@@ -50,8 +50,8 @@ logger.info('[BOOT] Starting API with config: {}'.format({
 
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from src.database import init_database, close_database
-from src.routes import auth_router, agents_router, assistant_router, knowledge_router, chat_router, workflow_router, file_router, memory_router, discovery_router
+from src.db import init_database, close_database
+from src.routes import auth_router, users_router, payments_router, uploads_router, profile_router, roles_router, role_management_router, menu_router, discovery_router
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import logging
@@ -84,13 +84,13 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth_router)
-app.include_router(agents_router)
-app.include_router(assistant_router)
-app.include_router(knowledge_router)
-app.include_router(chat_router)
-app.include_router(workflow_router)
-app.include_router(file_router)
-app.include_router(memory_router)
+app.include_router(users_router)
+app.include_router(payments_router)
+app.include_router(uploads_router)
+app.include_router(profile_router)
+app.include_router(roles_router)
+app.include_router(role_management_router)
+app.include_router(menu_router)
 app.include_router(discovery_router)
 
 

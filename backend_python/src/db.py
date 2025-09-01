@@ -73,3 +73,18 @@ async def ensure_indexes():
     except Exception as e:
         logger.error(f"[DB] Error creating indexes: {e}")
 
+
+async def init_database(uri: str = DEFAULT_URI, db_name: str = DEFAULT_DB):
+    """Initialize database connection - alias for connect_db"""
+    return await connect_db(uri, db_name)
+
+
+async def close_database():
+    """Close database connection"""
+    global client, db
+    if client:
+        client.close()
+        client = None
+        db = None
+        logger.info("[DB] Database connection closed")
+
