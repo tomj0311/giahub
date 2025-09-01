@@ -4,19 +4,18 @@ import Typography from '@mui/material/Typography'
 import TextField from '@mui/material/TextField'
 import Button from '@mui/material/Button'
 import Stack from '@mui/material/Stack'
-import Alert from '@mui/material/Alert'
 import Divider from '@mui/material/Divider'
 import PasswordField from '../components/PasswordField'
+import { useSnackbar } from '../contexts/SnackbarContext'
 
 export default function LoginPage({ onLogin }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const { showError } = useSnackbar()
 
   const submit = async (e) => {
     e.preventDefault()
-    setError('')
     setLoading(true)
     try {
       // Try admin/user login via /auth/login
@@ -51,7 +50,7 @@ export default function LoginPage({ onLogin }) {
       const tokenData = await tokenResp.json()
       onLogin(tokenData.token, user.name)
     } catch (err) {
-      setError(err.message)
+      showError(err.message)
     } finally {
       setLoading(false)
     }
@@ -64,13 +63,12 @@ export default function LoginPage({ onLogin }) {
   return (
     <Paper variant="card" sx={{ p: 3 }} component="form" onSubmit={submit}>
       <Typography variant="h4" sx={{ mb: 2 }}>Welcome back</Typography>
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <Stack spacing={2}>
         <TextField label="Email or username" value={username} onChange={e => setUsername(e.target.value)} required />
         <PasswordField label="Password" value={password} onChange={e => setPassword(e.target.value)} required />
-        <Button type="submit" variant="contained" disabled={loading}>{loading ? 'Signing in…' : 'Sign in'}</Button>
+        <Button type="submit" variant="contained" size="medium" disabled={loading}>{loading ? 'Signing in…' : 'Sign in'}</Button>
         <Divider>or</Divider>
-        <Button variant="outlined" onClick={loginWithGoogle}>Continue with Google</Button>
+        <Button variant="outlined" size="medium" onClick={loginWithGoogle}>Continue with Google</Button>
       </Stack>
     </Paper>
   )

@@ -4,9 +4,9 @@ import Typography from '@mui/material/Typography'
 import TextField from '@mui/material/TextField'
 import Button from '@mui/material/Button'
 import Stack from '@mui/material/Stack'
-import Alert from '@mui/material/Alert'
 import Grid from '@mui/material/Grid2'
 import PasswordField from '../components/PasswordField'
+import { useSnackbar } from '../contexts/SnackbarContext'
 
 export default function SignupPage() {
   const [firstName, setFirstName] = useState('')
@@ -15,13 +15,10 @@ export default function SignupPage() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const { showError, showSuccess } = useSnackbar()
 
   const submit = async (e) => {
     e.preventDefault()
-    setError('')
-    setSuccess('')
     setLoading(true)
     try {
       const resp = await fetch('/users', {
@@ -31,10 +28,10 @@ export default function SignupPage() {
       })
       const data = await resp.json()
       if (!resp.ok) throw new Error(data.detail || 'Registration failed')
-      setSuccess('Account created. Check your email to verify your account.')
+      showSuccess('Account created. Check your email to verify your account.', 8000)
       setFirstName(''); setLastName(''); setEmail(''); setPassword(''); setConfirmPassword('')
     } catch (err) {
-      setError(err.message)
+      showError(err.message)
     } finally {
       setLoading(false)
     }
@@ -43,8 +40,6 @@ export default function SignupPage() {
   return (
     <Paper variant="card" sx={{ p: 3 }} component="form" onSubmit={submit}>
       <Typography variant="h4" sx={{ mb: 2 }}>Create your account</Typography>
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
       <Stack spacing={2}>
         <Grid container spacing={2}>
           <Grid xs={12} sm={6}>
@@ -57,7 +52,7 @@ export default function SignupPage() {
         <TextField label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
         <PasswordField label="Password" value={password} onChange={e => setPassword(e.target.value)} required helperText="At least 8 characters" />
         <PasswordField label="Confirm password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required />
-        <Button type="submit" variant="contained" disabled={loading}>{loading ? 'Creating…' : 'Create account'}</Button>
+        <Button type="submit" variant="contained" size="medium" disabled={loading}>{loading ? 'Creating…' : 'Create account'}</Button>
       </Stack>
     </Paper>
   )

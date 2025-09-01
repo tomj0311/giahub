@@ -20,6 +20,7 @@ sys.path.insert(0, str(project_root))  # Add project root so we can import 'ai' 
 
 from src.db import connect_db
 from src.routes import auth, users, payments, uploads, profile, roles, role_management, menu, discovery
+from src.routes.model_config import router as model_config_router
 from src.services.rbac_service import init_default_roles
 from src.services.menu_service import MenuService
 
@@ -65,6 +66,15 @@ async def lifespan(app: FastAPI):
     # Initialize database on startup
     await init_database()
     logger.info("Database initialized")
+    
+    # Initialize default roles
+    await init_default_roles()
+    logger.info("Default roles initialized")
+    
+    # Initialize default menu items
+    await MenuService.seed_default_menu_items()
+    logger.info("Default menu items initialized")
+    
     yield
     # Close database on shutdown
     await close_database()
@@ -92,6 +102,7 @@ app.include_router(roles_router)
 app.include_router(role_management_router)
 app.include_router(menu_router)
 app.include_router(discovery_router)
+app.include_router(model_config_router)
 
 
 @app.get("/")

@@ -1,16 +1,12 @@
-import React, { useEffect, useState, useCallback, useContext } from 'react';
-import { Box, Button, TextField, Paper, Typography, CircularProgress, Autocomplete, LinearProgress, Fade, useTheme, Stack } from '@mui/material';
+import React, { useEffect, useState } from 'react';
+import { Box, Button, TextField, Paper, Typography, CircularProgress, Autocomplete, LinearProgress, Fade, Stack, Card, CardContent, Grid } from '@mui/material';
+import { useSnackbar } from '../contexts/SnackbarContext';
 
-export default function ModelConfig() {
-    const theme = useTheme();
+export default function ModelConfig({ user }) {
+    // Use the user token from props (same pattern as other dashboard components)
+    const token = user?.token;
     
-    // Simple auth context replacement
-    const token = null; // Replace with actual auth implementation
-    
-    // Simple snackbar replacement
-    const showSuccess = (msg) => alert(`Success: ${msg}`);
-    const showError = (msg) => alert(`Error: ${msg}`);
-    const showWarning = (msg) => alert(`Warning: ${msg}`);
+    const { showSuccess, showError, showWarning, showInfo } = useSnackbar();
     
     // Simple backend base function replacement
     const backendBase = () => import.meta.env.VITE_BACKEND_URL || 'http://localhost:4000';
@@ -22,8 +18,8 @@ export default function ModelConfig() {
     const [existingConfigs, setExistingConfigs] = useState([]);
     const [loadingConfigs, setLoadingConfigs] = useState(true);
     const [isEditMode, setIsEditMode] = useState(false);
-    const [globalDefaults, setGlobalDefaults] = useState({});
     const [form, setForm] = useState({
+        id: null,
         name: '',
         category: '',
         model: '',
@@ -34,7 +30,7 @@ export default function ModelConfig() {
     const [loadingCategories, setLoadingCategories] = useState(false);
 
     // Discover components using HTTP
-    const discoverComponents = useCallback(async () => {
+    const discoverComponents = async () => {
         try {
             setLoadingDiscovery(true);
             const response = await fetch(`${backendBase()}/api/model-config/components?folder=models`, {
@@ -54,10 +50,10 @@ export default function ModelConfig() {
         } finally {
             setLoadingDiscovery(false);
         }
-    }, [token, showError]);
+    };
 
     // Introspect model using HTTP
-    const introspectModel = useCallback(async (modulePath, kind = 'model') => {
+    const introspectModel = async (modulePath, kind = 'model') => {
         if (!modulePath || introspectCache[modulePath] || pendingIntros[modulePath]) return;
         
         try {
@@ -84,15 +80,9 @@ export default function ModelConfig() {
         } finally {
             setPendingIntros(p => { const { [modulePath]: _rm, ...rest } = p; return rest; });
         }
-    }, [token, introspectCache, pendingIntros, showError]);
+    };
 
-    // Load global defaults from backend (removed - not supported by new model config routes)
-    const loadGlobalDefaults = useCallback(async () => {
-        // This functionality was removed as it's not part of the model config routes
-        setGlobalDefaults({});
-    }, []);
-
-    const loadCategories = useCallback(async () => {
+    const loadCategories = async () => {
         try {
             setLoadingCategories(true);
             const response = await fetch(`${backendBase()}/api/model-config/categories`, {
@@ -107,16 +97,9 @@ export default function ModelConfig() {
         } finally {
             setLoadingCategories(false);
         }
-    }, [token]);
+    };
 
-    // Show warning when no models are discovered
-    useEffect(() => {
-        if (!loadingDiscovery && components.models.length === 0) {
-            showWarning('No models discovered. Check backend logs or refresh.');
-        }
-    }, [loadingDiscovery, components.models, showWarning]);
-
-    const loadExistingConfigs = useCallback(async () => {
+    const loadExistingConfigs = async () => {
         try {
             const resp = await fetch(`${backendBase()}/api/model-config/configs`, {
                 headers: {
@@ -132,12 +115,21 @@ export default function ModelConfig() {
         } finally {
             setLoadingConfigs(false);
         }
-    }, [token]);
+    };
 
-    useEffect(() => { discoverComponents(); }, [discoverComponents]);
-    useEffect(() => { loadExistingConfigs(); }, [loadExistingConfigs]);
-    useEffect(() => { loadGlobalDefaults(); }, [loadGlobalDefaults]);
-    useEffect(() => { loadCategories(); }, [loadCategories]);
+    // Show warning when no models are discovered
+    useEffect(() => {
+        if (!loadingDiscovery && components.models.length === 0) {
+            showWarning('No models discovered. Check backend logs or refresh.');
+        }
+    }, [loadingDiscovery, components.models]);
+
+    // Run these functions only once on mount
+    useEffect(() => {
+        discoverComponents();
+        loadExistingConfigs();
+        loadCategories();
+    }, []);
 
     function ensureIntrospection(path, kind) {
         if (!path || introspectCache[path]) return;
@@ -149,6 +141,7 @@ export default function ModelConfig() {
         if (config) {
             setForm({
                 ...config,
+                id: config.id,
                 name: config.name,
                 category: config.category || '',
                 model: config.model,
@@ -160,11 +153,11 @@ export default function ModelConfig() {
             }
         } else {
             setForm({
+                id: null,
                 name: configName,
                 category: '',
                 model: '',
-                model_params: {},
-                ...globalDefaults
+                model_params: {}
             });
             setIsEditMode(false);
         }
@@ -187,14 +180,28 @@ export default function ModelConfig() {
         };
 
         try {
-            const resp = await fetch(`${backendBase()}/api/model-config/configs`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                },
-                body: JSON.stringify(configToSave)
-            });
+            let resp;
+            if (isEditMode && form.id) {
+                // Update existing configuration
+                resp = await fetch(`${backendBase()}/api/model-config/configs/${form.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    },
+                    body: JSON.stringify(configToSave)
+                });
+            } else {
+                // Create new configuration
+                resp = await fetch(`${backendBase()}/api/model-config/configs`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    },
+                    body: JSON.stringify(configToSave)
+                });
+            }
             
             const data = await resp.json().catch(() => ({}));
             if (!resp.ok) {
@@ -211,11 +218,11 @@ export default function ModelConfig() {
             loadExistingConfigs();
             loadCategories();
             setForm({
+                id: null,
                 name: '',
                 category: '',
                 model: '',
-                model_params: {},
-                ...globalDefaults
+                model_params: {}
             });
             setIsEditMode(false);
         } catch (e) {
@@ -227,20 +234,28 @@ export default function ModelConfig() {
     const modelIntro = form.model ? introspectCache[form.model] : null;
 
     return (
-        <>
+        <Box>
             {(loadingDiscovery || loadingConfigs || Object.keys(pendingIntros).length > 0 || saveState.loading) && (
                 <Fade in timeout={400}>
-                    <LinearProgress sx={{ mb: 2, borderRadius: theme.custom.borderRadius.small }} />
+                    <LinearProgress sx={{ mb: 2, borderRadius: '4px' }} />
                 </Fade>
             )}
             
-            <Paper variant="section">
-                <Typography variant="h4" gutterBottom>
-                    Model Configuration {isEditMode && <Typography component="span" variant="body2" sx={{ color: 'warning.main' }}>(Editing)</Typography>}
-                </Typography>
-                <Typography variant="body1" sx={{ mb: 4, opacity: 0.7 }}>
-                    Configure and manage AI model settings for your agents. Select models and customize their parameters.
-                </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Box>
+                    <Typography variant="h4" gutterBottom>
+                        Model Configuration {isEditMode && <Typography component="span" variant="body2" sx={{ color: 'warning.main' }}>(Editing)</Typography>}
+                    </Typography>
+                    <Typography variant="body1" color="text.secondary">
+                        Configure and manage AI model settings for your agents. Select models and customize their parameters.
+                    </Typography>
+                </Box>
+            </Box>
+
+            <Grid container spacing={3}>
+                <Grid item xs={12}>
+                    <Card>
+                        <CardContent>
                 
                 {loadingDiscovery && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
@@ -274,7 +289,7 @@ export default function ModelConfig() {
                             if (v && existingConfigs.some(c => c.name === v)) {
                                 loadExistingConfig(v);
                             } else {
-                                setForm(f => ({ ...f, name: v || '' }));
+                                setForm(f => ({ ...f, id: null, name: v || '' }));
                                 setIsEditMode(false);
                             }
                         }}
@@ -283,6 +298,7 @@ export default function ModelConfig() {
                             if (existingConfigs.some(c => c.name === v)) {
                                 loadExistingConfig(v);
                             } else {
+                                setForm(f => ({ ...f, id: null }));
                                 setIsEditMode(false);
                             }
                         }}
@@ -342,6 +358,7 @@ export default function ModelConfig() {
                         />
                         <Button 
                             variant="gradientBorder"
+                            size="medium"
                             onClick={discoverComponents}
                         >
                             Refresh
@@ -362,20 +379,41 @@ export default function ModelConfig() {
                             <Typography variant="subtitle2" sx={{ mb: 1 }}>
                                 Model Parameters ({modelIntro.class_name})
                             </Typography>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                {(modelIntro.required || []).map(paramName => (
-                                    <TextField
-                                        key={paramName}
-                                        size="small"
-                                        label={paramName}
-                                        value={form.model_params[paramName] || ''}
-                                        onChange={(e) => setForm(f => ({ 
-                                            ...f, 
-                                            model_params: { ...f.model_params, [paramName]: e.target.value } 
-                                        }))}
-                                        placeholder={`Enter ${paramName}`}
-                                    />
-                                ))}
+                            <Box sx={{ 
+                                display: 'grid', 
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                                gap: 2
+                            }}>
+                                {(modelIntro.formatted_params || []).map(paramFormatted => {
+                                    // Extract parameter name and type from formatted string
+                                    const paramName = paramFormatted.split(':')[0].trim();
+                                    const typeMatch = paramFormatted.match(/:\s*([^=\s]+)/);
+                                    const paramType = typeMatch ? typeMatch[1].toLowerCase() : 'str';
+                                    
+                                    // Determine field width based on type
+                                    let gridColumn = 'span 1';
+                                    if (paramType.includes('int') || paramType.includes('float') || paramType.includes('bool')) {
+                                        gridColumn = 'span 1'; // Smaller for numeric/boolean
+                                    } else if (paramType.includes('str') && (paramName.includes('key') || paramName.includes('token') || paramName.includes('url'))) {
+                                        gridColumn = 'span 2'; // Larger for API keys, URLs, etc.
+                                    }
+                                    
+                                    return (
+                                        <TextField
+                                            key={paramName}
+                                            size="small"
+                                            label={paramName}
+                                            value={form.model_params[paramName] || ''}
+                                            onChange={(e) => setForm(f => ({ 
+                                                ...f, 
+                                                model_params: { ...f.model_params, [paramName]: e.target.value } 
+                                            }))}
+                                            placeholder={`Enter ${paramName}`}
+                                            sx={{ gridColumn }}
+                                            type={paramType.includes('int') || paramType.includes('float') ? 'number' : 'text'}
+                                        />
+                                    );
+                                })}
                             </Box>
                         </Box>
                     )}
@@ -386,19 +424,16 @@ export default function ModelConfig() {
                             disabled={saveState.loading || !form.name || !form.model}
                             color="primary"
                             variant="contained"
+                            size="medium"
                         >
                             {saveState.loading ? 'Saving...' : isEditMode ? 'Update Model Configuration' : 'Save Model Configuration'}
                         </Button>
                     </Box>
-
-                    {saveState.loading && (
-                        <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <CircularProgress size={18} />
-                            <Typography variant="caption" sx={{ opacity: 0.7 }}>Saving configuration…</Typography>
-                        </Box>
-                    )}
                 </Stack>
-            </Paper>
-        </>
+                        </CardContent>
+                    </Card>
+                </Grid>
+            </Grid>
+        </Box>
     );
 }

@@ -37,6 +37,7 @@ def get_collections():
         'roles': database['roles'],
         'userRoles': database['userRoles'],
         'menuItems': database['menuItems'],
+        'modelconfigs': database['modelconfigs'],
     }
 
 
@@ -68,6 +69,12 @@ async def ensure_indexes():
         await collections['menuItems'].create_index("order")
         await collections['menuItems'].create_index("parentId")
         await collections['menuItems'].create_index("isActive")
+        
+        # Model configurations indexes
+        await collections['modelconfigs'].create_index("name", unique=True)
+        await collections['modelconfigs'].create_index("category")
+        await collections['modelconfigs'].create_index("type")
+        await collections['modelconfigs'].create_index("created_at")
         
         logger.info("[DB] Indexes created successfully")
     except Exception as e:

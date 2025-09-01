@@ -20,8 +20,6 @@ import {
   Paper,
   IconButton,
   Chip,
-  Alert,
-  Snackbar,
   List,
   ListItem,
   ListItemText,
@@ -33,12 +31,12 @@ import {
   Trash2 as DeleteIcon,
   Shield as SecurityIcon
 } from 'lucide-react'
+import { useSnackbar } from '../contexts/SnackbarContext'
 
 export default function RoleManagement({ user }) {
   const [roles, setRoles] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const { showError, showSuccess } = useSnackbar()
   const [openCreateDialog, setOpenCreateDialog] = useState(false)
   const [openEditDialog, setOpenEditDialog] = useState(false)
   const [selectedRole, setSelectedRole] = useState(null)
@@ -65,10 +63,10 @@ export default function RoleManagement({ user }) {
         const data = await response.json()
         setRoles(data)
       } else {
-        setError('Failed to fetch roles')
+        showError('Failed to fetch roles')
       }
     } catch (err) {
-      setError('Failed to fetch roles')
+      showError('Failed to fetch roles')
     } finally {
       setLoading(false)
     }
@@ -92,16 +90,16 @@ export default function RoleManagement({ user }) {
       })
 
       if (response.ok) {
-        setSuccess('Role created successfully')
+        showSuccess('Role created successfully')
         setOpenCreateDialog(false)
         setFormData({ roleName: '', description: '', permissions: '' })
         fetchRoles()
       } else {
         const data = await response.json()
-        setError(data.detail || 'Failed to create role')
+        showError(data.detail || 'Failed to create role')
       }
     } catch (err) {
-      setError('Failed to create role')
+      showError('Failed to create role')
     }
   }
 
@@ -122,17 +120,17 @@ export default function RoleManagement({ user }) {
       })
 
       if (response.ok) {
-        setSuccess('Role updated successfully')
+        showSuccess('Role updated successfully')
         setOpenEditDialog(false)
         setSelectedRole(null)
         setFormData({ roleName: '', description: '', permissions: '' })
         fetchRoles()
       } else {
         const data = await response.json()
-        setError(data.detail || 'Failed to update role')
+        showError(data.detail || 'Failed to update role')
       }
     } catch (err) {
-      setError('Failed to update role')
+      showError('Failed to update role')
     }
   }
 
@@ -150,14 +148,14 @@ export default function RoleManagement({ user }) {
       })
 
       if (response.ok) {
-        setSuccess('Role deleted successfully')
+        showSuccess('Role deleted successfully')
         fetchRoles()
       } else {
         const data = await response.json()
-        setError(data.detail || 'Failed to delete role')
+        showError(data.detail || 'Failed to delete role')
       }
     } catch (err) {
-      setError('Failed to delete role')
+      showError('Failed to delete role')
     }
   }
 
@@ -211,6 +209,7 @@ export default function RoleManagement({ user }) {
         </Box>
         <Button
           variant="contained"
+          size="medium"
           startIcon={<AddIcon size={18} />}
           onClick={openCreateForm}
         >
@@ -335,8 +334,8 @@ export default function RoleManagement({ user }) {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialogs}>Cancel</Button>
-          <Button onClick={handleCreateRole} variant="contained">Create</Button>
+          <Button onClick={handleCloseDialogs} size="medium">Cancel</Button>
+          <Button onClick={handleCreateRole} variant="contained" size="medium">Create</Button>
         </DialogActions>
       </Dialog>
 
@@ -366,33 +365,10 @@ export default function RoleManagement({ user }) {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialogs}>Cancel</Button>
-          <Button onClick={handleEditRole} variant="contained">Update</Button>
+          <Button onClick={handleCloseDialogs} size="medium">Cancel</Button>
+          <Button onClick={handleEditRole} variant="contained" size="medium">Update</Button>
         </DialogActions>
       </Dialog>
-
-      {/* Success/Error Snackbars */}
-      <Snackbar
-        open={!!success}
-        autoHideDuration={6000}
-        onClose={() => setSuccess('')}
-        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-      >
-        <Alert onClose={() => setSuccess('')} severity="success">
-          {success}
-        </Alert>
-      </Snackbar>
-
-      <Snackbar
-        open={!!error}
-        autoHideDuration={6000}
-        onClose={() => setError('')}
-        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-      >
-        <Alert onClose={() => setError('')} severity="error">
-          {error}
-        </Alert>
-      </Snackbar>
     </Box>
   )
 }

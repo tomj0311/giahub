@@ -26,6 +26,19 @@ async def create_model_config(
     try:
         collections = get_collections()
         
+        # Validate required fields
+        if not config.get("name"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Name is required"
+            )
+        
+        if not config.get("model"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Model is required"
+            )
+        
         # Check if config with same name already exists
         existing = await collections['modelconfigs'].find_one({"name": config.get("name")})
         if existing:

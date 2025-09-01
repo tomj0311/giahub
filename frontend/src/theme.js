@@ -411,7 +411,8 @@ export function buildTheme(key) {
       ...(theme.components || {}),
       MuiButton: {
         defaultProps: {
-          variant: 'gradientBorder'
+          variant: 'gradientBorder',
+          size: 'medium'
         },
         styleOverrides: {
           root: {
@@ -421,14 +422,39 @@ export function buildTheme(key) {
             letterSpacing: 0.3,
             borderRadius: 9999, // robust pill radius
             overflow: 'hidden',
-            fontSize: '14px' // From CSS
+            fontSize: '14px', // From CSS
+            minWidth: 'auto', // Prevent growing
+            flexShrink: 0, // Prevent shrinking
+            whiteSpace: 'nowrap', // Prevent text wrapping
+            // Fixed sizes for consistency - prevent growing on screen resize
+            '&.MuiButton-sizeSmall': {
+              height: 32,
+              padding: '4px 12px',
+              fontSize: '13px',
+              minWidth: 64,
+              maxWidth: '200px'
+            },
+            '&.MuiButton-sizeMedium': {
+              height: 40,
+              padding: '6px 16px',
+              fontSize: '14px',
+              minWidth: 80,
+              maxWidth: '250px'
+            },
+            '&.MuiButton-sizeLarge': {
+              height: 48,
+              padding: '8px 24px',
+              fontSize: '15px',
+              minWidth: 96,
+              maxWidth: '300px'
+            }
           },
           containedPrimary: {
             // Using the login button gradient from CSS
             background: 'linear-gradient(180deg, #ffffff 0%, #fdfdfd 50%, #f5f5f5 100%)',
             color: '#09090A', // Dark text from CSS - ensures high contrast on white background
             boxShadow: '0 2px 6px rgba(0, 0, 0, 0.15)', // From CSS
-            padding: '8px 20px', // From CSS
+            // Remove responsive padding - use fixed sizes from root
             '&:hover': {
               opacity: 0.9, // From CSS hover effect
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
@@ -462,9 +488,9 @@ export function buildTheme(key) {
             color: theme.palette.secondary.main, // Nav link color
             borderColor: 'rgba(255, 255, 255, 0.28)', // From CSS
             borderRadius: 9999,
-            padding: '8px 20px',
             fontSize: '14px',
             fontWeight: 500,
+            // Remove responsive padding - use fixed sizes from root
             '&:hover': { 
               opacity: 0.9,
               borderColor: 'rgba(255, 255, 255, 0.4)',
@@ -490,11 +516,7 @@ export function buildTheme(key) {
               position: 'relative',
               display: 'inline-flex',
               alignItems: 'center',
-              padding: '0.65rem 1.25rem',
-              // Size tuning
-              '&.MuiButton-sizeSmall': { padding: '0.35rem 0.75rem', fontSize: '0.8125rem' },
-              '&.MuiButton-sizeMedium': { padding: '0.55rem 1rem', fontSize: '0.875rem' },
-              '&.MuiButton-sizeLarge': { padding: '0.8rem 1.4rem', fontSize: '0.9375rem' },
+              // Remove responsive padding - use fixed sizes from root
               color: '#fff',
               textDecoration: 'none',
               borderRadius: 9999,
@@ -682,20 +704,46 @@ export function buildTheme(key) {
       ...(theme.components || {}),
       MuiButton: {
         defaultProps: {
-          variant: 'gradientBorder'
+          variant: 'gradientBorder',
+          size: 'medium'
         },
         styleOverrides: {
           root: {
             textTransform: 'none',
             fontWeight: 500,
             borderRadius: 9999,
-            fontSize: '14px'
+            fontSize: '14px',
+            minWidth: 'auto', // Prevent growing
+            flexShrink: 0, // Prevent shrinking
+            whiteSpace: 'nowrap', // Prevent text wrapping
+            // Fixed sizes for consistency - prevent growing on screen resize
+            '&.MuiButton-sizeSmall': {
+              height: 32,
+              padding: '4px 12px',
+              fontSize: '13px',
+              minWidth: 64,
+              maxWidth: '200px'
+            },
+            '&.MuiButton-sizeMedium': {
+              height: 40,
+              padding: '6px 16px',
+              fontSize: '14px',
+              minWidth: 80,
+              maxWidth: '250px'
+            },
+            '&.MuiButton-sizeLarge': {
+              height: 48,
+              padding: '8px 24px',
+              fontSize: '15px',
+              minWidth: 96,
+              maxWidth: '300px'
+            }
           },
           containedPrimary: {
             background: 'linear-gradient(135deg, #1976d2 0%, #0288d1 100%)',
             color: '#ffffff', // Ensure white text on blue background for high contrast
             boxShadow: '0 2px 6px rgba(25, 118, 210, 0.3)',
-            padding: '8px 20px',
+            // Remove responsive padding - use fixed sizes from root
             '&:hover': {
               background: 'linear-gradient(135deg, #1565c0 0%, #0277bd 100%)',
               boxShadow: '0 4px 12px rgba(25, 118, 210, 0.4)',
@@ -722,8 +770,8 @@ export function buildTheme(key) {
             borderColor: '#1976d2',
             color: '#1976d2', // Blue text on white background provides good contrast
             borderRadius: 9999,
-            padding: '8px 20px',
             fontSize: '14px',
+            // Remove responsive padding - use fixed sizes from root
             '&:hover': {
               borderColor: '#1565c0',
               backgroundColor: 'rgba(25, 118, 210, 0.04)',
@@ -748,10 +796,7 @@ export function buildTheme(key) {
               position: 'relative',
               display: 'inline-flex',
               alignItems: 'center',
-              padding: '0.65rem 1.25rem',
-              '&.MuiButton-sizeSmall': { padding: '0.35rem 0.75rem', fontSize: '0.8125rem' },
-              '&.MuiButton-sizeMedium': { padding: '0.55rem 1rem', fontSize: '0.875rem' },
-              '&.MuiButton-sizeLarge': { padding: '0.8rem 1.4rem', fontSize: '0.9375rem' },
+              // Remove responsive padding - use fixed sizes from root
               color: theme.palette.primary.main,
               textDecoration: 'none',
               borderRadius: 9999,

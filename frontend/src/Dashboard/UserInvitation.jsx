@@ -20,8 +20,6 @@ import {
   Paper,
   IconButton,
   Chip,
-  Alert,
-  Snackbar,
   FormControl,
   InputLabel,
   Select,
@@ -37,6 +35,7 @@ import {
   Mail as EmailIcon,
   Shield as SecurityIcon
 } from 'lucide-react'
+import { useSnackbar } from '../contexts/SnackbarContext'
 
 const ITEM_HEIGHT = 48
 const ITEM_PADDING_TOP = 8
@@ -53,8 +52,7 @@ export default function UserInvitation({ user }) {
   const [users, setUsers] = useState([])
   const [roles, setRoles] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const { showError, showSuccess } = useSnackbar()
   const [openInviteDialog, setOpenInviteDialog] = useState(false)
   const [openAssignDialog, setOpenAssignDialog] = useState(false)
   const [selectedUser, setSelectedUser] = useState(null)
@@ -74,7 +72,7 @@ export default function UserInvitation({ user }) {
       setLoading(true)
       await Promise.all([fetchUsers(), fetchRoles()])
     } catch (err) {
-      setError('Failed to fetch data')
+      showError('Failed to fetch data')
     } finally {
       setLoading(false)
     }
@@ -92,10 +90,10 @@ export default function UserInvitation({ user }) {
         const data = await response.json()
         setUsers(data)
       } else {
-        setError('Failed to fetch users')
+        showError('Failed to fetch users')
       }
     } catch (err) {
-      setError('Failed to fetch users')
+      showError('Failed to fetch users')
     }
   }
 
@@ -112,10 +110,10 @@ export default function UserInvitation({ user }) {
         // Filter out default user roles for selection
         setRoles(data.filter(role => !role.roleName.includes('@')))
       } else {
-        setError('Failed to fetch roles')
+        showError('Failed to fetch roles')
       }
     } catch (err) {
-      setError('Failed to fetch roles')
+      showError('Failed to fetch roles')
     }
   }
 
@@ -137,16 +135,16 @@ export default function UserInvitation({ user }) {
 
       if (response.ok) {
         const data = await response.json()
-        setSuccess(`User invited successfully! Temporary password: ${data.tempPassword}`)
+        showSuccess(`User invited successfully! Temporary password: ${data.tempPassword}`, 8000)
         setOpenInviteDialog(false)
         setFormData({ firstName: '', lastName: '', email: '', selectedRoles: [] })
         fetchUsers()
       } else {
         const data = await response.json()
-        setError(data.detail || 'Failed to invite user')
+        showError(data.detail || 'Failed to invite user')
       }
     } catch (err) {
-      setError('Failed to invite user')
+      showError('Failed to invite user')
     }
   }
 
@@ -164,17 +162,17 @@ export default function UserInvitation({ user }) {
       })
 
       if (response.ok) {
-        setSuccess('Roles assigned successfully')
+        showSuccess('Roles assigned successfully')
         setOpenAssignDialog(false)
         setSelectedUser(null)
         setFormData({ firstName: '', lastName: '', email: '', selectedRoles: [] })
         fetchUsers()
       } else {
         const data = await response.json()
-        setError(data.detail || 'Failed to assign roles')
+        showError(data.detail || 'Failed to assign roles')
       }
     } catch (err) {
-      setError('Failed to assign roles')
+      showError('Failed to assign roles')
     }
   }
 
@@ -192,14 +190,14 @@ export default function UserInvitation({ user }) {
       })
 
       if (response.ok) {
-        setSuccess('Role removed successfully')
+        showSuccess('Role removed successfully')
         fetchUsers()
       } else {
         const data = await response.json()
-        setError(data.detail || 'Failed to remove role')
+        showError(data.detail || 'Failed to remove role')
       }
     } catch (err) {
-      setError('Failed to remove role')
+      showError('Failed to remove role')
     }
   }
 
@@ -249,6 +247,7 @@ export default function UserInvitation({ user }) {
         </Box>
         <Button
           variant="contained"
+          size="medium"
           startIcon={<PersonAddIcon />}
           onClick={openInviteForm}
         >
@@ -400,8 +399,8 @@ export default function UserInvitation({ user }) {
           </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialogs}>Cancel</Button>
-          <Button onClick={handleInviteUser} variant="contained">Invite</Button>
+          <Button onClick={handleCloseDialogs} size="medium">Cancel</Button>
+          <Button onClick={handleInviteUser} variant="contained" size="medium">Invite</Button>
         </DialogActions>
       </Dialog>
 
@@ -438,33 +437,10 @@ export default function UserInvitation({ user }) {
           </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialogs}>Cancel</Button>
-          <Button onClick={handleAssignRoles} variant="contained">Update Roles</Button>
+          <Button onClick={handleCloseDialogs} size="medium">Cancel</Button>
+          <Button onClick={handleAssignRoles} variant="contained" size="medium">Update Roles</Button>
         </DialogActions>
       </Dialog>
-
-      {/* Success/Error Snackbars */}
-      <Snackbar
-        open={!!success}
-        autoHideDuration={8000}
-        onClose={() => setSuccess('')}
-        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-      >
-        <Alert onClose={() => setSuccess('')} severity="success">
-          {success}
-        </Alert>
-      </Snackbar>
-
-      <Snackbar
-        open={!!error}
-        autoHideDuration={6000}
-        onClose={() => setError('')}
-        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-      >
-        <Alert onClose={() => setError('')} severity="error">
-          {error}
-        </Alert>
-      </Snackbar>
     </Box>
   )
 }

@@ -15,9 +15,7 @@ import {
   Chip,
   Avatar,
   IconButton,
-  Button,
-  Alert,
-  Snackbar
+  Button
 } from '@mui/material'
 import {
   Pencil as EditIcon,
@@ -26,12 +24,12 @@ import {
   Shield as SecurityIcon
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { useSnackbar } from '../contexts/SnackbarContext'
 
 export default function Users({ user }) {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const { showError, showSuccess } = useSnackbar()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -51,12 +49,12 @@ export default function Users({ user }) {
         const data = await response.json()
         setUsers(data)
       } else if (response.status === 403) {
-        setError('Access denied. You can only view users who have roles that you own.')
+        showError('Access denied. You can only view users who have roles that you own.')
       } else {
-        setError('Failed to fetch users')
+        showError('Failed to fetch users')
       }
     } catch (err) {
-      setError('Failed to fetch users')
+      showError('Failed to fetch users')
     } finally {
       setLoading(false)
     }
@@ -256,29 +254,6 @@ export default function Users({ user }) {
           </Card>
         </Grid>
       </Grid>
-
-      {/* Success/Error Snackbars */}
-      <Snackbar
-        open={!!success}
-        autoHideDuration={6000}
-        onClose={() => setSuccess('')}
-        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-      >
-        <Alert onClose={() => setSuccess('')} severity="success">
-          {success}
-        </Alert>
-      </Snackbar>
-
-      <Snackbar
-        open={!!error}
-        autoHideDuration={6000}
-        onClose={() => setError('')}
-        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-      >
-        <Alert onClose={() => setError('')} severity="error">
-          {error}
-        </Alert>
-      </Snackbar>
     </Box>
   )
 }

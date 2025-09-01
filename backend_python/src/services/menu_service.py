@@ -122,7 +122,7 @@ class MenuService:
             },
             {
                 "label": "Models",
-                "to": "/store/models",
+                "to": "/dashboard/model-config",
                 "icon": "Settings",
                 "parentId": store_parent_id,
                 "order": 2,

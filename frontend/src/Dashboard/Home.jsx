@@ -317,16 +317,16 @@ export default function Home({ user }) {
               Quick Actions
             </Typography>
             <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, flexWrap: 'wrap', mt: 2 }}>
-              <Button variant="contained" color="primary">
+              <Button variant="contained" color="primary" size="medium">
                 Create New Project
               </Button>
-              <Button variant="outlined" color="primary">
+              <Button variant="outlined" color="primary" size="medium">
                 Schedule Meeting
               </Button>
-              <Button variant="outlined" color="primary">
+              <Button variant="outlined" color="primary" size="medium">
                 Generate Report
               </Button>
-              <Button variant="outlined" color="primary">
+              <Button variant="outlined" color="primary" size="medium">
                 Invite Team Member
               </Button>
             </Box>

@@ -64,6 +64,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 		const loadMenuItems = async () => {
 			try {
 				const items = await menuService.getMenuItems()
+				console.log('Loaded menu items:', items)
 				setMenuItems(items)
 				
 				// Set initial expanded state based on current route
@@ -135,8 +136,8 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 
 	// Helper to render nav items (shared for top and bottom sections)
 	const renderNavItems = (items) => items.map((item) => {
-		if (item.expandable) {
-			// Determine if any child route is active for styling
+		if (item.expandable && !item.to) {
+			// Expandable section without direct navigation
 			const isSectionSelected = item.children?.some((child) =>
 				location.pathname === child.to || location.pathname.startsWith(child.to)
 			)
@@ -227,44 +228,105 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 				</React.Fragment>
 			)
 		} else {
+			// Non-expandable item or expandable item with direct navigation
 			const selected = location.pathname === item.to || (item.to !== '/' && location.pathname.startsWith(item.to))
 			const Icon = getIconComponent(item.icon)
+			
+			// For expandable items with 'to' property, we want both navigation and expansion
+			const isExpandableWithLink = item.expandable && item.to
+			const isExpanded = expandedSections[item.label] || false
+			const ExpandIcon = isExpanded ? ChevronUp : ChevronDown
+			
 			return (
-				<ListItemButton
-					key={item.to}
-					component={RouterLink}
-					to={item.to}
-					selected={selected}
-					sx={{
-						minHeight: 36,
-						px: 1,
-						py: 0.25,
-						my: 0.25,
-						mx: 1,
-						borderRadius: 1.5,
-						'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
-						'&:hover .MuiListItemText-primary': { color: theme.palette.text.primary },
-						'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
-						'&.Mui-selected': {
-							backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
-						}
-					}}
-					onClick={() => { if (isMobile) setMobileOpen(false) }}
-				>
-					<ListItemIcon sx={{ minWidth: 28, color: 'text.secondary' }}>
-						<Icon size={18} strokeWidth={1.8} />
-					</ListItemIcon>
-					<ListItemText
-						primary={item.label}
-						primaryTypographyProps={{
-							fontSize: 12.5,
-							fontWeight: 500,
-							letterSpacing: 0.2,
-							color: selected ? 'text.primary' : 'text.secondary'
+				<React.Fragment key={item.to || item.label}>
+					<ListItemButton
+						key={item.to || item.label}
+						component={RouterLink}
+						to={item.to}
+						selected={selected}
+						sx={{
+							minHeight: 36,
+							px: 1,
+							py: 0.25,
+							my: 0.25,
+							mx: 1,
+							borderRadius: 1.5,
+							'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
+							'&:hover .MuiListItemText-primary': { color: theme.palette.text.primary },
+							'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
+							'&.Mui-selected': {
+								backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
+							}
 						}}
-						sx={{ opacity: drawerOpen || isMobile ? 1 : 0 }}
-					/>
-				</ListItemButton>
+						onClick={() => { 
+							if (isMobile) setMobileOpen(false)
+							// If it's expandable with a link, also toggle expansion
+							if (isExpandableWithLink) {
+								toggleSection(item.label)
+							}
+						}}
+					>
+						<ListItemIcon sx={{ minWidth: 28, color: 'text.secondary' }}>
+							<Icon size={18} strokeWidth={1.8} />
+						</ListItemIcon>
+						<ListItemText
+							primary={item.label}
+							primaryTypographyProps={{
+								fontSize: 12.5,
+								fontWeight: 500,
+								letterSpacing: 0.2,
+								color: selected ? 'text.primary' : 'text.secondary'
+							}}
+							sx={{ opacity: drawerOpen || isMobile ? 1 : 0 }}
+						/>
+						{isExpandableWithLink && (drawerOpen || isMobile) && (
+							<ExpandIcon size={16} color={theme.palette.text.secondary} />
+						)}
+					</ListItemButton>
+					
+					{/* Submenu items for expandable items with links */}
+					{isExpandableWithLink && isExpanded && (drawerOpen || isMobile) && item.children?.map((child) => {
+						const childSelected = location.pathname === child.to
+						const ChildIcon = getIconComponent(child.icon)
+						return (
+							<ListItemButton
+								key={child.to}
+								component={RouterLink}
+								to={child.to}
+								selected={childSelected}
+								sx={{
+									minHeight: 32,
+									px: 1,
+									py: 0.25,
+									my: 0.1,
+									mx: 1,
+									ml: 3,
+									borderRadius: 1.5,
+									'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
+									'&:hover .MuiListItemText-primary': { color: theme.palette.text.primary },
+									'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
+									'&.Mui-selected': {
+										backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'
+									}
+								}}
+								onClick={() => { if (isMobile) setMobileOpen(false) }}
+							>
+								<ListItemIcon sx={{ minWidth: 24, color: 'text.secondary' }}>
+									<ChildIcon size={16} strokeWidth={1.8} />
+								</ListItemIcon>
+								<ListItemText
+									primary={child.label}
+									primaryTypographyProps={{
+										fontSize: 11.5,
+										fontWeight: 500,
+										letterSpacing: 0.2,
+										color: childSelected ? 'text.primary' : 'text.secondary'
+									}}
+								/>
+							</ListItemButton>
+						)
+					})}
+				</React.Fragment>
 			)
 		}
 	})
