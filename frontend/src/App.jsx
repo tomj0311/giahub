@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom'
 import { ThemeProvider, CssBaseline } from '@mui/material'
 import AppBar from '@mui/material/AppBar'
@@ -56,7 +56,7 @@ function AppShell({ children, themeKey, setThemeKey, isAuthenticated }) {
       <CssBaseline />
       <AppBar position="sticky" sx={{ background: theme.custom.appBarGradient, backgroundSize: '200% 200%', animation: 'appBarShift 12s ease infinite' }}>
         <Toolbar>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>ConsultFlow</Typography>
+          <Typography variant="h6" sx={{ flexGrow: 1, color: '#ffffff', fontWeight: 600 }}>GiaHUB</Typography>
           {!isAuthenticated && (
             <>
               <Button color="inherit" component={Link} to="/login">Login</Button>
@@ -76,8 +76,13 @@ function AppShell({ children, themeKey, setThemeKey, isAuthenticated }) {
 }
 
 export default function App() {
-  const [themeKey, setThemeKey] = useState('aurora')
+  const [themeKey, setThemeKey] = useState(() => localStorage.getItem('theme') || 'aurora')
   const auth = useAuth()
+
+  // Save theme preference to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('theme', themeKey)
+  }, [themeKey])
 
   return (
     <AppShell themeKey={themeKey} setThemeKey={setThemeKey} isAuthenticated={!!auth.token}>

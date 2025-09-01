@@ -1,4 +1,4 @@
-# ConsultFlow Platform Monorepo
+# GiaHUB Platform Monorepo
 
 Full‑stack prototype for user interactions (virtual consultations).
 

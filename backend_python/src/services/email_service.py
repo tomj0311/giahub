@@ -87,7 +87,7 @@ async def send_registration_email(to: str, role: str, verify_token: Optional[str
         html_content = f"""
         <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.5;font-size:15px;color:#222;">
             <h2 style="margin:0 0 16px;">Welcome{' ' + role.capitalize() if role else ''}!</h2>
-            <p>Thank you for registering as a <strong>{role}</strong> on the ConsultFlow Platform.</p>
+            <p>Thank you for registering as a <strong>{role}</strong> on the GiaHUB Platform.</p>
         """
         
         if verify_token:
@@ -123,7 +123,7 @@ async def send_registration_email(to: str, role: str, verify_token: Optional[str
         text_content = f"""
 Welcome{' ' + role.capitalize() if role else ''}!
 
-Thank you for registering as a {role} on the ConsultFlow Platform.
+Thank you for registering as a {role} on the GiaHUB Platform.
         """
         
         if verify_token:
@@ -143,7 +143,7 @@ Welcome to our healthcare consultation platform!
 This is an automated message. Please do not reply to this email.
         """
         
-        subject = f"Welcome to ConsultFlow - {role.capitalize()} Registration"
+        subject = f"Welcome to GiaHUB - {role.capitalize()} Registration"
         if verify_token:
             subject += " (Email Verification Required)"
         

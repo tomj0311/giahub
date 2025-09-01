@@ -1,6 +1,6 @@
-# ConsultFlow Backend - Python/FastAPI
+# GiaHUB Backend - Python/FastAPI
 
-This is the Python FastAPI conversion of the Node.js backend for the ConsultFlow healthcare consultation platform.
+This is the Python FastAPI conversion of the Node.js backend for the GiaHUB healthcare consultation platform.
 
 ## Features
 

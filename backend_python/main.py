@@ -112,7 +112,7 @@ async def root():
 
 # Create FastAPI app
 app = FastAPI(
-    title="ConsultFlow API",
+    title="GiaHUB API",
     description="Healthcare consultation platform API",
     version="0.1.0",
     lifespan=lifespan

@@ -369,28 +369,41 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			{/* AppBar */}
 			<AppBar
 				position="fixed"
-				color="transparent"
 				elevation={0}
 				sx={{
-					background: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.9)',
+					background: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.95)',
 					backdropFilter: 'saturate(180%) blur(8px)',
-					borderBottom: theme.palette.mode === 'dark' ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)'
+					borderBottom: theme.palette.mode === 'dark' ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
+					color: theme.palette.mode === 'dark' ? '#ffffff' : '#000000'
 				}}
 			>
 				<Toolbar sx={{ gap: 1 }}>
 					{isMobile ? (
-						<IconButton color="inherit" edge="start" onClick={() => setMobileOpen(true)}>
+						<IconButton 
+							edge="start" 
+							onClick={() => setMobileOpen(true)}
+							sx={{ color: theme.palette.mode === 'dark' ? '#ffffff !important' : '#000000 !important' }}
+						>
 							<MenuIconOld size={20} />
 						</IconButton>
 					) : (
-						<IconButton color="inherit" edge="start" onClick={() => setDrawerOpen(v => !v)}>
+						<IconButton 
+							edge="start" 
+							onClick={() => setDrawerOpen(v => !v)}
+							sx={{ color: theme.palette.mode === 'dark' ? '#ffffff !important' : '#000000 !important' }}
+						>
 							{drawerOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
 						</IconButton>
 					)}
-					<Typography variant="h6" sx={{ fontWeight: 600, flexGrow: 1 }}>ConsultFlow</Typography>
+					<Typography variant="h6" sx={{ 
+						fontWeight: 700, 
+						flexGrow: 1, 
+						color: theme.palette.mode === 'dark' ? '#ffffff !important' : '#000000 !important',
+						fontSize: '1.25rem'
+					}}>GiaHUB</Typography>
 					
 					<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-						<IconButton color="inherit">
+						<IconButton sx={{ color: theme.palette.mode === 'dark' ? '#ffffff !important' : '#000000 !important' }}>
 							<NotificationsIcon size={18} />
 						</IconButton>
 						

@@ -1,4 +1,4 @@
-ConsultFlow Frontend
+GiaHUB Frontend
 
 Stack
 - React 18 (Vite, JavaScript only)
