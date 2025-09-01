@@ -5,8 +5,7 @@ import logging
 
 from src.utils.component_discovery import (
     discover_components,
-    get_detailed_class_info,
-    get_param_defaults
+    get_detailed_class_info
 )
 
 logger = logging.getLogger(__name__)

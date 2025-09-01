@@ -1,15 +1,10 @@
 """Component discovery & introspection helpers extracted from the original app."""
 from __future__ import annotations
 
-import importlib
-import inspect
-import pkgutil
-import os
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Union, Optional, get_args, get_origin
-
-# from .logging_utils import log_event  # Comment out potentially missing import
+from typing import Any, Dict, List
 import logging
+import ast
 
 # Set up simple logging
 logger = logging.getLogger(__name__)
@@ -24,11 +19,7 @@ MAPPING = {
     "chunking": f"{BASE_NAMESPACE}.document.chunking",
 }
 
-_PARAM_CACHE: Dict[Tuple[str, str], Tuple[str, List[str]]] = {}
-_PARAM_DEFAULT_CACHE: Dict[Tuple[str, str], Dict[str, Any]] = {}
-_BASE_EXCLUDES = {
-    "base",
-}
+_DISCOVERY_CACHE: Dict[str, List[str]] = {}
 
 
 def _list_children(module_path: str) -> List[str]:
@@ -78,8 +69,6 @@ def _list_children(module_path: str) -> List[str]:
         return []
 
 
-_DISCOVERY_CACHE: Dict[str, List[str]] = {}
-
 def discover_components(folder: str = None) -> Dict[str, List[str]]:
     # Clear cache to force fresh discovery
     global _DISCOVERY_CACHE
@@ -107,65 +96,12 @@ def discover_components(folder: str = None) -> Dict[str, List[str]]:
         discovered[k] = full_paths
         _DISCOVERY_CACHE[module_path] = full_paths
         logger.info(f"Discovered {k}: {discovered[k]}")
-    try:
-        # log_event("discover.components", **{f"count_{k}": len(v) for k, v in discovered.items()})  # Comment out
-        pass
-    except Exception as e:
-        logger.warning(f"log_event failed in discover_components: {e}")
     return discovered
-
-
-def _is_optional_type(annotation: Any) -> bool:
-    if annotation is None:
-        return True
-    
-    # Import Optional for comparison
-    from typing import Optional
-    
-    try:
-        # Check if it's directly Optional[X] which is Union[X, None]
-        origin = get_origin(annotation)
-        if origin is Union:
-            args = get_args(annotation)
-            # Optional[X] is Union[X, None], so check if None is one of the args
-            return type(None) in args
-        
-        # Also check string representations for edge cases
-        str_annotation = str(annotation)
-        if 'Optional[' in str_annotation or 'Union[' in str_annotation and 'NoneType' in str_annotation:
-            return True
-            
-    except Exception as e:
-        logger.debug(f"Error checking optional type for {annotation}: {e}")
-        return False
-    
-    return False
-
-
-def get_required_params_for_single_module(module_path: str, kind: str, force_reload: bool = False) -> Tuple[str, List[str]]:
-    """Load ONLY the specified module and get its parameters. No bulk loading."""
-    import time
-    import sys
-    import os
-    start_time = time.time()
-    
-    if not module_path:
-        logger.warning("No module_path provided.")
-        return ("", [])
-    
-    logger.info(f"🎯 LOADING SINGLE MODULE: {module_path} (kind: {kind})")
-    
-    cache_key = (module_path, kind)
-    if cache_key in _PARAM_CACHE and not force_reload:
-        logger.info(f"✅ Cache hit for {module_path} (took {time.time() - start_time:.3f}s)")
-        return _PARAM_CACHE[cache_key]
 
 
 def get_detailed_class_info(module_path: str, kind: str = "model", force_reload: bool = False) -> Dict[str, Any]:
     """Get detailed information ONLY from what's written in the specific file."""
     import time
-    import sys
-    import ast
     start_time = time.time()
     
     if not module_path:
@@ -267,6 +203,10 @@ def get_detailed_class_info(module_path: str, kind: str = "model", force_reload:
                             if description:
                                 formatted += f" - {description}"
                             
+                            # Skip parameters with Optional in their type
+                            if "Optional" in param_type:
+                                continue
+                            
                             class_info["parameters"][param_name] = {
                                 "name": param_name,
                                 "type": param_type,
@@ -288,47 +228,8 @@ def get_detailed_class_info(module_path: str, kind: str = "model", force_reload:
         return {}
 
 
-def get_required_params_for_single_module(module_path: str, kind: str, force_reload: bool = False) -> Tuple[str, List[str]]:
-    """Backward compatibility wrapper that maintains the old interface."""
-    return get_required_params(module_path, kind)
-
-
-# Alias for backward compatibility
-def get_required_params(module_path: str, kind: str) -> Tuple[str, List[str]]:
-    """Backward compatibility wrapper - now uses detailed class info."""
-    detailed_info = get_detailed_class_info(module_path, kind)
-    if not detailed_info or not detailed_info.get("classes"):
-        return ("", [])
-    
-    # Get the first class and its required parameters
-    first_class = list(detailed_info["classes"].values())[0]
-    class_name = first_class["class_name"]
-    required_params = first_class["required_parameters"]
-    
-    return (class_name, required_params)
-
-
-def get_param_defaults(module_path: str, kind: str) -> Dict[str, Any]:
-    """Get parameter defaults using detailed class info."""
-    detailed_info = get_detailed_class_info(module_path, kind)
-    if not detailed_info or not detailed_info.get("classes"):
-        return {}
-    
-    # Get the first class and extract defaults
-    first_class = list(detailed_info["classes"].values())[0]
-    defaults = {}
-    
-    for param_name, param_info in first_class["parameters"].items():
-        if param_info.get("has_default") and param_info.get("default") is not None:
-            defaults[param_name] = param_info["default"]
-    
-    return defaults
-
-
 def clear_caches():
     """Clear all caches for debugging or when modules change."""
-    global _PARAM_CACHE, _PARAM_DEFAULT_CACHE, _DISCOVERY_CACHE
-    _PARAM_CACHE.clear()
-    _PARAM_DEFAULT_CACHE.clear()
+    global _DISCOVERY_CACHE
     _DISCOVERY_CACHE.clear()
     logger.info("All introspection caches cleared")
