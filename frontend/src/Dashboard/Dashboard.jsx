@@ -1,0 +1,456 @@
+import React, { useState, useEffect } from 'react'
+import { Routes, Route, Navigate, Link as RouterLink, useLocation, Outlet } from 'react-router-dom'
+import {
+	AppBar,
+	Toolbar,
+	IconButton,
+	Typography,
+	Drawer,
+	List,
+	ListItemButton,
+	ListItemIcon,
+	ListItemText,
+	Divider,
+	Box,
+	Container,
+	useMediaQuery,
+	Avatar,
+	Menu,
+	MenuItem,
+	Chip
+} from '@mui/material'
+import { useTheme } from '@mui/material/styles'
+import {
+	Menu as MenuIconOld,
+	PanelLeftOpen,
+	PanelLeftClose,
+	ChevronLeft,
+	ChevronRight,
+	ChevronDown,
+	ChevronUp,
+	Settings
+} from 'lucide-react'
+import {
+	LogOut as LogoutIcon,
+	Bell as NotificationsIcon,
+	User as AccountCircleIcon,
+	Moon as Brightness4Icon,
+	Sun as Brightness7Icon
+} from 'lucide-react'
+import Home from './Home'
+import Users from './Users'
+import RoleManagement from './RoleManagement'
+import UserInvitation from './UserInvitation'
+import ModelConfig from './ModelConfig'
+import { menuService } from '../services/menuService'
+import { getIconComponent } from '../utils/iconMap'
+
+const DRAWER_WIDTH = 240
+// Slimmer collapsed width to match compact icon rail
+const MINI_WIDTH = 56
+
+function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
+	const theme = useTheme()
+	const isMobile = useMediaQuery(theme.breakpoints.down('md'))
+	const [drawerOpen, setDrawerOpen] = useState(true) // desktop mini variant
+	const [mobileOpen, setMobileOpen] = useState(false)
+	const [anchorEl, setAnchorEl] = useState(null)
+	const [menuItems, setMenuItems] = useState([])
+	const [expandedSections, setExpandedSections] = useState({})
+	const location = useLocation()
+
+	// Load menu items from API
+	useEffect(() => {
+		const loadMenuItems = async () => {
+			try {
+				const items = await menuService.getMenuItems()
+				setMenuItems(items)
+				
+				// Set initial expanded state based on current route
+				const initialExpanded = {}
+				items.forEach(item => {
+					if (item.expandable && item.children) {
+						// Auto-expand if current route matches any child
+						const shouldExpand = item.children.some(child => 
+							location.pathname === child.to || location.pathname.startsWith(child.to)
+						)
+						initialExpanded[item.label] = shouldExpand
+					}
+				})
+				setExpandedSections(initialExpanded)
+			} catch (error) {
+				console.error('Failed to load menu items:', error)
+			}
+		}
+		
+		loadMenuItems()
+	}, [])
+
+	// Auto-expand sections when navigating to their pages
+	useEffect(() => {
+		const newExpanded = { ...expandedSections }
+		menuItems.forEach(item => {
+			if (item.expandable && item.children) {
+				const shouldExpand = item.children.some(child => 
+					location.pathname === child.to || location.pathname.startsWith(child.to)
+				)
+				if (shouldExpand && !newExpanded[item.label]) {
+					newExpanded[item.label] = true
+				}
+			}
+		})
+		setExpandedSections(newExpanded)
+	}, [location.pathname, menuItems])
+
+	const handleProfileMenuOpen = (event) => {
+		setAnchorEl(event.currentTarget)
+	}
+
+	const handleProfileMenuClose = () => {
+		setAnchorEl(null)
+	}
+
+	const handleLogout = () => {
+		handleProfileMenuClose()
+		onLogout()
+	}
+
+	const handleThemeToggle = () => {
+		handleProfileMenuClose()
+		setThemeKey(prev => prev === 'aurora' ? 'ocean' : 'aurora')
+	}
+
+	const toggleSection = (sectionLabel) => {
+		setExpandedSections(prev => ({
+			...prev,
+			[sectionLabel]: !prev[sectionLabel]
+		}))
+	}
+
+	const leftWidth = isMobile ? 0 : (drawerOpen ? DRAWER_WIDTH : MINI_WIDTH)
+
+	// Separate top-level and settings menu items
+	const topMenuItems = menuItems.filter(item => item.order < 100)
+	const settingsMenuItems = menuItems.filter(item => item.order >= 100)
+
+	// Helper to render nav items (shared for top and bottom sections)
+	const renderNavItems = (items) => items.map((item) => {
+		if (item.expandable) {
+			// Determine if any child route is active for styling
+			const isSectionSelected = item.children?.some((child) =>
+				location.pathname === child.to || location.pathname.startsWith(child.to)
+			)
+			const isExpanded = expandedSections[item.label] || false
+			const ExpandIcon = isExpanded ? ChevronUp : ChevronDown
+			const Icon = getIconComponent(item.icon)
+
+			return (
+				<React.Fragment key={item.label}>
+					<ListItemButton
+						onClick={() => toggleSection(item.label)}
+						selected={Boolean(isSectionSelected)}
+						sx={{
+							minHeight: 36,
+							px: 1,
+							py: 0.25,
+							my: 0.25,
+							mx: 1,
+							borderRadius: 1.5,
+							'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
+							'&:hover .MuiListItemText-primary': { color: theme.palette.text.primary },
+							'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
+							'&.Mui-selected': {
+								backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
+							}
+						}}
+					>
+						<ListItemIcon sx={{ minWidth: 28, color: 'text.secondary' }}>
+							<Icon size={18} strokeWidth={1.8} />
+						</ListItemIcon>
+						<ListItemText
+							primary={item.label}
+							primaryTypographyProps={{
+								fontSize: 12.5,
+								fontWeight: 500,
+								letterSpacing: 0.2,
+								color: isSectionSelected ? 'text.primary' : 'text.secondary'
+							}}
+							sx={{ opacity: drawerOpen || isMobile ? 1 : 0 }}
+						/>
+						{(drawerOpen || isMobile) && (
+							<ExpandIcon size={16} color={theme.palette.text.secondary} />
+						)}
+					</ListItemButton>
+
+					{/* Submenu items */}
+					{isExpanded && (drawerOpen || isMobile) && item.children?.map((child) => {
+						const selected = location.pathname === child.to
+						const ChildIcon = getIconComponent(child.icon)
+						return (
+							<ListItemButton
+								key={child.to}
+								component={RouterLink}
+								to={child.to}
+								selected={selected}
+								sx={{
+									minHeight: 32,
+									px: 1,
+									py: 0.25,
+									my: 0.1,
+									mx: 1,
+									ml: 3,
+									borderRadius: 1.5,
+									'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
+									'&:hover .MuiListItemText-primary': { color: theme.palette.text.primary },
+									'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
+									'&.Mui-selected': {
+										backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'
+									}
+								}}
+								onClick={() => { if (isMobile) setMobileOpen(false) }}
+							>
+								<ListItemIcon sx={{ minWidth: 24, color: 'text.secondary' }}>
+									<ChildIcon size={16} strokeWidth={1.8} />
+								</ListItemIcon>
+								<ListItemText
+									primary={child.label}
+									primaryTypographyProps={{
+										fontSize: 11.5,
+										fontWeight: 500,
+										letterSpacing: 0.2,
+										color: selected ? 'text.primary' : 'text.secondary'
+									}}
+								/>
+							</ListItemButton>
+						)
+					})}
+				</React.Fragment>
+			)
+		} else {
+			const selected = location.pathname === item.to || (item.to !== '/' && location.pathname.startsWith(item.to))
+			const Icon = getIconComponent(item.icon)
+			return (
+				<ListItemButton
+					key={item.to}
+					component={RouterLink}
+					to={item.to}
+					selected={selected}
+					sx={{
+						minHeight: 36,
+						px: 1,
+						py: 0.25,
+						my: 0.25,
+						mx: 1,
+						borderRadius: 1.5,
+						'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
+						'&:hover .MuiListItemText-primary': { color: theme.palette.text.primary },
+						'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
+						'&.Mui-selected': {
+							backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
+						}
+					}}
+					onClick={() => { if (isMobile) setMobileOpen(false) }}
+				>
+					<ListItemIcon sx={{ minWidth: 28, color: 'text.secondary' }}>
+						<Icon size={18} strokeWidth={1.8} />
+					</ListItemIcon>
+					<ListItemText
+						primary={item.label}
+						primaryTypographyProps={{
+							fontSize: 12.5,
+							fontWeight: 500,
+							letterSpacing: 0.2,
+							color: selected ? 'text.primary' : 'text.secondary'
+						}}
+						sx={{ opacity: drawerOpen || isMobile ? 1 : 0 }}
+					/>
+				</ListItemButton>
+			)
+		}
+	})
+
+	const DrawerContent = (
+		<Box sx={{ 
+			display: 'flex', 
+			flexDirection: 'column', 
+			height: '100%',
+			px: 1, // Add horizontal padding
+			pt: 1  // Add top padding for better spacing
+		}}>
+			{/* Dense list for tighter vertical rhythm */}
+			<List dense sx={{ py: 0.5 }}>
+				{renderNavItems(topMenuItems)}
+			</List>
+			<Box sx={{ flexGrow: 1 }} />
+			{/* Settings group anchored at the bottom */}
+			<List dense sx={{ py: 0.5 }}>
+				{renderNavItems(settingsMenuItems)}
+			</List>
+			<Divider />
+			<Box sx={{ p: 1, display: 'flex', justifyContent: drawerOpen || isMobile ? 'space-between' : 'center', alignItems: 'center' }}>
+				{drawerOpen || isMobile ? (
+					<Typography variant="caption" color="text.secondary">
+						Nav
+					</Typography>
+				) : null}
+				<IconButton size="small" onClick={() => (isMobile ? setMobileOpen(false) : setDrawerOpen(v => !v))}>
+					{theme.direction === 'rtl'
+						? (drawerOpen ? <ChevronRight size={18} /> : <ChevronLeft size={18} />)
+						: (drawerOpen ? <ChevronLeft size={18} /> : <ChevronRight size={18} />)}
+				</IconButton>
+			</Box>
+		</Box>
+	)
+
+	return (
+		<Box sx={{ display: 'flex', minHeight: '100vh' }}>
+			{/* AppBar */}
+			<AppBar
+				position="fixed"
+				color="transparent"
+				elevation={0}
+				sx={{
+					background: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.9)',
+					backdropFilter: 'saturate(180%) blur(8px)',
+					borderBottom: theme.palette.mode === 'dark' ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)'
+				}}
+			>
+				<Toolbar sx={{ gap: 1 }}>
+					{isMobile ? (
+						<IconButton color="inherit" edge="start" onClick={() => setMobileOpen(true)}>
+							<MenuIconOld size={20} />
+						</IconButton>
+					) : (
+						<IconButton color="inherit" edge="start" onClick={() => setDrawerOpen(v => !v)}>
+							{drawerOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
+						</IconButton>
+					)}
+					<Typography variant="h6" sx={{ fontWeight: 600, flexGrow: 1 }}>ConsultFlow</Typography>
+					
+					<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+						<IconButton color="inherit">
+							<NotificationsIcon size={18} />
+						</IconButton>
+						
+						<Chip
+							avatar={<Avatar sx={{ bgcolor: theme.palette.secondary.main }}>{user?.name?.[0] || 'U'}</Avatar>}
+							label={user?.name || 'User'}
+							onClick={handleProfileMenuOpen}
+							sx={{
+								color: theme.palette.text.primary,
+								borderColor: 'rgba(0,0,0,0.23)',
+								'& .MuiChip-label': { color: theme.palette.text.primary }
+							}}
+							variant="outlined"
+						/>
+					</Box>
+
+					<Menu
+						anchorEl={anchorEl}
+						open={Boolean(anchorEl)}
+						onClose={handleProfileMenuClose}
+						anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+						transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+					>
+						<MenuItem onClick={handleProfileMenuClose}>
+							<ListItemIcon>
+								<AccountCircleIcon size={16} />
+							</ListItemIcon>
+							Profile
+						</MenuItem>
+						<MenuItem onClick={handleThemeToggle}>
+							<ListItemIcon>
+								{themeKey === 'aurora' ? <Brightness7Icon size={16} /> : <Brightness4Icon size={16} />}
+							</ListItemIcon>
+							Switch to {themeKey === 'aurora' ? 'Ocean' : 'Aurora'} Theme
+						</MenuItem>
+						<Divider />
+						<MenuItem onClick={handleLogout}>
+							<ListItemIcon>
+								<LogoutIcon size={16} />
+							</ListItemIcon>
+							Sign Out
+						</MenuItem>
+					</Menu>
+				</Toolbar>
+			</AppBar>
+
+			{/* Left Drawer */}
+			{isMobile ? (
+				<Drawer
+					variant="temporary"
+					open={mobileOpen}
+					onClose={() => setMobileOpen(false)}
+					ModalProps={{ keepMounted: true }}
+					sx={{ 
+						'& .MuiDrawer-paper': { 
+							width: DRAWER_WIDTH,
+							background: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.9)',
+							backdropFilter: 'saturate(180%) blur(8px)',
+							borderRight: theme.palette.mode === 'dark' ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)'
+						} 
+					}}
+				>
+					{DrawerContent}
+				</Drawer>
+			) : (
+				<Drawer
+					variant="permanent"
+					open
+					sx={{
+						width: leftWidth,
+						flexShrink: 0,
+						'& .MuiDrawer-paper': {
+							position: 'fixed',
+							width: leftWidth,
+							transition: 'width 200ms ease',
+							overflowX: 'hidden',
+							top: 65, // Slightly offset from AppBar to avoid border intersection
+							height: 'calc(100% - 65px)',
+							background: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.9)',
+							backdropFilter: 'saturate(180%) blur(8px)',
+							borderTop: 'none', // Remove top border
+							borderRight: theme.palette.mode === 'dark' ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)'
+						}
+					}}
+				>
+					{DrawerContent}
+				</Drawer>
+			)}
+
+			{/* Main content */}
+			<Box component="main" sx={{ flexGrow: 1, width: '100%' }}>
+				{/* Offset for fixed AppBar */}
+				<Toolbar />
+				<Box sx={{ 
+					width: '100%', 
+					px: {
+						xs: 2,    // 16px on mobile
+						sm: 3,    // 24px on small tablets
+						md: 6,    // 48px on medium screens
+						lg: '12%', // 12% on large screens
+						xl: '18%'  // 18% on extra large screens
+					}, 
+					py: 8 
+				}}>
+					<Outlet />
+				</Box>
+			</Box>
+		</Box>
+	)
+}
+
+export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
+  return (
+    <Routes>
+      <Route path="/" element={<DashboardLayout user={user} onLogout={onLogout} themeKey={themeKey} setThemeKey={setThemeKey} />}>
+        <Route index element={<Navigate to="/dashboard/home" replace />} />
+        <Route path="home" element={<Home user={user} />} />
+        <Route path="users" element={<Users user={user} />} />
+        <Route path="role-management" element={<RoleManagement user={user} />} />
+        <Route path="user-invitation" element={<UserInvitation user={user} />} />
+        <Route path="model-config" element={<ModelConfig user={user} />} />
+      </Route>
+    </Routes>
+  )
+}

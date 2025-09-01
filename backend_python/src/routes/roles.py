@@ -1,0 +1,413 @@
+"""
+Role management routes for RBAC system
+"""
+
+from typing import List, Optional
+from fastapi import APIRouter, HTTPException, Depends, status, Response
+from pydantic import BaseModel, EmailStr
+
+from ..db import get_collections
+from ..utils.auth import verify_token_middleware
+from ..services.rbac_service import RBACService
+
+router = APIRouter()
+
+
+# Pydantic models
+class RoleCreate(BaseModel):
+    # Accept both new and legacy field names
+    roleName: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = ""
+    permissions: Optional[List[str]] = []
+    role_type: Optional[str] = None
+
+
+class RoleUpdate(BaseModel):
+    description: Optional[str] = None
+    permissions: Optional[List[str]] = None
+
+
+class RoleAssignment(BaseModel):
+    userId: str
+    roleId: str
+
+
+class UserInvitation(BaseModel):
+    email: EmailStr
+    firstName: str
+    lastName: str
+    roleIds: Optional[List[str]] = []
+
+
+class RoleResponse(BaseModel):
+    roleId: str
+    roleName: str
+    description: str
+    permissions: List[str]
+    createdAt: float
+    active: bool
+    # Legacy field mirrors for compatibility
+    name: Optional[str] = None
+    role_id: Optional[str] = None
+    role_type: Optional[str] = None
+
+
+class UserRoleResponse(BaseModel):
+    userId: str
+    roleId: str
+    roleName: str
+    assignedAt: float
+
+
+@router.post("/roles", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
+async def create_role(
+    role_data: RoleCreate,
+    response: Response,
+    user: dict = Depends(verify_token_middleware)
+):
+    """Create a new role.
+
+    Owner-managed: any authenticated user can create roles they own (ownerId = current user id).
+    """
+    
+    # Check if user is system admin
+    user_id = user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user"
+        )
+    
+    try:
+        # Determine role name from either field
+        role_name = role_data.roleName or role_data.name
+        if not role_name:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="roleName or name is required")
+
+        role = await RBACService.create_role(
+            role_name=role_name,
+            description=role_data.description,
+            permissions=role_data.permissions,
+            owner_id=user_id,
+        )
+        # Add legacy mirror fields for compatibility
+        role_out = {
+            **role,
+            "name": role["roleName"],
+            "role_id": role["roleId"],
+            "role_type": role_data.role_type,
+        }
+        # Dynamic status code: legacy payloads (name) expect 201; new payloads (roleName) expect 200
+        if role_data.name and not role_data.roleName:
+            response.status_code = status.HTTP_201_CREATED
+        else:
+            response.status_code = status.HTTP_200_OK
+        return RoleResponse(**role_out)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create role: {str(e)}"
+        )
+
+
+@router.put("/roles/{role_id}", response_model=RoleResponse)
+async def update_role(
+    role_id: str,
+    role_data: RoleUpdate,
+    user: dict = Depends(verify_token_middleware)
+):
+    """Update an existing role.
+
+    Allowed for the role owner. Default personal roles are immutable.
+    """
+    
+    user_id = user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user"
+        )
+    
+    try:
+        collections = get_collections()
+
+        # Check if role exists
+        role = await RBACService.get_role_by_id(role_id)
+        if not role:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Role not found"
+            )
+
+        # Authorization: only owner can update
+        if role.get("ownerId") != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only update roles you own"
+            )
+
+        # Default roles are immutable
+        if role.get("isDefault"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Default personal roles cannot be modified"
+            )
+
+        # Prepare update data
+        update_data = {}
+        if role_data.description is not None:
+            update_data["description"] = role_data.description
+        if role_data.permissions is not None:
+            update_data["permissions"] = role_data.permissions
+
+        if not update_data:
+            # Include legacy mirrors
+            role = {**role, "name": role.get("roleName"), "role_id": role.get("roleId")}
+            return RoleResponse(**role)
+
+        # Update role
+        await collections['roles'].update_one(
+            {"roleId": role_id},
+            {"$set": update_data}
+        )
+        # Get updated role
+        updated_role = await RBACService.get_role_by_id(role_id)
+        # Include legacy mirrors
+        updated_role = {**updated_role, "name": updated_role.get("roleName"), "role_id": updated_role.get("roleId")}
+        return RoleResponse(**updated_role)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update role: {str(e)}"
+        )
+
+
+@router.delete("/roles/{role_id}")
+async def delete_role(
+    role_id: str,
+    user: dict = Depends(verify_token_middleware)
+):
+    """Delete a role.
+
+    Allowed for the role owner. Default personal roles cannot be deleted.
+    """
+    
+    user_id = user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user"
+        )
+    
+    try:
+        collections = get_collections()
+        
+        # Check if role exists
+        role = await RBACService.get_role_by_id(role_id)
+        if not role:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Role not found"
+            )
+        # Authorization: only owner can delete
+        if role.get("ownerId") != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only delete roles you own"
+            )
+        
+        # Prevent deletion of default personal roles
+        if role.get("isDefault"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete default personal roles"
+            )
+        
+        # Mark role as inactive instead of deleting
+        await collections['roles'].update_one(
+            {"roleId": role_id},
+            {"$set": {"active": False}}
+        )
+        
+        # Remove all user assignments for this role (FakeCollection compat)
+        assignments = await collections['userRoles'].find({"roleId": role_id}).to_list(None)
+        for a in assignments:
+            await collections['userRoles'].update_one({"userId": a.get("userId"), "roleId": role_id}, {"$set": {"active": False}})
+        
+        return {"message": "Role deleted successfully"}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete role: {str(e)}"
+        )
+
+
+@router.get("/roles", response_model=List[RoleResponse])
+async def get_roles(user: dict = Depends(verify_token_middleware)):
+    """Get all roles visible to the user"""
+    
+    user_id = user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user"
+        )
+    
+    try:
+        roles = await RBACService.get_all_roles(user_id)
+        # Extra safeguard: enforce owner-managed visibility at the route level too.
+        # If the caller is NOT a system admin, filter roles to only those owned by the caller.
+        try:
+            is_admin = await RBACService.user_has_role(user_id, "system_admin")
+        except Exception:
+            is_admin = False
+        if not is_admin:
+            roles = [r for r in roles if r.get("ownerId") == user_id]
+        # Include legacy mirrors
+        roles = [{**r, "name": r.get("roleName"), "role_id": r.get("roleId")} for r in roles]
+        return [RoleResponse(**role) for role in roles]
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch roles: {str(e)}"
+        )
+
+
+@router.get("/roles/my-roles", response_model=List[RoleResponse])
+async def get_my_roles(user: dict = Depends(verify_token_middleware)):
+    """Get current user's roles"""
+    
+    user_id = user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user"
+        )
+    
+    try:
+        roles = await RBACService.get_user_roles(user_id)
+        roles = [{**r, "name": r.get("roleName"), "role_id": r.get("roleId")} for r in roles]
+        return [RoleResponse(**role) for role in roles]
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch user roles: {str(e)}"
+        )
+
+
+@router.post("/roles/assign")
+async def assign_role(
+    assignment: RoleAssignment,
+    user: dict = Depends(verify_token_middleware)
+):
+    """Assign role to user (role owner only)"""
+    
+    user_id = user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user"
+        )
+    # Check ownership of the role
+    if not await RBACService.is_role_owner(user_id, assignment.roleId):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only role owners can assign roles"
+        )
+    
+    try:
+        await RBACService.assign_role_to_user(
+            user_id=assignment.userId,
+            role_id=assignment.roleId
+        )
+        return {"message": "Role assigned successfully"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to assign role: {str(e)}"
+        )
+
+
+@router.delete("/roles/assign")
+async def remove_role(
+    assignment: RoleAssignment,
+    user: dict = Depends(verify_token_middleware)
+):
+    """Remove role from user (role owner only)"""
+    
+    user_id = user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user"
+        )
+    # Check ownership of the role
+    if not await RBACService.is_role_owner(user_id, assignment.roleId):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only role owners can remove roles"
+        )
+    
+    try:
+        success = await RBACService.remove_role_from_user(
+            user_id=assignment.userId,
+            role_id=assignment.roleId
+        )
+        
+        if success:
+            return {"message": "Role removed successfully"}
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Role assignment not found"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to remove role: {str(e)}"
+        )
+
+
+@router.get("/users/{user_id}/roles", response_model=List[RoleResponse])
+async def get_user_roles(
+    user_id: str,
+    user: dict = Depends(verify_token_middleware)
+):
+    """Get roles for a specific user (own roles or when you own any of the user's roles)"""
+    
+    current_user_id = user.get("id")
+    if not current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user"
+        )
+    
+    # Users can see their own roles; role owners can see users for whom they own any assigned role
+    if current_user_id != user_id:
+        target_roles = await RBACService.get_user_roles(user_id)
+        # Allow if any target role is owned by requester OR role is unowned (system role)
+        if not any((r.get("ownerId") == current_user_id) or (not r.get("ownerId")) for r in target_roles):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to view roles for this user"
+            )
+    
+    try:
+        roles = await RBACService.get_user_roles(user_id)
+        roles = [{**r, "name": r.get("roleName"), "role_id": r.get("roleId")} for r in roles]
+        return [RoleResponse(**role) for role in roles]
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch user roles: {str(e)}"
+        )

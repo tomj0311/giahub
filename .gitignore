@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+.coverage.*
+.tox/
+.nox/
+*.egg-info/
+.installed.cfg
+*.egg
+*.manifest
+*.spec
+*.log
+pip-log.txt
+
+# Virtual Environment
+.venv/
+env/
+venv/
+ENV/
+
+# Python Build
+python-build/
+dist-python/
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node/React
+node_modules/
+.pnp
+.pnp.js
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env.local
+
+# API keys and secrets
+secrets.py
+config.py
+
+# Logs
+logs/*.log
+!logs/.gitkeep
