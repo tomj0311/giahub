@@ -10,7 +10,7 @@ def main():
     """Run the development server"""
     
     # Check if virtual environment exists
-    venv_path = os.path.join(os.path.dirname(__file__), 'venv')
+    venv_path = os.path.join(os.path.dirname(__file__), '..', 'venv')
     if not os.path.exists(venv_path):
         print("Creating virtual environment...")
         subprocess.run([sys.executable, '-m', 'venv', 'venv'], check=True)
@@ -44,7 +44,7 @@ def main():
     cmd = [
         python_path, '-m', 'uvicorn', 'main:app',
         '--host', '0.0.0.0', '--port', '4000',
-    '--reload', '--reload-impl', 'statreload', '--reload-dir', 'src', '--reload-dir', '.',
+        '--reload', '--reload-dir', 'src', '--reload-dir', '.',
         '--reload-delay', '0.5', '--log-level', 'info', '--no-access-log',
         '--reload-exclude', 'venv', '--reload-exclude', '__pycache__', '--reload-exclude', '.git'
     ]

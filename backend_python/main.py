@@ -99,10 +99,6 @@ async def root():
     return {"message": "GIA Platform API is running"}
 
 
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-
-
 # Create FastAPI app
 app = FastAPI(
     title="ConsultFlow API",
@@ -149,28 +145,11 @@ app.include_router(discovery.router)
 
 
 if __name__ == "__main__":
-    port = int(os.getenv('PORT', 4000))
-    use_tls = os.getenv('TLS_KEY') and os.getenv('TLS_CERT')
-    # Avoid in-process reload on Windows; use dev scripts/CLI for reload instead.
-    reload_flag = os.getenv('UVICORN_RELOAD', '').lower() in {"1", "true", "yes"}
-
-    if use_tls:
-        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        ssl_context.load_cert_chain(
-            os.getenv('TLS_CERT'),
-            os.getenv('TLS_KEY')
-        )
-        uvicorn.run(
-            app,
-            host="0.0.0.0",
-            port=port,
-            ssl_context=ssl_context,
-            reload=reload_flag
-        )
-    else:
-        uvicorn.run(
-            app,
-            host="0.0.0.0",
-            port=port,
-            reload=reload_flag
-        )
+    # FORCE PORT 4000 - NO BULLSHIT
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=4000,
+        reload=False,
+        access_log=False
+    )
