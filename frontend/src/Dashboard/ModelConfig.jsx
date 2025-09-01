@@ -33,7 +33,7 @@ export default function ModelConfig() {
     const discoverComponents = useCallback(async () => {
         try {
             setLoadingDiscovery(true);
-            const response = await fetch(`${backendBase()}/api/discovery/components?folder=models`, {
+            const response = await fetch(`${backendBase()}/api/model-config/components?folder=models`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
             
@@ -59,7 +59,7 @@ export default function ModelConfig() {
         try {
             setPendingIntros(p => ({ ...p, [modulePath]: true }));
             
-            const response = await fetch(`${backendBase()}/api/discovery/introspect`, {
+            const response = await fetch(`${backendBase()}/api/model-config/introspect`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -82,38 +82,16 @@ export default function ModelConfig() {
         }
     }, [token, introspectCache, pendingIntros, showError]);
 
-    // Load global defaults from backend
+    // Load global defaults from backend (removed - not supported by new model config routes)
     const loadGlobalDefaults = useCallback(async () => {
-        try {
-            const response = await fetch(`${backendBase()}/api/discovery/defaults`, {
-                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-            });
-            if (response.ok) {
-                const data = await response.json();
-                const defaults = data.defaults || {};
-                setGlobalDefaults(defaults);
-                
-                // Update form with defaults if needed
-                setForm(f => ({
-                    ...f,
-                    ...Object.keys(defaults).reduce((acc, key) => {
-                        if (f[key] === undefined || f[key] === null) {
-                            acc[key] = defaults[key];
-                        }
-                        return acc;
-                    }, {})
-                }));
-            }
-        } catch (error) {
-            console.error('Failed to load global defaults:', error);
-            setGlobalDefaults({});
-        }
-    }, [token]);
+        // This functionality was removed as it's not part of the model config routes
+        setGlobalDefaults({});
+    }, []);
 
     const loadCategories = useCallback(async () => {
         try {
             setLoadingCategories(true);
-            const response = await fetch(`${backendBase()}/api/discovery/categories?action=list_categories`, {
+            const response = await fetch(`${backendBase()}/api/model-config/categories`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
             if (response.ok) {
@@ -136,7 +114,7 @@ export default function ModelConfig() {
 
     const loadExistingConfigs = useCallback(async () => {
         try {
-            const resp = await fetch(`${backendBase()}/api/discovery/configs`, {
+            const resp = await fetch(`${backendBase()}/api/model-config/configs`, {
                 headers: {
                     ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 }
@@ -205,7 +183,7 @@ export default function ModelConfig() {
         };
 
         try {
-            const resp = await fetch(`${backendBase()}/api/discovery/configs`, {
+            const resp = await fetch(`${backendBase()}/api/model-config/configs`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
