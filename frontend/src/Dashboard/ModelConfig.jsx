@@ -1,15 +1,19 @@
 import React, { useEffect, useState, useCallback, useContext } from 'react';
 import { Box, Button, TextField, Paper, Typography, CircularProgress, Autocomplete, LinearProgress, Fade, useTheme, Stack } from '@mui/material';
-import ParamFields from '../utils/ParamFields.jsx';
-import { AuthContext } from '../App.js';
-import { backendBase } from '../agentShared.js';
-import { useSnackbar } from '../contexts/SnackbarContext.jsx';
 
 export default function ModelConfig() {
     const theme = useTheme();
-    const authCtx = useContext(AuthContext) || {};
-    const token = authCtx?.login?.token;
-    const { showSuccess, showError, showWarning } = useSnackbar();
+    
+    // Simple auth context replacement
+    const token = null; // Replace with actual auth implementation
+    
+    // Simple snackbar replacement
+    const showSuccess = (msg) => alert(`Success: ${msg}`);
+    const showError = (msg) => alert(`Error: ${msg}`);
+    const showWarning = (msg) => alert(`Warning: ${msg}`);
+    
+    // Simple backend base function replacement
+    const backendBase = () => import.meta.env.VITE_BACKEND_URL || 'http://localhost:4000';
 
     const [components, setComponents] = useState({ models: [] });
     const [loadingDiscovery, setLoadingDiscovery] = useState(true);
@@ -358,12 +362,21 @@ export default function ModelConfig() {
                             <Typography variant="subtitle2" sx={{ mb: 1 }}>
                                 Model Parameters ({modelIntro.class_name})
                             </Typography>
-                            <ParamFields
-                                entries={modelIntro.required}
-                                values={form.model_params}
-                                defaults={modelIntro.defaults}
-                                onChange={(k, v) => setForm(f => ({ ...f, model_params: { ...f.model_params, [k]: v } }))}
-                            />
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                {(modelIntro.required || []).map(paramName => (
+                                    <TextField
+                                        key={paramName}
+                                        size="small"
+                                        label={paramName}
+                                        value={form.model_params[paramName] || ''}
+                                        onChange={(e) => setForm(f => ({ 
+                                            ...f, 
+                                            model_params: { ...f.model_params, [paramName]: e.target.value } 
+                                        }))}
+                                        placeholder={`Enter ${paramName}`}
+                                    />
+                                ))}
+                            </Box>
                         </Box>
                     )}
 

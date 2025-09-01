@@ -354,16 +354,13 @@ async def introspect_model_component(
                 detail=f"No valid class found in module: {module_path}"
             )
         
-        # Return detailed class information
+        # Return formatted params like discovery endpoint
         main_class = list(detailed_info["classes"].values())[0]
         
         return {
             "module_path": detailed_info["module_path"],
             "class_name": main_class["class_name"],
-            "parameters": main_class["parameters"],
-            "formatted_params": main_class["formatted_params"],
-            "required": [p for p, info in main_class["parameters"].items() if info.get("default") == "None"],
-            "defaults": {p: info.get("default") for p, info in main_class["parameters"].items() if info.get("default") != "None"}
+            "formatted_params": main_class["formatted_params"]
         }
         
     except HTTPException:
