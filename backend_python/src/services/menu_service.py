@@ -113,7 +113,7 @@ class MenuService:
         store_children = [
             {
                 "label": "Agent Store",
-                "to": "/store/agents",
+                "to": "/agents/agent-config",
                 "icon": "Bot",
                 "parentId": store_parent_id,
                 "order": 1,

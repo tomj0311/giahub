@@ -1,5 +1,30 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Button, TextField, Paper, Typography, CircularProgress, Autocomplete, Fade, Stack, Card, CardContent, Grid } from '@mui/material';
+import {
+    Box,
+    Button,
+    TextField,
+    Typography,
+    CircularProgress,
+    Autocomplete,
+    Fade,
+    Stack,
+    Card,
+    CardContent,
+    Grid,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    Paper,
+    IconButton
+} from '@mui/material';
+import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react';
 import { useSnackbar } from '../contexts/SnackbarContext';
 
 export default function ModelConfig({ user }) {
@@ -18,6 +43,7 @@ export default function ModelConfig({ user }) {
     const [existingConfigs, setExistingConfigs] = useState([]);
     const [loadingConfigs, setLoadingConfigs] = useState(true);
     const [isEditMode, setIsEditMode] = useState(false);
+    const [dialogOpen, setDialogOpen] = useState(false);
     const [form, setForm] = useState({
         id: null,
         name: '',
@@ -225,11 +251,49 @@ export default function ModelConfig({ user }) {
                 model_params: {}
             });
             setIsEditMode(false);
+            setDialogOpen(false);
         } catch (e) {
             showError(e.message || 'Network error');
             setSaveState({ loading: false });
         }
     }
+
+    async function deleteModelConfig(id) {
+        if (!id) return;
+        try {
+            setSaveState({ loading: true });
+            const resp = await fetch(`${backendBase()}/api/model-config/configs/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                }
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) {
+                showError(data.detail || `Delete failed (HTTP ${resp.status})`);
+                setSaveState({ loading: false });
+                return;
+            }
+            showSuccess('Model configuration deleted');
+            await loadExistingConfigs();
+            setSaveState({ loading: false });
+            setDialogOpen(false);
+        } catch (e) {
+            showError(e.message || 'Network error');
+            setSaveState({ loading: false });
+        }
+    }
+
+    const openCreate = () => {
+        setForm({ id: null, name: '', category: '', model: '', model_params: {} });
+        setIsEditMode(false);
+        setDialogOpen(true);
+    };
+
+    const openEdit = (configName) => {
+        loadExistingConfig(configName);
+        setDialogOpen(true);
+    };
 
     const modelIntro = form.model ? introspectCache[form.model] : null;
 
@@ -244,212 +308,233 @@ export default function ModelConfig({ user }) {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Box>
                     <Typography variant="h4" gutterBottom>
-                        Model Configuration {isEditMode && <Typography component="span" variant="body2" sx={{ color: 'warning.main' }}>(Editing)</Typography>}
+                        Model Configurations
                     </Typography>
                     <Typography variant="body1" color="text.secondary">
-                        Configure and manage AI model settings for your agents. Select models and customize their parameters.
+                        Configure and manage AI model settings for your agents.
                     </Typography>
                 </Box>
+                <Button variant="contained" startIcon={<AddIcon size={18} />} onClick={openCreate}>Create Configuration</Button>
             </Box>
 
-            <Grid container spacing={3}>
-                <Grid item xs={12}>
-                    <Card>
-                        <CardContent>
+            <Card>
+                <CardContent>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                        <Typography variant="h6">All Model Configs ({existingConfigs.length})</Typography>
+                    </Box>
+                    <TableContainer component={Paper} variant="outlined">
+                        <Table>
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell>Name</TableCell>
+                                    <TableCell>Category</TableCell>
+                                    <TableCell>Model</TableCell>
+                                    <TableCell>Params</TableCell>
+                                    <TableCell align="right">Actions</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {existingConfigs.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                                            <Typography color="text.secondary">No configurations found</Typography>
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    existingConfigs.map(cfg => (
+                                        <TableRow key={cfg.id || cfg.name} hover>
+                                            <TableCell>{cfg.name}</TableCell>
+                                            <TableCell>{cfg.category || '-'}</TableCell>
+                                            <TableCell>{cfg.model || '-'}</TableCell>
+                                            <TableCell>{Object.keys(cfg.model_params || {}).length}</TableCell>
+                                            <TableCell align="right">
+                                                <IconButton size="small" color="primary" onClick={() => openEdit(cfg.name)}>
+                                                    <EditIcon size={16} />
+                                                </IconButton>
+                                                {cfg.id && (
+                                                    <IconButton size="small" color="error" onClick={() => deleteModelConfig(cfg.id)}>
+                                                        <DeleteIcon size={16} />
+                                                    </IconButton>
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </CardContent>
+            </Card>
 
-                            {loadingDiscovery && (
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                                    <CircularProgress size={18} />
-                                    <Typography variant="body2">Discovering models...</Typography>
-                                </Box>
-                            )}
+            <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
+                <DialogTitle>{isEditMode ? 'Edit Model Configuration' : 'Create Model Configuration'}</DialogTitle>
+                <DialogContent dividers>
+                    <Stack spacing={1} sx={{ mt: 1 }}>
+                        <Typography variant="body2" color="text.secondary">
+                            {existingConfigs.length > 0 && 'Start typing to search existing configurations or enter a new name.'}
+                        </Typography>
 
-                            {!loadingDiscovery && Object.keys(pendingIntros).length > 0 && (
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                                    <CircularProgress size={16} />
-                                    <Typography variant="caption" sx={{ opacity: 0.7 }}>
-                                        Loading definitions for {Object.keys(pendingIntros).filter(k => !introspectCache[k]).length} item(s)…
-                                    </Typography>
-                                </Box>
-                            )}
-
-                            <Stack spacing={1}>
-                                <Typography variant="body2" color="text.secondary">
-                                    {existingConfigs.length > 0 && 'Start typing to search existing configurations or enter a new name.'}
-                                </Typography>
-
-                                <Autocomplete
-                                    freeSolo
-                                    fullWidth
-                                    options={existingConfigs.map(c => c.name)}
-                                    value={form.name}
-                                    loading={loadingConfigs}
-                                    loadingText="Loading configurations…"
-                                    onChange={(_, v) => {
-                                        if (v && existingConfigs.some(c => c.name === v)) {
-                                            loadExistingConfig(v);
-                                        } else {
-                                            setForm(f => ({ ...f, id: null, name: v || '' }));
-                                            setIsEditMode(false);
-                                        }
-                                    }}
-                                    onInputChange={(_, v) => {
-                                        setForm(f => ({ ...f, name: v }));
-                                        if (existingConfigs.some(c => c.name === v)) {
-                                            loadExistingConfig(v);
-                                        } else {
-                                            setForm(f => ({ ...f, id: null }));
-                                            setIsEditMode(false);
-                                        }
-                                    }}
-                                    renderInput={(params) =>
-                                        <TextField
-                                            {...params}
-                                            label="Configuration Name"
-                                            placeholder="Enter a short descriptive name"
-                                            size="small"
-                                            required
-                                        />
-                                    }
-                                />
-
-                                <Autocomplete
-                                    freeSolo
-                                    fullWidth
+                        <Autocomplete
+                            freeSolo
+                            fullWidth
+                            options={existingConfigs.map(c => c.name)}
+                            value={form.name}
+                            loading={loadingConfigs}
+                            loadingText="Loading configurations…"
+                            onChange={(_, v) => {
+                                if (v && existingConfigs.some(c => c.name === v)) {
+                                    loadExistingConfig(v);
+                                } else {
+                                    setForm(f => ({ ...f, id: null, name: v || '' }));
+                                    setIsEditMode(false);
+                                }
+                            }}
+                            onInputChange={(_, v) => {
+                                setForm(f => ({ ...f, name: v }));
+                                if (existingConfigs.some(c => c.name === v)) {
+                                    loadExistingConfig(v);
+                                } else {
+                                    setForm(f => ({ ...f, id: null }));
+                                    setIsEditMode(false);
+                                }
+                            }}
+                            renderInput={(params) =>
+                                <TextField
+                                    {...params}
+                                    label="Configuration Name"
+                                    placeholder="Enter a short descriptive name"
                                     size="small"
-                                    options={categories}
-                                    value={form.category}
-                                    loading={loadingCategories}
-                                    disabled={saveState.loading}
-                                    onChange={(e, val) => {
-                                        setForm(f => ({ ...f, category: val || '' }));
-                                        if (val && !categories.includes(val)) {
-                                            setCategories(prev => [...prev, val]);
-                                        }
-                                    }}
-                                    onInputChange={(e, val) => {
-                                        setForm(f => ({ ...f, category: val || '' }));
-                                        if (val && !categories.includes(val)) {
-                                            setCategories(prev => [...prev, val]);
-                                        }
-                                    }}
-                                    renderInput={(params) => (
-                                        <TextField
-                                            {...params}
-                                            label="Category"
-                                            placeholder="Enter or select a category..."
-                                            size="small"
-                                        />
-                                    )}
+                                    required
                                 />
+                            }
+                        />
 
-                                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                                    <Autocomplete
-                                        sx={{ flex: 1 }}
-                                        options={components.models || []}
-                                        value={form.model}
-                                        loading={loadingDiscovery && !(components.models || []).length}
-                                        loadingText="Loading models…"
-                                        onChange={(_, v) => {
-                                            setForm(f => ({ ...f, model: v || '', model_params: {} }));
-                                            ensureIntrospection(v, 'model');
-                                        }}
-                                        renderInput={(params) => <TextField {...params} label="Select Model" />}
-                                    />
-                                    <Button
-                                        variant="gradientBorder"
-                                        size="medium"
-                                        onClick={discoverComponents}
-                                    >
-                                        Refresh
-                                    </Button>
+                        <Autocomplete
+                            freeSolo
+                            fullWidth
+                            size="small"
+                            options={categories}
+                            value={form.category}
+                            loading={loadingCategories}
+                            disabled={saveState.loading}
+                            onChange={(e, val) => {
+                                setForm(f => ({ ...f, category: val || '' }));
+                                if (val && !categories.includes(val)) {
+                                    setCategories(prev => [...prev, val]);
+                                }
+                            }}
+                            onInputChange={(e, val) => {
+                                setForm(f => ({ ...f, category: val || '' }));
+                                if (val && !categories.includes(val)) {
+                                    setCategories(prev => [...prev, val]);
+                                }
+                            }}
+                            renderInput={(params) => (
+                                <TextField
+                                    {...params}
+                                    label="Category"
+                                    placeholder="Enter or select a category..."
+                                    size="small"
+                                />
+                            )}
+                        />
+
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                            <Autocomplete
+                                sx={{ flex: 1 }}
+                                options={components.models || []}
+                                value={form.model}
+                                loading={loadingDiscovery && !(components.models || []).length}
+                                loadingText="Loading models…"
+                                onChange={(_, v) => {
+                                    setForm(f => ({ ...f, model: v || '', model_params: {} }));
+                                    ensureIntrospection(v, 'model');
+                                }}
+                                renderInput={(params) => <TextField {...params} label="Select Model" />}
+                            />
+                            <Button
+                                variant="gradientBorder"
+                                size="medium"
+                                onClick={discoverComponents}
+                            >
+                                Refresh
+                            </Button>
+                        </Box>
+
+                        {!modelIntro && form.model && (
+                            <Fade in>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <CircularProgress size={16} />
+                                    <Typography variant="caption" sx={{ opacity: 0.7 }}>Fetching model parameters…</Typography>
                                 </Box>
+                            </Fade>
+                        )}
 
-                                {!modelIntro && form.model && (
-                                    <Fade in>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                            <CircularProgress size={16} />
-                                            <Typography variant="caption" sx={{ opacity: 0.7 }}>Fetching model parameters…</Typography>
-                                        </Box>
-                                    </Fade>
-                                )}
-
-                                {modelIntro && (
-                                    <Box>
-                                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                                            Model Parameters ({modelIntro.class_name})
-                                        </Typography>
-                                        <Box sx={{
-                                            display: 'grid',
-                                            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                                            gap: 2
-                                        }}>
-                                            {(modelIntro.formatted_params || []).map(paramFormatted => {
-                                                // Extract parameter name and type from formatted string
-                                                const paramName = paramFormatted.split(':')[0].trim();
-                                                const typeMatch = paramFormatted.match(/:\s*([^=\s]+)/);
-                                                const paramType = typeMatch ? typeMatch[1].toLowerCase() : 'str';
-
-                                                // Extract default value (handles: "name: type = default - desc")
-                                                let defaultRaw = '';
-                                                const descSplitIdx = paramFormatted.indexOf(' - ');
-                                                const mainPart = descSplitIdx !== -1 ? paramFormatted.slice(0, descSplitIdx) : paramFormatted;
-                                                const eqIdx = mainPart.indexOf('=');
-                                                if (eqIdx !== -1) {
-                                                    defaultRaw = mainPart.slice(eqIdx + 1).trim();
-                                                    // Strip wrapping quotes for nicer display
-                                                    if ((defaultRaw.startsWith("'") && defaultRaw.endsWith("'")) || (defaultRaw.startsWith('"') && defaultRaw.endsWith('"'))) {
-                                                        defaultRaw = defaultRaw.slice(1, -1);
-                                                    }
-                                                }
-                                                const hasDefault = defaultRaw !== '' && defaultRaw.toLowerCase() !== 'none';
-                                                const placeholderText = hasDefault ? `Default: ${defaultRaw}` : `Enter ${paramName}`;
-
-                                                // Determine field width based on type
-                                                let gridColumn = 'span 1';
-                                                if (paramType.includes('int') || paramType.includes('float') || paramType.includes('bool')) {
-                                                    gridColumn = 'span 1'; // Smaller for numeric/boolean
-                                                } else if (paramType.includes('str') && (paramName.includes('key') || paramName.includes('token') || paramName.includes('url'))) {
-                                                    gridColumn = 'span 2'; // Larger for API keys, URLs, etc.
-                                                }
-
-                                                return (
-                                                    <TextField
-                                                        key={paramName}
-                                                        size="small"
-                                                        label={paramName}
-                                                        InputLabelProps={{ shrink: true }}
-                                                        value={form.model_params[paramName] || ''}
-                                                        onChange={(e) => setForm(f => ({
-                                                            ...f,
-                                                            model_params: { ...f.model_params, [paramName]: e.target.value }
-                                                        }))}
-                                                        placeholder={placeholderText}
-                                                        sx={{ gridColumn }}
-                                                        type={paramType.includes('int') || paramType.includes('float') ? 'number' : 'text'}
-                                                    />
-                                                );
-                                            })}
-                                        </Box>
-                                    </Box>
-                                )}
-
-                                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
-                                    <Button
-                                        onClick={saveModelConfig}
-                                        disabled={saveState.loading || !form.name || !form.model}
-                                        color="primary"
-                                        variant="contained"
-                                        size="medium"
-                                    >
-                                        {saveState.loading ? 'Saving...' : isEditMode ? 'Update Model Configuration' : 'Save Model Configuration'}
-                                    </Button>
+                        {modelIntro && (
+                            <Box>
+                                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                    Model Parameters ({modelIntro.class_name})
+                                </Typography>
+                                <Box sx={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                                    gap: 2
+                                }}>
+                                    {(modelIntro.formatted_params || []).map(paramFormatted => {
+                                        const paramName = paramFormatted.split(':')[0].trim();
+                                        const typeMatch = paramFormatted.match(/:\s*([^=\s]+)/);
+                                        const paramType = typeMatch ? typeMatch[1].toLowerCase() : 'str';
+                                        let defaultRaw = '';
+                                        const descSplitIdx = paramFormatted.indexOf(' - ');
+                                        const mainPart = descSplitIdx !== -1 ? paramFormatted.slice(0, descSplitIdx) : paramFormatted;
+                                        const eqIdx = mainPart.indexOf('=');
+                                        if (eqIdx !== -1) {
+                                            defaultRaw = mainPart.slice(eqIdx + 1).trim();
+                                            if ((defaultRaw.startsWith("'") && defaultRaw.endsWith("'")) || (defaultRaw.startsWith('"') && defaultRaw.endsWith('"'))) {
+                                                defaultRaw = defaultRaw.slice(1, -1);
+                                            }
+                                        }
+                                        const hasDefault = defaultRaw !== '' && defaultRaw.toLowerCase() !== 'none';
+                                        const placeholderText = hasDefault ? `Default: ${defaultRaw}` : `Enter ${paramName}`;
+                                        let gridColumn = 'span 1';
+                                        if (paramType.includes('int') || paramType.includes('float') || paramType.includes('bool')) {
+                                            gridColumn = 'span 1';
+                                        } else if (paramType.includes('str') && (paramName.includes('key') || paramName.includes('token') || paramName.includes('url'))) {
+                                            gridColumn = 'span 2';
+                                        }
+                                        return (
+                                            <TextField
+                                                key={paramName}
+                                                size="small"
+                                                label={paramName}
+                                                InputLabelProps={{ shrink: true }}
+                                                value={form.model_params[paramName] || ''}
+                                                onChange={(e) => setForm(f => ({
+                                                    ...f,
+                                                    model_params: { ...f.model_params, [paramName]: e.target.value }
+                                                }))}
+                                                placeholder={placeholderText}
+                                                sx={{ gridColumn }}
+                                                type={paramType.includes('int') || paramType.includes('float') ? 'number' : 'text'}
+                                            />
+                                        );
+                                    })}
                                 </Box>
-                            </Stack>
-                        </CardContent>
-                    </Card>
-                </Grid>
-            </Grid>
+                            </Box>
+                        )}
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    {isEditMode && form.id && (
+                        <Button color="error" onClick={() => deleteModelConfig(form.id)} startIcon={<DeleteIcon size={16} />}>Delete</Button>
+                    )}
+                    <Box sx={{ flex: 1 }} />
+                    <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={saveModelConfig} variant="contained" disabled={saveState.loading || !form.name || !form.model}>
+                        {saveState.loading ? 'Saving...' : isEditMode ? 'Update Configuration' : 'Save Configuration'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }

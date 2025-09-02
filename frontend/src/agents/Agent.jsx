@@ -1,5 +1,30 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Box, Button, Card, CardContent, Chip, CircularProgress, Divider, Grid, Stack, TextField, Typography, Autocomplete, Paper } from '@mui/material'
+import {
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Grid,
+  Stack,
+  TextField,
+  Typography,
+  Autocomplete,
+  Paper,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  IconButton
+} from '@mui/material'
+import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
@@ -15,6 +40,7 @@ export default function Agent({ user }) {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
 
   const [models, setModels] = useState([])
   const [tools, setTools] = useState([])
@@ -34,6 +60,19 @@ export default function Agent({ user }) {
   })
 
   const toolList = Object.keys(form.tools || {})
+
+  const resetForm = () => {
+    setForm({
+      name: '',
+      category: '',
+      description: '',
+      instructions: '',
+      model: { name: '' },
+      tools: {},
+      collection: '',
+      memory: { history: { enabled: false, num: 3 } },
+    })
+  }
 
   async function fetchAll() {
     setLoading(true)
@@ -95,7 +134,8 @@ export default function Agent({ user }) {
       const data = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(data.detail || `Save failed (${resp.status})`)
       showSuccess(`Agent ${data.name} saved`)
-      await fetchAll()
+  await fetchAll()
+  setDialogOpen(false)
     } catch (e) {
       showError(e.message || 'Failed to save')
     } finally {
@@ -116,11 +156,41 @@ export default function Agent({ user }) {
       showSuccess(`Agent ${form.name} deleted`)
       setForm(f => ({ ...f, name: '' }))
       await fetchAll()
+      setDialogOpen(false)
     } catch (e) {
       showError(e.message || 'Failed to delete')
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleRowDelete = async (name) => {
+    if (!name) return
+    try {
+      setSaving(true)
+      const resp = await fetch(`${API_BASE_URL}/api/agents/${encodeURIComponent(name)}`, {
+        method: 'DELETE',
+        headers: authHeaders,
+      })
+      const data = await resp.json().catch(() => ({}))
+      if (!resp.ok) throw new Error(data.detail || `Delete failed (${resp.status})`)
+      showSuccess(`Agent ${name} deleted`)
+      await fetchAll()
+    } catch (e) {
+      showError(e.message || 'Failed to delete')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const openCreate = () => {
+    resetForm()
+    setDialogOpen(true)
+  }
+
+  const openEdit = (name) => {
+    loadAgent(name)
+    setDialogOpen(true)
   }
 
   return (
@@ -132,23 +202,111 @@ export default function Agent({ user }) {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h4" gutterBottom>
-            Agents
+            Agents Management
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Create and edit AI agents using saved model and tool configurations.
+            Create and manage AI agents configured with models, tools, and knowledge.
           </Typography>
         </Box>
         <Stack direction="row" spacing={1}>
-          <Button variant="outlined" color="error" disabled={!form.name || saving} onClick={handleDelete}>Delete</Button>
-          <Button variant="contained" onClick={handleSave} disabled={saving}>
-            {saving ? <CircularProgress size={16} color="inherit" /> : 'Save Agent'}
+          <Button variant="contained" startIcon={<AddIcon size={18} />} onClick={openCreate}>
+            Create Agent
           </Button>
         </Stack>
       </Box>
 
       <Card>
         <CardContent>
-          <Grid container spacing={3}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">All Agents ({existingAgents.length})</Typography>
+          </Box>
+
+          <TableContainer component={Paper} variant="outlined">
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Name</TableCell>
+                  <TableCell>Category</TableCell>
+                  <TableCell>Model</TableCell>
+                  <TableCell>Tools</TableCell>
+                  <TableCell>Knowledge</TableCell>
+                  <TableCell>Memory</TableCell>
+                  <TableCell align="right">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {existingAgents.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                      <Box sx={{ textAlign: 'center' }}>
+                        <Typography variant="h6" color="text.secondary" gutterBottom>
+                          No agents found
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                          Create your first agent to get started.
+                        </Typography>
+                        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+                          Create Agent
+                        </Button>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  existingAgents.map((a) => {
+                    const toolNames = Object.keys(a.tools || {})
+                    const mem = a.memory?.history?.enabled
+                      ? `History (${a.memory?.history?.num ?? 3})`
+                      : 'Off'
+                    return (
+                      <TableRow key={a.name} hover>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight="medium">{a.name}</Typography>
+                          {a.description && (
+                            <Typography variant="caption" color="text.secondary">{a.description}</Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>{a.category || '-'}</TableCell>
+                        <TableCell>{a.model?.name || '-'}</TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                            {toolNames.length === 0 ? (
+                              <Chip size="small" label="None" />
+                            ) : (
+                              toolNames.slice(0, 3).map(t => (
+                                <Chip key={t} size="small" label={t} variant="outlined" />
+                              ))
+                            )}
+                            {toolNames.length > 3 && (
+                              <Chip size="small" label={`+${toolNames.length - 3}`} />
+                            )}
+                          </Box>
+                        </TableCell>
+                        <TableCell>{a.collection || '-'}</TableCell>
+                        <TableCell>
+                          <Chip size="small" label={mem} color={a.memory?.history?.enabled ? 'primary' : 'default'} />
+                        </TableCell>
+                        <TableCell align="right">
+                          <IconButton size="small" color="primary" onClick={() => openEdit(a.name)}>
+                            <EditIcon size={16} />
+                          </IconButton>
+                          <IconButton size="small" color="error" onClick={() => handleRowDelete(a.name)}>
+                            <DeleteIcon size={16} />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
+
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>{form.name ? 'Edit Agent' : 'Create Agent'}</DialogTitle>
+        <DialogContent dividers>
+          <Grid container spacing={3} sx={{ mt: 0 }}>
             <Grid item xs={12} md={6}>
               <Stack spacing={2}>
                 <Autocomplete
@@ -234,8 +392,18 @@ export default function Agent({ user }) {
               </Stack>
             </Grid>
           </Grid>
-        </CardContent>
-      </Card>
+        </DialogContent>
+        <DialogActions>
+          {form.name && (
+            <Button color="error" onClick={handleDelete} disabled={saving} startIcon={<DeleteIcon size={16} />}>Delete</Button>
+          )}
+          <Box sx={{ flex: 1 }} />
+          <Button onClick={() => setDialogOpen(false)} disabled={saving}>Cancel</Button>
+          <Button variant="contained" onClick={handleSave} disabled={saving}>
+            {saving ? <CircularProgress size={16} color="inherit" /> : 'Save Agent'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

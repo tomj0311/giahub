@@ -549,8 +549,7 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="users" element={<Users user={user} />} />
 				<Route path="role-management" element={<RoleManagement user={user} />} />
 				<Route path="user-invitation" element={<UserInvitation user={user} />} />
-				<Route path="agents" element={<Agent user={user} />} />
-				{/* Agent configuration routes */}
+				<Route path="agent-config" element={<Agent user={user} />} />
 				<Route path="model-config" element={<ModelConfig user={user} />} />
 				<Route path="tool-config" element={<ToolConfig user={user} />} />
 				<Route path="knowledge-config" element={<KnowledgeConfig user={user} />} />
