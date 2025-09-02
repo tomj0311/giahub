@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
 import {
   Box,
   Paper,
@@ -150,19 +151,57 @@ export default function AgentPlayground({ user }) {
   const runAgent = async () => {
     if (!selected || !prompt.trim()) return
     setRunning(true)
+    
     // upload first if needed
     if (stagedFiles.length) {
       await uploadStagedFiles()
     }
+    
     const userMsg = { role: 'user', content: prompt, ts: Date.now() }
     setMessages(prev => [...prev, userMsg])
+    
+    // Add placeholder message for agent response
+    const agentMsgId = Date.now()
+    setMessages(prev => [...prev, { role: 'agent', content: '', ts: agentMsgId, streaming: true }])
+    
     setPrompt('')
+    
     try {
-      const res = await agentRuntimeService.run({ agent_name: selected, prompt: userMsg.content, session_prefix: sessionPrefix }, token)
-      const content = res?.content || ''
-      setMessages(prev => [...prev, { role: 'agent', content, ts: Date.now() }])
+      await agentRuntimeService.runStream(
+        { 
+          agent_name: selected, 
+          prompt: userMsg.content, 
+          session_prefix: sessionPrefix 
+        }, 
+        token,
+        (event) => {
+          if (event.type === 'agent_chunk' && event.payload?.content) {
+            // Update the streaming message with new content
+            setMessages(prev => prev.map(msg => 
+              msg.ts === agentMsgId && msg.streaming 
+                ? { ...msg, content: msg.content + event.payload.content }
+                : msg
+            ))
+          } else if (event.type === 'agent_run_complete') {
+            // Mark streaming as complete
+            setMessages(prev => prev.map(msg => 
+              msg.ts === agentMsgId 
+                ? { ...msg, streaming: false }
+                : msg
+            ))
+          } else if (event.type === 'error' || event.error) {
+            setMessages(prev => [...prev, { 
+              role: 'system', 
+              content: `Error: ${event.error || event.details?.message || 'Unknown error'}`, 
+              ts: Date.now() 
+            }])
+          }
+        }
+      )
     } catch (e) {
       setMessages(prev => [...prev, { role: 'system', content: `Error: ${e.message || e}`, ts: Date.now() }])
+      // Remove the placeholder message on error
+      setMessages(prev => prev.filter(msg => msg.ts !== agentMsgId))
     } finally {
       setRunning(false)
       // autosave snapshot
@@ -266,8 +305,28 @@ export default function AgentPlayground({ user }) {
         >
           {messages.map((m, idx) => (
             <Box key={idx} sx={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
-              <Typography variant="caption" sx={{ opacity: 0.6, fontSize: 11, textTransform: 'uppercase' }}>{m.role}</Typography>
-              <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxWidth: '90ch' }}>{m.content}</Typography>
+              <Typography variant="caption" sx={{ opacity: 0.6, fontSize: 11, textTransform: 'uppercase' }}>
+                {m.role}{m.streaming ? ' (streaming...)' : ''}
+              </Typography>
+              {m.role === 'user' ? (
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxWidth: '90ch' }}>
+                  {m.content}
+                </Typography>
+              ) : (
+                <Box sx={{
+                  fontSize: 15,
+                  lineHeight: 1.5,
+                  maxWidth: '90ch',
+                  wordBreak: 'break-word',
+                  '& p': { my: 0.6 },
+                  '& pre': { p: 1, bgcolor: 'action.hover', borderRadius: 1, overflowX: 'auto', fontSize: 13, lineHeight: 1.4 },
+                  '& code': { fontFamily: 'monospace', bgcolor: 'action.hover', px: 0.5, borderRadius: 0.5 },
+                }}>
+                  <ReactMarkdown>
+                    {m.content && m.content.length ? m.content : '...'}
+                  </ReactMarkdown>
+                </Box>
+              )}
             </Box>
           ))}
           {!autoScroll && !atBottom && messages.length > 0 && (

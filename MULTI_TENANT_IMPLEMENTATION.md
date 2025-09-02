@@ -31,8 +31,8 @@ This implementation adds multi-tenancy to your GiaHUB platform. Every user now b
    - `roles` - Roles belong to a tenant
    - `userRoles` - Role assignments include tenant ID
    - `menuItems` - Menu items can be tenant-specific
-   - `modelconfigs` - Model configurations per tenant
-   - `tool_config` - Tool configurations per tenant
+   - `modelConfig` - Model configurations per tenant
+   - `toolConfig` - Tool configurations per tenant
 
 ### Services Added
 

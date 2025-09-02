@@ -40,7 +40,7 @@ async def create_model_config(
             )
         
         # Check if config with same name already exists
-        existing = await collections['modelconfigs'].find_one({"name": config.get("name")})
+        existing = await collections['modelConfig'].find_one({"name": config.get("name")})
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -60,10 +60,10 @@ async def create_model_config(
         }
         
         # Insert into MongoDB
-        result = await collections['modelconfigs'].insert_one(config_doc)
+        result = await collections['modelConfig'].insert_one(config_doc)
         
         # Retrieve the created document
-        created_config = await collections['modelconfigs'].find_one({"_id": result.inserted_id})
+        created_config = await collections['modelConfig'].find_one({"_id": result.inserted_id})
         
         # Convert MongoDB document to response format
         response_config = {
@@ -105,7 +105,7 @@ async def get_model_configs(
             query["category"] = category
         
         # Fetch configurations
-        cursor = collections['modelconfigs'].find(query)
+        cursor = collections['modelConfig'].find(query)
         configs = await cursor.to_list(length=None)
         
         # Convert to response format
@@ -145,7 +145,7 @@ async def get_model_config(
         from bson import ObjectId
         
         # Fetch the configuration
-        config = await collections['modelconfigs'].find_one({"_id": ObjectId(config_id)})
+        config = await collections['modelConfig'].find_one({"_id": ObjectId(config_id)})
         
         if not config:
             raise HTTPException(
@@ -190,7 +190,7 @@ async def update_model_config(
         from bson import ObjectId
         
         # Check if config exists
-        existing_config = await collections['modelconfigs'].find_one({"_id": ObjectId(config_id)})
+        existing_config = await collections['modelConfig'].find_one({"_id": ObjectId(config_id)})
         if not existing_config:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -203,7 +203,7 @@ async def update_model_config(
         # Only update provided fields
         if "name" in config_update:
             # Check if new name conflicts with existing configs
-            existing_name = await collections['modelconfigs'].find_one({
+            existing_name = await collections['modelConfig'].find_one({
                 "name": config_update["name"],
                 "_id": {"$ne": ObjectId(config_id)}
             })
@@ -224,13 +224,13 @@ async def update_model_config(
             update_doc["model_params"] = config_update["model_params"]
         
         # Update the document
-        await collections['modelconfigs'].update_one(
+        await collections['modelConfig'].update_one(
             {"_id": ObjectId(config_id)},
             {"$set": update_doc}
         )
         
         # Fetch updated document
-        updated_config = await collections['modelconfigs'].find_one({"_id": ObjectId(config_id)})
+        updated_config = await collections['modelConfig'].find_one({"_id": ObjectId(config_id)})
         
         # Convert to response format
         response_config = {
@@ -269,7 +269,7 @@ async def delete_model_config(
         from bson import ObjectId
         
         # Check if config exists
-        existing_config = await collections['modelconfigs'].find_one({"_id": ObjectId(config_id)})
+        existing_config = await collections['modelConfig'].find_one({"_id": ObjectId(config_id)})
         if not existing_config:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -277,7 +277,7 @@ async def delete_model_config(
             )
         
         # Delete the configuration
-        await collections['modelconfigs'].delete_one({"_id": ObjectId(config_id)})
+        await collections['modelConfig'].delete_one({"_id": ObjectId(config_id)})
         
         logger.info(f"Deleted model config: {config_id}")
         return {"message": f"Model configuration '{existing_config['name']}' deleted successfully"}

@@ -42,7 +42,7 @@ async def create_tool_config(
         tool_module = config.get("tool") or config.get("function")
 
         # Ensure unique name
-        existing = await collections['tool_config'].find_one({"name": config.get("name")})
+        existing = await collections['toolConfig'].find_one({"name": config.get("name")})
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -54,14 +54,14 @@ async def create_tool_config(
             "category": config.get("category", ""),
             "tool": tool_module,
             "tool_params": config.get("tool_params", {}),
-            "type": "tool_config",
+            "type": "toolConfig",
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow(),
             "created_by": user.get("id", user.get("username"))
         }
 
-        res = await collections['tool_config'].insert_one(doc)
-        created = await collections['tool_config'].find_one({"_id": res.inserted_id})
+        res = await collections['toolConfig'].insert_one(doc)
+        created = await collections['toolConfig'].find_one({"_id": res.inserted_id})
 
         return {
             "id": str(created["_id"]),
@@ -88,10 +88,10 @@ async def get_tool_configs(
     """List tool configurations"""
     try:
         collections = get_collections()
-        query = {"type": "tool_config"}
+        query = {"type": "toolConfig"}
         if category:
             query["category"] = category
-        cursor = collections['tool_config'].find(query)
+        cursor = collections['toolConfig'].find(query)
         configs = await cursor.to_list(length=None)
         return {
             "configurations": [
@@ -117,7 +117,7 @@ async def get_tool_config(config_id: str, user: dict = Depends(verify_token_midd
     try:
         collections = get_collections()
         from bson import ObjectId
-        c = await collections['tool_config'].find_one({"_id": ObjectId(config_id)})
+        c = await collections['toolConfig'].find_one({"_id": ObjectId(config_id)})
         if not c:
             raise HTTPException(status_code=404, detail=f"Tool configuration with ID '{config_id}' not found")
         return {
@@ -142,13 +142,13 @@ async def update_tool_config(config_id: str, config_update: dict, user: dict = D
     try:
         collections = get_collections()
         from bson import ObjectId
-        existing = await collections['tool_config'].find_one({"_id": ObjectId(config_id)})
+        existing = await collections['toolConfig'].find_one({"_id": ObjectId(config_id)})
         if not existing:
             raise HTTPException(status_code=404, detail=f"Tool configuration with ID '{config_id}' not found")
 
         update_doc = {"updated_at": datetime.utcnow()}
         if "name" in config_update:
-            conflict = await collections['tool_config'].find_one({
+            conflict = await collections['toolConfig'].find_one({
                 "name": config_update["name"],
                 "_id": {"$ne": ObjectId(config_id)}
             })
@@ -162,8 +162,8 @@ async def update_tool_config(config_id: str, config_update: dict, user: dict = D
         if "tool_params" in config_update:
             update_doc["tool_params"] = config_update["tool_params"]
 
-        await collections['tool_config'].update_one({"_id": ObjectId(config_id)}, {"$set": update_doc})
-        updated = await collections['tool_config'].find_one({"_id": ObjectId(config_id)})
+        await collections['toolConfig'].update_one({"_id": ObjectId(config_id)}, {"$set": update_doc})
+        updated = await collections['toolConfig'].find_one({"_id": ObjectId(config_id)})
 
         return {
             "id": str(updated["_id"]),
@@ -187,10 +187,10 @@ async def delete_tool_config(config_id: str, user: dict = Depends(verify_token_m
     try:
         collections = get_collections()
         from bson import ObjectId
-        existing = await collections['tool_config'].find_one({"_id": ObjectId(config_id)})
+        existing = await collections['toolConfig'].find_one({"_id": ObjectId(config_id)})
         if not existing:
             raise HTTPException(status_code=404, detail=f"Tool configuration with ID '{config_id}' not found")
-        await collections['tool_config'].delete_one({"_id": ObjectId(config_id)})
+        await collections['toolConfig'].delete_one({"_id": ObjectId(config_id)})
         return {"message": f"Tool configuration '{existing['name']}' deleted successfully"}
     except HTTPException:
         raise
@@ -203,7 +203,7 @@ async def delete_tool_config(config_id: str, user: dict = Depends(verify_token_m
 async def get_tool_categories(user: dict = Depends(verify_token_middleware)):
     try:
         collections = get_collections()
-        cats = await collections['tool_config'].distinct("category")
+        cats = await collections['toolConfig'].distinct("category")
         cats = [c for c in cats if c and c.strip()]
         cats.sort()
         return {"categories": cats}

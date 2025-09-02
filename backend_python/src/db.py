@@ -37,8 +37,8 @@ def get_collections():
         "roles": database["roles"],
         "userRoles": database["userRoles"],
         "menuItems": database["menuItems"],
-        "modelconfigs": database["modelconfigs"],
-        "tool_config": database["tool_config"],
+        "modelConfig": database["modelConfig"],
+        "toolConfig": database["toolConfig"],
         "tenants": database["tenants"],
         "knowledgeConfig": database["knowledgeConfig"],
     "agents": database["agents"],
@@ -91,16 +91,16 @@ async def ensure_indexes():
         await collections["menuItems"].create_index("isActive")
 
         # Model configurations indexes
-        await collections["modelconfigs"].create_index("name", unique=True)
-        await collections["modelconfigs"].create_index("category")
-        await collections["modelconfigs"].create_index("type")
-        await collections["modelconfigs"].create_index("created_at")
+        await collections["modelConfig"].create_index("name", unique=True)
+        await collections["modelConfig"].create_index("category")
+        await collections["modelConfig"].create_index("type")
+        await collections["modelConfig"].create_index("created_at")
 
         # Tool configurations indexes
-        await collections["tool_config"].create_index("name", unique=True)
-        await collections["tool_config"].create_index("category")
-        await collections["tool_config"].create_index("type")
-        await collections["tool_config"].create_index("created_at")
+        await collections["toolConfig"].create_index("name", unique=True)
+        await collections["toolConfig"].create_index("category")
+        await collections["toolConfig"].create_index("type")
+        await collections["toolConfig"].create_index("created_at")
 
         # Tenant indexes
         await collections["tenants"].create_index("tenantId", unique=True)
@@ -112,8 +112,8 @@ async def ensure_indexes():
         await collections["roles"].create_index("tenantId")
         await collections["userRoles"].create_index("tenantId")
         await collections["menuItems"].create_index("tenantId")
-        await collections["modelconfigs"].create_index("tenantId")
-        await collections["tool_config"].create_index("tenantId")
+        await collections["modelConfig"].create_index("tenantId")
+        await collections["toolConfig"].create_index("tenantId")
 
         # Knowledge collection indexes
         await collections["knowledgeConfig"].create_index(

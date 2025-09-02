@@ -182,7 +182,7 @@ export default function ToolConfig({ user }) {
             category: form.category || '',
             tool: form.tool,
             tool_params: form.tool_params,
-            type: 'tool_config'
+            type: 'toolConfig'
         };
         try {
             let resp;

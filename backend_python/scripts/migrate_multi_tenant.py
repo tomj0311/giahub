@@ -124,8 +124,8 @@ async def migrate_to_multi_tenant():
         except Exception as e:
             print(f"❌ Failed to update role assignment: {e}")
     
-    # Step 4: Update other collections (menuItems, modelconfigs, tool_config)
-    other_collections = ['menuItems', 'modelconfigs', 'tool_config']
+    # Step 4: Update other collections (menuItems, modelConfig, toolConfig)
+    other_collections = ['menuItems', 'modelConfig', 'toolConfig']
     
     for collection_name in other_collections:
         if collection_name in collections:
