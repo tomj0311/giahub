@@ -36,6 +36,7 @@ import {
   Shield as SecurityIcon
 } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
+import { api } from '../config/api'
 
 const ITEM_HEIGHT = 48
 const ITEM_PADDING_TOP = 8
@@ -80,10 +81,8 @@ export default function UserInvitation({ user }) {
 
   const fetchUsers = async () => {
     try {
-      const response = await api('/rbac/users', {
-        headers: {
-          'Authorization': `Bearer ${user.token}`
-        }
+      const response = await api('/api/rbac/users', {
+        headers: user?.token ? { 'Authorization': `Bearer ${user.token}` } : {}
       })
 
       if (response.ok) {
@@ -99,10 +98,8 @@ export default function UserInvitation({ user }) {
 
   const fetchRoles = async () => {
     try {
-      const response = await api('/rbac/roles', {
-        headers: {
-          'Authorization': `Bearer ${user.token}`
-        }
+  const response = await api('/api/roles', {
+        headers: user?.token ? { 'Authorization': `Bearer ${user.token}` } : {}
       })
 
       if (response.ok) {
@@ -119,12 +116,9 @@ export default function UserInvitation({ user }) {
 
   const handleInviteUser = async () => {
     try {
-      const response = await api('/rbac/invite-user', {
+      const response = await api('/api/rbac/invite-user', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.token}`
-        },
+        headers: { 'Content-Type': 'application/json', ...(user?.token ? { 'Authorization': `Bearer ${user.token}` } : {}) },
         body: JSON.stringify({
           firstName: formData.firstName,
           lastName: formData.lastName,
@@ -150,12 +144,9 @@ export default function UserInvitation({ user }) {
 
   const handleAssignRoles = async () => {
     try {
-      const response = await api(`/rbac/users/${selectedUser.id}/roles/assign`, {
+      const response = await api(`/api/rbac/users/${selectedUser.id}/roles/assign`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.token}`
-        },
+        headers: { 'Content-Type': 'application/json', ...(user?.token ? { 'Authorization': `Bearer ${user.token}` } : {}) },
         body: JSON.stringify({
           roleIds: formData.selectedRoles
         })
@@ -182,11 +173,9 @@ export default function UserInvitation({ user }) {
     }
 
     try {
-      const response = await api(`/rbac/users/${userId}/roles/${roleId}`, {
+      const response = await api(`/api/rbac/users/${userId}/roles/${roleId}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${user.token}`
-        }
+        headers: user?.token ? { 'Authorization': `Bearer ${user.token}` } : {}
       })
 
       if (response.ok) {

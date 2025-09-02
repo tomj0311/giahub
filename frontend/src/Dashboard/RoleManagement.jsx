@@ -32,6 +32,7 @@ import {
   Shield as SecurityIcon
 } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
+import { api } from '../config/api'
 
 export default function RoleManagement({ user }) {
   const [roles, setRoles] = useState([])
@@ -53,10 +54,8 @@ export default function RoleManagement({ user }) {
   const fetchRoles = async () => {
     try {
       setLoading(true)
-      const response = await api('/rbac/roles', {
-        headers: {
-          'Authorization': `Bearer ${user.token}`
-        }
+  const response = await api('/api/roles', {
+        headers: user?.token ? { 'Authorization': `Bearer ${user.token}` } : {}
       })
 
       if (response.ok) {
@@ -76,12 +75,9 @@ export default function RoleManagement({ user }) {
     try {
       const permissions = formData.permissions.split(',').map(p => p.trim()).filter(p => p)
 
-      const response = await api('/rbac/roles', {
+  const response = await api('/api/roles', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.token}`
-        },
+        headers: { 'Content-Type': 'application/json', ...(user?.token ? { 'Authorization': `Bearer ${user.token}` } : {}) },
         body: JSON.stringify({
           roleName: formData.roleName,
           description: formData.description,
@@ -107,12 +103,9 @@ export default function RoleManagement({ user }) {
     try {
       const permissions = formData.permissions.split(',').map(p => p.trim()).filter(p => p)
 
-      const response = await api(`/rbac/roles/${selectedRole.roleId}`, {
+  const response = await api(`/api/roles/${selectedRole.roleId}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.token}`
-        },
+        headers: { 'Content-Type': 'application/json', ...(user?.token ? { 'Authorization': `Bearer ${user.token}` } : {}) },
         body: JSON.stringify({
           description: formData.description,
           permissions: permissions
@@ -140,11 +133,9 @@ export default function RoleManagement({ user }) {
     }
 
     try {
-      const response = await api(`/rbac/roles/${role.roleId}`, {
+  const response = await api(`/api/roles/${role.roleId}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${user.token}`
-        }
+        headers: user?.token ? { 'Authorization': `Bearer ${user.token}` } : {}
       })
 
       if (response.ok) {

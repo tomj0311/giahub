@@ -25,7 +25,6 @@ import {
     IconButton
 } from '@mui/material';
 import { api } from '../config/api';
-} from '@mui/material';
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react';
 import { useSnackbar } from '../contexts/SnackbarContext';
 

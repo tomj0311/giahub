@@ -32,6 +32,7 @@ export default function Users({ user }) {
   const [loading, setLoading] = useState(true)
   const { showError, showSuccess } = useSnackbar()
   const navigate = useNavigate()
+  const token = user?.token
 
   useEffect(() => {
     fetchUsers()
@@ -40,8 +41,8 @@ export default function Users({ user }) {
   const fetchUsers = async () => {
     try {
       setLoading(true)
-      const response = await apiCall('/rbac/users', {
-        headers: { Authorization: `Bearer ${token}` }
+      const response = await apiCall('/api/rbac/users', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
       })
       if (response.ok) {
         const data = await response.json()
