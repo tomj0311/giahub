@@ -142,6 +142,7 @@ export default function App() {
         <Route path="/auth/callback" element={<AuthCallback onLogin={auth.login} />} />
 
         {/* Protected routes */}
+        <Route path="/agent-playground" element={<Navigate to="/dashboard/agent-playground" replace />} />
         <Route path="/dashboard/*" element={auth.token ? <Dashboard user={{ name: auth.name, token: auth.token }} onLogout={auth.logout} themeKey={themeKey} setThemeKey={setThemeKey} /> : <Navigate to="/login" replace />} />
         <Route path="/agents/*" element={auth.token ? <Dashboard user={{ name: auth.name, token: auth.token }} onLogout={auth.logout} themeKey={themeKey} setThemeKey={setThemeKey} /> : <Navigate to="/login" replace />} />
 

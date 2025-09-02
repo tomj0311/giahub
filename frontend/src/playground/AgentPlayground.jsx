@@ -19,7 +19,8 @@ import {
   DialogContent,
   DialogActions,
   Tooltip,
-  useMediaQuery
+  useMediaQuery,
+  Autocomplete
 } from '@mui/material'
 import { useTheme, alpha } from '@mui/material/styles'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
@@ -62,6 +63,21 @@ export default function AgentPlayground({ user }) {
   const [conversations, setConversations] = useState([])
   const [currentConversationId, setCurrentConversationId] = useState(null)
 
+  // Agent selector dialog
+  const [selectorOpen, setSelectorOpen] = useState(false)
+
+  // Build autocomplete options from grouped structure
+  const searchOptions = useMemo(() => {
+    const opts = []
+    Object.entries(grouped).forEach(([cat, arr]) => {
+      arr.forEach(name => {
+        const label = cat === '_root' ? name : `${cat}/${name}`
+        opts.push({ label, value: name, category: cat })
+      })
+    })
+    return opts.sort((a,b) => a.label.localeCompare(b.label))
+  }, [grouped])
+
   const scrollRef = useRef(null)
   const bottomRef = useRef(null)
   const [autoScroll, setAutoScroll] = useState(true)
@@ -72,6 +88,7 @@ export default function AgentPlayground({ user }) {
       setLoading(true)
       try {
         const agents = await agentService.listAgents(token)
+        console.log('Loaded agents:', agents) // Debug log
         const groupedByCat = agents.reduce((acc, a) => {
           const cat = a.category || '_root'
           acc[cat] = acc[cat] || []
@@ -79,6 +96,7 @@ export default function AgentPlayground({ user }) {
           return acc
         }, {})
         Object.keys(groupedByCat).forEach(k => groupedByCat[k].sort())
+        console.log('Grouped agents:', groupedByCat) // Debug log
         setGrouped(groupedByCat)
       } catch (e) {
         console.error('Failed to load agents', e)
@@ -203,9 +221,10 @@ export default function AgentPlayground({ user }) {
     setSessionPrefix(genUuidHex())
   }
 
-  const renderGrouped = () => {
+  const renderGroupedList = () => {
     const cats = Object.keys(grouped).sort((a,b) => a.localeCompare(b))
     if (!cats.length && !loading) return <Typography variant="body2" sx={{ p: 1 }}>No agents found.</Typography>
+    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}><CircularProgress size={20} /></Box>
     return cats.map((cat, idx) => {
       const items = grouped[cat] || []
       const title = cat === '_root' ? 'Uncategorized' : cat
@@ -217,7 +236,15 @@ export default function AgentPlayground({ user }) {
           <AccordionDetails sx={{ p: 0 }}>
             <List dense sx={{ py: 0 }}>
               {items.map((name) => (
-                <ListItemButton key={name} selected={name === selected} onClick={() => setSelected(name)} sx={{ pl: 2 }}>
+                <ListItemButton 
+                  key={name} 
+                  selected={name === selected} 
+                  onClick={() => {
+                    setSelected(name)
+                    setSelectorOpen(false)
+                  }} 
+                  sx={{ pl: 2 }}
+                >
                   <ListItemText primary={name} primaryTypographyProps={{ sx: { pl: 1 } }} />
                 </ListItemButton>
               ))}
@@ -231,21 +258,6 @@ export default function AgentPlayground({ user }) {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 900, mx: 'auto', height: { xs: 'calc(100dvh - 120px)', md: 'calc(100vh - 120px)' } }}>
       <Paper variant="section" elevation={0} square sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 2, background: 'transparent', boxShadow: 'none', border: 'none' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Button size="small" startIcon={<MenuIcon />} onClick={() => { /* simple - list is on page */ }} disabled={loading}>
-            {selected || 'Agent'}
-          </Button>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <IconButton size="small" onClick={openHistory} title="History"><HistoryIcon fontSize="small" /></IconButton>
-            <Button size="small" color="error" onClick={clearChat}>Clear</Button>
-          </Box>
-        </Box>
-
-        {/* Agent list */}
-        <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
-          {renderGrouped()}
-        </Box>
-
         {/* Messages area */}
         <Box
           ref={scrollRef}
@@ -277,20 +289,49 @@ export default function AgentPlayground({ user }) {
 
         {/* Input row */}
         <Box sx={{ position: 'relative', width: '100%', maxWidth: 650, alignSelf: 'center', backgroundColor: 'background.paper', borderRadius: 1.5, border: 1, borderColor: 'divider', p: 1.5, mb: 3 }}>
+          {/* Compact Header with Agent Selector */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-            <input id="file-upload-input" type="file" multiple style={{ display: 'none' }} onChange={(e) => handleFilesSelected(Array.from(e.target.files || []))} />
+            {/* Agent Selector Button */}
+            <Button
+              variant="text"
+              size="small"
+              onClick={() => setSelectorOpen(true)}
+              disabled={running}
+              startIcon={<MenuIcon />}
+              sx={{ 
+                textTransform: 'none',
+                fontSize: '12px',
+                minWidth: 'auto',
+                px: 1
+              }}
+            >
+              {selected ? selected.replace(/\.json$/, '').slice(0, 15) + (selected.replace(/\.json$/, '').length > 15 ? '...' : '') : 'Agent'}
+            </Button>
+            
+            {/* Attach File Icon */}
+            <input
+              id="file-upload-input"
+              type="file"
+              multiple
+              style={{ display: 'none' }}
+              onChange={(e) => handleFilesSelected(Array.from(e.target.files || []))}
+            />
             <label htmlFor="file-upload-input">
               <IconButton component="span" size="small" disabled={running} sx={{ color: stagedFiles.length > 0 ? 'primary.main' : 'text.secondary', opacity: 0.8 }}>
                 <AttachFileIcon fontSize="small" />
               </IconButton>
             </label>
+
+            {/* Upload Chips */}
             {stagedFiles.map((f, idx) => (
               <Chip key={`${f.name}-${idx}`} size="small" color="primary" variant="outlined" label={f.name.length > 15 ? f.name.slice(0, 12) + '...' : f.name} onDelete={() => setStagedFiles(prev => prev.filter((_, i) => i !== idx))} sx={{ height: 20, fontSize: '10px' }} />
             ))}
             {uploadedFiles.map((name, idx) => (
               <Chip key={`up-${name}-${idx}`} size="small" color="success" variant="filled" label={name.length > 15 ? name.slice(0, 12) + '...' : name} sx={{ height: 20, fontSize: '10px' }} />
             ))}
+            
             <Box sx={{ flex: 1 }} />
+            
             <IconButton size="small" onClick={openHistory} title="History"><HistoryIcon fontSize="small" /></IconButton>
             <Button size="small" onClick={clearChat} color="error">Clear</Button>
           </Box>
@@ -315,6 +356,49 @@ export default function AgentPlayground({ user }) {
           </Box>
         </Box>
       </Paper>
+
+      {/* Agent selection dialog */}
+      <Dialog 
+        open={selectorOpen} 
+        onClose={() => setSelectorOpen(false)} 
+        fullWidth 
+        maxWidth="sm"
+        PaperProps={{
+          sx: (theme) => ({
+            backgroundColor: theme.palette.background.paper,
+            backgroundImage: 'none'
+          })
+        }}
+      >
+        <DialogTitle>Select an Agent</DialogTitle>
+        <DialogContent dividers>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+            <Typography variant="body2" sx={{ opacity: 0.8 }}>Choose from available agents</Typography>
+            <Button size="small" onClick={() => window.location.reload()}>Refresh</Button>
+          </Box>
+          <Autocomplete
+            size="small"
+            options={searchOptions}
+            value={searchOptions.find(opt => opt.value === selected) || null}
+            onChange={(_, v)=> { 
+              if (v && v.value) { 
+                setSelected(v.value); 
+                setSelectorOpen(false); 
+              } 
+            }}
+            getOptionLabel={(o)=> o?.label || ''}
+            renderInput={(params)=><TextField {...params} label="Search agents" placeholder="Type to search" />}
+            isOptionEqualToValue={(o,v)=> (o?.value||'')===(v?.value||'')}
+            sx={{ mb:1 }}
+          />
+          <Box sx={{ maxHeight: 360, overflow:'auto', pr:0.5 }}>
+            {renderGroupedList()}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSelectorOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* History dialog */}
       <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} fullWidth maxWidth="md">
