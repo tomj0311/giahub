@@ -59,14 +59,14 @@ export default function ModelConfig({ user }) {
     const discoverComponents = async () => {
         try {
             setLoadingDiscovery(true);
-            const response = await fetch(`${backendBase()}/api/model-config/components?folder=models`, {
+            const response = await fetch(`${backendBase()}/api/model-config/components?folder=ai.models`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
 
             if (response.ok) {
                 const data = await response.json();
                 const comps = data?.components || {};
-                setComponents({ models: comps.models || [] });
+                setComponents({ models: comps['ai.models'] || [] });
             } else {
                 showError('Failed to discover models');
             }

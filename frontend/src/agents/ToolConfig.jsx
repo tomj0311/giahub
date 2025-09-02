@@ -54,13 +54,13 @@ export default function ToolConfig({ user }) {
     const discoverComponents = async () => {
         try {
             setLoadingDiscovery(true);
-            const response = await fetch(`${backendBase()}/api/tool-config/components?folder=functions`, {
+            const response = await fetch(`${backendBase()}/api/tool-config/components?folder=ai.functions`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
             if (response.ok) {
                 const data = await response.json();
                 const comps = data?.components || {};
-                setComponents({ functions: comps.functions || [] });
+                setComponents({ functions: comps['ai.functions'] || [] });
             } else {
                 showError('Failed to discover tools');
             }

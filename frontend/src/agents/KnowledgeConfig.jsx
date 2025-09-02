@@ -91,13 +91,16 @@ const api = {
     return r.json()
   },
   async discoverChunking() {
-    const r = await fetch('/api/discovery/components?folder=document/chunking')
+    const r = await fetch('/api/discovery/components?folder=ai.document.chunking')
     return r.json()
   },
-  async introspect(module_path) {
-    const r = await fetch('/api/discovery/introspect', {
+  async introspect(module_path, token) {
+    const r = await fetch('/api/knowledge/introspect', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
       body: JSON.stringify({ module_path, kind: 'chunk' })
     })
     return r.json()
@@ -140,7 +143,7 @@ export default function KnowledgeConfig() {
       setDefaults(d.defaults || {})
       setCategories(c.categories || [])
       setPrefixes(p.prefixes || [])
-      const chunking = (comps.components?.['document/chunking'] || []).concat(comps.components?.chunking || [])
+      const chunking = comps.components?.['ai.document.chunking'] || []
       setComponents({ chunking })
     }).catch(err => console.error(err)).finally(() => setLoading(false))
   }, [token])
@@ -388,7 +391,7 @@ export default function KnowledgeConfig() {
                   </FormControl>
                   <Button variant="outlined" size="small" onClick={async () => {
                     const comps = await api.discoverChunking()
-                    const chunking = (comps.components?.['document/chunking'] || []).concat(comps.components?.chunking || [])
+                    const chunking = comps.components?.['ai.document.chunking'] || []
                     setComponents({ chunking })
                   }}>Refresh</Button>
                 </Box>

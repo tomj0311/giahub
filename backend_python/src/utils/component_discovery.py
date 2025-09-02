@@ -75,12 +75,32 @@ def discover_components(folder: str = None) -> Dict[str, List[str]]:
     _DISCOVERY_CACHE.clear()
     
     if folder:
-        # Only discover components in the specified folder
-        module_path = f"{BASE_NAMESPACE}.{folder}"
+        # Handle both short names and full paths
+        if folder in MAPPING:
+            # Short name like "models" -> "ai.models"
+            module_path = MAPPING[folder]
+            folder_key = folder
+        elif folder.startswith(BASE_NAMESPACE + "."):
+            # Full path like "ai.models" -> use as is
+            module_path = folder
+            # Find the corresponding short key
+            folder_key = None
+            for k, v in MAPPING.items():
+                if v == folder:
+                    folder_key = k
+                    break
+            if folder_key is None:
+                # Create a key from the last part of the path
+                folder_key = folder.split('.')[-1]
+        else:
+            # Unknown folder
+            logger.warning(f"Unknown folder: {folder}")
+            return {}
+            
         children = _list_children(module_path)
         full_paths = [f"{module_path}.{c}" for c in children]
-        logger.info(f"Discovered {folder}: {full_paths}")
-        return {folder: full_paths}
+        logger.info(f"Discovered {folder_key}: {full_paths}")
+        return {folder_key: full_paths, folder: full_paths}
     
     # Default behavior - discover all
     discovered: Dict[str, List[str]] = {k: [] for k in MAPPING}
