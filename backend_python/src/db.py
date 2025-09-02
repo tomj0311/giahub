@@ -41,6 +41,7 @@ def get_collections():
         "tool_config": database["tool_config"],
         "tenants": database["tenants"],
         "knowledgeConfig": database["knowledgeConfig"],
+    "agents": database["agents"],
     }
 
 
@@ -119,6 +120,11 @@ async def ensure_indexes():
         )
         await collections["knowledgeConfig"].create_index("category")
         await collections["knowledgeConfig"].create_index("created_at")
+
+        # Agents collection indexes
+        await collections["agents"].create_index([("tenantId", 1), ("name", 1)], unique=True)
+        await collections["agents"].create_index("category")
+        await collections["agents"].create_index("created_at")
 
         logger.info("[DB] Indexes created successfully")
     except Exception as e:

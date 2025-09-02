@@ -39,10 +39,11 @@ function AppShell({ children, themeKey, setThemeKey, isAuthenticated }) {
   const theme = useMemo(() => buildTheme(themeKey), [themeKey])
   const location = useLocation()
 
-  // Don't show app bar for dashboard routes - dashboard has its own navigation
+  // Don't show app bar for dashboard and agents routes - they have their own navigation
   const isDashboard = location.pathname.startsWith('/dashboard')
+  const isAgents = location.pathname.startsWith('/agents')
 
-  if (isDashboard) {
+  if (isDashboard || isAgents) {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
@@ -142,6 +143,7 @@ export default function App() {
 
         {/* Protected routes */}
         <Route path="/dashboard/*" element={auth.token ? <Dashboard user={{ name: auth.name, token: auth.token }} onLogout={auth.logout} themeKey={themeKey} setThemeKey={setThemeKey} /> : <Navigate to="/login" replace />} />
+        <Route path="/agents/*" element={auth.token ? <Dashboard user={{ name: auth.name, token: auth.token }} onLogout={auth.logout} themeKey={themeKey} setThemeKey={setThemeKey} /> : <Navigate to="/login" replace />} />
 
         {/* Default redirects */}
         <Route path="/" element={<Navigate to={auth.token ? "/dashboard" : "/login"} replace />} />

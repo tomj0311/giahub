@@ -45,6 +45,7 @@ const UserInvitation = lazy(() => import('./UserInvitation'))
 const ModelConfig = lazy(() => import('../agents/ModelConfig'))
 const ToolConfig = lazy(() => import('../agents/ToolConfig'))
 const KnowledgeConfig = lazy(() => import('../agents/KnowledgeConfig'))
+const Agent = lazy(() => import('../agents/Agent'))
 import RouteTransition from '../components/RouteTransition'
 import RouteLoader from '../components/RouteLoader'
 import { menuService } from '../services/menuService'
@@ -518,14 +519,15 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 				<Toolbar />
 				<Box sx={{
 					width: '100%',
+					maxWidth: '1200px', // Consistent max width for all components
+					mx: 'auto',         // Center the content
 					px: {
 						xs: 2,    // 16px on mobile
 						sm: 3,    // 24px on small tablets
-						md: 6,    // 48px on medium screens
-						lg: '12%', // 12% on large screens
-						xl: '18%'  // 18% on extra large screens
+						md: 4,    // 32px on medium screens
+						lg: 6,    // 48px on large screens
 					},
-					py: 8
+					py: 4
 				}}>
 					<Suspense fallback={<RouteLoader />}>
 						<RouteTransition>
@@ -547,6 +549,8 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="users" element={<Users user={user} />} />
 				<Route path="role-management" element={<RoleManagement user={user} />} />
 				<Route path="user-invitation" element={<UserInvitation user={user} />} />
+				<Route path="agents" element={<Agent user={user} />} />
+				{/* Agent configuration routes */}
 				<Route path="model-config" element={<ModelConfig user={user} />} />
 				<Route path="tool-config" element={<ToolConfig user={user} />} />
 				<Route path="knowledge-config" element={<KnowledgeConfig user={user} />} />
