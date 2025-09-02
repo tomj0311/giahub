@@ -9,6 +9,8 @@ from pydantic import BaseModel, EmailStr
 from ..db import get_collections
 from ..utils.auth import verify_token_middleware
 from ..services.rbac_service import RBACService
+from ..services.tenant_service import TenantService
+from ..utils.tenant_middleware import tenant_filter_query, tenant_filter_records
 
 router = APIRouter()
 
@@ -99,6 +101,14 @@ async def invite_user(
         hashed_password = hash_password(temp_password)
         new_user_id = str(uuid.uuid4())
 
+        # Get inviter's tenant_id for inheritance
+        inviter_tenant_id = await TenantService.get_user_tenant_id(user_id)
+        if not inviter_tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Inviter must belong to a tenant"
+            )
+
         # Create user
         user_data = {
             "id": new_user_id,
@@ -112,13 +122,18 @@ async def invite_user(
             "email": normalized_email,
             "emailOriginal": email,
             "invitedBy": invited_by,
-            "isInvited": True
+            "isInvited": True,
+            "tenantId": inviter_tenant_id  # INHERIT TENANT FROM INVITER
         }
 
         await collections['users'].insert_one(user_data)
 
     # Create default personal role for the invited user (immutable, owned by them)
-        default_role = await RBACService.create_default_user_role(email, owner_id=new_user_id)
+        default_role = await RBACService.create_default_user_role(
+            email, 
+            owner_id=new_user_id,
+            tenant_id=inviter_tenant_id  # ASSIGN SAME TENANT TO ROLE
+        )
         await RBACService.assign_role_to_user(new_user_id, default_role["roleId"])
 
         # Assign additional roles if specified
@@ -163,75 +178,39 @@ async def invite_user(
 
 @router.get("/users", response_model=List[dict])
 async def get_all_users(user: dict = Depends(verify_token_middleware)):
-    """Get users with their roles (owner-managed view).
-
-    - You always see yourself.
-    - You see users who have at least one role owned by you.
-    """
-    user_id = user.get("id")
-    if not user_id:
+    """Get all users with their roles - filtered by tenant"""
+    current_user_id = user.get("id")
+    if not current_user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid user"
         )
 
-    try:
-        collections = get_collections()
+    collections = get_collections()
+    
+    # Filter users by tenant
+    user_query = await tenant_filter_query(current_user_id, {})
+    all_users = await collections['users'].find(user_query).to_list(None)
+    
+    # Additional tenant filtering for safety
+    tenant_users = await tenant_filter_records(current_user_id, all_users)
 
-        # Fetch users (active only), but always include current user
-        all_users = await collections['users'].find(
-            {
-                "$or": [
-                    {"active": True},
-                    {"is_active": True},
-                    {"id": user_id},
-                    {"user_id": user_id}
-                ]
-            },
-            {"_id": 0, "password": 0}
-        ).to_list(None)
+    # Build user list with their roles (tenant-filtered)
+    users = []
+    for u in tenant_users:
+        user_id_field = u.get('id') or u.get('user_id')
+        if not user_id_field:
+            continue
 
-        # Build set of user IDs to include: self + users with roles owned by current user
-        include_ids = set()
-        include_ids.add(user_id)
+        # Get user's roles (already tenant-filtered via RBAC service)
+        user_roles = await RBACService.get_user_roles(user_id_field)
+        
+        # Build user data without password and _id (ObjectId serialization issue)
+        user_data = {k: v for k, v in u.items() if k not in ["password", "_id"]}
+        user_data["roles"] = user_roles
+        users.append(user_data)
 
-        # Get all assignments to find users who have roles owned by current user
-        assignments = await collections['userRoles'].find(None).to_list(None)
-        role_ids_owned_by_me = set()
-        roles = await collections['roles'].find(None).to_list(None)
-        for r in roles:
-            if r.get('ownerId') == user_id:
-                role_ids_owned_by_me.add(r.get('roleId') or r.get('role_id'))
-        for a in assignments:
-            rid = a.get('roleId') or a.get('role_id')
-            uid = a.get('userId') or a.get('user_id')
-            if rid in role_ids_owned_by_me:
-                include_ids.add(uid)
-
-        # Filter users - ensure current user is always included regardless of field name
-        users = []
-        for u in all_users:
-            user_id_field = u.get('id') or u.get('user_id')
-            if user_id_field in include_ids or user_id_field == user_id:
-                users.append(u)
-
-        # Populate roles for each included user
-        for user_data in users:
-            target_id = user_data.get("id") or user_data.get("user_id")
-            user_roles = await RBACService.get_user_roles(target_id)
-            user_data["roles"] = [
-                {"roleId": role["roleId"], "roleName": role["roleName"], "name": role["roleName"]}
-                for role in user_roles
-            ]
-            if "user_id" not in user_data and "id" in user_data:
-                user_data["user_id"] = user_data["id"]
-        return users
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch users: {str(e)}"
-        )
+    return users
 
 
 @router.post("/users/{user_id}/roles/assign")

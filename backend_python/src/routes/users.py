@@ -15,6 +15,7 @@ from ..utils.auth import (
 )
 from ..services.email_service import send_registration_email
 from ..services.rbac_service import RBACService
+from ..services.tenant_service import TenantService
 
 router = APIRouter()
 
@@ -80,6 +81,17 @@ async def register_user(registration: UserRegistration):
     hashed_password = hash_password(registration.password)
     user_id = str(uuid.uuid4())
     
+    # CREATE TENANT FIRST - MANDATORY
+    try:
+        default_tenant = await TenantService.create_default_tenant(registration.email, user_id)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Failed to create tenant for user {user_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create user organization. Registration aborted."
+        )
+    
     user_data = {
         "id": user_id,
         "role": "user",
@@ -90,8 +102,17 @@ async def register_user(registration: UserRegistration):
         "lastName": registration.lastName,
         "name": f"{registration.firstName} {registration.lastName}".strip(),
         "email": normalize_email(registration.email),
-        "emailOriginal": registration.email
+        "emailOriginal": registration.email,
+        "tenantId": default_tenant["tenantId"]  # FUCKING TENANTID IS HERE NOW
     }
+    
+    # CRITICAL: Validate tenantId is present before insertion
+    if not user_data.get("tenantId"):
+        await collections['tenants'].delete_one({"ownerId": user_id})  # Clean up tenant
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="User registration failed: tenantId is required"
+        )
     
     # Remove None values
     user_data = {k: v for k, v in user_data.items() if v is not None}
@@ -101,11 +122,16 @@ async def register_user(registration: UserRegistration):
     # Create default role for the user (owned by the user) and assign it
     # CRITICAL: This MUST succeed or registration fails
     try:
-        default_role = await RBACService.create_default_user_role(registration.email, owner_id=user_id)
+        default_role = await RBACService.create_default_user_role(
+            registration.email, 
+            owner_id=user_id,
+            tenant_id=default_tenant["tenantId"]
+        )
         await RBACService.assign_role_to_user(user_id, default_role["roleId"])
     except Exception as e:
-        # Delete the user if role creation fails to maintain data consistency
+        # Delete the user and tenant if role creation fails to maintain data consistency
         await collections['users'].delete_one({"id": user_id})
+        await collections['tenants'].delete_one({"ownerId": user_id})
         import logging
         logging.getLogger(__name__).error(f"Failed to create/assign default role for user {user_id}: {e}")
         raise HTTPException(
@@ -231,85 +257,6 @@ async def get_users(user: dict = Depends(verify_token_middleware)):
     return users
 
 
-@router.post("/admin", status_code=status.HTTP_201_CREATED)
-async def create_user_admin(
-    registration: UserRegistration,
-    user: dict = Depends(verify_token_middleware)
-):
-    """Admin-only: create and activate user directly (no email verification)"""
-    
-    if user.get("role") != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="admin only"
-        )
-    
-    # Check for duplicate email
-    if await email_exists(registration.email):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered."
-        )
-    
-    # Handle password
-    password = registration.password
-    generated_password = False
-    if not password:
-        password = generate_random_password()
-        generated_password = True
-    
-    # Create user
-    collections = get_collections()
-    hashed_password = hash_password(password)
-    user_id = str(uuid.uuid4())
-    
-    user_data = {
-        "id": user_id,
-        "role": "user",
-        "active": True,  # Admin created users are active immediately
-        "password": hashed_password,
-        "createdAt": datetime.utcnow().timestamp() * 1000,
-        "firstName": registration.firstName,
-        "lastName": registration.lastName,
-        "name": f"{registration.firstName} {registration.lastName}".strip(),
-        "email": normalize_email(registration.email),
-        "emailOriginal": registration.email
-    }
-    
-    # Remove None values
-    user_data = {k: v for k, v in user_data.items() if v is not None}
-    
-    await collections['users'].insert_one(user_data)
-    
-    # Create default role for the user and assign it
-    # CRITICAL: This MUST succeed or user creation fails
-    try:
-        default_role = await RBACService.create_default_user_role(registration.email)
-        await RBACService.assign_role_to_user(user_id, default_role["roleId"])
-    except Exception as e:
-        # Delete the user if role creation fails to maintain data consistency
-        await collections['users'].delete_one({"id": user_id})
-        import logging
-        logging.getLogger(__name__).error(f"Failed to create/assign default role for user {user_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create user security profile. User creation aborted."
-        )
-    
-    # Send registration email
-    try:
-        await send_registration_email(user_data["email"], "user")
-    except Exception:
-        pass  # Continue even if email fails
-    
-    # Prepare response
-    response_data = {k: v for k, v in user_data.items() if k != "password"}
-    if generated_password:
-        response_data["tempPassword"] = password
-    
-    return response_data
-
-
 # Legacy routes for backwards compatibility
 @router.post("/patients", status_code=status.HTTP_410_GONE)
 async def legacy_patients():
@@ -329,8 +276,3 @@ async def legacy_patients_login():
 @router.get("/patients", status_code=status.HTTP_410_GONE)
 async def legacy_get_patients():
     return {"message": "Route renamed to /users"}
-
-
-@router.post("/patients/admin", status_code=status.HTTP_410_GONE)
-async def legacy_patients_admin():
-    return {"message": "Route renamed to /users/admin"}

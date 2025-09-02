@@ -19,7 +19,7 @@ sys.path.insert(0, str(current_dir))
 sys.path.insert(0, str(project_root))  # Add project root so we can import 'ai' module
 
 from src.db import connect_db
-from src.routes import auth, users, payments, uploads, profile, roles, role_management, menu, discovery
+from src.routes import auth, users, payments, uploads, profile, roles, role_management, menu, discovery, tenant
 from src.routes.model_config import router as model_config_router
 from src.services.rbac_service import init_default_roles
 from src.services.menu_service import MenuService
@@ -149,6 +149,7 @@ app.include_router(payments.router, prefix="/payments", tags=["payments"])
 app.include_router(uploads.router, prefix="/uploads", tags=["uploads"])
 app.include_router(roles.router, prefix="/rbac", tags=["roles"])
 app.include_router(role_management.router, prefix="/rbac", tags=["role-management"])
+app.include_router(tenant.router, prefix="/tenant", tags=["tenant"])
 app.include_router(menu.router, prefix="/api", tags=["menu"])
 app.include_router(discovery.router)
 app.include_router(model_config_router)

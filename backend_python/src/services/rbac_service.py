@@ -24,6 +24,7 @@ class RBACService:
         *,
         owner_id: Optional[str] = None,
         is_default: bool = False,
+        tenant_id: Optional[str] = None,
     ) -> Dict:
         """Create a new role.
 
@@ -61,6 +62,8 @@ class RBACService:
             role_data["ownerId"] = owner_id
         if is_default:
             role_data["isDefault"] = True
+        if tenant_id is not None:
+            role_data["tenantId"] = tenant_id
         
         await collections['roles'].insert_one(role_data)
         return role_data
@@ -94,7 +97,7 @@ class RBACService:
         return f"user@{email}_role"
     
     @staticmethod
-    async def create_default_user_role(email: str, *, owner_id: Optional[str] = None) -> Dict:
+    async def create_default_user_role(email: str, *, owner_id: Optional[str] = None, tenant_id: Optional[str] = None) -> Dict:
         """Create default role for a user based on their email.
 
         The default role is owned by the user and is immutable (we mark isDefault=True).
@@ -113,6 +116,7 @@ class RBACService:
             permissions=["read_own_data", "update_own_profile"],
             owner_id=owner_id,
             is_default=True,
+            tenant_id=tenant_id,
         )
     
     @staticmethod
@@ -134,6 +138,11 @@ class RBACService:
             "assignedAt": datetime.utcnow().timestamp() * 1000,
             "active": True
         }
+        
+        # Get tenant_id from role to maintain consistency
+        role = await RBACService.get_role_by_id(role_id)
+        if role and role.get("tenantId"):
+            assignment_data["tenantId"] = role["tenantId"]
         
         await collections['userRoles'].insert_one(assignment_data)
         return assignment_data
@@ -208,6 +217,7 @@ class RBACService:
                 "active": r.get("active", True),
                 "ownerId": r.get("ownerId"),
                 "isDefault": r.get("isDefault", False),
+                "tenantId": r.get("tenantId"),
             })
         return normalized
     
@@ -322,6 +332,7 @@ class RBACService:
                 "active": r.get("active", True),
                 "ownerId": r.get("ownerId"),
                 "isDefault": r.get("isDefault", False),
+                "tenantId": r.get("tenantId"),
             })
         return normalized
 

@@ -38,7 +38,8 @@ def get_collections():
         'userRoles': database['userRoles'],
         'menuItems': database['menuItems'],
         'modelconfigs': database['modelconfigs'],
-    'tool_config': database['tool_config'],
+        'tool_config': database['tool_config'],
+        'tenants': database['tenants'],
     }
 
 
@@ -82,6 +83,19 @@ async def ensure_indexes():
         await collections['tool_config'].create_index("category")
         await collections['tool_config'].create_index("type")
         await collections['tool_config'].create_index("created_at")
+        
+        # Tenant indexes
+        await collections['tenants'].create_index("tenantId", unique=True)
+        await collections['tenants'].create_index("name")
+        await collections['tenants'].create_index("createdAt")
+        
+        # Add tenant_id indexes to existing collections for multi-tenancy
+        await collections['users'].create_index("tenantId")
+        await collections['roles'].create_index("tenantId")
+        await collections['userRoles'].create_index("tenantId")
+        await collections['menuItems'].create_index("tenantId")
+        await collections['modelconfigs'].create_index("tenantId")
+        await collections['tool_config'].create_index("tenantId")
         
         logger.info("[DB] Indexes created successfully")
     except Exception as e:

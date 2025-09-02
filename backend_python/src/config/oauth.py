@@ -98,20 +98,39 @@ async def handle_google_user_data(user_info: Dict[str, Any]) -> Dict[str, Any]:
             )
             print(f"📝 Updated user data for: {email}")
         
-        # CRITICAL: Ensure existing Google OAuth user has a default role
+        # CRITICAL: Ensure existing Google OAuth user has tenantId and default role
         try:
             from ..services.rbac_service import RBACService
+            from ..services.tenant_service import TenantService
+            
+            # Check if user has tenantId
+            user_tenant_id = await TenantService.get_user_tenant_id(user['id'])
+            if not user_tenant_id:
+                print(f"⚠️ Existing user {email} has no tenantId. Creating default tenant...")
+                default_tenant = await TenantService.create_default_tenant(email, user['id'])
+                await collections['users'].update_one(
+                    {"id": user['id']},
+                    {"$set": {"tenantId": default_tenant["tenantId"]}}
+                )
+                user_tenant_id = default_tenant["tenantId"]
+                print(f"✅ Created and assigned default tenant for existing user: {email}")
+            
+            # Check if user has roles
             user_roles = await RBACService.get_user_roles(user['id'])
             if not user_roles:
                 print(f"⚠️ Existing user {email} has no roles. Creating default role...")
-                default_role = await RBACService.create_default_user_role(email, owner_id=user['id'])
+                default_role = await RBACService.create_default_user_role(
+                    email, 
+                    owner_id=user['id'],
+                    tenant_id=user_tenant_id
+                )
                 await RBACService.assign_role_to_user(user['id'], default_role["roleId"])
                 print(f"✅ Created and assigned default role for existing user: {email}")
             else:
                 print(f"✅ Existing user {email} has {len(user_roles)} role(s)")
         except Exception as e:
             import logging
-            logging.getLogger(__name__).error(f"Failed to ensure default role for existing Google OAuth user {user['id']}: {e}")
+            logging.getLogger(__name__).error(f"Failed to ensure default tenant/role for existing Google OAuth user {user['id']}: {e}")
         
         return {
             "id": user['id'],

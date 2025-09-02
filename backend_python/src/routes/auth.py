@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, status, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr
@@ -14,6 +15,7 @@ from ..utils.auth import (
     verify_token_middleware
 )
 from ..config.oauth import get_oauth_client, handle_google_user_data
+from ..services.tenant_service import TenantService
 
 router = APIRouter()
 
@@ -47,7 +49,11 @@ async def login(request: LoginRequest):
     
     # Admin login
     if normalized_username == normalize_email(ADMIN_USER) and request.password == ADMIN_PASS:
-        token = generate_token({"role": "admin", "username": request.username})
+        token = generate_token({
+            "role": "admin", 
+            "username": request.username,
+            "tenantId": "system"  # System admin has special tenant
+        })
         return LoginResponse(token=token, role="admin")
     
     collections = get_collections()
@@ -61,10 +67,14 @@ async def login(request: LoginRequest):
     })
     
     if user and user.get('active') and verify_password(request.password, user['password']):
+        # Get user's tenant_id for token
+        user_tenant_id = await TenantService.get_user_tenant_id(user['id'])
+        
         token = generate_token({
             "role": "user",
             "id": user['id'],
-            "email": user['email']
+            "email": user['email'],
+            "tenantId": user_tenant_id
         })
         return LoginResponse(token=token, role="user", name=user.get('name'))
     
@@ -110,20 +120,38 @@ async def google_callback(request: Request):
         # Process the user data and create/update user
         user_data = await handle_google_user_data(user_info)
         
-        # ADDITIONAL SAFETY CHECK: Ensure user has roles after OAuth processing
-        # This catches any edge cases where role creation might have failed
+        # ADDITIONAL SAFETY CHECK: Ensure user has roles and tenantId after OAuth processing
+        # This catches any edge cases where role creation or tenant assignment might have failed
         if not user_data.get('new_user'):
             try:
                 from ..services.rbac_service import RBACService
+                collections = get_collections()
+                user_doc = await collections['users'].find_one({"id": user_data['id']})
+                user_tenant_id = await TenantService.get_user_tenant_id(user_data['id'])
+                
+                if not user_tenant_id:
+                    print(f"⚠️ Warning: Existing OAuth user {user_data['email']} has no tenantId. Creating default tenant...")
+                    default_tenant = await TenantService.create_default_tenant(user_data['email'], user_data['id'])
+                    await collections['users'].update_one(
+                        {"id": user_data['id']},
+                        {"$set": {"tenantId": default_tenant["tenantId"]}}
+                    )
+                    user_tenant_id = default_tenant["tenantId"]
+                    print(f"✅ Created and assigned default tenant for {user_data['email']}")
+                
                 user_roles = await RBACService.get_user_roles(user_data['id'])
                 if not user_roles:
                     print(f"⚠️ Warning: Existing OAuth user {user_data['email']} has no roles. Creating default role...")
-                    default_role = await RBACService.create_default_user_role(user_data['email'], owner_id=user_data['id'])
+                    default_role = await RBACService.create_default_user_role(
+                        user_data['email'], 
+                        owner_id=user_data['id'],
+                        tenant_id=user_tenant_id
+                    )
                     await RBACService.assign_role_to_user(user_data['id'], default_role["roleId"])
                     print(f"✅ Created and assigned default role for {user_data['email']}")
             except Exception as e:
                 import logging
-                logging.getLogger(__name__).error(f"Failed to ensure roles for OAuth user {user_data['id']}: {e}")
+                logging.getLogger(__name__).error(f"Failed to ensure roles/tenant for OAuth user {user_data['id']}: {e}")
                 # Continue with login - user can still access the system
         
         # Check if this is a new user that needs registration completion
@@ -134,13 +162,31 @@ async def google_callback(request: Request):
             # Generate user ID first
             new_user_id = secrets.token_urlsafe(16)
             
-            # STEP 1: Create default role BEFORE creating user
+            # STEP 1: Create default tenant BEFORE creating user
+            try:
+                default_tenant = await TenantService.create_default_tenant(user_data['email'], new_user_id)
+                print(f"✅ Created default tenant: {default_tenant['tenantId']} for {user_data['email']}")
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Failed to create default tenant for Google OAuth user {user_data['email']}: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to create user organization. OAuth registration aborted."
+                )
+            
+            # STEP 2: Create default role with tenant_id
             try:
                 from ..services.rbac_service import RBACService
                 print(f"🔧 Creating default role for new Google OAuth user: {user_data['email']}")
-                default_role = await RBACService.create_default_user_role(user_data['email'], owner_id=new_user_id)
+                default_role = await RBACService.create_default_user_role(
+                    user_data['email'], 
+                    owner_id=new_user_id,
+                    tenant_id=default_tenant['tenantId']
+                )
                 print(f"✅ Created default role: {default_role['roleId']} for {user_data['email']}")
             except Exception as e:
+                # Clean up: delete the tenant since role creation failed
+                await collections['tenants'].delete_one({"ownerId": new_user_id})
                 import logging
                 logging.getLogger(__name__).error(f"Failed to create default role for Google OAuth user {user_data['email']}: {e}")
                 raise HTTPException(
@@ -148,7 +194,7 @@ async def google_callback(request: Request):
                     detail="Failed to create user security profile. OAuth registration aborted."
                 )
             
-            # STEP 2: Create user with proper structure
+            # STEP 3: Create user with proper structure including tenantId
             random_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
             new_user = {
                 "id": new_user_id,
@@ -161,14 +207,25 @@ async def google_callback(request: Request):
                 "googleId": user_info.get('sub'),  # Google user ID
                 "emailVerified": True,  # Google emails are pre-verified
                 "active": True,  # Make sure user is active
-                "createdAt": None,  # Will be set by database
-                "updatedAt": None   # Will be set by database
+                "tenantId": default_tenant['tenantId'],  # FUCKING TENANTID IS HERE NOW
+                "createdAt": datetime.utcnow().timestamp() * 1000,
+                "updatedAt": datetime.utcnow().timestamp() * 1000
             }
+            
+            # CRITICAL: Validate tenantId is present before insertion
+            if not new_user.get("tenantId"):
+                await collections['tenants'].delete_one({"ownerId": new_user_id})
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="OAuth user creation failed: tenantId is required"
+                )
             
             try:
                 await collections['users'].insert_one(new_user)
                 print(f"✅ Created new Google OAuth user: {user_data['email']}")
             except Exception as e:
+                # Clean up: delete the tenant and role since user creation failed
+                await collections['tenants'].delete_one({"ownerId": new_user_id})
                 import logging
                 logging.getLogger(__name__).error(f"Failed to create Google OAuth user {new_user_id}: {e}")
                 raise HTTPException(
@@ -176,13 +233,14 @@ async def google_callback(request: Request):
                     detail="Failed to create user account. OAuth registration aborted."
                 )
             
-            # STEP 3: Assign the role to the user
+            # STEP 4: Assign the role to the user
             try:
                 await RBACService.assign_role_to_user(new_user_id, default_role["roleId"])
                 print(f"✅ Assigned role {default_role['roleId']} to user {new_user_id}")
             except Exception as e:
-                # Clean up: delete the user since role assignment failed
+                # Clean up: delete the user and tenant since role assignment failed
                 await collections['users'].delete_one({"id": new_user_id})
+                await collections['tenants'].delete_one({"ownerId": new_user_id})
                 import logging
                 logging.getLogger(__name__).error(f"Failed to assign role to Google OAuth user {new_user_id}: {e}")
                 raise HTTPException(
