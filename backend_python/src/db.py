@@ -40,6 +40,7 @@ def get_collections():
         'modelconfigs': database['modelconfigs'],
         'tool_config': database['tool_config'],
         'tenants': database['tenants'],
+    'knowledge_Collection': database['knowledge_Collection'],
     }
 
 
@@ -96,7 +97,11 @@ async def ensure_indexes():
         await collections['menuItems'].create_index("tenantId")
         await collections['modelconfigs'].create_index("tenantId")
         await collections['tool_config'].create_index("tenantId")
-        
+        # Knowledge collection indexes
+        await collections['knowledge_Collection'].create_index([("tenantId", 1), ("prefix", 1)], unique=True)
+        await collections['knowledge_Collection'].create_index("category")
+        await collections['knowledge_Collection'].create_index("created_at")
+
         logger.info("[DB] Indexes created successfully")
     except Exception as e:
         logger.error(f"[DB] Error creating indexes: {e}")

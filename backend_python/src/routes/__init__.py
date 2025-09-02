@@ -10,6 +10,8 @@ from .menu import router as menu_router
 from .discovery import discovery_router
 from .model_config import router as model_config_router
 from .tool_config import router as tool_config_router
+from .knowledge import router as knowledge_router
+from .knowledge import router as knowledge_router
 
 __all__ = [
     "auth_router", 
@@ -24,3 +26,8 @@ __all__ = [
     "model_config_router",
     "tool_config_router"
 ]
+
+__all__.append("knowledge_router")
+
+# Expose new router
+__all__.append("knowledge_router")

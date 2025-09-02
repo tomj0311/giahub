@@ -140,7 +140,7 @@ class MenuService:
             },
             {
                 "label": "Knowledge",
-                "to": "/store/knowledge",
+                "to": "/dashboard/knowledge-config",
                 "icon": "BookOpen",
                 "parentId": store_parent_id,
                 "order": 4,
