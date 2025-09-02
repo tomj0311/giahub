@@ -20,6 +20,7 @@ import {
 	Chip
 } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
+import { getThemeKeyForMode } from '../theme'
 import {
 	Menu as MenuIconOld,
 	PanelLeftOpen,
@@ -118,10 +119,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 		onLogout()
 	}
 
-	const handleThemeToggle = () => {
-		handleProfileMenuClose()
-		setThemeKey(prev => prev === 'aurora' ? 'ocean' : 'aurora')
-	}
+		const handleThemeToggle = () => {
+			handleProfileMenuClose()
+			const nextMode = theme.palette.mode === 'dark' ? 'light' : 'dark'
+			setThemeKey(getThemeKeyForMode(nextMode))
+		}
 
 	const toggleSection = (sectionLabel) => {
 		setExpandedSections(prev => ({

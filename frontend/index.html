@@ -4,6 +4,45 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GiaHUB</title>
+    <!-- Prevent white flash on reload by applying the saved theme background immediately -->
+  <script>
+      (function () {
+        try {
+      // Prefer an explicit palette mode if the app saved one; otherwise use system
+      var savedKey = localStorage.getItem('theme');
+      var savedMode = localStorage.getItem('theme_mode'); // 'dark' | 'light'
+      var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      // Treat 'aurora' as dark and 'ocean' as light if a key exists but no mode
+      var darkFromKey = savedKey ? (savedKey === 'aurora') : null;
+      var dark = typeof savedMode === 'string' ? (savedMode === 'dark')
+          : (darkFromKey !== null ? darkFromKey : !!prefersDark);
+          var bg = dark ? '#000000' : '#ffffff';
+          var tc = dark ? 'dark' : 'light';
+          // Apply to <html> ASAP (body may not exist yet)
+          document.documentElement.style.backgroundColor = bg;
+          document.documentElement.style.colorScheme = tc;
+          // Set theme-color for browser UI (tabs/address bar)
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (!meta) {
+            meta = document.createElement('meta');
+            meta.setAttribute('name', 'theme-color');
+            document.head.appendChild(meta);
+          }
+          meta.setAttribute('content', bg);
+          // If body already exists, mirror bg to avoid flash
+          if (document.body) {
+            document.body.style.backgroundColor = bg;
+          } else {
+            // Ensure body gets correct bg once parsed
+            document.addEventListener('DOMContentLoaded', function () {
+              document.body.style.backgroundColor = bg;
+            });
+          }
+  } catch (e) {
+          // no-op
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

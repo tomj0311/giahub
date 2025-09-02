@@ -950,3 +950,13 @@ export function buildTheme(key) {
 }
 
 export const themeOrder = ['aurora', 'ocean'];
+
+// Return the first theme key whose palette.mode matches the requested mode.
+// Falls back to the first entry in themeOrder when no exact match is found.
+export function getThemeKeyForMode(mode) {
+  for (const key of themeOrder) {
+    const def = themeDefinitions[key];
+    if (def && def.palette && def.palette.mode === mode) return key;
+  }
+  return themeOrder[0];
+}

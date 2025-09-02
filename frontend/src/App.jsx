@@ -13,7 +13,7 @@ import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
 import AuthCallback from './pages/AuthCallback'
 import Dashboard from './Dashboard/Dashboard'
-import { buildTheme } from './theme'
+import { buildTheme, getThemeKeyForMode } from './theme'
 
 function useAuth() {
   const [token, setToken] = useState(() => localStorage.getItem('token'))
@@ -63,8 +63,13 @@ function AppShell({ children, themeKey, setThemeKey, isAuthenticated }) {
               <Button color="inherit" component={Link} to="/signup" sx={{ ml: 1 }}>Sign up</Button>
             </>
           )}
-          <IconButton color="inherit" onClick={() => setThemeKey(prev => prev === 'aurora' ? 'ocean' : 'aurora')} aria-label="toggle theme" sx={{ ml: 2 }}>
-            {themeKey === 'aurora' ? <Brightness7Icon size={18} /> : <Brightness4Icon size={18} />}
+          <IconButton
+            color="inherit"
+            onClick={() => setThemeKey(getThemeKeyForMode(theme.palette.mode === 'dark' ? 'light' : 'dark'))}
+            aria-label="toggle theme"
+            sx={{ ml: 2 }}
+          >
+            {theme.palette.mode === 'dark' ? <Brightness7Icon size={18} /> : <Brightness4Icon size={18} />}
           </IconButton>
         </Toolbar>
       </AppBar>
@@ -76,13 +81,56 @@ function AppShell({ children, themeKey, setThemeKey, isAuthenticated }) {
 }
 
 export default function App() {
-  const [themeKey, setThemeKey] = useState(() => localStorage.getItem('theme') || 'aurora')
+  const [themeKey, setThemeKey] = useState(() => {
+    const savedKey = localStorage.getItem('theme')
+    if (savedKey) return savedKey
+    const systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+    return getThemeKeyForMode(systemDark ? 'dark' : 'light')
+  })
   const auth = useAuth()
 
   // Save theme preference to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('theme', themeKey)
+    // Also store palette mode for key-agnostic early boot
+    try {
+      const mode = themeKey === 'aurora' ? 'dark' : 'light'
+      localStorage.setItem('theme_mode', mode)
+    } catch {}
+    // Keep document background in sync to avoid flashes when toggling
+    const dark = themeKey === 'aurora'
+    const bg = dark ? '#000000' : '#ffffff'
+    const tc = dark ? 'dark' : 'light'
+    try {
+      document.documentElement.style.backgroundColor = bg
+      document.documentElement.style.colorScheme = tc
+      if (document.body) document.body.style.backgroundColor = bg
+      let meta = document.querySelector('meta[name="theme-color"]')
+      if (!meta) {
+        meta = document.createElement('meta')
+        meta.setAttribute('name', 'theme-color')
+        document.head.appendChild(meta)
+      }
+      meta.setAttribute('content', bg)
+    } catch {}
   }, [themeKey])
+
+  // React to OS color scheme changes when user hasn't explicitly chosen a theme key
+  useEffect(() => {
+    const mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)')
+    if (!mq) return
+    const handler = (e) => {
+      const savedKey = localStorage.getItem('theme')
+      // Only auto-switch if user hasn't chosen explicitly (no saved key) or saved key was set via system before
+      if (!savedKey) {
+        setThemeKey(getThemeKeyForMode(e.matches ? 'dark' : 'light'))
+      }
+    }
+    mq.addEventListener ? mq.addEventListener('change', handler) : mq.addListener(handler)
+    return () => {
+      mq.removeEventListener ? mq.removeEventListener('change', handler) : mq.removeListener(handler)
+    }
+  }, [])
 
   return (
     <AppShell themeKey={themeKey} setThemeKey={setThemeKey} isAuthenticated={!!auth.token}>
