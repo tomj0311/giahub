@@ -53,6 +53,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from src.db import init_database, close_database
 from src.routes import auth_router, users_router, payments_router, uploads_router, profile_router, roles_router, role_management_router, menu_router, discovery_router, model_config_router, tool_config_router, knowledge_router, agents_router
+from src.routes.agent_runtime import router as agent_runtime_router
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import logging
@@ -106,6 +107,7 @@ app.include_router(model_config_router)
 app.include_router(tool_config_router)
 app.include_router(knowledge_router)
 app.include_router(agents_router)
+app.include_router(agent_runtime_router)
 
 
 @app.get("/")
@@ -158,6 +160,7 @@ app.include_router(model_config_router)
 app.include_router(tool_config_router)
 app.include_router(knowledge_router)
 app.include_router(agents_router)
+app.include_router(agent_runtime_router)
 
 
 # No WebSocket routes needed - only HTTP

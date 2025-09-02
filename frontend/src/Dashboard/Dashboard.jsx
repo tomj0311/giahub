@@ -46,6 +46,7 @@ const ModelConfig = lazy(() => import('../agents/ModelConfig'))
 const ToolConfig = lazy(() => import('../agents/ToolConfig'))
 const KnowledgeConfig = lazy(() => import('../agents/KnowledgeConfig'))
 const Agent = lazy(() => import('../agents/Agent'))
+const AgentPlayground = lazy(() => import('../playground/AgentPlayground'))
 import RouteTransition from '../components/RouteTransition'
 import RouteLoader from '../components/RouteLoader'
 import { menuService } from '../services/menuService'
@@ -553,6 +554,7 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="model-config" element={<ModelConfig user={user} />} />
 				<Route path="tool-config" element={<ToolConfig user={user} />} />
 				<Route path="knowledge-config" element={<KnowledgeConfig user={user} />} />
+				<Route path="agent-playground" element={<AgentPlayground user={user} />} />
 			</Route>
 		</Routes>
 	)

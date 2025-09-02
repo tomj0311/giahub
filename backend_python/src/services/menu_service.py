@@ -86,7 +86,7 @@ class MenuService:
             },
             {
                 "label": "Playground",
-                "to": "/runner",
+                "to": "/agent-playground",
                 "icon": "PlayCircle",
                 "order": 4,
                 "isActive": True,
