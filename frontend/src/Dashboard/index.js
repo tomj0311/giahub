@@ -1,3 +1,3 @@
 export { default } from './Dashboard'
 export { default as Home } from './Home'
-export { default as KnowledgeConfig } from './KnowledgeConfig'
+export { default as KnowledgeConfig } from '../agents/KnowledgeConfig'

@@ -122,7 +122,7 @@ class MenuService:
             },
             {
                 "label": "Models",
-                "to": "/dashboard/model-config",
+                "to": "/agents/model-config",
                 "icon": "Settings",
                 "parentId": store_parent_id,
                 "order": 2,
@@ -131,7 +131,7 @@ class MenuService:
             },
             {
                 "label": "Tools",
-                "to": "/dashboard/tool-config",
+                "to": "/agents/tool-config",
                 "icon": "Wrench",
                 "parentId": store_parent_id,
                 "order": 3,
@@ -140,7 +140,7 @@ class MenuService:
             },
             {
                 "label": "Knowledge",
-                "to": "/dashboard/knowledge-config",
+                "to": "/agents/knowledge-config",
                 "icon": "BookOpen",
                 "parentId": store_parent_id,
                 "order": 4,

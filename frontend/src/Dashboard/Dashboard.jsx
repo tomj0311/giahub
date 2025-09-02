@@ -42,9 +42,9 @@ const Home = lazy(() => import('./Home'))
 const Users = lazy(() => import('./Users'))
 const RoleManagement = lazy(() => import('./RoleManagement'))
 const UserInvitation = lazy(() => import('./UserInvitation'))
-const ModelConfig = lazy(() => import('./ModelConfig'))
-const ToolConfig = lazy(() => import('./ToolConfig'))
-const KnowledgeConfig = lazy(() => import('./KnowledgeConfig'))
+const ModelConfig = lazy(() => import('../agents/ModelConfig'))
+const ToolConfig = lazy(() => import('../agents/ToolConfig'))
+const KnowledgeConfig = lazy(() => import('../agents/KnowledgeConfig'))
 import RouteTransition from '../components/RouteTransition'
 import RouteLoader from '../components/RouteLoader'
 import { menuService } from '../services/menuService'
