@@ -37,7 +37,7 @@ const dashboardMetrics = [
     value: '$45,210',
     change: '+12.5%',
     trend: 'up',
-  icon: <MoneyIcon size={18} />,
+    icon: <MoneyIcon size={18} />,
     color: 'success'
   },
   {
@@ -45,7 +45,7 @@ const dashboardMetrics = [
     value: '2,847',
     change: '+8.2%',
     trend: 'up',
-  icon: <PeopleIcon size={18} />,
+    icon: <PeopleIcon size={18} />,
     color: 'primary'
   },
   {
@@ -53,7 +53,7 @@ const dashboardMetrics = [
     value: '3.42%',
     change: '-2.1%',
     trend: 'down',
-  icon: <TrendingUp size={18} />,
+    icon: <TrendingUp size={18} />,
     color: 'warning'
   },
   {
@@ -61,7 +61,7 @@ const dashboardMetrics = [
     value: '127',
     change: '+15.3%',
     trend: 'up',
-  icon: <AssessmentIcon size={18} />,
+    icon: <AssessmentIcon size={18} />,
     color: 'info'
   }
 ]
@@ -108,14 +108,14 @@ const projectProgress = [
 
 function MetricCard({ metric }) {
   const theme = useTheme()
-  
+
   return (
     <Card sx={{ height: '100%', position: 'relative', overflow: 'visible' }}>
       <CardContent>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-          <Box sx={{ 
-            p: 1, 
-            borderRadius: 2, 
+          <Box sx={{
+            p: 1,
+            borderRadius: 2,
             bgcolor: `${metric.color}.main`,
             color: 'white',
             display: 'flex',
@@ -127,24 +127,24 @@ function MetricCard({ metric }) {
             <MoreVertIcon size={18} />
           </IconButton>
         </Box>
-        
+
         <Typography variant="h4" fontWeight="bold" gutterBottom>
           {metric.value}
         </Typography>
-        
+
         <Typography variant="body2" color="text.secondary" gutterBottom>
           {metric.title}
         </Typography>
-        
+
         <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
           {metric.trend === 'up' ? (
             <ArrowUpwardIcon size={16} style={{ color: 'var(--mui-palette-success-main)' }} />
           ) : (
             <ArrowDownwardIcon size={16} style={{ color: 'var(--mui-palette-error-main)' }} />
           )}
-          <Typography 
-            variant="caption" 
-            sx={{ 
+          <Typography
+            variant="caption"
+            sx={{
               ml: 0.5,
               color: metric.trend === 'up' ? 'success.main' : 'error.main',
               fontWeight: 'medium'
@@ -197,17 +197,17 @@ function ProjectProgressItem({ project }) {
         <Typography variant="body2" fontWeight="medium">
           {project.name}
         </Typography>
-        <Chip 
-          label={project.status} 
-          size="small" 
+        <Chip
+          label={project.status}
+          size="small"
           color={getStatusColor(project.status)}
           variant="outlined"
         />
       </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-        <LinearProgress 
-          variant="determinate" 
-          value={project.progress} 
+        <LinearProgress
+          variant="determinate"
+          value={project.progress}
           sx={{ flexGrow: 1, height: 6, borderRadius: 3 }}
         />
         <Typography variant="caption" color="text.secondary" sx={{ minWidth: 35 }}>

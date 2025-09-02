@@ -58,7 +58,7 @@ export default function RoleManagement({ user }) {
           'Authorization': `Bearer ${user.token}`
         }
       })
-      
+
       if (response.ok) {
         const data = await response.json()
         setRoles(data)
@@ -75,7 +75,7 @@ export default function RoleManagement({ user }) {
   const handleCreateRole = async () => {
     try {
       const permissions = formData.permissions.split(',').map(p => p.trim()).filter(p => p)
-      
+
       const response = await fetch('/rbac/roles', {
         method: 'POST',
         headers: {
@@ -106,7 +106,7 @@ export default function RoleManagement({ user }) {
   const handleEditRole = async () => {
     try {
       const permissions = formData.permissions.split(',').map(p => p.trim()).filter(p => p)
-      
+
       const response = await fetch(`/rbac/roles/${selectedRole.roleId}`, {
         method: 'PUT',
         headers: {

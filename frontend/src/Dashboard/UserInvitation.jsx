@@ -85,7 +85,7 @@ export default function UserInvitation({ user }) {
           'Authorization': `Bearer ${user.token}`
         }
       })
-      
+
       if (response.ok) {
         const data = await response.json()
         setUsers(data)
@@ -104,7 +104,7 @@ export default function UserInvitation({ user }) {
           'Authorization': `Bearer ${user.token}`
         }
       })
-      
+
       if (response.ok) {
         const data = await response.json()
         // Filter out default user roles for selection

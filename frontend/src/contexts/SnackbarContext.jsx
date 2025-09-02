@@ -32,7 +32,7 @@ export const SnackbarProvider = ({ children }) => {
   const showInfo = (message, duration) => showSnackbar(message, 'info', duration);
 
   return (
-    <SnackbarContext.Provider 
+    <SnackbarContext.Provider
       value={{
         showSnackbar,
         showSuccess,
@@ -54,8 +54,8 @@ export const SnackbarProvider = ({ children }) => {
             mt: index * 7, // Stack multiple snackbars
           }}
         >
-          <Alert 
-            onClose={() => hideSnackbar(snackbar.id)} 
+          <Alert
+            onClose={() => hideSnackbar(snackbar.id)}
             severity={snackbar.severity}
             sx={{
               backgroundColor: theme.palette.background.paper,

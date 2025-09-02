@@ -5,9 +5,9 @@ import { useSnackbar } from '../contexts/SnackbarContext';
 export default function ModelConfig({ user }) {
     // Use the user token from props (same pattern as other dashboard components)
     const token = user?.token;
-    
+
     const { showSuccess, showError, showWarning, showInfo } = useSnackbar();
-    
+
     // Simple backend base function replacement
     const backendBase = () => import.meta.env.VITE_BACKEND_URL || 'http://localhost:4000';
 
@@ -36,7 +36,7 @@ export default function ModelConfig({ user }) {
             const response = await fetch(`${backendBase()}/api/model-config/components?folder=models`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
-            
+
             if (response.ok) {
                 const data = await response.json();
                 const comps = data?.components || {};
@@ -55,10 +55,10 @@ export default function ModelConfig({ user }) {
     // Introspect model using HTTP
     const introspectModel = async (modulePath, kind = 'model') => {
         if (!modulePath || introspectCache[modulePath] || pendingIntros[modulePath]) return;
-        
+
         try {
             setPendingIntros(p => ({ ...p, [modulePath]: true }));
-            
+
             const response = await fetch(`${backendBase()}/api/model-config/introspect`, {
                 method: 'POST',
                 headers: {
@@ -67,7 +67,7 @@ export default function ModelConfig({ user }) {
                 },
                 body: JSON.stringify({ module_path: modulePath, kind })
             });
-            
+
             if (response.ok) {
                 const data = await response.json();
                 setIntrospectCache(c => ({ ...c, [modulePath]: data }));
@@ -170,7 +170,7 @@ export default function ModelConfig({ user }) {
         }
 
         setSaveState(s => ({ ...s, loading: true }));
-        
+
         const configToSave = {
             name: form.name,
             category: form.category || '',
@@ -202,18 +202,18 @@ export default function ModelConfig({ user }) {
                     body: JSON.stringify(configToSave)
                 });
             }
-            
+
             const data = await resp.json().catch(() => ({}));
             if (!resp.ok) {
                 showError(data.detail || `Save failed (HTTP ${resp.status})`);
                 setSaveState({ loading: false });
                 return;
             }
-            
+
             const action = isEditMode ? 'updated' : 'saved';
             showSuccess(`Model configuration "${form.name}" ${action} successfully`);
             setSaveState({ loading: false });
-            
+
             // Reload existing configs and reset form after successful save
             loadExistingConfigs();
             loadCategories();
@@ -240,7 +240,7 @@ export default function ModelConfig({ user }) {
                     <LinearProgress sx={{ mb: 2, borderRadius: '4px' }} />
                 </Fade>
             )}
-            
+
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Box>
                     <Typography variant="h4" gutterBottom>
@@ -256,180 +256,180 @@ export default function ModelConfig({ user }) {
                 <Grid item xs={12}>
                     <Card>
                         <CardContent>
-                
-                {loadingDiscovery && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                        <CircularProgress size={18} />
-                        <Typography variant="body2">Discovering models...</Typography>
-                    </Box>
-                )}
-                
-                {!loadingDiscovery && Object.keys(pendingIntros).length > 0 && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                        <CircularProgress size={16} />
-                        <Typography variant="caption" sx={{ opacity: 0.7 }}>
-                            Loading definitions for {Object.keys(pendingIntros).filter(k => !introspectCache[k]).length} item(s)…
-                        </Typography>
-                    </Box>
-                )}
 
-                <Stack spacing={1}>
-                    <Typography variant="body2" color="text.secondary">
-                        {existingConfigs.length > 0 && 'Start typing to search existing configurations or enter a new name.'}
-                    </Typography>
+                            {loadingDiscovery && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                                    <CircularProgress size={18} />
+                                    <Typography variant="body2">Discovering models...</Typography>
+                                </Box>
+                            )}
 
-                    <Autocomplete
-                        freeSolo
-                        fullWidth
-                        options={existingConfigs.map(c => c.name)}
-                        value={form.name}
-                        loading={loadingConfigs}
-                        loadingText="Loading configurations…"
-                        onChange={(_, v) => {
-                            if (v && existingConfigs.some(c => c.name === v)) {
-                                loadExistingConfig(v);
-                            } else {
-                                setForm(f => ({ ...f, id: null, name: v || '' }));
-                                setIsEditMode(false);
-                            }
-                        }}
-                        onInputChange={(_, v) => {
-                            setForm(f => ({ ...f, name: v }));
-                            if (existingConfigs.some(c => c.name === v)) {
-                                loadExistingConfig(v);
-                            } else {
-                                setForm(f => ({ ...f, id: null }));
-                                setIsEditMode(false);
-                            }
-                        }}
-                        renderInput={(params) => 
-                            <TextField 
-                                {...params} 
-                                label="Configuration Name" 
-                                placeholder="Enter a short descriptive name"
-                                size="small"
-                                required
-                            />
-                        }
-                    />
+                            {!loadingDiscovery && Object.keys(pendingIntros).length > 0 && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                                    <CircularProgress size={16} />
+                                    <Typography variant="caption" sx={{ opacity: 0.7 }}>
+                                        Loading definitions for {Object.keys(pendingIntros).filter(k => !introspectCache[k]).length} item(s)…
+                                    </Typography>
+                                </Box>
+                            )}
 
-                    <Autocomplete
-                        freeSolo
-                        fullWidth
-                        size="small"
-                        options={categories}
-                        value={form.category}
-                        loading={loadingCategories}
-                        disabled={saveState.loading}
-                        onChange={(e, val) => {
-                            setForm(f => ({ ...f, category: val || '' }));
-                            if (val && !categories.includes(val)) {
-                                setCategories(prev => [...prev, val]);
-                            }
-                        }}
-                        onInputChange={(e, val) => {
-                            setForm(f => ({ ...f, category: val || '' }));
-                            if (val && !categories.includes(val)) {
-                                setCategories(prev => [...prev, val]);
-                            }
-                        }}
-                        renderInput={(params) => (
-                            <TextField 
-                                {...params} 
-                                label="Category" 
-                                placeholder="Enter or select a category..."
-                                size="small"
-                            />
-                        )}
-                    />
+                            <Stack spacing={1}>
+                                <Typography variant="body2" color="text.secondary">
+                                    {existingConfigs.length > 0 && 'Start typing to search existing configurations or enter a new name.'}
+                                </Typography>
 
-                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                        <Autocomplete
-                            sx={{ flex: 1 }}
-                            options={components.models || []}
-                            value={form.model}
-                            loading={loadingDiscovery && !(components.models || []).length}
-                            loadingText="Loading models…"
-                            onChange={(_, v) => { 
-                                setForm(f => ({ ...f, model: v || '', model_params: {} })); 
-                                ensureIntrospection(v, 'model'); 
-                            }}
-                            renderInput={(params) => <TextField {...params} label="Select Model" />}
-                        />
-                        <Button 
-                            variant="gradientBorder"
-                            size="medium"
-                            onClick={discoverComponents}
-                        >
-                            Refresh
-                        </Button>
-                    </Box>
-
-                    {!modelIntro && form.model && (
-                        <Fade in>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <CircularProgress size={16} />
-                                <Typography variant="caption" sx={{ opacity: 0.7 }}>Fetching model parameters…</Typography>
-                            </Box>
-                        </Fade>
-                    )}
-
-                    {modelIntro && (
-                        <Box>
-                            <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                                Model Parameters ({modelIntro.class_name})
-                            </Typography>
-                            <Box sx={{ 
-                                display: 'grid', 
-                                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                                gap: 2
-                            }}>
-                                {(modelIntro.formatted_params || []).map(paramFormatted => {
-                                    // Extract parameter name and type from formatted string
-                                    const paramName = paramFormatted.split(':')[0].trim();
-                                    const typeMatch = paramFormatted.match(/:\s*([^=\s]+)/);
-                                    const paramType = typeMatch ? typeMatch[1].toLowerCase() : 'str';
-                                    
-                                    // Determine field width based on type
-                                    let gridColumn = 'span 1';
-                                    if (paramType.includes('int') || paramType.includes('float') || paramType.includes('bool')) {
-                                        gridColumn = 'span 1'; // Smaller for numeric/boolean
-                                    } else if (paramType.includes('str') && (paramName.includes('key') || paramName.includes('token') || paramName.includes('url'))) {
-                                        gridColumn = 'span 2'; // Larger for API keys, URLs, etc.
-                                    }
-                                    
-                                    return (
+                                <Autocomplete
+                                    freeSolo
+                                    fullWidth
+                                    options={existingConfigs.map(c => c.name)}
+                                    value={form.name}
+                                    loading={loadingConfigs}
+                                    loadingText="Loading configurations…"
+                                    onChange={(_, v) => {
+                                        if (v && existingConfigs.some(c => c.name === v)) {
+                                            loadExistingConfig(v);
+                                        } else {
+                                            setForm(f => ({ ...f, id: null, name: v || '' }));
+                                            setIsEditMode(false);
+                                        }
+                                    }}
+                                    onInputChange={(_, v) => {
+                                        setForm(f => ({ ...f, name: v }));
+                                        if (existingConfigs.some(c => c.name === v)) {
+                                            loadExistingConfig(v);
+                                        } else {
+                                            setForm(f => ({ ...f, id: null }));
+                                            setIsEditMode(false);
+                                        }
+                                    }}
+                                    renderInput={(params) =>
                                         <TextField
-                                            key={paramName}
+                                            {...params}
+                                            label="Configuration Name"
+                                            placeholder="Enter a short descriptive name"
                                             size="small"
-                                            label={paramName}
-                                            value={form.model_params[paramName] || ''}
-                                            onChange={(e) => setForm(f => ({ 
-                                                ...f, 
-                                                model_params: { ...f.model_params, [paramName]: e.target.value } 
-                                            }))}
-                                            placeholder={`Enter ${paramName}`}
-                                            sx={{ gridColumn }}
-                                            type={paramType.includes('int') || paramType.includes('float') ? 'number' : 'text'}
+                                            required
                                         />
-                                    );
-                                })}
-                            </Box>
-                        </Box>
-                    )}
+                                    }
+                                />
 
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
-                        <Button 
-                            onClick={saveModelConfig} 
-                            disabled={saveState.loading || !form.name || !form.model}
-                            color="primary"
-                            variant="contained"
-                            size="medium"
-                        >
-                            {saveState.loading ? 'Saving...' : isEditMode ? 'Update Model Configuration' : 'Save Model Configuration'}
-                        </Button>
-                    </Box>
-                </Stack>
+                                <Autocomplete
+                                    freeSolo
+                                    fullWidth
+                                    size="small"
+                                    options={categories}
+                                    value={form.category}
+                                    loading={loadingCategories}
+                                    disabled={saveState.loading}
+                                    onChange={(e, val) => {
+                                        setForm(f => ({ ...f, category: val || '' }));
+                                        if (val && !categories.includes(val)) {
+                                            setCategories(prev => [...prev, val]);
+                                        }
+                                    }}
+                                    onInputChange={(e, val) => {
+                                        setForm(f => ({ ...f, category: val || '' }));
+                                        if (val && !categories.includes(val)) {
+                                            setCategories(prev => [...prev, val]);
+                                        }
+                                    }}
+                                    renderInput={(params) => (
+                                        <TextField
+                                            {...params}
+                                            label="Category"
+                                            placeholder="Enter or select a category..."
+                                            size="small"
+                                        />
+                                    )}
+                                />
+
+                                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                                    <Autocomplete
+                                        sx={{ flex: 1 }}
+                                        options={components.models || []}
+                                        value={form.model}
+                                        loading={loadingDiscovery && !(components.models || []).length}
+                                        loadingText="Loading models…"
+                                        onChange={(_, v) => {
+                                            setForm(f => ({ ...f, model: v || '', model_params: {} }));
+                                            ensureIntrospection(v, 'model');
+                                        }}
+                                        renderInput={(params) => <TextField {...params} label="Select Model" />}
+                                    />
+                                    <Button
+                                        variant="gradientBorder"
+                                        size="medium"
+                                        onClick={discoverComponents}
+                                    >
+                                        Refresh
+                                    </Button>
+                                </Box>
+
+                                {!modelIntro && form.model && (
+                                    <Fade in>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <CircularProgress size={16} />
+                                            <Typography variant="caption" sx={{ opacity: 0.7 }}>Fetching model parameters…</Typography>
+                                        </Box>
+                                    </Fade>
+                                )}
+
+                                {modelIntro && (
+                                    <Box>
+                                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                            Model Parameters ({modelIntro.class_name})
+                                        </Typography>
+                                        <Box sx={{
+                                            display: 'grid',
+                                            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                                            gap: 2
+                                        }}>
+                                            {(modelIntro.formatted_params || []).map(paramFormatted => {
+                                                // Extract parameter name and type from formatted string
+                                                const paramName = paramFormatted.split(':')[0].trim();
+                                                const typeMatch = paramFormatted.match(/:\s*([^=\s]+)/);
+                                                const paramType = typeMatch ? typeMatch[1].toLowerCase() : 'str';
+
+                                                // Determine field width based on type
+                                                let gridColumn = 'span 1';
+                                                if (paramType.includes('int') || paramType.includes('float') || paramType.includes('bool')) {
+                                                    gridColumn = 'span 1'; // Smaller for numeric/boolean
+                                                } else if (paramType.includes('str') && (paramName.includes('key') || paramName.includes('token') || paramName.includes('url'))) {
+                                                    gridColumn = 'span 2'; // Larger for API keys, URLs, etc.
+                                                }
+
+                                                return (
+                                                    <TextField
+                                                        key={paramName}
+                                                        size="small"
+                                                        label={paramName}
+                                                        value={form.model_params[paramName] || ''}
+                                                        onChange={(e) => setForm(f => ({
+                                                            ...f,
+                                                            model_params: { ...f.model_params, [paramName]: e.target.value }
+                                                        }))}
+                                                        placeholder={`Enter ${paramName}`}
+                                                        sx={{ gridColumn }}
+                                                        type={paramType.includes('int') || paramType.includes('float') ? 'number' : 'text'}
+                                                    />
+                                                );
+                                            })}
+                                        </Box>
+                                    </Box>
+                                )}
+
+                                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
+                                    <Button
+                                        onClick={saveModelConfig}
+                                        disabled={saveState.loading || !form.name || !form.model}
+                                        color="primary"
+                                        variant="contained"
+                                        size="medium"
+                                    >
+                                        {saveState.loading ? 'Saving...' : isEditMode ? 'Update Model Configuration' : 'Save Model Configuration'}
+                                    </Button>
+                                </Box>
+                            </Stack>
                         </CardContent>
                     </Card>
                 </Grid>

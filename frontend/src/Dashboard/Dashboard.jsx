@@ -69,13 +69,13 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 				const items = await menuService.getMenuItems()
 				console.log('Loaded menu items:', items)
 				setMenuItems(items)
-				
+
 				// Set initial expanded state based on current route
 				const initialExpanded = {}
 				items.forEach(item => {
 					if (item.expandable && item.children) {
 						// Auto-expand if current route matches any child
-						const shouldExpand = item.children.some(child => 
+						const shouldExpand = item.children.some(child =>
 							location.pathname === child.to || location.pathname.startsWith(child.to)
 						)
 						initialExpanded[item.label] = shouldExpand
@@ -86,7 +86,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 				console.error('Failed to load menu items:', error)
 			}
 		}
-		
+
 		loadMenuItems()
 	}, [])
 
@@ -95,7 +95,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 		const newExpanded = { ...expandedSections }
 		menuItems.forEach(item => {
 			if (item.expandable && item.children) {
-				const shouldExpand = item.children.some(child => 
+				const shouldExpand = item.children.some(child =>
 					location.pathname === child.to || location.pathname.startsWith(child.to)
 				)
 				if (shouldExpand && !newExpanded[item.label]) {
@@ -119,11 +119,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 		onLogout()
 	}
 
-		const handleThemeToggle = () => {
-			handleProfileMenuClose()
-			const nextMode = theme.palette.mode === 'dark' ? 'light' : 'dark'
-			setThemeKey(getThemeKeyForMode(nextMode))
-		}
+	const handleThemeToggle = () => {
+		handleProfileMenuClose()
+		const nextMode = theme.palette.mode === 'dark' ? 'light' : 'dark'
+		setThemeKey(getThemeKeyForMode(nextMode))
+	}
 
 	const toggleSection = (sectionLabel) => {
 		setExpandedSections(prev => ({
@@ -235,12 +235,12 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			// Non-expandable item or expandable item with direct navigation
 			const selected = location.pathname === item.to || (item.to !== '/' && location.pathname.startsWith(item.to))
 			const Icon = getIconComponent(item.icon)
-			
+
 			// For expandable items with 'to' property, we want both navigation and expansion
 			const isExpandableWithLink = item.expandable && item.to
 			const isExpanded = expandedSections[item.label] || false
 			const ExpandIcon = isExpanded ? ChevronUp : ChevronDown
-			
+
 			return (
 				<React.Fragment key={item.to || item.label}>
 					<ListItemButton
@@ -262,7 +262,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 								backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
 							}
 						}}
-						onClick={() => { 
+						onClick={() => {
 							if (isMobile) setMobileOpen(false)
 							// If it's expandable with a link, also toggle expansion
 							if (isExpandableWithLink) {
@@ -287,7 +287,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 							<ExpandIcon size={16} color={theme.palette.text.secondary} />
 						)}
 					</ListItemButton>
-					
+
 					{/* Submenu items for expandable items with links */}
 					{isExpandableWithLink && isExpanded && (drawerOpen || isMobile) && item.children?.map((child) => {
 						const childSelected = location.pathname === child.to
@@ -336,9 +336,9 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 	})
 
 	const DrawerContent = (
-		<Box sx={{ 
-			display: 'flex', 
-			flexDirection: 'column', 
+		<Box sx={{
+			display: 'flex',
+			flexDirection: 'column',
 			height: '100%',
 			px: 1, // Add horizontal padding
 			pt: 1  // Add top padding for better spacing
@@ -383,42 +383,55 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			>
 				<Toolbar sx={{ gap: 1 }}>
 					{isMobile ? (
-						<IconButton 
-							edge="start" 
+						<IconButton
+							edge="start"
 							onClick={() => setMobileOpen(true)}
 							sx={{ color: theme.palette.mode === 'dark' ? '#ffffff !important' : '#000000 !important' }}
 						>
 							<MenuIconOld size={20} />
 						</IconButton>
 					) : (
-						<IconButton 
-							edge="start" 
+						<IconButton
+							edge="start"
 							onClick={() => setDrawerOpen(v => !v)}
 							sx={{ color: theme.palette.mode === 'dark' ? '#ffffff !important' : '#000000 !important' }}
 						>
 							{drawerOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
 						</IconButton>
 					)}
-					<Typography variant="h6" sx={{ 
-						fontWeight: 700, 
-						flexGrow: 1, 
+					<Typography variant="h6" sx={{
+						fontWeight: 700,
+						flexGrow: 1,
 						color: theme.palette.mode === 'dark' ? '#ffffff !important' : '#000000 !important',
 						fontSize: '1.25rem'
 					}}>GiaHUB</Typography>
-					
+
 					<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
 						<IconButton sx={{ color: theme.palette.mode === 'dark' ? '#ffffff !important' : '#000000 !important' }}>
 							<NotificationsIcon size={18} />
 						</IconButton>
-						
+
 						<Chip
-							avatar={<Avatar sx={{ bgcolor: theme.palette.secondary.main }}>{user?.name?.[0] || 'U'}</Avatar>}
+							avatar={
+								<Avatar
+									sx={{
+										bgcolor: theme.palette.mode === 'dark' ? theme.palette.primary.main : theme.palette.secondary.main,
+										color: theme.palette.getContrastText(theme.palette.mode === 'dark' ? theme.palette.primary.main : theme.palette.secondary.main),
+										width: 24,
+										height: 24,
+										fontSize: 12
+									}}
+								>
+									{user?.name?.[0] || 'U'}
+								</Avatar>
+							}
 							label={user?.name || 'User'}
 							onClick={handleProfileMenuOpen}
 							sx={{
 								color: theme.palette.text.primary,
-								borderColor: 'rgba(0,0,0,0.23)',
-								'& .MuiChip-label': { color: theme.palette.text.primary }
+								bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
+								borderColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.24)' : 'rgba(0,0,0,0.23)',
+								'& .MuiChip-label': { color: 'inherit' }
 							}}
 							variant="outlined"
 						/>
@@ -461,13 +474,13 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 					open={mobileOpen}
 					onClose={() => setMobileOpen(false)}
 					ModalProps={{ keepMounted: true }}
-					sx={{ 
-						'& .MuiDrawer-paper': { 
+					sx={{
+						'& .MuiDrawer-paper': {
 							width: DRAWER_WIDTH,
 							background: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.9)',
 							backdropFilter: 'saturate(180%) blur(8px)',
 							borderRight: theme.palette.mode === 'dark' ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)'
-						} 
+						}
 					}}
 				>
 					{DrawerContent}
@@ -501,22 +514,22 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			<Box component="main" sx={{ flexGrow: 1, width: '100%' }}>
 				{/* Offset for fixed AppBar */}
 				<Toolbar />
-								<Box sx={{ 
-					width: '100%', 
+				<Box sx={{
+					width: '100%',
 					px: {
 						xs: 2,    // 16px on mobile
 						sm: 3,    // 24px on small tablets
 						md: 6,    // 48px on medium screens
 						lg: '12%', // 12% on large screens
 						xl: '18%'  // 18% on extra large screens
-					}, 
-					py: 8 
+					},
+					py: 8
 				}}>
-										<Suspense fallback={<RouteLoader />}>
-											<RouteTransition>
-												<Outlet />
-											</RouteTransition>
-										</Suspense>
+					<Suspense fallback={<RouteLoader />}>
+						<RouteTransition>
+							<Outlet />
+						</RouteTransition>
+					</Suspense>
 				</Box>
 			</Box>
 		</Box>
@@ -524,16 +537,16 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 }
 
 export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
-  return (
-    <Routes>
-      <Route path="/" element={<DashboardLayout user={user} onLogout={onLogout} themeKey={themeKey} setThemeKey={setThemeKey} />}>
-        <Route index element={<Navigate to="/dashboard/home" replace />} />
-        <Route path="home" element={<Home user={user} />} />
-        <Route path="users" element={<Users user={user} />} />
-        <Route path="role-management" element={<RoleManagement user={user} />} />
-        <Route path="user-invitation" element={<UserInvitation user={user} />} />
-        <Route path="model-config" element={<ModelConfig user={user} />} />
-      </Route>
-    </Routes>
-  )
+	return (
+		<Routes>
+			<Route path="/" element={<DashboardLayout user={user} onLogout={onLogout} themeKey={themeKey} setThemeKey={setThemeKey} />}>
+				<Route index element={<Navigate to="/dashboard/home" replace />} />
+				<Route path="home" element={<Home user={user} />} />
+				<Route path="users" element={<Users user={user} />} />
+				<Route path="role-management" element={<RoleManagement user={user} />} />
+				<Route path="user-invitation" element={<UserInvitation user={user} />} />
+				<Route path="model-config" element={<ModelConfig user={user} />} />
+			</Route>
+		</Routes>
+	)
 }

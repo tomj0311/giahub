@@ -44,7 +44,7 @@ export default function Users({ user }) {
           'Authorization': `Bearer ${user.token}`
         }
       })
-      
+
       if (response.ok) {
         const data = await response.json()
         setUsers(data)
@@ -172,81 +172,81 @@ export default function Users({ user }) {
                         </TableCell>
                       </TableRow>
                     ) : (
-                    users.map((userData) => (
-                      <TableRow key={userData.id}>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <Avatar sx={{ width: 32, height: 32 }}>
-                              {getInitials(userData.name)}
-                            </Avatar>
-                            <Box>
-                              <Typography variant="body2" fontWeight="medium">
-                                {userData.name}
-                              </Typography>
-                              {userData.isInvited && (
-                                <Typography variant="caption" color="text.secondary">
-                                  Invited user
+                      users.map((userData) => (
+                        <TableRow key={userData.id}>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                              <Avatar sx={{ width: 32, height: 32 }}>
+                                {getInitials(userData.name)}
+                              </Avatar>
+                              <Box>
+                                <Typography variant="body2" fontWeight="medium">
+                                  {userData.name}
                                 </Typography>
-                              )}
+                                {userData.isInvited && (
+                                  <Typography variant="caption" color="text.secondary">
+                                    Invited user
+                                  </Typography>
+                                )}
+                              </Box>
                             </Box>
-                          </Box>
-                        </TableCell>
-                        <TableCell>{userData.email}</TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                            {userData.roles
-                              .filter(role => !role.roleName.includes('@'))
-                              .slice(0, 2)
-                              .map((role) => (
+                          </TableCell>
+                          <TableCell>{userData.email}</TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                              {userData.roles
+                                .filter(role => !role.roleName.includes('@'))
+                                .slice(0, 2)
+                                .map((role) => (
+                                  <Chip
+                                    key={role.roleId}
+                                    label={role.roleName}
+                                    color={getRoleColor(role.roleName)}
+                                    size="small"
+                                    variant="outlined"
+                                  />
+                                ))}
+                              {userData.roles.filter(role => !role.roleName.includes('@')).length > 2 && (
                                 <Chip
-                                  key={role.roleId}
-                                  label={role.roleName}
-                                  color={getRoleColor(role.roleName)}
+                                  label={`+${userData.roles.filter(role => !role.roleName.includes('@')).length - 2} more`}
                                   size="small"
                                   variant="outlined"
+                                  color="secondary"
                                 />
-                              ))}
-                            {userData.roles.filter(role => !role.roleName.includes('@')).length > 2 && (
-                              <Chip
-                                label={`+${userData.roles.filter(role => !role.roleName.includes('@')).length - 2} more`}
-                                size="small"
-                                variant="outlined"
-                                color="secondary"
-                              />
-                            )}
-                            {userData.roles.filter(role => !role.roleName.includes('@')).length === 0 && (
-                              <Chip
-                                label="Basic User"
-                                size="small"
-                                color="default"
-                              />
-                            )}
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={userData.active ? 'Active' : 'Inactive'}
-                            color={getStatusColor(userData.active)}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          {new Date(userData.createdAt).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell align="right">
-                          <IconButton size="small" color="primary">
-                            <EditIcon size={16} />
-                          </IconButton>
-                          <IconButton 
-                            size="small" 
-                            color="error"
-                            disabled={userData.id === user.id}
-                          >
-                            <DeleteIcon size={16} />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    )))}
+                              )}
+                              {userData.roles.filter(role => !role.roleName.includes('@')).length === 0 && (
+                                <Chip
+                                  label="Basic User"
+                                  size="small"
+                                  color="default"
+                                />
+                              )}
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={userData.active ? 'Active' : 'Inactive'}
+                              color={getStatusColor(userData.active)}
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {new Date(userData.createdAt).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell align="right">
+                            <IconButton size="small" color="primary">
+                              <EditIcon size={16} />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              disabled={userData.id === user.id}
+                            >
+                              <DeleteIcon size={16} />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      )))}
                   </TableBody>
                 </Table>
               </TableContainer>
