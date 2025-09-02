@@ -35,6 +35,7 @@ import {
 } from '@mui/material'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react'
+import { apiCall } from '../config/api'
 
 function useAuthToken() {
   const token = useMemo(() => localStorage.getItem('token'), [])
@@ -43,24 +44,24 @@ function useAuthToken() {
 
 const api = {
   async getDefaults(token) {
-    const r = await fetch('/api/knowledge/defaults', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    const r = await apiCall('/api/knowledge/defaults', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
     return r.json()
   },
   async getCategories(token) {
-    const r = await fetch('/api/knowledge/categories', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    const r = await apiCall('/api/knowledge/categories', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
     return r.json()
   },
   async getPrefixes(token) {
-    const r = await fetch('/api/knowledge/prefixes', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    const r = await apiCall('/api/knowledge/prefixes', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
     return r.json()
   },
   async getPrefix(prefix, token) {
-    const r = await fetch(`/api/knowledge/prefix/${encodeURIComponent(prefix)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    const r = await apiCall(`/api/knowledge/prefix/${encodeURIComponent(prefix)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
     if (!r.ok) throw new Error('Failed to load prefix')
     return r.json()
   },
   async savePrefix(body, token) {
-    const r = await fetch('/api/knowledge/prefix/save', {
+    const r = await apiCall('/api/knowledge/prefix/save', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -71,7 +72,7 @@ const api = {
     return r.json()
   },
   async deletePrefix(prefix, token) {
-    const r = await fetch(`/api/knowledge/prefix/${encodeURIComponent(prefix)}`, {
+    const r = await api(`/api/knowledge/prefix/${encodeURIComponent(prefix)}`, {
       method: 'DELETE',
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     })
@@ -82,7 +83,7 @@ const api = {
     const fd = new FormData()
     fd.append('prefix', prefix)
     for (const f of files) fd.append('files', f)
-    const r = await fetch(`/api/knowledge/upload?prefix=${encodeURIComponent(prefix)}`, {
+    const r = await api(`/api/knowledge/upload?prefix=${encodeURIComponent(prefix)}`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: fd
@@ -90,12 +91,14 @@ const api = {
     if (!r.ok) throw new Error('Upload failed')
     return r.json()
   },
-  async discoverChunking() {
-    const r = await fetch('/api/discovery/components?folder=ai.document.chunking')
+  async discoverChunking(token) {
+    const r = await api('/api/knowledge/components?folder=ai.document.chunking', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    })
     return r.json()
   },
   async introspect(module_path, token) {
-    const r = await fetch('/api/knowledge/introspect', {
+    const r = await api('/api/knowledge/introspect', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -138,7 +141,7 @@ export default function KnowledgeConfig() {
       api.getDefaults(token),
       api.getCategories(token),
       api.getPrefixes(token),
-      api.discoverChunking()
+      api.discoverChunking(token)
     ]).then(([d, c, p, comps]) => {
       setDefaults(d.defaults || {})
       setCategories(c.categories || [])
@@ -390,7 +393,7 @@ export default function KnowledgeConfig() {
                     </Select>
                   </FormControl>
                   <Button variant="outlined" size="small" onClick={async () => {
-                    const comps = await api.discoverChunking()
+                    const comps = await api.discoverChunking(token)
                     const chunking = comps.components?.['ai.document.chunking'] || []
                     setComponents({ chunking })
                   }}>Refresh</Button>

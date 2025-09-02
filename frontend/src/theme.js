@@ -373,7 +373,6 @@ export function buildTheme(key) {
             : '1px solid rgba(0, 0, 0, 0.1)',
           borderRadius: '16px',
           padding: theme.spacing(2),
-          transition: 'all 0.3s ease',
           position: 'relative',
           overflow: 'hidden',
           '&::before': theme.palette.mode === 'dark' ? {
@@ -385,19 +384,7 @@ export function buildTheme(key) {
             height: '3px',
             background: `linear-gradient(90deg, ${def.palette.gradient?.appBarStart || '#ff9d42'}, ${def.palette.gradient?.appBarMiddle || '#ff4fd8'}, ${def.palette.gradient?.appBarEnd || '#5d00ff'})`,
             borderRadius: '16px 16px 0 0'
-          } : {},
-          '&:hover': {
-            background: theme.palette.mode === 'dark'
-              ? '#1b1b1b'
-              : '#ffffff',
-            borderColor: theme.palette.mode === 'dark'
-              ? 'rgba(255, 255, 255, 0.2)'
-              : 'rgba(0, 0, 0, 0.15)',
-            transform: 'translateY(-5px)',
-            boxShadow: theme.palette.mode === 'dark'
-              ? '0 10px 30px rgba(0, 0, 0, 0.45)'
-              : '0 10px 30px rgba(0, 0, 0, 0.15)'
-          }
+          } : {}
         }
       }
     ]

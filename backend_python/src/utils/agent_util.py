@@ -20,7 +20,7 @@ def load_model_from_config(config: Dict[str, Any] = None) -> Any:
             "model": "ai.models.openai",
             "model_params": {
                 "id": "gpt-4o",
-                "api_key": "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"
+                "api_key": "--"
             }
         }
     

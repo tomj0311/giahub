@@ -7,6 +7,7 @@ import Stack from '@mui/material/Stack'
 import Divider from '@mui/material/Divider'
 import PasswordField from '../components/PasswordField'
 import { useSnackbar } from '../contexts/SnackbarContext'
+import { apiCall, API_BASE_URL, api } from '../config/api'
 
 export default function LoginPage({ onLogin }) {
   const [username, setUsername] = useState('')
@@ -19,7 +20,7 @@ export default function LoginPage({ onLogin }) {
     setLoading(true)
     try {
       // Try admin/user login via /auth/login
-      const resp = await fetch('/auth/login', {
+      const resp = await apiCall('/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
@@ -30,7 +31,7 @@ export default function LoginPage({ onLogin }) {
         return
       }
       // Fallback to /users/login (requires verified user)
-      const resp2 = await fetch('/users/login', {
+      const resp2 = await apiCall('/users/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: username, password })
@@ -41,7 +42,7 @@ export default function LoginPage({ onLogin }) {
       }
       const user = await resp2.json()
       // /users/login does not return JWT; call /auth/login for token
-      const tokenResp = await fetch('/auth/login', {
+      const tokenResp = await apiCall('/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
@@ -57,7 +58,7 @@ export default function LoginPage({ onLogin }) {
   }
 
   const loginWithGoogle = () => {
-    window.location.href = '/auth/google'
+    window.location.href = `${API_BASE_URL}/auth/google`
   }
 
   return (

@@ -80,7 +80,7 @@ export default function UserInvitation({ user }) {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('/rbac/users', {
+      const response = await api('/rbac/users', {
         headers: {
           'Authorization': `Bearer ${user.token}`
         }
@@ -99,7 +99,7 @@ export default function UserInvitation({ user }) {
 
   const fetchRoles = async () => {
     try {
-      const response = await fetch('/rbac/roles', {
+      const response = await api('/rbac/roles', {
         headers: {
           'Authorization': `Bearer ${user.token}`
         }
@@ -119,7 +119,7 @@ export default function UserInvitation({ user }) {
 
   const handleInviteUser = async () => {
     try {
-      const response = await fetch('/rbac/invite-user', {
+      const response = await api('/rbac/invite-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -150,7 +150,7 @@ export default function UserInvitation({ user }) {
 
   const handleAssignRoles = async () => {
     try {
-      const response = await fetch(`/rbac/users/${selectedUser.id}/roles/assign`, {
+      const response = await api(`/rbac/users/${selectedUser.id}/roles/assign`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -182,7 +182,7 @@ export default function UserInvitation({ user }) {
     }
 
     try {
-      const response = await fetch(`/rbac/users/${userId}/roles/${roleId}`, {
+      const response = await api(`/rbac/users/${userId}/roles/${roleId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${user.token}`

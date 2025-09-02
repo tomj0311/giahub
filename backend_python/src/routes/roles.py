@@ -10,7 +10,7 @@ from ..db import get_collections
 from ..utils.auth import verify_token_middleware
 from ..services.rbac_service import RBACService
 
-router = APIRouter()
+router = APIRouter(prefix="/api")
 
 
 # Pydantic models

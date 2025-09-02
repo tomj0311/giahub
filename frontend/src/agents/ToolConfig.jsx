@@ -24,13 +24,15 @@ import {
     Paper,
     IconButton
 } from '@mui/material';
+import { api } from '../config/api';
+} from '@mui/material';
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react';
 import { useSnackbar } from '../contexts/SnackbarContext';
 
 export default function ToolConfig({ user }) {
     const token = user?.token;
     const { showSuccess, showError, showWarning } = useSnackbar();
-    const backendBase = () => import.meta.env.VITE_BACKEND_URL || 'http://localhost:4000';
+    
 
     const [components, setComponents] = useState({ functions: [] });
     const [loadingDiscovery, setLoadingDiscovery] = useState(true);
@@ -54,7 +56,7 @@ export default function ToolConfig({ user }) {
     const discoverComponents = async () => {
         try {
             setLoadingDiscovery(true);
-            const response = await fetch(`${backendBase()}/api/tool-config/components?folder=ai.functions`, {
+            const response = await api(`/api/tool-config/components?folder=ai.functions`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
             if (response.ok) {
@@ -76,7 +78,7 @@ export default function ToolConfig({ user }) {
         if (!modulePath || introspectCache[modulePath] || pendingIntros[modulePath]) return;
         try {
             setPendingIntros(p => ({ ...p, [modulePath]: true }));
-            const response = await fetch(`${backendBase()}/api/tool-config/introspect`, {
+            const response = await api(`/api/tool-config/introspect`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -101,7 +103,7 @@ export default function ToolConfig({ user }) {
     const loadCategories = async () => {
         try {
             setLoadingCategories(true);
-            const response = await fetch(`${backendBase()}/api/tool-config/categories`, {
+            const response = await api(`/api/tool-config/categories`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
             if (response.ok) {
@@ -117,7 +119,7 @@ export default function ToolConfig({ user }) {
 
     const loadExistingConfigs = async () => {
         try {
-            const resp = await fetch(`${backendBase()}/api/tool-config/configs`, {
+            const resp = await api(`/api/tool-config/configs`, {
                 headers: {
                     ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 }
@@ -187,13 +189,13 @@ export default function ToolConfig({ user }) {
         try {
             let resp;
             if (isEditMode && form.id) {
-                resp = await fetch(`${backendBase()}/api/tool-config/configs/${form.id}`, {
+                resp = await api(`/api/tool-config/configs/${form.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
                     body: JSON.stringify(configToSave)
                 });
             } else {
-                resp = await fetch(`${backendBase()}/api/tool-config/configs`, {
+                resp = await api(`/api/tool-config/configs`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
                     body: JSON.stringify(configToSave)
@@ -223,7 +225,7 @@ export default function ToolConfig({ user }) {
         if (!id) return;
         try {
             setSaveState({ loading: true });
-            const resp = await fetch(`${backendBase()}/api/tool-config/configs/${id}`, {
+            const resp = await api(`/api/tool-config/configs/${id}`, {
                 method: 'DELETE',
                 headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
             });

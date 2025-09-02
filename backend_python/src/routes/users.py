@@ -255,24 +255,3 @@ async def get_users(user: dict = Depends(verify_token_middleware)):
     ).to_list(None)
     
     return users
-
-
-# Legacy routes for backwards compatibility
-@router.post("/patients", status_code=status.HTTP_410_GONE)
-async def legacy_patients():
-    return {"message": "Route renamed to /users"}
-
-
-@router.post("/patients/verify", status_code=status.HTTP_410_GONE)
-async def legacy_patients_verify():
-    return {"message": "Route renamed to /users/verify"}
-
-
-@router.post("/patients/login", status_code=status.HTTP_410_GONE)
-async def legacy_patients_login():
-    return {"message": "Route renamed to /users/login"}
-
-
-@router.get("/patients", status_code=status.HTTP_410_GONE)
-async def legacy_get_patients():
-    return {"message": "Route renamed to /users"}

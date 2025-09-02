@@ -24,6 +24,7 @@ import {
     Paper,
     IconButton
 } from '@mui/material';
+import { api } from '../config/api';
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react';
 import { useSnackbar } from '../contexts/SnackbarContext';
 
@@ -34,7 +35,7 @@ export default function ModelConfig({ user }) {
     const { showSuccess, showError, showWarning, showInfo } = useSnackbar();
 
     // Simple backend base function replacement
-    const backendBase = () => import.meta.env.VITE_BACKEND_URL || 'http://localhost:4000';
+    
 
     const [components, setComponents] = useState({ models: [] });
     const [loadingDiscovery, setLoadingDiscovery] = useState(true);
@@ -59,7 +60,7 @@ export default function ModelConfig({ user }) {
     const discoverComponents = async () => {
         try {
             setLoadingDiscovery(true);
-            const response = await fetch(`${backendBase()}/api/model-config/components?folder=ai.models`, {
+            const response = await api(`/api/model-config/components?folder=ai.models`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
 
@@ -85,7 +86,7 @@ export default function ModelConfig({ user }) {
         try {
             setPendingIntros(p => ({ ...p, [modulePath]: true }));
 
-            const response = await fetch(`${backendBase()}/api/model-config/introspect`, {
+            const response = await api(`/api/model-config/introspect`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -111,7 +112,7 @@ export default function ModelConfig({ user }) {
     const loadCategories = async () => {
         try {
             setLoadingCategories(true);
-            const response = await fetch(`${backendBase()}/api/model-config/categories`, {
+            const response = await api(`/api/model-config/categories`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
             if (response.ok) {
@@ -127,7 +128,7 @@ export default function ModelConfig({ user }) {
 
     const loadExistingConfigs = async () => {
         try {
-            const resp = await fetch(`${backendBase()}/api/model-config/configs`, {
+            const resp = await api(`/api/model-config/configs`, {
                 headers: {
                     ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 }
@@ -209,7 +210,7 @@ export default function ModelConfig({ user }) {
             let resp;
             if (isEditMode && form.id) {
                 // Update existing configuration
-                resp = await fetch(`${backendBase()}/api/model-config/configs/${form.id}`, {
+                resp = await api(`/api/model-config/configs/${form.id}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
@@ -219,7 +220,7 @@ export default function ModelConfig({ user }) {
                 });
             } else {
                 // Create new configuration
-                resp = await fetch(`${backendBase()}/api/model-config/configs`, {
+                resp = await api(`/api/model-config/configs`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -262,7 +263,7 @@ export default function ModelConfig({ user }) {
         if (!id) return;
         try {
             setSaveState({ loading: true });
-            const resp = await fetch(`${backendBase()}/api/model-config/configs/${id}`, {
+            const resp = await api(`/api/model-config/configs/${id}`, {
                 method: 'DELETE',
                 headers: {
                     ...(token ? { 'Authorization': `Bearer ${token}` } : {})

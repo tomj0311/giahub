@@ -285,9 +285,24 @@ async def logout(user: dict = Depends(verify_token_middleware)):
 @router.get("/me")
 async def get_current_user(user: dict = Depends(verify_token_middleware)):
     """Get current user information"""
-    return {
-        "role": user.get("role"),
-        "id": user.get("id"),
-        "email": user.get("email"),
-        "username": user.get("username")
-    }
+    # For admin users, return username; for regular users, get name from database
+    if user.get("role") == "admin":
+        return {
+            "role": user.get("role"),
+            "username": user.get("username"),
+            "email": user.get("email", ""),
+            "tenantId": user.get("tenantId")
+        }
+    else:
+        # For regular users, fetch additional info from database
+        collections = get_collections()
+        user_doc = await collections['users'].find_one({"id": user.get("id")})
+        return {
+            "role": user.get("role"),
+            "id": user.get("id"),
+            "email": user.get("email"),
+            "name": user_doc.get("name") if user_doc else None,
+            "firstName": user_doc.get("firstName") if user_doc else None,
+            "lastName": user_doc.get("lastName") if user_doc else None,
+            "tenantId": user.get("tenantId")
+        }

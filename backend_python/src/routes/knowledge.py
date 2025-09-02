@@ -32,7 +32,7 @@ router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
 
 # ---------------------- Component discovery & introspection -------------------
 @router.get("/components")
-async def get_components(folder: Optional[str] = None, user: dict = Depends(verify_token_middleware)):
+async def get_components(folder: Optional[str] = None):
     """Discover components in a specific folder. Example: folder=chunking"""
     if not folder:
         raise HTTPException(status_code=400, detail="folder parameter is required")

@@ -7,6 +7,7 @@ import Stack from '@mui/material/Stack'
 import Grid from '@mui/material/Grid2'
 import PasswordField from '../components/PasswordField'
 import { useSnackbar } from '../contexts/SnackbarContext'
+import { apiCall } from '../config/api'
 
 export default function SignupPage() {
   const [firstName, setFirstName] = useState('')
@@ -21,7 +22,7 @@ export default function SignupPage() {
     e.preventDefault()
     setLoading(true)
     try {
-      const resp = await fetch('/users', {
+      const resp = await apiCall('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ firstName, lastName, email, password, confirmPassword })

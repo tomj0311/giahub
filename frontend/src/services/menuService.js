@@ -1,9 +1,9 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+import { api } from '../config/api'
 
 export const menuService = {
   async getMenuItems() {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/menu-items`, {
+      const response = await api('/api/menu-items', {
         method: 'GET',
         credentials: 'include',
         headers: {
@@ -25,7 +25,7 @@ export const menuService = {
 
   async createMenuItem(menuItem) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/menu-items`, {
+      const response = await api('/api/menu-items', {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -48,7 +48,7 @@ export const menuService = {
 
   async updateMenuItem(itemId, menuItem) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/menu-items/${itemId}`, {
+      const response = await api(`/api/menu-items/${itemId}`, {
         method: 'PUT',
         credentials: 'include',
         headers: {
@@ -71,7 +71,7 @@ export const menuService = {
 
   async deleteMenuItem(itemId) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/menu-items/${itemId}`, {
+      const response = await api(`/api/menu-items/${itemId}`, {
         method: 'DELETE',
         credentials: 'include',
         headers: {
@@ -93,7 +93,7 @@ export const menuService = {
 
   async reorderMenuItems(itemOrders) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/menu-items/reorder`, {
+      const response = await api('/api/menu-items/reorder', {
         method: 'PUT',
         credentials: 'include',
         headers: {
@@ -116,7 +116,7 @@ export const menuService = {
 
   async seedMenuItems() {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/menu-items/seed`, {
+      const response = await api('/api/menu-items/seed', {
         method: 'POST',
         credentials: 'include',
         headers: {

@@ -14,6 +14,7 @@ import SignupPage from './pages/SignupPage'
 import AuthCallback from './pages/AuthCallback'
 import Dashboard from './Dashboard/Dashboard'
 import { buildTheme, getThemeKeyForMode } from './theme'
+import { apiCall } from './config/api'
 
 function useAuth() {
   const [token, setToken] = useState(() => localStorage.getItem('token'))
@@ -26,7 +27,7 @@ function useAuth() {
     setName(n || '')
   }
   const logout = async () => {
-    try { await fetch('/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }) } catch { }
+    try { await apiCall('/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }) } catch { }
     localStorage.removeItem('token')
     localStorage.removeItem('name')
     setToken(null)

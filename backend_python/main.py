@@ -18,9 +18,9 @@ project_root = current_dir.parent  # Go up to gia_platform root
 sys.path.insert(0, str(current_dir))
 sys.path.insert(0, str(project_root))  # Add project root so we can import 'ai' module
 
-from src.db import connect_db
-from src.routes import auth, users, payments, uploads, profile, roles, role_management, menu, discovery, tenant
-from src.routes.model_config import router as model_config_router
+from src.db import init_database, close_database
+from src.routes import auth_router, users_router, payments_router, uploads_router, profile_router, roles_router, role_management_router, menu_router, model_config_router, tool_config_router, knowledge_router, agents_router
+from src.routes.agent_runtime import router as agent_runtime_router
 from src.services.rbac_service import init_default_roles
 from src.services.menu_service import MenuService
 
@@ -49,19 +49,6 @@ logger.info('[BOOT] Starting API with config: {}'.format({
 }))
 
 
-from fastapi import FastAPI
-from contextlib import asynccontextmanager
-from src.db import init_database, close_database
-from src.routes import auth_router, users_router, payments_router, uploads_router, profile_router, roles_router, role_management_router, menu_router, discovery_router, model_config_router, tool_config_router, knowledge_router, agents_router
-from src.routes.agent_runtime import router as agent_runtime_router
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
-import logging
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize database on startup
@@ -82,7 +69,15 @@ async def lifespan(app: FastAPI):
     logger.info("Database closed")
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    title="GIA Platform API",
+    description="AI-powered platform API with authentication, role management, and agent capabilities",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    lifespan=lifespan
+)
 
 # Add CORS middleware
 app.add_middleware(
@@ -93,21 +88,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add Session middleware for Google OAuth
+app.add_middleware(SessionMiddleware, secret_key=os.getenv('SESSION_SECRET', 'dev_session_secret'))
+
 # Include routers
-app.include_router(auth_router)
-app.include_router(users_router)
-app.include_router(payments_router)
-app.include_router(uploads_router)
+app.include_router(auth_router, prefix="/auth")
+app.include_router(users_router, prefix="/api/users")
 app.include_router(profile_router)
 app.include_router(roles_router)
-app.include_router(role_management_router)
-app.include_router(menu_router)
-app.include_router(discovery_router)
+app.include_router(role_management_router, prefix="/api/rbac")
+# app.include_router(menu_router)  # Temporarily disabled due to RBAC middleware issue
 app.include_router(model_config_router)
 app.include_router(tool_config_router)
 app.include_router(knowledge_router)
 app.include_router(agents_router)
-app.include_router(agent_runtime_router)
+# app.include_router(agent_runtime_router)  # Temporarily disabled
+app.include_router(payments_router)
+app.include_router(uploads_router)
+
 
 
 @app.get("/")
@@ -115,52 +113,9 @@ async def root():
     return {"message": "GIA Platform API is running"}
 
 
-# Create FastAPI app
-app = FastAPI(
-    title="GiaHUB API",
-    description="Healthcare consultation platform API",
-    version="0.1.0",
-    lifespan=lifespan
-)
-
-# CORS configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[os.getenv('CLIENT_URL', '*')],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Session middleware for OAuth
-app.add_middleware(
-    SessionMiddleware, 
-    secret_key=os.getenv('JWT_SECRET', 'dev_jwt_secret'),
-    max_age=86400  # 24 hours
-)
-
-
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
-
-
-# Include routers
-app.include_router(auth.router, prefix="/auth", tags=["auth"])
-app.include_router(users.router, prefix="/users", tags=["users"])
-app.include_router(profile.router, prefix="/profile", tags=["profile"])
-app.include_router(payments.router, prefix="/payments", tags=["payments"])
-app.include_router(uploads.router, prefix="/uploads", tags=["uploads"])
-app.include_router(roles.router, prefix="/rbac", tags=["roles"])
-app.include_router(role_management.router, prefix="/rbac", tags=["role-management"])
-app.include_router(tenant.router, prefix="/tenant", tags=["tenant"])
-app.include_router(menu.router, prefix="/api", tags=["menu"])
-app.include_router(discovery.router)
-app.include_router(model_config_router)
-app.include_router(tool_config_router)
-app.include_router(knowledge_router)
-app.include_router(agents_router)
-app.include_router(agent_runtime_router)
 
 
 # No WebSocket routes needed - only HTTP

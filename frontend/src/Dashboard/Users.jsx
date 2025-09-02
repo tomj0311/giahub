@@ -17,6 +17,7 @@ import {
   IconButton,
   Button
 } from '@mui/material'
+import { apiCall } from '../config/api'
 import {
   Pencil as EditIcon,
   Trash2 as DeleteIcon,
@@ -39,12 +40,9 @@ export default function Users({ user }) {
   const fetchUsers = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/rbac/users', {
-        headers: {
-          'Authorization': `Bearer ${user.token}`
-        }
+      const response = await apiCall('/rbac/users', {
+        headers: { Authorization: `Bearer ${token}` }
       })
-
       if (response.ok) {
         const data = await response.json()
         setUsers(data)

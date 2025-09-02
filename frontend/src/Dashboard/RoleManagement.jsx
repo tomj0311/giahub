@@ -53,7 +53,7 @@ export default function RoleManagement({ user }) {
   const fetchRoles = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/rbac/roles', {
+      const response = await api('/rbac/roles', {
         headers: {
           'Authorization': `Bearer ${user.token}`
         }
@@ -76,7 +76,7 @@ export default function RoleManagement({ user }) {
     try {
       const permissions = formData.permissions.split(',').map(p => p.trim()).filter(p => p)
 
-      const response = await fetch('/rbac/roles', {
+      const response = await api('/rbac/roles', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -107,7 +107,7 @@ export default function RoleManagement({ user }) {
     try {
       const permissions = formData.permissions.split(',').map(p => p.trim()).filter(p => p)
 
-      const response = await fetch(`/rbac/roles/${selectedRole.roleId}`, {
+      const response = await api(`/rbac/roles/${selectedRole.roleId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -140,7 +140,7 @@ export default function RoleManagement({ user }) {
     }
 
     try {
-      const response = await fetch(`/rbac/roles/${role.roleId}`, {
+      const response = await api(`/rbac/roles/${role.roleId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${user.token}`

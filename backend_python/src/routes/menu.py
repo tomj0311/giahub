@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from src.services.menu_service import MenuService
 from src.utils.rbac_middleware import require_roles
 
-router = APIRouter()
+router = APIRouter(prefix="/api")
 
 
 class MenuItemCreate(BaseModel):

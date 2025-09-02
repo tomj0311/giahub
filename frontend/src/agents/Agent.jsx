@@ -27,7 +27,7 @@ import {
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+import { api } from '../config/api'
 
 export default function Agent({ user }) {
   const token = user?.token
@@ -78,11 +78,11 @@ export default function Agent({ user }) {
     setLoading(true)
     try {
       const [modelsRes, toolsRes, modelCatsRes, prefixesRes, agentsRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/model-config/configs`, { headers: authHeaders }),
-        fetch(`${API_BASE_URL}/api/tool-config/configs`, { headers: authHeaders }),
-        fetch(`${API_BASE_URL}/api/model-config/categories`, { headers: authHeaders }),
-        fetch(`${API_BASE_URL}/api/knowledge/prefixes`, { headers: authHeaders }),
-        fetch(`${API_BASE_URL}/api/agents`, { headers: authHeaders }),
+        api(`/api/model-config/configs`, { headers: authHeaders }),
+        api(`/api/tool-config/configs`, { headers: authHeaders }),
+        api(`/api/model-config/categories`, { headers: authHeaders }),
+        api(`/api/knowledge/prefixes`, { headers: authHeaders }),
+        api(`/api/agents`, { headers: authHeaders }),
       ])
 
       const modelsJson = await modelsRes.json().catch(() => ({}))
@@ -126,7 +126,7 @@ export default function Agent({ user }) {
     if (!form.model?.name) { showError('Select a model configuration'); return }
     setSaving(true)
     try {
-      const resp = await fetch(`${API_BASE_URL}/api/agents`, {
+      const resp = await api(`/api/agents`, {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify(form),
@@ -147,7 +147,7 @@ export default function Agent({ user }) {
     if (!form.name) return
     setSaving(true)
     try {
-      const resp = await fetch(`${API_BASE_URL}/api/agents/${encodeURIComponent(form.name)}`, {
+      const resp = await api(`/api/agents/${encodeURIComponent(form.name)}`, {
         method: 'DELETE',
         headers: authHeaders,
       })
@@ -168,7 +168,7 @@ export default function Agent({ user }) {
     if (!name) return
     try {
       setSaving(true)
-      const resp = await fetch(`${API_BASE_URL}/api/agents/${encodeURIComponent(name)}`, {
+      const resp = await api(`/api/agents/${encodeURIComponent(name)}`, {
         method: 'DELETE',
         headers: authHeaders,
       })

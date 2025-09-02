@@ -5,7 +5,7 @@ from pydantic import BaseModel, validator
 from ..db import get_collections
 from ..utils.auth import verify_token_middleware, normalize_email
 
-router = APIRouter()
+router = APIRouter(prefix="/api")
 
 # Pydantic models
 class ProfileUpdate(BaseModel):
