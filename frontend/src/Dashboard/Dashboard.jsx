@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, Suspense, lazy } from 'react'
 import { Routes, Route, Navigate, Link as RouterLink, useLocation, Outlet } from 'react-router-dom'
 import {
 	AppBar,
@@ -37,11 +37,13 @@ import {
 	Moon as Brightness4Icon,
 	Sun as Brightness7Icon
 } from 'lucide-react'
-import Home from './Home'
-import Users from './Users'
-import RoleManagement from './RoleManagement'
-import UserInvitation from './UserInvitation'
-import ModelConfig from './ModelConfig'
+const Home = lazy(() => import('./Home'))
+const Users = lazy(() => import('./Users'))
+const RoleManagement = lazy(() => import('./RoleManagement'))
+const UserInvitation = lazy(() => import('./UserInvitation'))
+const ModelConfig = lazy(() => import('./ModelConfig'))
+import RouteTransition from '../components/RouteTransition'
+import RouteLoader from '../components/RouteLoader'
 import { menuService } from '../services/menuService'
 import { getIconComponent } from '../utils/iconMap'
 
@@ -497,7 +499,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			<Box component="main" sx={{ flexGrow: 1, width: '100%' }}>
 				{/* Offset for fixed AppBar */}
 				<Toolbar />
-				<Box sx={{ 
+								<Box sx={{ 
 					width: '100%', 
 					px: {
 						xs: 2,    // 16px on mobile
@@ -508,7 +510,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 					}, 
 					py: 8 
 				}}>
-					<Outlet />
+										<Suspense fallback={<RouteLoader />}>
+											<RouteTransition>
+												<Outlet />
+											</RouteTransition>
+										</Suspense>
 				</Box>
 			</Box>
 		</Box>
