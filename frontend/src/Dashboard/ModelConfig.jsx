@@ -390,6 +390,21 @@ export default function ModelConfig({ user }) {
                                                 const typeMatch = paramFormatted.match(/:\s*([^=\s]+)/);
                                                 const paramType = typeMatch ? typeMatch[1].toLowerCase() : 'str';
 
+                                                // Extract default value (handles: "name: type = default - desc")
+                                                let defaultRaw = '';
+                                                const descSplitIdx = paramFormatted.indexOf(' - ');
+                                                const mainPart = descSplitIdx !== -1 ? paramFormatted.slice(0, descSplitIdx) : paramFormatted;
+                                                const eqIdx = mainPart.indexOf('=');
+                                                if (eqIdx !== -1) {
+                                                    defaultRaw = mainPart.slice(eqIdx + 1).trim();
+                                                    // Strip wrapping quotes for nicer display
+                                                    if ((defaultRaw.startsWith("'") && defaultRaw.endsWith("'")) || (defaultRaw.startsWith('"') && defaultRaw.endsWith('"'))) {
+                                                        defaultRaw = defaultRaw.slice(1, -1);
+                                                    }
+                                                }
+                                                const hasDefault = defaultRaw !== '' && defaultRaw.toLowerCase() !== 'none';
+                                                const placeholderText = hasDefault ? `Default: ${defaultRaw}` : `Enter ${paramName}`;
+
                                                 // Determine field width based on type
                                                 let gridColumn = 'span 1';
                                                 if (paramType.includes('int') || paramType.includes('float') || paramType.includes('bool')) {
@@ -403,12 +418,13 @@ export default function ModelConfig({ user }) {
                                                         key={paramName}
                                                         size="small"
                                                         label={paramName}
+                                                        InputLabelProps={{ shrink: true }}
                                                         value={form.model_params[paramName] || ''}
                                                         onChange={(e) => setForm(f => ({
                                                             ...f,
                                                             model_params: { ...f.model_params, [paramName]: e.target.value }
                                                         }))}
-                                                        placeholder={`Enter ${paramName}`}
+                                                        placeholder={placeholderText}
                                                         sx={{ gridColumn }}
                                                         type={paramType.includes('int') || paramType.includes('float') ? 'number' : 'text'}
                                                     />
