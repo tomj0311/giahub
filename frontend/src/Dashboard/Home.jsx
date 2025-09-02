@@ -10,7 +10,6 @@ import {
   IconButton,
   Avatar,
   Chip,
-  LinearProgress,
   List,
   ListItem,
   ListItemText,
@@ -205,11 +204,7 @@ function ProjectProgressItem({ project }) {
         />
       </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-        <LinearProgress
-          variant="determinate"
-          value={project.progress}
-          sx={{ flexGrow: 1, height: 6, borderRadius: 3 }}
-        />
+        <Box sx={{ flexGrow: 1, height: 6, borderRadius: 3, bgcolor: 'action.hover' }} />
         <Typography variant="caption" color="text.secondary" sx={{ minWidth: 35 }}>
           {project.progress}%
         </Typography>
@@ -231,7 +226,6 @@ export default function Home({ user }) {
   if (loading) {
     return (
       <Box sx={{ width: '100%', mt: 2 }}>
-        <LinearProgress />
         <Typography variant="body2" sx={{ mt: 2, textAlign: 'center' }}>
           Loading dashboard...
         </Typography>

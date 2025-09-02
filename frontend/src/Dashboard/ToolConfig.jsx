@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Button, TextField, Paper, Typography, CircularProgress, Autocomplete, LinearProgress, Fade, Stack, Card, CardContent, Grid } from '@mui/material';
+import { Box, Button, TextField, Paper, Typography, CircularProgress, Autocomplete, Fade, Stack, Card, CardContent, Grid } from '@mui/material';
 import { useSnackbar } from '../contexts/SnackbarContext';
 
 export default function ToolConfig({ user }) {
@@ -197,7 +197,9 @@ export default function ToolConfig({ user }) {
     return (
         <Box>
             {(loadingDiscovery || loadingConfigs || Object.keys(pendingIntros).length > 0 || saveState.loading) && (
-                <Fade in timeout={400}><LinearProgress sx={{ mb: 2, borderRadius: '4px' }} /></Fade>
+                <Fade in timeout={400}>
+                    <Box sx={{ mb: 2, height: 4, borderRadius: '4px', bgcolor: 'action.hover' }} />
+                </Fade>
             )}
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
