@@ -289,8 +289,27 @@ export default function AgentPlayground({ user }) {
 
         {/* Input row */}
         <Box sx={{ position: 'relative', width: '100%', maxWidth: 650, alignSelf: 'center', backgroundColor: 'background.paper', borderRadius: 1.5, border: 1, borderColor: 'divider', p: 1.5, mb: 3 }}>
-          {/* Compact Header with Agent Selector */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <Box sx={{ position: 'relative' }}>
+            <TextField
+              placeholder={!selected ? 'Select an agent first' : (stagedFiles.length ? `Type your message... (${stagedFiles.length} file(s) ready)` : 'Type your message...')}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runAgent() } }}
+              fullWidth
+              multiline
+              minRows={1}
+              maxRows={4}
+              disabled={!selected || running}
+              size="small"
+              sx={{ '& .MuiInputBase-root': { pr: 8, fontSize: '14px', alignItems: 'flex-start' } }}
+            />
+            <IconButton onClick={runAgent} disabled={!selected || running || !prompt.trim() || uploading} size="small" sx={{ position: 'absolute', top: '50%', right: 6, transform: 'translateY(-50%)' }}>
+              {running || uploading ? <CircularProgress size={18} /> : <SendIcon fontSize="small" />}
+            </IconButton>
+          </Box>
+
+          {/* Controls moved to bottom */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
             {/* Agent Selector Button */}
             <Button
               variant="text"
@@ -334,25 +353,6 @@ export default function AgentPlayground({ user }) {
             
             <IconButton size="small" onClick={openHistory} title="History"><HistoryIcon fontSize="small" /></IconButton>
             <Button size="small" onClick={clearChat} color="error">Clear</Button>
-          </Box>
-
-          <Box sx={{ position: 'relative' }}>
-            <TextField
-              placeholder={!selected ? 'Select an agent first' : (stagedFiles.length ? `Type your message... (${stagedFiles.length} file(s) ready)` : 'Type your message...')}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runAgent() } }}
-              fullWidth
-              multiline
-              minRows={1}
-              maxRows={4}
-              disabled={!selected || running}
-              size="small"
-              sx={{ '& .MuiInputBase-root': { pr: 8, fontSize: '14px', alignItems: 'flex-start' } }}
-            />
-            <IconButton onClick={runAgent} disabled={!selected || running || !prompt.trim() || uploading} size="small" sx={{ position: 'absolute', top: '50%', right: 6, transform: 'translateY(-50%)' }}>
-              {running || uploading ? <CircularProgress size={18} /> : <SendIcon fontSize="small" />}
-            </IconButton>
           </Box>
         </Box>
       </Paper>
