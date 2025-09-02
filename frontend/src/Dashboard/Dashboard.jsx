@@ -43,6 +43,7 @@ const Users = lazy(() => import('./Users'))
 const RoleManagement = lazy(() => import('./RoleManagement'))
 const UserInvitation = lazy(() => import('./UserInvitation'))
 const ModelConfig = lazy(() => import('./ModelConfig'))
+const ToolConfig = lazy(() => import('./ToolConfig'))
 import RouteTransition from '../components/RouteTransition'
 import RouteLoader from '../components/RouteLoader'
 import { menuService } from '../services/menuService'
@@ -546,6 +547,7 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="role-management" element={<RoleManagement user={user} />} />
 				<Route path="user-invitation" element={<UserInvitation user={user} />} />
 				<Route path="model-config" element={<ModelConfig user={user} />} />
+				<Route path="tool-config" element={<ToolConfig user={user} />} />
 			</Route>
 		</Routes>
 	)

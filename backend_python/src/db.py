@@ -38,6 +38,7 @@ def get_collections():
         'userRoles': database['userRoles'],
         'menuItems': database['menuItems'],
         'modelconfigs': database['modelconfigs'],
+    'tool_config': database['tool_config'],
     }
 
 
@@ -75,6 +76,12 @@ async def ensure_indexes():
         await collections['modelconfigs'].create_index("category")
         await collections['modelconfigs'].create_index("type")
         await collections['modelconfigs'].create_index("created_at")
+        
+        # Tool configurations indexes
+        await collections['tool_config'].create_index("name", unique=True)
+        await collections['tool_config'].create_index("category")
+        await collections['tool_config'].create_index("type")
+        await collections['tool_config'].create_index("created_at")
         
         logger.info("[DB] Indexes created successfully")
     except Exception as e:

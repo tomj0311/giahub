@@ -131,7 +131,7 @@ class MenuService:
             },
             {
                 "label": "Tools",
-                "to": "/store/tools",
+                "to": "/dashboard/tool-config",
                 "icon": "Wrench",
                 "parentId": store_parent_id,
                 "order": 3,

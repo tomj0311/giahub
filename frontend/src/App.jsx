@@ -26,7 +26,7 @@ function useAuth() {
     setName(n || '')
   }
   const logout = async () => {
-    try { await fetch('/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }) } catch {}
+    try { await fetch('/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }) } catch { }
     localStorage.removeItem('token')
     localStorage.removeItem('name')
     setToken(null)
@@ -38,10 +38,10 @@ function useAuth() {
 function AppShell({ children, themeKey, setThemeKey, isAuthenticated }) {
   const theme = useMemo(() => buildTheme(themeKey), [themeKey])
   const location = useLocation()
-  
+
   // Don't show app bar for dashboard routes - dashboard has its own navigation
   const isDashboard = location.pathname.startsWith('/dashboard')
-  
+
   if (isDashboard) {
     return (
       <ThemeProvider theme={theme}>
@@ -50,7 +50,7 @@ function AppShell({ children, themeKey, setThemeKey, isAuthenticated }) {
       </ThemeProvider>
     )
   }
-  
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -96,7 +96,7 @@ export default function App() {
     try {
       const mode = themeKey === 'aurora' ? 'dark' : 'light'
       localStorage.setItem('theme_mode', mode)
-    } catch {}
+    } catch { }
     // Keep document background in sync to avoid flashes when toggling
     const dark = themeKey === 'aurora'
     const bg = dark ? '#000000' : '#ffffff'
@@ -112,7 +112,7 @@ export default function App() {
         document.head.appendChild(meta)
       }
       meta.setAttribute('content', bg)
-    } catch {}
+    } catch { }
   }, [themeKey])
 
   // React to OS color scheme changes when user hasn't explicitly chosen a theme key
@@ -139,10 +139,10 @@ export default function App() {
         <Route path="/login" element={!auth.token ? <LoginPage onLogin={auth.login} /> : <Navigate to="/dashboard" replace />} />
         <Route path="/signup" element={!auth.token ? <SignupPage /> : <Navigate to="/dashboard" replace />} />
         <Route path="/auth/callback" element={<AuthCallback onLogin={auth.login} />} />
-        
+
         {/* Protected routes */}
         <Route path="/dashboard/*" element={auth.token ? <Dashboard user={{ name: auth.name, token: auth.token }} onLogout={auth.logout} themeKey={themeKey} setThemeKey={setThemeKey} /> : <Navigate to="/login" replace />} />
-        
+
         {/* Default redirects */}
         <Route path="/" element={<Navigate to={auth.token ? "/dashboard" : "/login"} replace />} />
         <Route path="*" element={<Navigate to={auth.token ? "/dashboard" : "/login"} replace />} />
