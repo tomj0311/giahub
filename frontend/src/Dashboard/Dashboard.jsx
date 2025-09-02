@@ -70,7 +70,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 	useEffect(() => {
 		const loadMenuItems = async () => {
 			try {
-				const items = await menuService.getMenuItems()
+				const items = await menuService.getMenuItems(user.token)
 				console.log('Loaded menu items:', items)
 				setMenuItems(items)
 
@@ -92,7 +92,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 		}
 
 		loadMenuItems()
-	}, [])
+	}, [user.token])
 
 	// Auto-expand sections when navigating to their pages
 	useEffect(() => {

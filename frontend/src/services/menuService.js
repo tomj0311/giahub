@@ -1,14 +1,21 @@
 import { api } from '../config/api'
 
 export const menuService = {
-  async getMenuItems() {
+  async getMenuItems(userToken = null) {
     try {
+      const headers = {
+        'Content-Type': 'application/json',
+      }
+      
+      // Add authorization header if token is provided
+      if (userToken) {
+        headers['Authorization'] = `Bearer ${userToken}`
+      }
+      
       const response = await api('/api/menu-items', {
         method: 'GET',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
       })
 
       if (!response.ok) {

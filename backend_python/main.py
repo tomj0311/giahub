@@ -97,7 +97,7 @@ app.include_router(users_router, prefix="/api/users")
 app.include_router(profile_router)
 app.include_router(roles_router)
 app.include_router(role_management_router, prefix="/api/rbac")
-# app.include_router(menu_router)  # Temporarily disabled due to RBAC middleware issue
+app.include_router(menu_router)
 app.include_router(model_config_router)
 app.include_router(tool_config_router)
 app.include_router(knowledge_router)

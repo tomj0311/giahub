@@ -34,9 +34,15 @@ class MenuItemReorder(BaseModel):
 
 @router.get("/menu-items")
 async def get_menu_items():
-    """Get all active menu items organized hierarchically"""
+    """Get all active menu items organized hierarchically (no auth required)."""
     try:
+        # First check if menu items exist, if not seed them
         menu_items = await MenuService.get_menu_items()
+        if not menu_items:
+            # Seed default menu items for new users
+            await MenuService.seed_default_menu_items()
+            menu_items = await MenuService.get_menu_items()
+        
         return {"success": True, "data": menu_items}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
