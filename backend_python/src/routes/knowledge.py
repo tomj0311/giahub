@@ -4,7 +4,7 @@ Knowledge Configuration and Upload routes (HTTP only)
 Features:
 - List available chunking components via filesystem discovery
 - Introspect a chunking module to get constructor parameters
-- CRUD knowledge prefix configurations stored in MongoDB collection 'knowledge_Collection'
+- CRUD knowledge prefix configurations stored in MongoDB collection 'knowledgeConfig'
 - Upload files to MinIO at uploads/{tenant_id}/{user_id}/{prefix}/
 """
 
@@ -70,7 +70,7 @@ async def introspect(request: dict, user: dict = Depends(verify_token_middleware
 
 # ---------------------- Mongo helpers ----------------------------------------
 def _knowledge_col():
-    return get_collections()["knowledge_Collection"]
+    return get_collections()["knowledgeConfig"]
 
 
 async def _ensure_collection_indexes():
@@ -81,7 +81,7 @@ async def _ensure_collection_indexes():
         await col.create_index("tenantId")
         await col.create_index("created_at")
     except Exception as e:
-        logger.warning("Index ensure for knowledge_Collection failed or already exists: %s", e)
+        logger.warning("Index ensure for knowledgeConfig failed or already exists: %s", e)
 
 
 # ---------------------- Categories -------------------------------------------
@@ -340,7 +340,7 @@ async def list_categories(user: dict = Depends(verify_token_middleware)):
     """Return distinct knowledge categories for the user's tenant."""
     collections = get_collections()
     tenant_id = user.get("tenantId") or "system"
-    cats = await collections['knowledge_Collection'].distinct("category", {"tenantId": tenant_id})
+    cats = await collections['knowledgeConfig'].distinct("category", {"tenantId": tenant_id})
     # filter out empty
     categories = [c for c in cats if c]
     return {"categories": categories}
@@ -350,7 +350,7 @@ async def list_categories(user: dict = Depends(verify_token_middleware)):
 async def list_prefixes(user: dict = Depends(verify_token_middleware)):
     collections = get_collections()
     tenant_id = user.get("tenantId") or "system"
-    cursor = collections['knowledge_Collection'].find({"tenantId": tenant_id}, {"prefix": 1}).sort("prefix", 1)
+    cursor = collections['knowledgeConfig'].find({"tenantId": tenant_id}, {"prefix": 1}).sort("prefix", 1)
     docs = await cursor.to_list(length=None)
     prefixes = sorted({d.get("prefix") for d in docs if d.get("prefix")})
     return {"prefixes": list(prefixes)}
@@ -360,7 +360,7 @@ async def list_prefixes(user: dict = Depends(verify_token_middleware)):
 async def get_prefix(prefix: str, user: dict = Depends(verify_token_middleware)):
     collections = get_collections()
     tenant_id = user.get("tenantId") or "system"
-    doc = await collections['knowledge_Collection'].find_one({"tenantId": tenant_id, "prefix": prefix})
+    doc = await collections['knowledgeConfig'].find_one({"tenantId": tenant_id, "prefix": prefix})
     if not doc:
         raise HTTPException(status_code=404, detail="prefix not found")
 
@@ -409,7 +409,7 @@ async def save_prefix(payload: dict, user: dict = Depends(verify_token_middlewar
     overwrite = bool(payload.get("overwrite"))
     now_ms = int(datetime.utcnow().timestamp() * 1000)
 
-    doc = await collections['knowledge_Collection'].find_one({"tenantId": tenant_id, "prefix": prefix})
+    doc = await collections['knowledgeConfig'].find_one({"tenantId": tenant_id, "prefix": prefix})
     if doc and not overwrite:
         return JSONResponse({"exists": True, "message": "prefix exists"}, status_code=200)
 
@@ -430,7 +430,7 @@ async def save_prefix(payload: dict, user: dict = Depends(verify_token_middlewar
         record["created_at"] = now_ms
 
     # Upsert
-    await collections['knowledge_Collection'].update_one(
+    await collections['knowledgeConfig'].update_one(
         {"tenantId": tenant_id, "prefix": prefix},
         {"$set": record},
         upsert=True
@@ -443,7 +443,7 @@ async def save_prefix(payload: dict, user: dict = Depends(verify_token_middlewar
 async def delete_prefix(prefix: str, user: dict = Depends(verify_token_middleware)):
     collections = get_collections()
     tenant_id = user.get("tenantId") or "system"
-    res = await collections['knowledge_Collection'].delete_one({"tenantId": tenant_id, "prefix": prefix})
+    res = await collections['knowledgeConfig'].delete_one({"tenantId": tenant_id, "prefix": prefix})
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="prefix not found")
     return {"deleted": True, "prefix": prefix}
