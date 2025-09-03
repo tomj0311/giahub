@@ -295,7 +295,7 @@ class AuthService:
         # Create user
         random_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
         new_user = {
-            "id": new_user_id,
+            "_id": new_user_id,  # Use _id to match normal signup pattern
             "email": user_info['email'],
             "name": f"{user_info.get('given_name', '')} {user_info.get('family_name', '')}".strip(),
             "firstName": user_info.get('given_name', ''),

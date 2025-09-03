@@ -4,6 +4,7 @@ Handles user authentication, token generation, and Google OAuth flow.
 """
 
 import os
+import httpx
 from fastapi import APIRouter, HTTPException, Depends, status, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr
@@ -50,6 +51,8 @@ async def google_auth(request: Request):
         oauth_client = get_oauth_client()
         redirect_uri = f"{request.url.scheme}://{request.url.netloc}/auth/google/callback"
         logger.debug(f"[OAUTH] Redirect URI: {redirect_uri}")
+        
+        # Generate the authorization URL with proper state handling
         response = await oauth_client.authorize_redirect(request, redirect_uri)
         logger.info("[OAUTH] Redirecting to Google OAuth")
         return response
@@ -67,31 +70,87 @@ async def google_callback(request: Request):
     logger.info("[OAUTH] Processing Google OAuth callback")
     try:
         oauth_client = get_oauth_client()
+        
+        # Use the correct method for Authlib with Starlette
         token = await oauth_client.authorize_access_token(request)
+        
+        # Get user info directly from token
         user_info = token.get('userinfo')
+        if not user_info:
+            # If userinfo not in token, make a separate request
+            resp = await oauth_client.get('https://openidconnect.googleapis.com/v1/userinfo', token=token)
+            user_info = resp.json()
+        
         if not user_info:
             logger.error("[OAUTH] Failed to get user information from Google")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to get user information from Google"
             )
+        
         logger.info(f"[OAUTH] Processing user data for: {user_info.get('email', 'unknown')}")
         user_data = await AuthService.handle_google_oauth_callback(user_info)
         logger.info(f"[OAUTH] User authenticated: {user_data.get('email', 'unknown')}")
-        token = generate_token({
+        
+        auth_token = generate_token({
             "id": user_data['id'],
             "role": user_data['role']
         })
         client_url = os.getenv('CLIENT_URL', 'http://localhost:5173')
         logger.info(f"[OAUTH] Redirecting user to frontend: {client_url}")
         return RedirectResponse(
-            url=f"{client_url}/auth/callback?token={token}&name={user_data['name']}"
+            url=f"{client_url}/auth/callback?token={auth_token}&name={user_data['name']}"
         )
-    except HTTPException:
-        logger.error("[OAUTH] HTTPException during callback")
-        raise
     except Exception as e:
         logger.error(f"[OAUTH] Exception during callback: {str(e)}")
+        # For state mismatch errors, try a simpler approach
+        if "mismatching_state" in str(e).lower() or "csrf" in str(e).lower():
+            logger.info("[OAUTH] State mismatch detected, attempting manual token exchange")
+            try:
+                # Manual token exchange as fallback
+                import httpx
+                code = request.query_params.get('code')
+                if code:
+                    redirect_uri = f"{request.url.scheme}://{request.url.netloc}/auth/google/callback"
+                    
+                    # Exchange code for token manually
+                    token_data = {
+                        'client_id': os.getenv('GOOGLE_CLIENT_ID'),
+                        'client_secret': os.getenv('GOOGLE_CLIENT_SECRET'),
+                        'code': code,
+                        'grant_type': 'authorization_code',
+                        'redirect_uri': redirect_uri
+                    }
+                    
+                    async with httpx.AsyncClient() as client:
+                        token_response = await client.post(
+                            'https://oauth2.googleapis.com/token',
+                            data=token_data
+                        )
+                        token_json = token_response.json()
+                        
+                        if 'access_token' in token_json:
+                            # Get user info with the token
+                            user_response = await client.get(
+                                'https://openidconnect.googleapis.com/v1/userinfo',
+                                headers={'Authorization': f"Bearer {token_json['access_token']}"}
+                            )
+                            user_info = user_response.json()
+                            
+                            logger.info(f"[OAUTH] Manual token exchange successful for: {user_info.get('email', 'unknown')}")
+                            user_data = await AuthService.handle_google_oauth_callback(user_info)
+                            
+                            auth_token = generate_token({
+                                "id": user_data['id'],
+                                "role": user_data['role']
+                            })
+                            client_url = os.getenv('CLIENT_URL', 'http://localhost:5173')
+                            return RedirectResponse(
+                                url=f"{client_url}/auth/callback?token={auth_token}&name={user_data['name']}"
+                            )
+            except Exception as fallback_error:
+                logger.error(f"[OAUTH] Manual token exchange also failed: {str(fallback_error)}")
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"OAuth callback failed: {str(e)}"

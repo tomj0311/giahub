@@ -85,8 +85,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add Session middleware for Google OAuth
-app.add_middleware(SessionMiddleware, secret_key=os.getenv('SESSION_SECRET', 'dev_session_secret'))
+# Add Session middleware for Google OAuth with secure settings
+session_secret = os.getenv('SESSION_SECRET', 'dev_session_secret')
+app.add_middleware(
+    SessionMiddleware, 
+    secret_key=session_secret,
+    max_age=3600,  # 1 hour session timeout
+    same_site='lax',  # Allow cross-site requests for OAuth callback
+    https_only=False  # Set to True in production with HTTPS
+)
 
 # Include routers
 app.include_router(auth_router, prefix="/auth")

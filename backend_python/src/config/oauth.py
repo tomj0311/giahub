@@ -46,14 +46,11 @@ if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
         name='google',
         client_id=GOOGLE_CLIENT_ID,
         client_secret=GOOGLE_CLIENT_SECRET,
-        # Use explicit endpoints to bypass discovery which is currently failing
         authorize_url='https://accounts.google.com/o/oauth2/v2/auth',
         access_token_url='https://oauth2.googleapis.com/token',
         userinfo_endpoint='https://openidconnect.googleapis.com/v1/userinfo',
-        jwks_uri='https://www.googleapis.com/oauth2/v3/certs',
         client_kwargs={
-            'scope': 'openid email profile',
-            'response_type': 'code'
+            'scope': 'openid email profile'
         }
     )
     logger.info('✅ Google OAuth configured successfully')
