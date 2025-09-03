@@ -51,17 +51,17 @@ const api = {
     const r = await apiCall('/api/knowledge/categories', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
     return r.json()
   },
-  async getPrefixes(token) {
-    const r = await apiCall('/api/knowledge/prefixes', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  async getCollections(token) {
+    const r = await apiCall('/api/knowledge/collections', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
     return r.json()
   },
-  async getPrefix(prefix, token) {
-    const r = await apiCall(`/api/knowledge/prefix/${encodeURIComponent(prefix)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-    if (!r.ok) throw new Error('Failed to load prefix')
+  async getCollection(collection, token) {
+    const r = await apiCall(`/api/knowledge/collection/${encodeURIComponent(collection)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    if (!r.ok) throw new Error('Failed to load collection')
     return r.json()
   },
-  async savePrefix(body, token) {
-    const r = await apiCall('/api/knowledge/prefix/save', {
+  async saveCollection(body, token) {
+    const r = await apiCall('/api/knowledge/collection/save', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -71,19 +71,19 @@ const api = {
     })
     return r.json()
   },
-  async deletePrefix(prefix, token) {
-    const r = await api(`/api/knowledge/prefix/${encodeURIComponent(prefix)}`, {
+  async deleteCollection(collection, token) {
+    const r = await api(`/api/knowledge/collection/${encodeURIComponent(collection)}`, {
       method: 'DELETE',
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     })
     if (!r.ok) throw new Error('Delete failed')
     return r.json()
   },
-  async uploadFiles(prefix, files, token) {
+  async uploadFiles(collection, files, token) {
     const fd = new FormData()
-    fd.append('prefix', prefix)
+    fd.append('collection', collection)
     for (const f of files) fd.append('files', f)
-    const r = await api(`/api/knowledge/upload?prefix=${encodeURIComponent(prefix)}`, {
+    const r = await api(`/api/knowledge/upload?collection=${encodeURIComponent(collection)}`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: fd
@@ -115,7 +115,7 @@ export default function KnowledgeConfig() {
   const token = useAuthToken()
 
   const [loading, setLoading] = useState(true)
-  const [prefixes, setPrefixes] = useState([])
+  const [collections, setCollections] = useState([])
   const [categories, setCategories] = useState([])
   const [components, setComponents] = useState({ chunking: [] })
   const [introspection, setIntrospection] = useState({})
@@ -136,16 +136,16 @@ export default function KnowledgeConfig() {
   const [dialogOpen, setDialogOpen] = useState(false)
 
   useEffect(() => {
-    // Boot: defaults, categories, prefixes, chunking discovery
+    // Boot: defaults, categories, collections, chunking discovery
     Promise.all([
       api.getDefaults(token),
       api.getCategories(token),
-      api.getPrefixes(token),
+      api.getCollections(token),
       api.discoverChunking(token)
     ]).then(([d, c, p, comps]) => {
       setDefaults(d.defaults || {})
       setCategories(c.categories || [])
-      setPrefixes(p.prefixes || [])
+      setCollections(p.collections || [])
       const chunking = comps.components?.['ai.document.chunking'] || []
       setComponents({ chunking })
     }).catch(err => console.error(err)).finally(() => setLoading(false))
@@ -162,9 +162,9 @@ export default function KnowledgeConfig() {
   const loadExisting = async (name) => {
     setLoading(true)
     try {
-      const data = await api.getPrefix(name, token)
+      const data = await api.getCollection(name, token)
       setForm({
-        name: data.prefix,
+        name: data.collection,
         category: data.category || '',
         chunk_strategy: data.chunk?.strategy || '',
         chunk_strategy_params: data.chunk?.params || {},
@@ -184,7 +184,7 @@ export default function KnowledgeConfig() {
     setSaveBusy(true)
     try {
       const payload = {
-        prefix: form.name,
+        collection: form.name,
         category: form.category || '',
         overwrite: isEdit,
         chunk: form.chunk_strategy ? {
@@ -197,18 +197,18 @@ export default function KnowledgeConfig() {
           chunk_overlap: form.chunk_overlap || defaults.chunk_overlap || 0
         }
       }
-      const res = await api.savePrefix(payload, token)
+      const res = await api.saveCollection(payload, token)
       if (pendingFiles.length > 0) {
         await api.uploadFiles(form.name, pendingFiles, token)
         setPendingFiles([])
       }
       if (res.exists) {
         // Save again forcing overwrite
-        await api.savePrefix({ ...payload, overwrite: true }, token)
+        await api.saveCollection({ ...payload, overwrite: true }, token)
       }
       // refresh lists
-      const pfx = await api.getPrefixes(token)
-      setPrefixes(pfx.prefixes || [])
+      const collections = await api.getCollections(token)
+      setCollections(collections.collections || [])
       const cat = await api.getCategories(token)
       setCategories(cat.categories || [])
       setIsEdit(true)
@@ -223,11 +223,11 @@ export default function KnowledgeConfig() {
     if (!form.name) return
     setSaveBusy(true)
     try {
-      await api.deletePrefix(form.name, token)
+      await api.deleteCollection(form.name, token)
       setForm({ name: '', category: '', chunk_strategy: '', chunk_strategy_params: {}, chunk_size: defaults.chunk_size || 5000, chunk_overlap: defaults.chunk_overlap || 0 })
       setIsEdit(false)
-      const pfx = await api.getPrefixes(token)
-      setPrefixes(pfx.prefixes || [])
+      const collections = await api.getCollections(token)
+      setCollections(collections.collections || [])
   setDialogOpen(false)
     } catch (e) {
       console.error(e)
@@ -269,19 +269,19 @@ export default function KnowledgeConfig() {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h4" gutterBottom>
-            Knowledge Prefixes
+            Knowledge Collections
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Manage knowledge prefix collections and chunking configuration.
+            Manage knowledge collections for file upload and vector indexing.
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon size={18} />} onClick={openCreate}>Create Prefix</Button>
+        <Button variant="contained" startIcon={<AddIcon size={18} />} onClick={openCreate}>Create Collection</Button>
       </Box>
 
       <Card>
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">All Prefixes ({prefixes.length})</Typography>
+            <Typography variant="h6">All Collections ({collections.length})</Typography>
           </Box>
           <TableContainer component={Paper} variant="outlined">
             <Table>
@@ -296,14 +296,14 @@ export default function KnowledgeConfig() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {prefixes.length === 0 ? (
+                {collections.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
-                      <Typography color="text.secondary">No prefixes found</Typography>
+                      <Typography color="text.secondary">No collections found</Typography>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  prefixes.map((p) => (
+                  collections.map((p) => (
                     <TableRow key={p} hover>
                       <TableCell>{p}</TableCell>
                       <TableCell>-</TableCell>
@@ -328,22 +328,22 @@ export default function KnowledgeConfig() {
       </Card>
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{isEdit ? 'Edit Prefix' : 'Create Prefix'}</DialogTitle>
+        <DialogTitle>{isEdit ? 'Edit Collection' : 'Create Collection'}</DialogTitle>
         <DialogContent dividers>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             <Autocomplete
               freeSolo fullWidth
-              options={prefixes}
+              options={collections}
               value={form.name}
               onChange={(_, v) => {
-                if (v && prefixes.includes(v)) loadExisting(v)
+                if (v && collections.includes(v)) loadExisting(v)
                 else { setForm(f => ({ ...f, name: v || '' })); setIsEdit(false) }
               }}
               onInputChange={(_, v) => {
                 setForm(f => ({ ...f, name: v || '' }))
               }}
               renderInput={(params) => (
-                <TextField {...params} label="Prefix Name" placeholder="Enter or select a prefix…" size="small" required />
+                <TextField {...params} label="Collection Name" placeholder="Enter or select a collection…" size="small" required />
               )}
             />
 
@@ -454,7 +454,7 @@ export default function KnowledgeConfig() {
           <Box sx={{ flex: 1 }} />
           <Button onClick={() => setDialogOpen(false)} disabled={saveBusy}>Cancel</Button>
           <Button size="large" variant="contained" disabled={!form.name || saveBusy} onClick={save}>
-            {saveBusy ? (isEdit ? 'Updating…' : 'Saving…') : (isEdit ? 'Update Prefix' : 'Create Prefix')}
+            {saveBusy ? (isEdit ? 'Updating…' : 'Saving…') : (isEdit ? 'Update Collection' : 'Create Collection')}
           </Button>
         </DialogActions>
       </Dialog>
