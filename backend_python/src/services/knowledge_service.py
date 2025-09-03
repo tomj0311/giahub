@@ -15,6 +15,7 @@ from ..db import get_collections
 from ..utils.log import logger
 from src.utils.component_discovery import discover_components, get_detailed_class_info
 from .file_service import FileService
+from .vector_service import VectorService
 
 
 class KnowledgeService:
@@ -289,25 +290,8 @@ class KnowledgeService:
     async def _initialize_vector_collection(cls, tenant_id: str, user_id: str, collection: str):
         """Initialize a new vector database collection for this knowledge collection"""
         try:
-            from ai.vectordb.qdrant import Qdrant
-            from ai.embedder.openai import OpenAIEmbedder
-            
-            # Create collection name with user isolation: collectionname_userid
-            vector_collection_name = f"{collection}_{user_id}"
-            
-            # Initialize vector database
-            vector_db = Qdrant(
-                collection=vector_collection_name,
-                host=os.getenv("QDRANT_HOST", "localhost"),
-                port=int(os.getenv("QDRANT_PORT", "8805")),
-                https=os.getenv("QDRANT_HTTPS", "false").lower() == "true",
-                api_key=os.getenv("QDRANT_API_KEY", None),
-                embedder=OpenAIEmbedder()
-            )
-            
-            # Create the collection in Qdrant
-            vector_db.create()
-            logger.info(f"[KNOWLEDGE] Initialized vector collection: {vector_collection_name}")
+            await VectorService.create_collection(user_id, collection)
+            logger.info(f"[KNOWLEDGE] Initialized vector collection for: {collection}")
             
         except Exception as e:
             logger.error(f"[KNOWLEDGE] Failed to initialize vector collection {collection}: {e}")
@@ -317,111 +301,39 @@ class KnowledgeService:
     async def _delete_vector_collection(cls, tenant_id: str, user_id: str, collection: str):
         """Delete a vector database collection"""
         try:
-            from ai.vectordb.qdrant import Qdrant
-            
-            # Create collection name with user isolation: collectionname_userid
-            vector_collection_name = f"{collection}_{user_id}"
-            
-            # Initialize vector database client
-            vector_db = Qdrant(
-                collection=vector_collection_name,
-                host=os.getenv("QDRANT_HOST", "localhost"),
-                port=int(os.getenv("QDRANT_PORT", "8805")),
-                https=os.getenv("QDRANT_HTTPS", "false").lower() == "true",
-                api_key=os.getenv("QDRANT_API_KEY", None),
-            )
-            
-            # Delete the collection
-            vector_db.delete()
-            logger.info(f"[KNOWLEDGE] Deleted vector collection: {vector_collection_name}")
+            await VectorService.delete_collection(user_id, collection)
+            logger.info(f"[KNOWLEDGE] Deleted vector collection for: {collection}")
             
         except Exception as e:
             logger.error(f"[KNOWLEDGE] Failed to delete vector collection {collection}: {e}")
             # Don't raise exception for cleanup operations
     
-    @classmethod  
-    async def _index_file_to_vector_db(cls, tenant_id: str, user_id: str, collection: str, filename: str, content: bytes, object_key: str):
-        """Index a file's content to the vector database"""
-        try:
-            from ai.vectordb.qdrant import Qdrant
-            from ai.embedder.openai import OpenAIEmbedder
-            from ai.document import Document
-            from ai.document.chunking.fixed import FixedChunker
-            
-            # Create collection name with user isolation: collectionname_userid
-            vector_collection_name = f"{collection}_{user_id}"
-            
-            # Initialize vector database
-            vector_db = Qdrant(
-                collection=vector_collection_name,
-                host=os.getenv("QDRANT_HOST", "localhost"),
-                port=int(os.getenv("QDRANT_PORT", "8805")),
-                https=os.getenv("QDRANT_HTTPS", "false").lower() == "true",
-                api_key=os.getenv("QDRANT_API_KEY", None),
-                embedder=OpenAIEmbedder()
-            )
-            
-            # Extract text from file
-            text_content = await cls._extract_text_from_file(filename, content)
-            
-            # Create a document
-            document = Document(
-                name=filename,
-                id=object_key,
-                content=text_content,
-                meta={"source": filename, "object_key": object_key}
-            )
-            
-            # Chunk the document
-            chunker = FixedChunker(chunk_size=1024, overlap=64)
-            chunks = chunker.chunk([document])
-            
-            # Index the chunks
-            vector_db.insert(chunks)
-            logger.info(f"[KNOWLEDGE] Indexed {len(chunks)} chunks from {filename} to collection {vector_collection_name}")
-            
-        except Exception as e:
-            logger.error(f"[KNOWLEDGE] Failed to index file {filename} to vector collection {collection}: {e}")
-            raise
-    
     @classmethod
-    async def _extract_text_from_file(cls, filename: str, content: bytes) -> str:
-        """Extract text content from uploaded file"""
+    async def search_knowledge(cls, user: dict, collection: str, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Search for documents in the vector database"""
         try:
-            file_extension = filename.lower().split('.')[-1]
+            user_id = user.get("id")
+            if not user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="User ID missing from token"
+                )
             
-            if file_extension == 'txt':
-                return content.decode('utf-8')
-            elif file_extension == 'pdf':
-                import PyPDF2
-                from io import BytesIO
-                pdf_reader = PyPDF2.PdfReader(BytesIO(content))
-                text = ""
-                for page in pdf_reader.pages:
-                    text += page.extract_text()
-                return text
-            elif file_extension in ['doc', 'docx']:
-                import docx
-                from io import BytesIO
-                doc = docx.Document(BytesIO(content))
-                text = ""
-                for paragraph in doc.paragraphs:
-                    text += paragraph.text + "\n"
-                return text
-            elif file_extension == 'md':
-                return content.decode('utf-8')
-            else:
-                # Try to decode as text
-                return content.decode('utf-8')
-                
+            # Use VectorService for search
+            results = await VectorService.search(user_id, collection, query, limit)
+            logger.info(f"[KNOWLEDGE] Found {len(results)} results for query in collection {collection}")
+            return results
+            
         except Exception as e:
-            logger.error(f"[KNOWLEDGE] Failed to extract text from {filename}: {e}")
-            # Return empty string if extraction fails
-            return ""
+            logger.error(f"[KNOWLEDGE] Failed to search knowledge in collection {collection}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Knowledge search failed: {str(e)}"
+            )
     
     @classmethod
     async def upload_files(cls, user: dict, files: List[UploadFile], knowledge_prefix: str):
-        """Upload files to MinIO and index them in vector database"""
+        """Upload files to MinIO and index them in vector database using FileService"""
         tenant_id = await cls.validate_tenant_access(user)
         user_id = user.get("id")
         
@@ -432,7 +344,7 @@ class KnowledgeService:
             )
         
         # Validate knowledge prefix exists
-        config = await cls.get_knowledge_config(user, knowledge_prefix)
+        config = await cls.get_knowledge_config(knowledge_prefix, user)
         if not config:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -442,46 +354,39 @@ class KnowledgeService:
         logger.info(f"[KNOWLEDGE] Uploading {len(files)} files for prefix: {knowledge_prefix}")
         
         try:
-            uploaded_files = []
+            # Upload files using FileService
+            upload_result = await FileService.upload_multiple_files(files, tenant_id, user_id, knowledge_prefix)
             
-            for file in files:
-                # Read file content
-                content = await file.read()
-                
-                # Create object key: uploads/{tenant_id}/{user_id}/{prefix}/{filename}
-                object_key = f"uploads/{tenant_id}/{user_id}/{knowledge_prefix}/{file.filename}"
-                
-                # Upload to MinIO using FileService
-                from ..services.file_service import FileService
-                success = await FileService.upload_file_content_to_path(object_key, content)
-                
-                if not success:
-                    logger.error(f"[KNOWLEDGE] Failed to upload {file.filename} to MinIO")
-                    continue
-                
-                # Index to vector database if configured
+            uploaded_files = upload_result.get("uploaded_files", [])
+            
+            # Index each uploaded file to vector database
+            for file_info in uploaded_files:
                 try:
-                    await cls._index_file_to_vector_db(
-                        tenant_id, user_id, knowledge_prefix,
-                        file.filename, content, object_key
+                    # Get the file content from MinIO for indexing
+                    file_content = await FileService.get_file_content(file_info["file_path"])
+                    
+                    # Index to vector database using VectorService
+                    await VectorService.index_file(
+                        user_id, knowledge_prefix,
+                        file_info["filename"], file_content, file_info["file_path"]
                     )
+                    
+                    logger.info(f"[KNOWLEDGE] Successfully indexed: {file_info['filename']}")
+                    
                 except Exception as e:
-                    logger.error(f"[KNOWLEDGE] Failed to index {file.filename}: {e}")
-                    # Continue with upload even if indexing fails
-                
-                uploaded_files.append({
-                    "filename": file.filename,
-                    "object_key": object_key,
-                    "size": len(content),
-                    "content_type": file.content_type
-                })
-                
-                logger.info(f"[KNOWLEDGE] Uploaded and indexed: {file.filename}")
-            
-            return {
+                    logger.error(f"[KNOWLEDGE] Failed to index {file_info['filename']}: {e}")
+                    # Continue with other files even if one indexing fails
+                    
+            response = {
                 "message": f"Successfully uploaded {len(uploaded_files)} files",
                 "files": uploaded_files
             }
+            
+            # Include any upload errors from FileService
+            if "errors" in upload_result:
+                response["errors"] = upload_result["errors"]
+                
+            return response
             
         except Exception as e:
             logger.error(f"[KNOWLEDGE] File upload failed: {e}")
@@ -805,6 +710,12 @@ class KnowledgeService:
             # TODO: Also remove the file's embeddings from the vector database
             # This would require identifying and deleting specific vectors based on file metadata
             
+            # Remove the file from the MongoDB collection's files array
+            await cls._get_knowledge_config_collection().update_one(
+                {"tenantId": tenant_id, "collection": collection_name},
+                {"$pull": {"files": filename}}
+            )
+            
             logger.info(f"[KNOWLEDGE] Successfully deleted file '{filename}' from collection '{collection_name}'")
             return {"deleted": True, "filename": filename, "collection": collection_name}
             
@@ -886,13 +797,12 @@ class KnowledgeService:
             indexed_files = []
             for file_result in results:
                 try:
-                    await cls._index_file_to_vector_db(
-                        tenant_id=tenant_id,
+                    await VectorService.index_file(
                         user_id=user_id,
                         collection=collection_name,
                         filename=file_result["filename"],
                         content=file_result["content"],
-                        object_key=file_result["key"]
+                        file_path=file_result["key"]
                     )
                     indexed_files.append(file_result["filename"])
                 except Exception as e:
@@ -946,3 +856,25 @@ class KnowledgeService:
             "endpoint": os.getenv("MINIO_ENDPOINT", "127.0.0.1:8803"),
             "bucket": os.getenv("MINIO_BUCKET", "hcp"),
         }
+    
+    @classmethod
+    async def get_collection_info(cls, user: dict, collection: str) -> Dict[str, Any]:
+        """Get information about a vector collection"""
+        try:
+            user_id = user.get("id")
+            if not user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="User ID missing from token"
+                )
+            
+            # Get collection statistics from VectorService
+            stats = await VectorService.get_collection_stats(user_id, collection)
+            return stats
+            
+        except Exception as e:
+            logger.error(f"[KNOWLEDGE] Failed to get collection info for {collection}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to get collection information: {str(e)}"
+            )
