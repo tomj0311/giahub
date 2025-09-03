@@ -20,11 +20,14 @@ CLIENT_URL = os.getenv('CLIENT_URL', 'http://localhost:5173')
 
 async def send_email(to: str, subject: str, html_content: str, text_content: Optional[str] = None):
     """Send an email using SMTP"""
+    logger.info(f"[EMAIL] Attempting to send email to: {to}, subject: {subject}")
+    
     if not SMTP_HOST:
-        logger.info("SMTP not configured, skipping email send")
+        logger.warning("[EMAIL] SMTP not configured, skipping email send")
         return
     
     try:
+        logger.debug(f"[EMAIL] Creating email message for: {to}")
         # Create message
         message = MIMEMultipart('alternative')
         message['Subject'] = subject
@@ -33,10 +36,12 @@ async def send_email(to: str, subject: str, html_content: str, text_content: Opt
         
         # Add text part if provided
         if text_content:
+            logger.debug("[EMAIL] Adding text content to email")
             text_part = MIMEText(text_content, 'plain')
             message.attach(text_part)
         
         # Add HTML part
+        logger.debug("[EMAIL] Adding HTML content to email")
         html_part = MIMEText(html_content, 'html')
         message.attach(html_part)
         
@@ -49,40 +54,51 @@ async def send_email(to: str, subject: str, html_content: str, text_content: Opt
         # Gmail specific configuration
         is_gmail = 'gmail.com' in (SMTP_USER or '') or SMTP_HOST == 'smtp.gmail.com'
         if is_gmail:
+            logger.debug("[EMAIL] Configuring for Gmail SMTP")
             smtp_kwargs.update({
                 'port': int(os.getenv('SMTP_PORT', 465)),
                 'use_tls': True
             })
         else:
+            logger.debug("[EMAIL] Configuring for standard SMTP")
             smtp_kwargs['use_tls'] = SMTP_SECURE
         
         # Add authentication if configured
         if SMTP_USER and SMTP_PASS:
+            logger.debug(f"[EMAIL] Using authentication with user: {SMTP_USER}")
             smtp_kwargs.update({
                 'username': SMTP_USER,
                 'password': SMTP_PASS
             })
+        else:
+            logger.debug("[EMAIL] No authentication configured")
         
         # Send email
+        logger.debug(f"[EMAIL] Sending email via SMTP: {SMTP_HOST}:{SMTP_PORT}")
         await aiosmtplib.send(message, **smtp_kwargs)
-        logger.info(f"Email sent successfully to {to}")
+        logger.info(f"[EMAIL] Email sent successfully to {to}")
         
     except Exception as e:
-        logger.error(f"Failed to send email to {to}: {e}")
+        logger.error(f"[EMAIL] Failed to send email to {to}: {e}")
         raise
 
 
 async def send_registration_email(to: str, role: str, verify_token: Optional[str] = None):
     """Send a registration/verification email"""
+    logger.info(f"[EMAIL] Sending registration email to: {to}, role: {role}")
+    
     if not SMTP_HOST:
+        logger.warning("[EMAIL] SMTP not configured, skipping registration email")
         return  # Skip if not configured
     
     try:
         verification_link = None
         if verify_token:
             verification_link = f"{CLIENT_URL}/verify?token={quote_plus(verify_token)}"
+            logger.debug(f"[EMAIL] Generated verification link: {verification_link}")
         
         # Create HTML content
+        logger.debug("[EMAIL] Creating registration email HTML content")
         html_content = f"""
         <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.5;font-size:15px;color:#222;">
             <h2 style="margin:0 0 16px;">Welcome{' ' + role.capitalize() if role else ''}!</h2>

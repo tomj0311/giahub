@@ -36,6 +36,7 @@ MAX_FILE_SIZE = 200 * 1024 * 1024
 def validate_file(file: UploadFile) -> None:
     """Validate uploaded file"""
     if file.content_type not in ALLOWED_TYPES:
+        logger.warning(f"[UPLOAD] Rejected file type: {file.content_type} for file: {file.filename}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File type not allowed"
@@ -64,7 +65,7 @@ def get_minio_client():
             except Exception as e:  # pragma: no cover
                 _MINIO_IMPORT_ERROR = repr(e)
                 # Log helpful diagnostics
-                logger.error("MinIO import failed: %s | python=%s", _MINIO_IMPORT_ERROR, sys.executable)
+                logger.error(f"[UPLOAD] MinIO import failed: {_MINIO_IMPORT_ERROR} | python={sys.executable}")
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="MinIO client unavailable: install the 'minio' package on the backend or configure storage."

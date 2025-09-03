@@ -19,27 +19,51 @@ JWT_EXPIRATION_HOURS = 8
 
 def hash_password(password: str) -> str:
     """Hash a password using bcrypt"""
-    return pwd_context.hash(password)
+    logger.debug(f"[AUTH] Hashing password (length: {len(password)})")
+    try:
+        hashed = pwd_context.hash(password)
+        logger.debug("[AUTH] Password hashed successfully")
+        return hashed
+    except Exception as e:
+        logger.error(f"[AUTH] Failed to hash password: {e}")
+        raise
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash"""
-    return pwd_context.verify(plain_password, hashed_password)
+    logger.debug("[AUTH] Verifying password")
+    try:
+        result = pwd_context.verify(plain_password, hashed_password)
+        logger.debug(f"[AUTH] Password verification result: {'success' if result else 'failed'}")
+        return result
+    except Exception as e:
+        logger.error(f"[AUTH] Password verification error: {e}")
+        return False
 
 
 def generate_token(payload: Dict[str, Any]) -> str:
     """Generate a JWT token"""
-    expiration = datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
-    payload.update({'exp': expiration})
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    logger.debug(f"[AUTH] Generating JWT token for: {payload.get('email', payload.get('username', 'unknown'))}")
+    try:
+        expiration = datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+        payload.update({'exp': expiration})
+        token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        logger.debug(f"[AUTH] JWT token generated successfully (expires in {JWT_EXPIRATION_HOURS} hours)")
+        return token
+    except Exception as e:
+        logger.error(f"[AUTH] Failed to generate JWT token: {e}")
+        raise
 
 
 def verify_token(token: str) -> Dict[str, Any]:
     """Verify and decode a JWT token"""
+    logger.debug("[AUTH] Verifying JWT token")
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        logger.debug(f"[AUTH] Token verified successfully for: {payload.get('email', payload.get('username', 'unknown'))}")
         return payload
     except jwt.ExpiredSignatureError:
+        logger.warning("[AUTH] Token verification failed - token expired")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
@@ -48,7 +72,8 @@ def verify_token(token: str) -> Dict[str, Any]:
                 "message": "Your session has expired. Please log in again."
             }
         )
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as e:
+        logger.warning(f"[AUTH] Token verification failed - invalid token: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
@@ -61,13 +86,16 @@ def verify_token(token: str) -> Dict[str, Any]:
 
 async def verify_token_middleware(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
     """FastAPI dependency for token verification"""
+    logger.debug("[AUTH] Middleware token verification")
     if not credentials:
+        logger.warning("[AUTH] Missing token in request")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "missing token"}
         )
     
     token = credentials.credentials
+    logger.debug("[AUTH] Token found in authorization header")
     return verify_token(token)
 
 

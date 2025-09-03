@@ -69,25 +69,30 @@ def generate_random_password() -> str:
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def register_user(registration: UserRegistration):
     """Register a new user"""
+    logger.info(f"[USERS] Registration attempt for email: {registration.email}")
     
     # Check for duplicate email
     if await email_exists(registration.email):
+        logger.warning(f"[USERS] Registration failed - email already exists: {registration.email}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered. Please log in or use a different email."
         )
     
+    logger.debug(f"[USERS] Creating new user for: {registration.email}")
     # Create user
     collections = get_collections()
     hashed_password = hash_password(registration.password)
     user_id = str(uuid.uuid4())
+    logger.debug(f"[USERS] Generated user ID: {user_id}")
     
     # CREATE TENANT FIRST - MANDATORY
     try:
+        logger.info(f"[USERS] Creating default tenant for user: {user_id}")
         default_tenant = await TenantService.create_default_tenant(registration.email, user_id)
+        logger.info(f"[USERS] Successfully created tenant: {default_tenant['tenantId']}")
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"Failed to create tenant for user {user_id}: {e}")
+        logger.error(f"[USERS] CRITICAL: Failed to create tenant for user {user_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create user organization. Registration aborted."
@@ -133,8 +138,7 @@ async def register_user(registration: UserRegistration):
         # Delete the user and tenant if role creation fails to maintain data consistency
         await collections['users'].delete_one({"id": user_id})
         await collections['tenants'].delete_one({"ownerId": user_id})
-        import logging
-        logging.getLogger(__name__).error(f"Failed to create/assign default role for user {user_id}: {e}")
+        logger.error(f"[USERS] CRITICAL: Failed to create/assign default role for user {user_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create user security profile. Registration aborted."
@@ -151,7 +155,8 @@ async def register_user(registration: UserRegistration):
     # Send verification email
     try:
         await send_registration_email(user_data["email"], "user", verification_token)
-    except Exception:
+    except Exception as e:
+        logger.warning(f"[USERS] Failed to send verification email to {user_data['email']}: {e}")
         pass  # Continue even if email fails
     
     return {"id": user_id, "verifyToken": verification_token}
@@ -165,6 +170,7 @@ async def verify_user(verification: VerifyToken):
     # Find verification token
     token_record = await collections['verificationTokens'].find_one({"token": verification.token})
     if not token_record:
+        logger.warning(f"[USERS] Invalid verification token attempted: {verification.token}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="invalid token"
@@ -173,6 +179,7 @@ async def verify_user(verification: VerifyToken):
     # Find user
     user = await collections['users'].find_one({"id": token_record.get("userId") or token_record.get("consumerId")})
     if not user:
+        logger.error(f"[USERS] User not found for verification token: {verification.token}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="user not found"
@@ -231,8 +238,7 @@ async def login_user(login_data: UserLogin):
             default_role = await RBACService.create_default_user_role(user["email"], owner_id=user["id"])
             await RBACService.assign_role_to_user(user["id"], default_role["roleId"])
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"Failed to ensure default role for user {user['id']} during login: {e}")
+        logger.error(f"[USERS] Failed to ensure default role for user {user['id']} during login: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to validate user security profile."

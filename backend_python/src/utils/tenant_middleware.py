@@ -18,12 +18,18 @@ class TenantMiddleware:
     @staticmethod
     async def filter_query_by_tenant(user_id: str, query: Dict) -> Dict:
         """Add tenant filtering to a MongoDB query"""
-        return await TenantService.filter_by_tenant(user_id, query)
+        logger.debug(f"[TENANT] Filtering query by tenant for user: {user_id}")
+        filtered_query = await TenantService.filter_by_tenant(user_id, query)
+        logger.debug(f"[TENANT] Query filtered: original={query}, filtered={filtered_query}")
+        return filtered_query
     
     @staticmethod
     async def add_tenant_to_record(user_id: str, record: Dict) -> Dict:
         """Add tenant_id to a record before saving"""
-        return await TenantService.add_tenant_to_record(user_id, record)
+        logger.debug(f"[TENANT] Adding tenant ID to record for user: {user_id}")
+        updated_record = await TenantService.add_tenant_to_record(user_id, record)
+        logger.debug(f"[TENANT] Tenant ID added to record")
+        return updated_record
     
     @staticmethod
     async def ensure_tenant_access(user_id: str, record: Dict) -> bool:
@@ -33,12 +39,18 @@ class TenantMiddleware:
     @staticmethod
     async def filter_records_by_tenant(user_id: str, records: List[Dict]) -> List[Dict]:
         """Filter a list of records to only include those from user's tenant"""
+        logger.debug(f"[TENANT] Filtering {len(records)} records by tenant for user: {user_id}")
+        
         if not records:
+            logger.debug("[TENANT] No records to filter")
             return []
         
         user_tenant_id = await TenantService.get_user_tenant_id(user_id)
         if not user_tenant_id:
+            logger.warning(f"[TENANT] No tenant ID found for user: {user_id}")
             return []
+        
+        logger.debug(f"[TENANT] User {user_id} belongs to tenant: {user_tenant_id}")
         
         filtered_records = []
         for record in records:
@@ -46,24 +58,31 @@ class TenantMiddleware:
             
             # If record has no tenant_id, it's considered public (legacy data)
             if not record_tenant_id:
+                logger.debug("[TENANT] Including record with no tenant ID (legacy/public data)")
                 filtered_records.append(record)
                 continue
             
             # Only include records from the same tenant
             if record_tenant_id == user_tenant_id:
                 filtered_records.append(record)
+            else:
+                logger.debug(f"[TENANT] Excluding record from different tenant: {record_tenant_id}")
         
+        logger.debug(f"[TENANT] Filtered results: {len(filtered_records)} out of {len(records)} records")
         return filtered_records
     
     @staticmethod
     async def verify_tenant_ownership(user_id: str, record: Dict) -> None:
         """Verify user owns/can access a record - raises exception if not"""
+        logger.debug(f"[TENANT] Verifying tenant ownership for user: {user_id}")
         has_access = await TenantMiddleware.ensure_tenant_access(user_id, record)
         if not has_access:
+            logger.warning(f"[TENANT] Access denied for user {user_id} - record belongs to different organization")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied - record belongs to different organization"
             )
+        logger.debug(f"[TENANT] Access granted for user: {user_id}")
 
 
 # Convenience functions for common operations

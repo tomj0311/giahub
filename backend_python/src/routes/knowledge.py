@@ -269,7 +269,6 @@ async def upload_knowledge_files(
         raise HTTPException(status_code=500, detail="Upload failed")
 import os
 import sys
-import logging
 from datetime import datetime
 from io import BytesIO
 from typing import List, Optional

@@ -21,25 +21,31 @@ async def create_model_config(
     user: dict = Depends(verify_token_middleware)
 ):
     """Create a new model configuration"""
+    logger.info(f"[MODEL_CONFIG] Creating model config: {config.get('name')} by user: {user.get('id', user.get('username'))}")
+    
     try:
         collections = get_collections()
         
         # Validate required fields
         if not config.get("name"):
+            logger.warning(f"[MODEL_CONFIG] Missing name field in config creation")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Name is required"
             )
         
         if not config.get("model"):
+            logger.warning(f"[MODEL_CONFIG] Missing model field in config creation")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Model is required"
             )
         
+        logger.debug(f"[MODEL_CONFIG] Checking for existing config with name: {config.get('name')}")
         # Check if config with same name already exists
         existing = await collections['modelConfig'].find_one({"name": config.get("name")})
         if existing:
+            logger.warning(f"[MODEL_CONFIG] Config with name '{config.get('name')}' already exists")
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Model configuration with name '{config.get('name')}' already exists"
@@ -57,6 +63,7 @@ async def create_model_config(
             "created_by": user.get("id", user.get("username"))
         }
         
+        logger.debug(f"[MODEL_CONFIG] Inserting config into database")
         # Insert into MongoDB
         result = await collections['modelConfig'].insert_one(config_doc)
         
@@ -75,13 +82,13 @@ async def create_model_config(
             "updated_at": created_config["updated_at"]
         }
         
-        logger.info(f"Created model config: {config.get('name')}")
+        logger.info(f"[MODEL_CONFIG] Successfully created model config: {config.get('name')} (ID: {str(result.inserted_id)})")
         return response_config
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error creating model config: {e}")
+        logger.error(f"[MODEL_CONFIG] Error creating model config: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create model configuration"
@@ -94,6 +101,8 @@ async def get_model_configs(
     user: dict = Depends(verify_token_middleware)
 ):
     """Get all model configurations, optionally filtered by category"""
+    logger.info(f"[MODEL_CONFIG] Getting model configs (category: {category}) for user: {user.get('id', user.get('username'))}")
+    
     try:
         collections = get_collections()
         

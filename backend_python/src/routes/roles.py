@@ -9,6 +9,7 @@ from pydantic import BaseModel, EmailStr
 from ..db import get_collections
 from ..utils.auth import verify_token_middleware
 from ..services.rbac_service import RBACService
+from ..utils.log import logger
 
 router = APIRouter(prefix="/api")
 
@@ -74,6 +75,7 @@ async def create_role(
     # Check if user is system admin
     user_id = user.get("id")
     if not user_id:
+        logger.error(f"[ROLES] Invalid user attempting to create role: {user}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid user"
@@ -83,6 +85,7 @@ async def create_role(
         # Determine role name from either field
         role_name = role_data.roleName or role_data.name
         if not role_name:
+            logger.warning(f"[ROLES] Role creation failed - missing name for user: {user_id}")
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="roleName or name is required")
 
         role = await RBACService.create_role(
@@ -312,12 +315,14 @@ async def assign_role(
     
     user_id = user.get("id")
     if not user_id:
+        logger.error(f"[ROLES] Invalid user attempting role assignment: {user}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid user"
         )
     # Check ownership of the role
     if not await RBACService.is_role_owner(user_id, assignment.roleId):
+        logger.warning(f"[ROLES] User {user_id} attempted to assign role {assignment.roleId} without ownership")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only role owners can assign roles"
@@ -330,6 +335,7 @@ async def assign_role(
         )
         return {"message": "Role assigned successfully"}
     except Exception as e:
+        logger.error(f"[ROLES] CRITICAL: Failed to assign role {assignment.roleId} to user {assignment.userId}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to assign role: {str(e)}"

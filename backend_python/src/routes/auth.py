@@ -40,16 +40,21 @@ ADMIN_PASS = os.getenv('ADMIN_PASS', '123')
 @router.post("/login", response_model=LoginResponse)
 async def login(request: LoginRequest):
     """Login endpoint for admin and users"""
+    logger.info(f"[AUTH] Login attempt for username: {request.username}")
+    
     if not request.username or not request.password:
+        logger.warning(f"[AUTH] Login failed - missing credentials for: {request.username}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username and password are required"
         )
     
     normalized_username = normalize_email(request.username)
+    logger.debug(f"[AUTH] Normalized username: {normalized_username}")
     
     # Admin login
     if normalized_username == normalize_email(ADMIN_USER) and request.password == ADMIN_PASS:
+        logger.info(f"[AUTH] Admin login successful for: {request.username}")
         token = generate_token({
             "role": "admin", 
             "username": request.username,
@@ -57,6 +62,7 @@ async def login(request: LoginRequest):
         })
         return LoginResponse(token=token, role="admin")
     
+    logger.debug(f"[AUTH] Checking user database for: {normalized_username}")
     collections = get_collections()
     
     # User login
@@ -68,8 +74,10 @@ async def login(request: LoginRequest):
     })
     
     if user and user.get('active') and verify_password(request.password, user['password']):
+        logger.info(f"[AUTH] User login successful for: {user['email']} (ID: {user['id']})")
         # Get user's tenant_id for token
         user_tenant_id = await TenantService.get_user_tenant_id(user['id'])
+        logger.debug(f"[AUTH] User tenant ID: {user_tenant_id}")
         
         token = generate_token({
             "role": "user",
@@ -79,9 +87,19 @@ async def login(request: LoginRequest):
         })
         return LoginResponse(token=token, role="user", name=user.get('name'))
     
+    # Log failed attempt details
+    if user:
+        if not user.get('active'):
+            logger.warning(f"[AUTH] Login failed - inactive user: {normalized_username}")
+        else:
+            logger.warning(f"[AUTH] Login failed - invalid password for: {normalized_username}")
+    else:
+        logger.warning(f"[AUTH] Login failed - user not found: {normalized_username}")
+    
     # Providers feature removed
     
     # Invalid credentials
+    logger.error(f"[AUTH] Authentication failed for: {normalized_username}")
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="invalid credentials"
@@ -92,12 +110,15 @@ async def login(request: LoginRequest):
 @router.get("/google")
 async def google_auth(request: Request):
     """Initiate Google OAuth flow"""
+    logger.info("[OAUTH] Initiating Google OAuth flow")
     try:
         oauth_client = get_oauth_client()
         # Construct the callback URL explicitly
         redirect_uri = f"{request.url.scheme}://{request.url.netloc}/auth/google/callback"
+        logger.debug(f"[OAUTH] Redirect URI: {redirect_uri}")
         return await oauth_client.authorize_redirect(request, redirect_uri)
     except Exception as e:
+        logger.error(f"[OAUTH] Failed to initiate Google OAuth: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"OAuth initialization failed: {str(e)}"
@@ -107,17 +128,20 @@ async def google_auth(request: Request):
 @router.get("/google/callback")
 async def google_callback(request: Request):
     """Handle Google OAuth callback"""
+    logger.info("[OAUTH] Processing Google OAuth callback")
     try:
         oauth_client = get_oauth_client()
         token = await oauth_client.authorize_access_token(request)
         user_info = token.get('userinfo')
         
         if not user_info:
+            logger.error("[OAUTH] Failed to get user information from Google")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to get user information from Google"
             )
         
+        logger.info(f"[OAUTH] Processing user data for: {user_info.get('email', 'unknown')}")
         # Process the user data and create/update user
         user_data = await handle_google_user_data(user_info)
         
@@ -151,8 +175,7 @@ async def google_callback(request: Request):
                     await RBACService.assign_role_to_user(user_data['id'], default_role["roleId"])
                     print(f"✅ Created and assigned default role for {user_data['email']}")
             except Exception as e:
-                import logging
-                logging.getLogger(__name__).error(f"Failed to ensure roles/tenant for OAuth user {user_data['id']}: {e}")
+                logger.error(f"[AUTH] Failed to ensure roles/tenant for OAuth user {user_data['id']}: {e}")
                 # Continue with login - user can still access the system
         
         # Check if this is a new user that needs registration completion
@@ -168,8 +191,7 @@ async def google_callback(request: Request):
                 default_tenant = await TenantService.create_default_tenant(user_data['email'], new_user_id)
                 print(f"✅ Created default tenant: {default_tenant['tenantId']} for {user_data['email']}")
             except Exception as e:
-                import logging
-                logging.getLogger(__name__).error(f"Failed to create default tenant for Google OAuth user {user_data['email']}: {e}")
+                logger.error(f"[AUTH] Failed to create default tenant for Google OAuth user {user_data['email']}: {e}")
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Failed to create user organization. OAuth registration aborted."
@@ -188,8 +210,7 @@ async def google_callback(request: Request):
             except Exception as e:
                 # Clean up: delete the tenant since role creation failed
                 await collections['tenants'].delete_one({"ownerId": new_user_id})
-                import logging
-                logging.getLogger(__name__).error(f"Failed to create default role for Google OAuth user {user_data['email']}: {e}")
+                logger.error(f"[AUTH] Failed to create default role for Google OAuth user {user_data['email']}: {e}")
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Failed to create user security profile. OAuth registration aborted."
@@ -227,8 +248,7 @@ async def google_callback(request: Request):
             except Exception as e:
                 # Clean up: delete the tenant and role since user creation failed
                 await collections['tenants'].delete_one({"ownerId": new_user_id})
-                import logging
-                logging.getLogger(__name__).error(f"Failed to create Google OAuth user {new_user_id}: {e}")
+                logger.error(f"[AUTH] Failed to create Google OAuth user {new_user_id}: {e}")
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Failed to create user account. OAuth registration aborted."
@@ -242,8 +262,7 @@ async def google_callback(request: Request):
                 # Clean up: delete the user and tenant since role assignment failed
                 await collections['users'].delete_one({"id": new_user_id})
                 await collections['tenants'].delete_one({"ownerId": new_user_id})
-                import logging
-                logging.getLogger(__name__).error(f"Failed to assign role to Google OAuth user {new_user_id}: {e}")
+                logger.error(f"[AUTH] Failed to assign role to Google OAuth user {new_user_id}: {e}")
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Failed to assign security role. OAuth registration aborted."

@@ -13,24 +13,33 @@ db = None
 async def connect_db(uri: str = DEFAULT_URI, db_name: str = DEFAULT_DB):
     global client, db
     if db is not None:
+        logger.info(f"[DB] Using existing connection to {db_name}")
         return db
 
-    client = AsyncIOMotorClient(uri)
-    db = client[db_name]
-    logger.info(f"[DB] Connected to {uri}/{db_name}")
-    await ensure_indexes()
-    return db
+    logger.info(f"[DB] Connecting to database: {uri}/{db_name}")
+    try:
+        client = AsyncIOMotorClient(uri)
+        db = client[db_name]
+        logger.info(f"[DB] Connected successfully to {uri}/{db_name}")
+        await ensure_indexes()
+        return db
+    except Exception as e:
+        logger.error(f"[DB] Failed to connect to database: {e}")
+        raise
 
 
 def get_db():
     if db is None:
+        logger.error("[DB] Database not connected - call connect_db() first")
         raise RuntimeError("DB not connected. Call connect_db() first.")
+    logger.debug("[DB] Returning database connection")
     return db
 
 
 def get_collections():
+    logger.debug("[DB] Getting database collections")
     database = get_db()
-    return {
+    collections = {
         "users": database["users"],
         "verificationTokens": database["verificationTokens"],
         "roles": database["roles"],
@@ -43,13 +52,18 @@ def get_collections():
     "agents": database["agents"],
     "conversations": database["conversations"],
     }
+    logger.debug(f"[DB] Retrieved {len(collections)} collections")
+    return collections
 
 
 def get_bucket(bucket_name: str = "uploads"):
-    return AsyncIOMotorGridFSBucket(get_db(), bucket_name=bucket_name)
+    logger.debug(f"[DB] Getting GridFS bucket: {bucket_name}")
+    bucket = AsyncIOMotorGridFSBucket(get_db(), bucket_name=bucket_name)
+    return bucket
 
 
 async def ensure_indexes():
+    logger.info("[DB] Starting index creation process")
     collections = get_collections()
     # One-time migration: rename legacy collection 'knowledge_Collection' -> 'knowledgeConfig'
     # Safe: only if old exists and new doesn't.
@@ -68,13 +82,17 @@ async def ensure_indexes():
 
     # Create indexes
     try:
+        logger.debug("[DB] Creating user indexes")
         await collections["users"].create_index("id", unique=True)
         await collections["users"].create_index("email", unique=True)
+        
+        logger.debug("[DB] Creating verification token indexes")
         await collections["verificationTokens"].create_index("token", unique=True)
         await collections["verificationTokens"].create_index(
             "createdAt", expireAfterSeconds=60 * 60 * 24 * 3  # 3 days
         )
 
+        logger.debug("[DB] Creating RBAC indexes")
         # RBAC indexes
         await collections["roles"].create_index("roleId", unique=True)
         await collections["roles"].create_index("roleName", unique=True)
@@ -84,28 +102,33 @@ async def ensure_indexes():
         await collections["userRoles"].create_index("userId")
         await collections["userRoles"].create_index("roleId")
 
+        logger.debug("[DB] Creating menu item indexes")
         # Menu items indexes
         await collections["menuItems"].create_index("order")
         await collections["menuItems"].create_index("parentId")
         await collections["menuItems"].create_index("isActive")
 
+        logger.debug("[DB] Creating model configuration indexes")
         # Model configurations indexes
         await collections["modelConfig"].create_index("name", unique=True)
         await collections["modelConfig"].create_index("category")
         await collections["modelConfig"].create_index("type")
         await collections["modelConfig"].create_index("created_at")
 
+        logger.debug("[DB] Creating tool configuration indexes")
         # Tool configurations indexes
         await collections["toolConfig"].create_index("name", unique=True)
         await collections["toolConfig"].create_index("category")
         await collections["toolConfig"].create_index("type")
         await collections["toolConfig"].create_index("created_at")
 
+        logger.debug("[DB] Creating tenant indexes")
         # Tenant indexes
         await collections["tenants"].create_index("tenantId", unique=True)
         await collections["tenants"].create_index("name")
         await collections["tenants"].create_index("createdAt")
 
+        logger.debug("[DB] Creating multi-tenancy indexes")
         # Add tenant_id indexes to existing collections for multi-tenancy
         await collections["users"].create_index("tenantId")
         await collections["roles"].create_index("tenantId")
@@ -114,6 +137,7 @@ async def ensure_indexes():
         await collections["modelConfig"].create_index("tenantId")
         await collections["toolConfig"].create_index("tenantId")
 
+        logger.debug("[DB] Creating knowledge collection indexes")
         # Knowledge collection indexes
         await collections["knowledgeConfig"].create_index(
             [("tenantId", 1), ("prefix", 1)], unique=True
@@ -121,11 +145,13 @@ async def ensure_indexes():
         await collections["knowledgeConfig"].create_index("category")
         await collections["knowledgeConfig"].create_index("created_at")
 
+        logger.debug("[DB] Creating agent indexes")
         # Agents collection indexes
         await collections["agents"].create_index([("tenantId", 1), ("name", 1)], unique=True)
         await collections["agents"].create_index("category")
         await collections["agents"].create_index("created_at")
 
+        logger.debug("[DB] Creating conversation indexes")
         # Conversations collection indexes
         await collections["conversations"].create_index([("tenantId", 1), ("conversation_id", 1)], unique=True)
         await collections["conversations"].create_index("updated_at")
@@ -133,6 +159,7 @@ async def ensure_indexes():
         logger.info("[DB] Indexes created successfully")
     except Exception as e:
         logger.error(f"[DB] Error creating indexes: {e}")
+        raise
 
 
 async def init_database(uri: str = DEFAULT_URI, db_name: str = DEFAULT_DB):

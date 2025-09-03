@@ -32,10 +32,12 @@ class RBACService:
         - Duplicate names are allowed across different owners.
         - For system roles (owner_id None), keep uniqueness by name among system roles.
         """
+        logger.info(f"[RBAC] Creating role: {role_name} (owner: {owner_id}, tenant: {tenant_id})")
         collections = get_collections()
         
         if permissions is None:
             permissions = []
+        logger.debug(f"[RBAC] Role permissions: {permissions}")
 
         # Uniqueness: per-owner scope. For system roles (owner_id None), enforce uniqueness among system roles.
         query = {"roleName": role_name}
@@ -45,12 +47,15 @@ class RBACService:
             query["ownerId"] = owner_id
         existing = await collections['roles'].find_one(query)
         if existing:
+            logger.warning(f"[RBAC] Role '{role_name}' already exists for owner: {owner_id}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Role '{role_name}' already exists for this owner"
             )
         
         role_id = str(uuid.uuid4())
+        logger.debug(f"[RBAC] Generated role ID: {role_id}")
+        
         role_data = {
             "roleId": role_id,
             "roleName": role_name,
@@ -66,31 +71,49 @@ class RBACService:
         if tenant_id is not None:
             role_data["tenantId"] = tenant_id
         
-        await collections['roles'].insert_one(role_data)
+        try:
+            await collections['roles'].insert_one(role_data)
+            logger.info(f"[RBAC] Successfully created role: {role_name} (ID: {role_id})")
+        except Exception as e:
+            logger.error(f"[RBAC] Failed to create role {role_name}: {e}")
+            raise
+            
         return role_data
     
     @staticmethod
     async def get_role_by_name(role_name: str) -> Optional[Dict]:
         """Get role by name"""
+        logger.debug(f"[RBAC] Fetching role by name: {role_name}")
         collections = get_collections()
         # Support legacy 'name' as well
-        return await collections['roles'].find_one({
+        role = await collections['roles'].find_one({
             "$or": [
                 {"roleName": role_name},
                 {"name": role_name}
             ]
         })
+        if role:
+            logger.debug(f"[RBAC] Found role: {role['roleName']} (ID: {role.get('roleId', 'N/A')})")
+        else:
+            logger.warning(f"[RBAC] Role not found: {role_name}")
+        return role
     
     @staticmethod
     async def get_role_by_id(role_id: str) -> Optional[Dict]:
         """Get role by ID"""
+        logger.debug(f"[RBAC] Fetching role by ID: {role_id}")
         collections = get_collections()
-        return await collections['roles'].find_one({
+        role = await collections['roles'].find_one({
             "$or": [
                 {"roleId": role_id},
                 {"role_id": role_id}
             ]
         })
+        if role:
+            logger.debug(f"[RBAC] Found role: {role.get('roleName', 'N/A')}")
+        else:
+            logger.warning(f"[RBAC] Role not found by ID: {role_id}")
+        return role
     
     @staticmethod
     async def get_default_role_name(email: str) -> str:
@@ -131,22 +154,34 @@ class RBACService:
             "roleId": role_id
         })
         if existing:
+            logger.warning(f"[RBAC] Role assignment already exists: user {user_id} -> role {role_id}")
             return existing
         
-        assignment_data = {
-            "userId": user_id,
-            "roleId": role_id,
-            "assignedAt": datetime.utcnow().timestamp() * 1000,
-            "active": True
-        }
-        
-        # Get tenant_id from role to maintain consistency
-        role = await RBACService.get_role_by_id(role_id)
-        if role and role.get("tenantId"):
-            assignment_data["tenantId"] = role["tenantId"]
-        
-        await collections['userRoles'].insert_one(assignment_data)
-        return assignment_data
+        try:
+            assignment_data = {
+                "userId": user_id,
+                "roleId": role_id,
+                "assignedAt": datetime.utcnow().timestamp() * 1000,
+                "active": True
+            }
+            
+            # Get tenant_id from role to maintain consistency
+            role = await RBACService.get_role_by_id(role_id)
+            if not role:
+                logger.error(f"[RBAC] Cannot assign non-existent role {role_id} to user {user_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Role {role_id} not found"
+                )
+                
+            if role and role.get("tenantId"):
+                assignment_data["tenantId"] = role["tenantId"]
+            
+            await collections['userRoles'].insert_one(assignment_data)
+            return assignment_data
+        except Exception as e:
+            logger.error(f"[RBAC] Failed to assign role {role_id} to user {user_id}: {e}")
+            raise
     
     @staticmethod
     async def remove_role_from_user(user_id: str, role_id: str) -> bool:

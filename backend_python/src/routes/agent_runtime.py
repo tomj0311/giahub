@@ -46,6 +46,7 @@ async def stream_agent_response(
         })
         
         if not agent_doc:
+            logger.error(f"[AGENT_RUNTIME] Agent '{agent_name}' not found for tenant: {tenant_id}")
             yield f"data: {json.dumps({'error': f'Agent {agent_name} not found'})}\n\n"
             return
             
@@ -73,10 +74,11 @@ async def stream_agent_response(
                 }
                 asyncio.create_task(event_queue.put(event_data))
             except Exception as e:
-                logger.error(f"Error sending event: {e}")
+                logger.error(f"[AGENT_RUNTIME] Error sending event: {e}")
         
         def send_error(event_type: str, corr_id: str, status_code: int, details: Dict[str, Any]):
             """Send error event to the stream queue."""
+            logger.error(f"[AGENT_RUNTIME] Agent error - {event_type}: {details}")
             error_data = {
                 'type': 'error',
                 'error': event_type,

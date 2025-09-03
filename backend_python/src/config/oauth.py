@@ -128,8 +128,7 @@ async def handle_google_user_data(user_info: Dict[str, Any]) -> Dict[str, Any]:
             else:
                 print(f"✅ Existing user {email} has {len(user_roles)} role(s)")
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"Failed to ensure default tenant/role for existing Google OAuth user {user['id']}: {e}")
+            logger.error(f"[OAUTH] Failed to ensure default tenant/role for existing Google OAuth user {user['id']}: {e}")
         
         return {
             "id": user['id'],

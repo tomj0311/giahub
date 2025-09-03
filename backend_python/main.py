@@ -1,7 +1,7 @@
 import os
 import ssl
-import logging
 import sys
+from datetime import datetime
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -23,10 +23,7 @@ from src.routes import auth_router, users_router, payments_router, uploads_route
 from src.routes.agent_runtime import router as agent_runtime_router
 from src.services.rbac_service import init_default_roles
 from src.services.menu_service import MenuService
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from src.utils.log import logger
 
 # Load environment variables FIRST
 load_dotenv()
@@ -114,8 +111,9 @@ async def root():
 
 
 @app.get("/health")
-async def health_check():
-    return {"status": "ok"}
+def health_check():
+    logger.debug("[HEALTH] Health check endpoint called")
+    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 
 # No WebSocket routes needed - only HTTP
