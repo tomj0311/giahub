@@ -102,6 +102,15 @@ class MinioClient:
         for obj in self._client.list_objects(b, prefix=prefix, recursive=recursive):
             yield obj.object_name  # type: ignore[attr-defined]
 
+    def exists(self, key: str, bucket: Optional[str] = None) -> bool:
+        """Check if an object exists in the bucket"""
+        b = bucket or self.bucket
+        try:
+            self._client.stat_object(b, key)
+            return True
+        except S3Error:
+            return False
+
     def presign_put(self, key: str, expires_seconds: int = 3600, bucket: Optional[str] = None) -> str:
         """Return a presigned URL for PUT of the given key.
 

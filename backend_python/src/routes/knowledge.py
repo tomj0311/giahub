@@ -99,6 +99,23 @@ async def delete_collection(collection: str, user: dict = Depends(verify_token_m
     return await KnowledgeService.delete_collection(collection, user)
 
 
+@router.delete("/collection/{collection}/file/{filename}")
+async def delete_file_from_collection(
+    collection: str, 
+    filename: str, 
+    user: dict = Depends(verify_token_middleware)
+):
+    """Delete a specific file from a knowledge collection."""
+    logger.info(f"[KNOWLEDGE] Deleting file '{filename}' from collection '{collection}'")
+    try:
+        result = await KnowledgeService.delete_file_from_collection(collection, filename, user)
+        logger.info(f"[KNOWLEDGE] Successfully deleted file '{filename}' from collection '{collection}'")
+        return result
+    except Exception as e:
+        logger.error(f"[KNOWLEDGE] Error deleting file '{filename}' from collection '{collection}': {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/upload")
 async def upload_knowledge_files(
     collection: str = Query(..., description="Knowledge collection name"),

@@ -76,15 +76,22 @@ class FileService:
             # Create file path: uploads/{tenant_id}/{user_id}/{collection}/
             file_path = f"uploads/{tenant_id}/{user_id}/{collection}/{file.filename}"
             
+            # Check if file already exists
+            file_exists = await cls.check_file_exists(file_path)
+            warning_message = None
+            if file_exists:
+                warning_message = f"File '{file.filename}' already exists and will be overwritten"
+                logger.warning(f"[FILE] File '{file.filename}' already exists at {file_path}. Overwriting existing file.")
+            
             # Read file content
             content = await file.read()
             
             # Calculate file hash for deduplication
             file_hash = hashlib.md5(content).hexdigest()
             
-            # Upload to MinIO (placeholder - implement actual MinIO client)
+            # Upload to MinIO
             success = await cls._upload_to_minio(file_path, content)
-            
+
             if not success:
                 raise HTTPException(status_code=500, detail="Failed to upload file to storage")
             
@@ -97,6 +104,9 @@ class FileService:
                 "uploaded_at": datetime.utcnow()
             }
             
+            if warning_message:
+                file_info["warning"] = warning_message
+                
             logger.info(f"[FILE] Successfully uploaded file '{file.filename}' to {file_path}")
             return file_info
             
@@ -214,13 +224,27 @@ class FileService:
             logger.warning(f"[FILE] Failed to cleanup temp file {file_path}: {e}")
     
     @staticmethod
+    async def check_file_exists(file_path: str) -> bool:
+        """Check if file exists in MinIO"""
+        try:
+            minio_client = FileService._get_minio_client()
+            bucket_name = "uploads"
+            
+            # Use stat_object to check if file exists
+            minio_client.stat_object(bucket_name, file_path)
+            return True
+            
+        except Exception:
+            # File doesn't exist or other error
+            return False
+
+    @staticmethod
     async def upload_file_content(object_name: str, content: bytes, content_type: str = None) -> bool:
         """Upload file content directly to MinIO with given object name"""
         try:
             logger.info(f"[FILE] Uploading content to object: {object_name}")
             
-            # For now, use the placeholder MinIO upload
-            # TODO: Implement actual MinIO client upload when MinIO is configured
+            # Use the internal MinIO upload method
             success = await FileService._upload_to_minio(object_name, content)
             
             if success:
@@ -234,32 +258,115 @@ class FileService:
             logger.error(f"[FILE] Error uploading content to {object_name}: {e}")
             return False
     
-    # MinIO client methods (placeholder implementations)
+    # Public MinIO operations for other services
+    @staticmethod
+    async def upload_file_content_to_path(file_path: str, content: bytes) -> bool:
+        """Public method to upload content to a specific MinIO path"""
+        return await FileService._upload_to_minio(file_path, content)
+    
+    @staticmethod
+    async def delete_file_at_path(file_path: str) -> bool:
+        """Public method to delete a file at a specific MinIO path"""
+        return await FileService._delete_from_minio(file_path)
+    
+    @staticmethod
+    async def list_files_at_path(path: str) -> List[str]:
+        """Public method to list files at a specific MinIO path"""
+        return await FileService._list_files_in_minio(path)
+    
+    @staticmethod
+    async def get_file_content_from_path(file_path: str) -> bytes:
+        """Public method to get file content from a specific MinIO path"""
+        return await FileService._get_file_from_minio(file_path)
+
+    # MinIO client methods
+    @staticmethod
+    def _get_minio_client():
+        """Get MinIO client for file storage"""
+        from minio import Minio
+        
+        return Minio(
+            f"{os.getenv('MINIO_HOST', 'localhost')}:{os.getenv('MINIO_PORT', '8803')}",
+            access_key=os.getenv('MINIO_ACCESS_KEY', 'minio'),
+            secret_key=os.getenv('MINIO_SECRET_KEY', 'minio8888'),
+            secure=os.getenv('MINIO_SECURE', 'false').lower() == 'true'
+        )
+    
     @staticmethod
     async def _upload_to_minio(file_path: str, content: bytes) -> bool:
-        """Upload content to MinIO (placeholder)"""
-        # TODO: Implement actual MinIO client upload
-        # For now, simulate successful upload
-        logger.debug(f"[FILE] MinIO upload simulation for: {file_path}")
-        return True
+        """Upload content to MinIO"""
+        try:
+            minio_client = FileService._get_minio_client()
+            bucket_name = "uploads"
+            
+            # Ensure bucket exists
+            if not minio_client.bucket_exists(bucket_name):
+                minio_client.make_bucket(bucket_name)
+            
+            # Upload file
+            from io import BytesIO
+            minio_client.put_object(
+                bucket_name,
+                file_path,
+                BytesIO(content),
+                length=len(content),
+                content_type='application/octet-stream'
+            )
+            
+            logger.info(f"[FILE] Successfully uploaded to MinIO: {file_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"[FILE] MinIO upload failed for {file_path}: {e}")
+            return False
     
     @staticmethod
     async def _delete_from_minio(file_path: str) -> bool:
-        """Delete file from MinIO (placeholder)"""
-        # TODO: Implement actual MinIO client deletion
-        logger.debug(f"[FILE] MinIO delete simulation for: {file_path}")
-        return True
+        """Delete file from MinIO"""
+        try:
+            minio_client = FileService._get_minio_client()
+            bucket_name = "uploads"
+            
+            minio_client.remove_object(bucket_name, file_path)
+            logger.info(f"[FILE] Successfully deleted from MinIO: {file_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"[FILE] MinIO delete failed for {file_path}: {e}")
+            return False
     
     @staticmethod
     async def _list_files_in_minio(path: str) -> List[str]:
-        """List files in MinIO path (placeholder)"""
-        # TODO: Implement actual MinIO client listing
-        logger.debug(f"[FILE] MinIO list simulation for: {path}")
-        return []
+        """List files in MinIO path"""
+        try:
+            minio_client = FileService._get_minio_client()
+            bucket_name = "uploads"
+            
+            if not minio_client.bucket_exists(bucket_name):
+                return []
+            
+            objects = minio_client.list_objects(bucket_name, prefix=path, recursive=True)
+            return [obj.object_name for obj in objects]
+            
+        except Exception as e:
+            logger.error(f"[FILE] MinIO list failed for {path}: {e}")
+            return []
     
     @staticmethod
     async def _get_file_from_minio(file_path: str) -> bytes:
-        """Get file content from MinIO (placeholder)"""
-        # TODO: Implement actual MinIO client download
-        logger.debug(f"[FILE] MinIO download simulation for: {file_path}")
-        return b""
+        """Get file content from MinIO"""
+        try:
+            minio_client = FileService._get_minio_client()
+            bucket_name = "uploads"
+            
+            response = minio_client.get_object(bucket_name, file_path)
+            content = response.read()
+            response.close()
+            response.release_conn()
+            
+            logger.info(f"[FILE] Successfully retrieved from MinIO: {file_path}")
+            return content
+            
+        except Exception as e:
+            logger.error(f"[FILE] MinIO get failed for {file_path}: {e}")
+            return b""

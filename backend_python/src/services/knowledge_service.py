@@ -420,18 +420,6 @@ class KnowledgeService:
             return ""
     
     @classmethod
-    def _get_minio_client(cls):
-        """Get MinIO client for file storage"""
-        from minio import Minio
-        
-        return Minio(
-            f"{os.getenv('MINIO_HOST', 'localhost')}:{os.getenv('MINIO_PORT', '9000')}",
-            access_key=os.getenv('MINIO_ACCESS_KEY', 'minioadmin'),
-            secret_key=os.getenv('MINIO_SECRET_KEY', 'minioadmin'),
-            secure=os.getenv('MINIO_SECURE', 'false').lower() == 'true'
-        )
-    
-    @classmethod
     async def upload_files(cls, user: dict, files: List[UploadFile], knowledge_prefix: str):
         """Upload files to MinIO and index them in vector database"""
         tenant_id = await cls.validate_tenant_access(user)
@@ -454,13 +442,6 @@ class KnowledgeService:
         logger.info(f"[KNOWLEDGE] Uploading {len(files)} files for prefix: {knowledge_prefix}")
         
         try:
-            minio_client = cls._get_minio_client()
-            bucket_name = "uploads"
-            
-            # Ensure bucket exists
-            if not minio_client.bucket_exists(bucket_name):
-                minio_client.make_bucket(bucket_name)
-            
             uploaded_files = []
             
             for file in files:
@@ -470,15 +451,13 @@ class KnowledgeService:
                 # Create object key: uploads/{tenant_id}/{user_id}/{prefix}/{filename}
                 object_key = f"uploads/{tenant_id}/{user_id}/{knowledge_prefix}/{file.filename}"
                 
-                # Upload to MinIO
-                from io import BytesIO
-                minio_client.put_object(
-                    bucket_name,
-                    object_key,
-                    BytesIO(content),
-                    length=len(content),
-                    content_type=file.content_type or 'application/octet-stream'
-                )
+                # Upload to MinIO using FileService
+                from ..services.file_service import FileService
+                success = await FileService.upload_file_content_to_path(object_key, content)
+                
+                if not success:
+                    logger.error(f"[KNOWLEDGE] Failed to upload {file.filename} to MinIO")
+                    continue
                 
                 # Index to vector database if configured
                 try:
@@ -800,6 +779,42 @@ class KnowledgeService:
         return {"deleted": True, "collection": collection_name, "vector_collection": f"{collection_name}_user@{user_id}"}
     
     @classmethod
+    async def delete_file_from_collection(cls, collection_name: str, filename: str, user: dict) -> Dict[str, Any]:
+        """Delete a specific file from a knowledge collection"""
+        tenant_id = await cls.validate_tenant_access(user)
+        user_id = user.get("id")
+        if not user_id or not user_id.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User ID missing. Please re-login."
+            )
+        
+        logger.info(f"[KNOWLEDGE] Deleting file '{filename}' from collection '{collection_name}' for tenant {tenant_id}, user {user_id}")
+        
+        try:
+            # Construct the file path in MinIO
+            file_path = f"uploads/{tenant_id}/{user_id}/{collection_name}/{filename}"
+            
+            # Delete the file from MinIO using FileService
+            success = await FileService.delete_file_at_path(file_path)
+            
+            if not success:
+                logger.error(f"[KNOWLEDGE] Failed to delete file '{filename}' from MinIO at path: {file_path}")
+                raise HTTPException(status_code=500, detail=f"Failed to delete file: {filename}")
+            
+            # TODO: Also remove the file's embeddings from the vector database
+            # This would require identifying and deleting specific vectors based on file metadata
+            
+            logger.info(f"[KNOWLEDGE] Successfully deleted file '{filename}' from collection '{collection_name}'")
+            return {"deleted": True, "filename": filename, "collection": collection_name}
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[KNOWLEDGE] Error deleting file '{filename}': {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to delete file: {filename}")
+    
+    @classmethod
     async def upload_knowledge_files(cls, collection_name: str, files: List[UploadFile], user: dict) -> Dict[str, Any]:
         """Upload files to MinIO under uploads/tenantId/userId/collection/ and index them"""
         from io import BytesIO
@@ -842,18 +857,30 @@ class KnowledgeService:
                 if len(content) > MAX_FILE_SIZE:
                     raise HTTPException(status_code=400, detail=f"File too large: {f.filename}")
 
-                ts = int(datetime.utcnow().timestamp() * 1000)
-                object_name = f"{base_prefix}/{ts}-{f.filename}"
+                # Use plain filename without timestamp
+                object_name = f"{base_prefix}/{f.filename}"
+                
+                # Check if file already exists
+                file_exists = await FileService.check_file_exists(object_name)
+                warning_message = None
+                if file_exists:
+                    warning_message = f"File '{f.filename}' already exists and will be overwritten"
+                    logger.warning(f"[KNOWLEDGE] File '{f.filename}' already exists at {object_name}. Overwriting existing file.")
                 
                 # Upload file
                 await FileService.upload_file_content(object_name, content, f.content_type)
 
-                results.append({
+                result_item = {
                     "filename": f.filename,
                     "size": len(content),
                     "key": object_name,
                     "content": content,  # Keep content for indexing
-                })
+                }
+                
+                if warning_message:
+                    result_item["warning"] = warning_message
+                    
+                results.append(result_item)
 
             # Index uploaded files to vector database
             indexed_files = []
