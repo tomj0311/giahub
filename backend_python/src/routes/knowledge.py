@@ -40,8 +40,11 @@ async def list_categories(user: dict = Depends(verify_token_middleware)):
         logger.debug(f"[KNOWLEDGE] Retrieved {len(result)} categories")
         return result
     except Exception as e:
-        logger.error(f"[KNOWLEDGE] Error listing categories: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        error_msg = str(e) if str(e) else repr(e)
+        logger.error(f"[KNOWLEDGE] Error listing categories: {error_msg}")
+        logger.error(f"[KNOWLEDGE] Categories error traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=error_msg)
 
 
 @router.get("/collections")
@@ -53,8 +56,11 @@ async def list_collections(user: dict = Depends(verify_token_middleware)):
         logger.debug(f"[KNOWLEDGE] Retrieved {len(result) if result else 0} collections")
         return result
     except Exception as e:
-        logger.error(f"[KNOWLEDGE] Error listing collections: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        error_msg = str(e) if str(e) else repr(e)
+        logger.error(f"[KNOWLEDGE] Error listing collections: {error_msg}")
+        logger.error(f"[KNOWLEDGE] Collections error traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=error_msg)
 
 
 @router.get("/collection/{collection}")
@@ -80,8 +86,11 @@ async def save_collection(payload: dict, user: dict = Depends(verify_token_middl
         logger.info(f"[KNOWLEDGE] Successfully saved collection: {payload.get('name', 'Unnamed')}")
         return result
     except Exception as e:
-        logger.error(f"[KNOWLEDGE] Error saving collection: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        error_msg = str(e) if str(e) else repr(e)
+        logger.error(f"[KNOWLEDGE] Error saving collection: {error_msg}")
+        logger.error(f"[KNOWLEDGE] Save error traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=error_msg)
 
 
 @router.delete("/collection/{collection}")

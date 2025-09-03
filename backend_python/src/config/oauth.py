@@ -49,6 +49,7 @@ if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
         authorize_url='https://accounts.google.com/o/oauth2/v2/auth',
         access_token_url='https://oauth2.googleapis.com/token',
         userinfo_endpoint='https://openidconnect.googleapis.com/v1/userinfo',
+        jwks_uri='https://www.googleapis.com/oauth2/v3/certs',
         client_kwargs={
             'scope': 'openid email profile'
         }
@@ -127,6 +128,11 @@ async def handle_google_user_data(user_info: Dict[str, Any]) -> Dict[str, Any]:
             update_data['googleId'] = user_info.get('sub')
         
         if update_data:
+            from datetime import datetime
+            current_time = datetime.utcnow()
+            update_data['updated_at'] = current_time
+            update_data['updatedAt'] = current_time.timestamp() * 1000  # Timestamp in milliseconds
+            
             await collections['users'].update_one(
                 {"id": user['id']},
                 {"$set": update_data}
@@ -143,9 +149,18 @@ async def handle_google_user_data(user_info: Dict[str, Any]) -> Dict[str, Any]:
             if not user_tenant_id:
                 print(f"⚠️ Existing user {email} has no tenantId. Creating default tenant...")
                 default_tenant = await TenantService.create_default_tenant(email, user['id'])
+                
+                from datetime import datetime
+                current_time = datetime.utcnow()
                 await collections['users'].update_one(
                     {"id": user['id']},
-                    {"$set": {"tenantId": default_tenant["tenantId"]}}
+                    {
+                        "$set": {
+                            "tenantId": default_tenant["tenantId"],
+                            "updated_at": current_time,
+                            "updatedAt": current_time.timestamp() * 1000
+                        }
+                    }
                 )
                 user_tenant_id = default_tenant["tenantId"]
                 print(f"✅ Created and assigned default tenant for existing user: {email}")
@@ -218,6 +233,11 @@ async def handle_microsoft_user_data(user_info: Dict[str, Any]) -> Dict[str, Any
             update_data['microsoftId'] = user_info.get('id')
         
         if update_data:
+            from datetime import datetime
+            current_time = datetime.utcnow()
+            update_data['updated_at'] = current_time
+            update_data['updatedAt'] = current_time.timestamp() * 1000  # Timestamp in milliseconds
+            
             await collections['users'].update_one(
                 {"id": user['id']},
                 {"$set": update_data}
@@ -234,9 +254,18 @@ async def handle_microsoft_user_data(user_info: Dict[str, Any]) -> Dict[str, Any
             if not user_tenant_id:
                 print(f"⚠️ Existing user {email} has no tenantId. Creating default tenant...")
                 default_tenant = await TenantService.create_default_tenant(email, user['id'])
+                
+                from datetime import datetime
+                current_time = datetime.utcnow()
                 await collections['users'].update_one(
                     {"id": user['id']},
-                    {"$set": {"tenantId": default_tenant["tenantId"]}}
+                    {
+                        "$set": {
+                            "tenantId": default_tenant["tenantId"],
+                            "updated_at": current_time,
+                            "updatedAt": current_time.timestamp() * 1000
+                        }
+                    }
                 )
                 user_tenant_id = default_tenant["tenantId"]
                 print(f"✅ Created and assigned default tenant for existing user: {email}")

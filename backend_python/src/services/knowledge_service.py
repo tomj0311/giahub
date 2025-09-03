@@ -643,22 +643,36 @@ class KnowledgeService:
         """Return distinct knowledge categories for the user's tenant"""
         tenant_id = await cls.validate_tenant_access(user)
         
-        collection = cls._get_knowledge_config_collection()
-        cats = await collection.distinct("category", {"tenantId": tenant_id})
-        # filter out empty
-        categories = [c for c in cats if c]
-        return {"categories": categories}
+        try:
+            collection = cls._get_knowledge_config_collection()
+            logger.debug(f"[KNOWLEDGE] Got collection for categories: {collection}")
+            cats = await collection.distinct("category", {"tenantId": tenant_id})
+            # filter out empty
+            categories = [c for c in cats if c]
+            return {"categories": categories}
+        except Exception as e:
+            logger.error(f"[KNOWLEDGE] Database error in list_categories: {str(e)}")
+            import traceback
+            logger.error(f"[KNOWLEDGE] Categories traceback: {traceback.format_exc()}")
+            raise
     
     @classmethod
     async def list_collections(cls, user: dict) -> Dict[str, List[str]]:
         """List knowledge collections for current tenant"""
         tenant_id = await cls.validate_tenant_access(user)
         
-        collection = cls._get_knowledge_config_collection()
-        cursor = collection.find({"tenantId": tenant_id}, {"collection": 1}).sort("collection", 1)
-        docs = await cursor.to_list(length=None)
-        collections_list = sorted({d.get("collection") for d in docs if d.get("collection")})
-        return {"collections": list(collections_list)}
+        try:
+            collection = cls._get_knowledge_config_collection()
+            logger.debug(f"[KNOWLEDGE] Got collection for list: {collection}")
+            cursor = collection.find({"tenantId": tenant_id}, {"collection": 1}).sort("collection", 1)
+            docs = await cursor.to_list(length=None)
+            collections_list = sorted({d.get("collection") for d in docs if d.get("collection")})
+            return {"collections": list(collections_list)}
+        except Exception as e:
+            logger.error(f"[KNOWLEDGE] Database error in list_collections: {str(e)}")
+            import traceback
+            logger.error(f"[KNOWLEDGE] Collections traceback: {traceback.format_exc()}")
+            raise
     
     @classmethod
     async def get_collection(cls, collection_name: str, user: dict) -> Dict[str, Any]:

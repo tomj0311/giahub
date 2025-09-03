@@ -160,9 +160,16 @@ class AuthService:
     async def _update_last_login(cls, user_id):
         """Update user's last login timestamp"""
         try:
+            current_time = datetime.utcnow()
             await cls._get_users_collection().update_one(
                 {"_id": user_id},
-                {"$set": {"last_login": datetime.utcnow()}}
+                {
+                    "$set": {
+                        "last_login": current_time,
+                        "updated_at": current_time,
+                        "updatedAt": current_time.timestamp() * 1000  # Timestamp in milliseconds
+                    }
+                }
             )
         except Exception as e:
             logger.error(f"[AUTH] Failed to update last login for user {user_id}: {e}")
@@ -218,32 +225,43 @@ class AuthService:
 
         collections = get_collections()
 
+        # Get the user ID - handle both _id and id fields
+        user_id = user_data.get('_id') or user_data.get('id')
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="User document missing both _id and id fields"
+            )
+
         # Ensure user has roles and tenantId
-        user_tenant_id = await TenantService.get_user_tenant_id(user_data['id'])
+        user_tenant_id = await TenantService.get_user_tenant_id(user_id)
 
         if not user_tenant_id:
             logger.warning(f"Existing OAuth user {user_data['email']} has no tenantId. Creating default tenant...")
-            default_tenant = await TenantService.create_default_tenant(user_data['email'], user_data['id'])
+            default_tenant = await TenantService.create_default_tenant(user_data['email'], user_id)
             await collections['users'].update_one(
-                {"id": user_data['id']},
+                {"_id": user_id},
                 {"$set": {"tenantId": default_tenant["tenantId"]}}
             )
             user_tenant_id = default_tenant["tenantId"]
             logger.info(f"Created and assigned default tenant for {user_data['email']}")
 
-        user_roles = await RBACService.get_user_roles(user_data['id'])
+        user_roles = await RBACService.get_user_roles(user_id)
         if not user_roles:
             logger.warning(f"Existing OAuth user {user_data['email']} has no roles. Creating default role...")
             default_role = await RBACService.create_default_user_role(
                 user_data['email'],
-                owner_id=user_data['id'],
+                owner_id=user_id,
                 tenant_id=user_tenant_id
             )
-            await RBACService.assign_role_to_user(user_data['id'], default_role["roleId"])
+            await RBACService.assign_role_to_user(user_id, default_role["roleId"])
             logger.info(f"Created and assigned default role for {user_data['email']}")
 
+        # Update last login timestamp
+        await cls._update_last_login(user_id)
+
         return {
-            "id": user_data['id'],
+            "id": user_id,
             "role": user_data.get('role', 'user'),
             "email": user_data['email'],
             "name": user_data.get('name', ''),
@@ -293,21 +311,27 @@ class AuthService:
             )
 
         # Create user
+        current_time = datetime.utcnow()
         random_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
         new_user = {
-            "_id": new_user_id,  # Use _id to match normal signup pattern
-            "email": user_info['email'],
-            "name": f"{user_info.get('given_name', '')} {user_info.get('family_name', '')}".strip(),
+            "_id": new_user_id,  # Primary MongoDB identifier
+            "id": new_user_id,   # Backward compatibility field
             "firstName": user_info.get('given_name', ''),
             "lastName": user_info.get('family_name', ''),
-            "password": random_password,  # Not used for OAuth users
+            "name": f"{user_info.get('given_name', '')} {user_info.get('family_name', '')}".strip(),
+            "email": user_info['email'],
+            "password_hash": "",  # Empty for OAuth users
+            "password": random_password,  # Not used for OAuth users but kept for compatibility
             "role": "user",
-            "googleId": user_info.get('sub'),  # Google user ID
+            "verified": True,  # Google emails are pre-verified
             "emailVerified": True,  # Google emails are pre-verified
             "active": True,
+            "googleId": user_info.get('sub'),  # Google user ID
             "tenantId": default_tenant['tenantId'],
-            "createdAt": datetime.utcnow().timestamp() * 1000,
-            "updatedAt": datetime.utcnow().timestamp() * 1000
+            "created_at": current_time,
+            "updated_at": current_time,
+            "createdAt": current_time.timestamp() * 1000,
+            "updatedAt": current_time.timestamp() * 1000
         }
 
         # Validate tenantId is present
@@ -336,7 +360,7 @@ class AuthService:
             logger.info(f"Assigned role {default_role['roleId']} to user {new_user_id}")
         except Exception as e:
             # Clean up: delete the user and tenant since role assignment failed
-            await collections['users'].delete_one({"id": new_user_id})
+            await collections['users'].delete_one({"_id": new_user_id})
             await collections['tenants'].delete_one({"ownerId": new_user_id})
             logger.error(f"Failed to assign role to Google OAuth user {new_user_id}: {e}")
             raise HTTPException(
@@ -345,7 +369,7 @@ class AuthService:
             )
 
         return {
-            "id": new_user['id'],
+            "id": new_user['_id'],  # Use _id to match updated structure
             "role": "user",
             "email": new_user['email'],
             "name": new_user['name'],

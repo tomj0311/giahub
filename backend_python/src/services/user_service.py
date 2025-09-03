@@ -73,24 +73,33 @@ class UserService:
             # Create user record
             user_id = str(uuid.uuid4())
             verification_token = cls._generate_verification_token()
+            current_time = datetime.utcnow()
             
             user_record = {
                 "_id": user_id,
+                "id": user_id,  # Backward compatibility field
                 "firstName": user_data["firstName"].strip(),
                 "lastName": user_data["lastName"].strip(),
+                "name": f"{user_data['firstName'].strip()} {user_data['lastName'].strip()}",
                 "email": email,
                 "password_hash": hash_password(user_data["password"]),
+                "password": "",  # Empty for regular users (password_hash is used)
+                "role": "user",
                 "verified": False,
+                "emailVerified": False,  # Standardized field name
+                "active": True,
                 "verification_token": verification_token,
-                "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow()
+                "created_at": current_time,
+                "updated_at": current_time,
+                "createdAt": current_time.timestamp() * 1000,  # Timestamp in milliseconds
+                "updatedAt": current_time.timestamp() * 1000   # Timestamp in milliseconds
             }
             
             # Add optional fields
             if user_data.get("profile_picture"):
                 user_record["profile_picture"] = user_data["profile_picture"]
             if user_data.get("google_id"):
-                user_record["google_id"] = user_data["google_id"]
+                user_record["googleId"] = user_data["google_id"]  # Standardized field name
             
             # Insert user
             await cls._get_users_collection().insert_one(user_record)
@@ -150,13 +159,16 @@ class UserService:
                 return {"message": "Email already verified"}
             
             # Update user as verified
+            current_time = datetime.utcnow()
             await cls._get_users_collection().update_one(
                 {"_id": user["_id"]},
                 {
                     "$set": {
                         "verified": True,
-                        "verified_at": datetime.utcnow(),
-                        "updated_at": datetime.utcnow()
+                        "emailVerified": True,  # Standardized field
+                        "verified_at": current_time,
+                        "updated_at": current_time,
+                        "updatedAt": current_time.timestamp() * 1000  # Timestamp in milliseconds
                     },
                     "$unset": {"verification_token": ""}
                 }
@@ -242,7 +254,18 @@ class UserService:
                 detail="No valid fields to update"
             )
         
-        update_record["updated_at"] = datetime.utcnow()
+        current_time = datetime.utcnow()
+        update_record["updated_at"] = current_time
+        update_record["updatedAt"] = current_time.timestamp() * 1000  # Timestamp in milliseconds
+        
+        # Update name field if firstName or lastName changed
+        if "firstName" in update_record or "lastName" in update_record:
+            # Get current user data to build name
+            user_doc = await cls._get_users_collection().find_one({"_id": user_id})
+            if user_doc:
+                first_name = update_record.get("firstName", user_doc.get("firstName", ""))
+                last_name = update_record.get("lastName", user_doc.get("lastName", ""))
+                update_record["name"] = f"{first_name} {last_name}".strip()
         
         try:
             result = await cls._get_users_collection().update_one(

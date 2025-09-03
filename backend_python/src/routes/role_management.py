@@ -111,20 +111,28 @@ async def invite_user(
             )
 
         # Create user
+        current_time = datetime.utcnow()
         user_data = {
+            "_id": new_user_id,
             "id": new_user_id,
-            "role": "user",
-            "active": True,
-            "password": hashed_password,
-            "createdAt": datetime.utcnow().timestamp() * 1000,
             "firstName": first_name,
             "lastName": last_name,
             "name": f"{first_name} {last_name}".strip() or normalized_email.split('@')[0],
             "email": normalized_email,
             "emailOriginal": email,
+            "password_hash": hashed_password,
+            "password": "",  # Empty for invited users
+            "role": "user",
+            "verified": False,
+            "emailVerified": False,
+            "active": True,
             "invitedBy": invited_by,
             "isInvited": True,
-            "tenantId": inviter_tenant_id  # INHERIT TENANT FROM INVITER
+            "tenantId": inviter_tenant_id,  # INHERIT TENANT FROM INVITER
+            "created_at": current_time,
+            "updated_at": current_time,
+            "createdAt": current_time.timestamp() * 1000,
+            "updatedAt": current_time.timestamp() * 1000
         }
 
         await collections['users'].insert_one(user_data)
