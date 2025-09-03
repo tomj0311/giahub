@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Dict, Optional
 from fastapi import HTTPException, status
 
+from ..utils.log import logger
 from ..db import get_collections
 
 

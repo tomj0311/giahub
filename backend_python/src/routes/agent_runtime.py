@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import uuid
 from datetime import datetime
 from typing import List, Dict, Any, AsyncGenerator
@@ -13,8 +12,7 @@ from fastapi.responses import StreamingResponse
 from ..db import get_collections
 from ..utils.auth import verify_token_middleware
 from ..utils.agent_runtime import AgentRunManager, RunCallbacks
-
-logger = logging.getLogger(__name__)
+from ..utils.log import logger
 
 router = APIRouter(prefix="/api/agent-runtime", tags=["agent-runtime"]) 
 

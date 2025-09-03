@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import os
 import sys
-import logging
 from datetime import datetime
 from io import BytesIO
 from typing import List, Optional
@@ -24,8 +23,7 @@ from ..db import get_collections
 from ..utils.auth import verify_token_middleware
 from ..utils.rbac_middleware import RBACMiddleware
 from src.utils.component_discovery import discover_components, get_detailed_class_info
-
-logger = logging.getLogger(__name__)
+from ..utils.log import logger
 
 router = APIRouter(prefix="/api/knowledge", tags=["knowledge"]) 
 
@@ -281,8 +279,6 @@ from fastapi.responses import JSONResponse
 
 from ..db import get_collections
 from ..utils.auth import verify_token_middleware
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
 

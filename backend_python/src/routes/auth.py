@@ -7,6 +7,7 @@ from typing import Optional
 import secrets
 import string
 
+from ..utils.log import logger
 from ..db import get_collections
 from ..utils.auth import (
     generate_token, 

@@ -1,6 +1,5 @@
 import os
 import sys
-import logging
 from datetime import datetime
 from typing import List
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File
@@ -9,6 +8,7 @@ from io import BytesIO
 
 from ..utils.auth import verify_token_middleware
 from ..utils.rbac_middleware import get_rbac_user, RBACMiddleware
+from ..utils.log import logger
 
 try:  # Prefer eager import, but keep details if it fails
     from minio import Minio  # type: ignore
@@ -16,8 +16,6 @@ try:  # Prefer eager import, but keep details if it fails
 except Exception as _e:  # pragma: no cover - tests patch client, import may be absent
     Minio = None  # type: ignore
     _MINIO_IMPORT_ERROR = repr(_e)
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

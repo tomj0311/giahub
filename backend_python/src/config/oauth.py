@@ -1,11 +1,10 @@
 import os
-import logging
 from typing import Optional, Dict, Any
 from authlib.integrations.starlette_client import OAuth
 from fastapi import HTTPException, status
 from dotenv import load_dotenv
 
-logger = logging.getLogger(__name__)
+from ..utils.log import logger
 
 # Ensure environment variables are loaded
 load_dotenv()

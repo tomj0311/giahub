@@ -22,7 +22,7 @@ import threading
 import uuid
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Type
 
-from .logging_utils import log_event
+from .log import logger
 
 # Lazy imports of heavy ai.* modules only when first needed
 from typing import TYPE_CHECKING

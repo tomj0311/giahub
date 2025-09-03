@@ -11,6 +11,7 @@ from fastapi import HTTPException, Depends, status
 
 from ..utils.auth import verify_token_middleware
 from ..services.rbac_service import RBACService
+from .log import logger
 
 
 def require_roles(required_roles: List[str]):

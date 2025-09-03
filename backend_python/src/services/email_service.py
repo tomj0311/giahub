@@ -1,12 +1,11 @@
 import os
-import logging
 import aiosmtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional
 from urllib.parse import quote_plus
 
-logger = logging.getLogger(__name__)
+from ..utils.log import logger
 
 # Email configuration
 SMTP_HOST = os.getenv('SMTP_HOST')

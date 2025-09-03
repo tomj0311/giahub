@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import List, Dict, Optional, Set
 from fastapi import HTTPException, status
 
+from ..utils.log import logger
 from ..db import get_collections
 
 

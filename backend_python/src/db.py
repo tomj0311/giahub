@@ -1,8 +1,7 @@
 import os
-import logging
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 
-logger = logging.getLogger(__name__)
+from .utils.log import logger
 
 DEFAULT_URI = os.getenv("MONGO_URL", "mongodb://127.0.0.1:8801")
 DEFAULT_DB = os.getenv("MONGO_DB", "giap")

@@ -1,11 +1,9 @@
 import uuid
 import secrets
-import logging
 from typing import Dict, Any
 
 from ..db import get_collections
-
-logger = logging.getLogger(__name__)
+from ..utils.log import logger
 
 # Base AI agent configuration
 BASE_AGENT = {

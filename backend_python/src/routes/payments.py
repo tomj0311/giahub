@@ -1,13 +1,11 @@
 import os
-import logging
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
 import stripe
 
 from ..utils.auth import verify_token_middleware
-
-logger = logging.getLogger(__name__)
+from ..utils.log import logger
 
 router = APIRouter()
 

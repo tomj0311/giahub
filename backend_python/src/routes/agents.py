@@ -12,14 +12,12 @@ Schema (agents collection):
 
 from datetime import datetime
 from typing import Optional, Dict, Any, List
-import logging
 
 from fastapi import APIRouter, HTTPException, Depends, status
 
 from ..db import get_collections
 from ..utils.auth import verify_token_middleware
-
-logger = logging.getLogger(__name__)
+from ..utils.log import logger
 
 router = APIRouter(prefix="/api/agents", tags=["agents"]) 
 

@@ -6,6 +6,7 @@ from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel, EmailStr, validator
 
+from ..utils.log import logger
 from ..db import get_collections
 from ..utils.auth import (
     hash_password, 

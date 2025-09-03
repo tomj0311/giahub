@@ -3,12 +3,9 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Dict, List
-import logging
 import ast
 
-# Set up simple logging
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+from .log import logger
 
 BASE_NAMESPACE = "ai"
 MAPPING = {

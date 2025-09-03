@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Any
 from fastapi import HTTPException, status
 
 from ..services.tenant_service import TenantService
+from .log import logger
 
 
 class TenantMiddleware:

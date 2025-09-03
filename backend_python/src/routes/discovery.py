@@ -1,14 +1,12 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Dict, List, Any, Optional
-import logging
 
 from src.utils.component_discovery import (
     discover_components,
     get_detailed_class_info
 )
-
-logger = logging.getLogger(__name__)
+from ..utils.log import logger
 
 router = APIRouter(prefix="/api/discovery", tags=["discovery"])
 

@@ -7,6 +7,13 @@ from rich.logging import RichHandler
 
 # Import centralized logging
 try:
+    import sys
+    import os
+    # Add the parent directory to sys.path to import logger
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+    sys.path.insert(0, project_root)
+    
     from logger.logger import get_logger as centralized_get_logger, set_log_level_to_debug as centralized_set_debug, set_log_level_to_info as centralized_set_info
     CENTRALIZED_LOGGING_AVAILABLE = True
 except ImportError:

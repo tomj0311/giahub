@@ -6,13 +6,11 @@ Handles model configurations stored in MongoDB with categories
 from fastapi import APIRouter, HTTPException, Depends, status
 from typing import Dict, List, Any, Optional
 from datetime import datetime
-import logging
 
 from ..db import get_collections
 from ..utils.auth import verify_token_middleware
 from src.utils.component_discovery import discover_components, get_detailed_class_info
-
-logger = logging.getLogger(__name__)
+from ..utils.log import logger
 
 router = APIRouter(prefix="/api/model-config", tags=["model-config"])
 

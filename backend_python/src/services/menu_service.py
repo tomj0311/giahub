@@ -1,9 +1,7 @@
-import logging
 from typing import List, Dict, Any, Optional
 from bson import ObjectId
 from src.db import get_collections
-
-logger = logging.getLogger(__name__)
+from ..utils.log import logger
 
 
 class MenuService:

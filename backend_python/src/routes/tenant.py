@@ -8,6 +8,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
 
+from ..utils.log import logger
 from ..db import get_collections
 from ..utils.auth import verify_token_middleware
 from ..services.tenant_service import TenantService

@@ -1,9 +1,8 @@
 """MongoDB storage utilities for agent runtime."""
 from typing import Dict, Optional, Any
 from datetime import datetime
-import logging
 
-logger = logging.getLogger(__name__)
+from .log import logger
 
 def model_config_get(config_name: str) -> Optional[Dict[str, Any]]:
     """Get model configuration from MongoDB."""
