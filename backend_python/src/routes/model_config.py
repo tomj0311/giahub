@@ -8,8 +8,8 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
-from ..db import get_collections
 from ..utils.auth import verify_token_middleware
+from ..utils.tenant_access import tenant_db, require_tenant_access
 from src.utils.component_discovery import discover_components, get_detailed_class_info
 from ..utils.log import logger
 
@@ -17,16 +17,16 @@ router = APIRouter(prefix="/api/model-config", tags=["model-config"])
 
 
 @router.post("/configs", status_code=status.HTTP_201_CREATED)
+@require_tenant_access(['modelConfig'])
 async def create_model_config(
     config: dict,
-    user: dict = Depends(verify_token_middleware)
+    user: dict = Depends(verify_token_middleware),
+    collections = Depends(tenant_db.collections)
 ):
     """Create a new model configuration"""
     logger.info(f"[MODEL_CONFIG] Creating model config: {config.get('name')} by user: {user.get('id', user.get('username'))}")
     
     try:
-        collections = get_collections()
-        
         # Validate required fields
         if not config.get("name"):
             logger.warning(f"[MODEL_CONFIG] Missing name field in config creation")
@@ -54,21 +54,12 @@ async def create_model_config(
             "created_by": user.get("id", user.get("username"))
         }
         
-        # Add tenant ID to the record - REQUIRED, no hardcoded fallbacks
-        tenant_id = user.get("tenantId")
-        if not tenant_id:
-            logger.error(f"[MODEL_CONFIG] No tenantId found for user: {user.get('id', user.get('username'))}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User tenant information missing. Please re-login."
-            )
-        config_doc["tenantId"] = tenant_id
-        
+        # tenant_id is automatically added by the tenant-aware wrapper
         logger.debug(f"[MODEL_CONFIG] Inserting config into database")
-        # Insert into MongoDB
+        # Insert into MongoDB - tenant_id automatically added
         result = await collections['modelConfig'].insert_one(config_doc)
         
-        # Retrieve the created document
+        # Retrieve the created document - automatically tenant-filtered
         created_config = await collections['modelConfig'].find_one({"_id": result.inserted_id})
         
         # Convert MongoDB document to response format
@@ -97,32 +88,22 @@ async def create_model_config(
 
 
 @router.get("/configs")
+@require_tenant_access(['modelConfig'])
 async def get_model_configs(
     category: Optional[str] = None,
-    user: dict = Depends(verify_token_middleware)
+    user: dict = Depends(verify_token_middleware),
+    collections = Depends(tenant_db.collections)
 ):
     """Get all model configurations, optionally filtered by category"""
     logger.info(f"[MODEL_CONFIG] Getting model configs (category: {category}) for user: {user.get('id', user.get('username'))}")
     
     try:
-        collections = get_collections()
-        
-        # Build query with tenant isolation
+        # Build query - tenant filtering is automatic
         base_query = {"type": "model_config"}
         if category:
             base_query["category"] = category
         
-        # Apply tenant filtering - REQUIRED, no hardcoded fallbacks
-        tenant_id = user.get("tenantId")
-        if not tenant_id:
-            logger.error(f"[MODEL_CONFIG] No tenantId found for user: {user.get('id', user.get('username'))}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User tenant information missing. Please re-login."
-            )
-        base_query["tenantId"] = tenant_id
-        
-        # Fetch configurations
+        # Fetch configurations - automatically tenant-filtered
         cursor = collections['modelConfig'].find(base_query)
         configs = await cursor.to_list(length=None)
         
@@ -152,37 +133,23 @@ async def get_model_configs(
 
 
 @router.get("/configs/{config_id}")
+@require_tenant_access(['modelConfig'])
 async def get_model_config(
     config_id: str,
-    user: dict = Depends(verify_token_middleware)
+    user: dict = Depends(verify_token_middleware),
+    collections = Depends(tenant_db.collections)
 ):
     """Get a specific model configuration by ID"""
     try:
-        collections = get_collections()
-        
         from bson import ObjectId
         
-        # Fetch the configuration
+        # Fetch the configuration - automatically tenant-filtered
         config = await collections['modelConfig'].find_one({"_id": ObjectId(config_id)})
         
         if not config:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Model configuration with ID '{config_id}' not found"
-            )
-        
-        # Verify tenant access - REQUIRED, no hardcoded fallbacks
-        tenant_id = user.get("tenantId")
-        if not tenant_id:
-            logger.error(f"[MODEL_CONFIG] No tenantId found for user: {user.get('id', user.get('username'))}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User tenant information missing. Please re-login."
-            )
-        if config.get("tenantId") != tenant_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied - configuration belongs to different organization"
             )
         
         # Convert to response format

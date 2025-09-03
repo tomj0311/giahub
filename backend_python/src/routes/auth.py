@@ -65,7 +65,7 @@ async def login(request: LoginRequest):
     logger.debug(f"[AUTH] Checking user database for: {normalized_username}")
     collections = get_collections()
     
-    # User login
+    # User login - no tenant filtering for authentication
     user = await collections['users'].find_one({
         "$or": [
             {"email": normalized_username},

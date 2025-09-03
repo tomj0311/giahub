@@ -68,7 +68,7 @@ async def invite_user(
         incoming_role_ids = request.get("roleIds") or request.get("role_ids") or []
         invited_by = request.get("invited_by") or user_id
 
-        # Check if email already exists
+        # Check if email already exists - no tenant filtering for email uniqueness check
         normalized_email = normalize_email(email)
         existing_user = await collections['users'].find_one({"email": normalized_email})
         if existing_user:

@@ -52,7 +52,7 @@ class VerifyToken(BaseModel):
 
 # Helper functions
 async def email_exists(email: str) -> bool:
-    """Check if email exists in users collection"""
+    """Check if email exists in users collection - no tenant filtering for registration"""
     target = normalize_email(email)
     collections = get_collections()
     user = await collections['users'].find_one({"email": target})
@@ -167,7 +167,7 @@ async def verify_user(verification: VerifyToken):
     """Verify user email"""
     collections = get_collections()
     
-    # Find verification token
+    # Find verification token - no tenant filtering for verification
     token_record = await collections['verificationTokens'].find_one({"token": verification.token})
     if not token_record:
         logger.warning(f"[USERS] Invalid verification token attempted: {verification.token}")
@@ -176,7 +176,7 @@ async def verify_user(verification: VerifyToken):
             detail="invalid token"
         )
     
-    # Find user
+    # Find user - no tenant filtering for verification process
     user = await collections['users'].find_one({"id": token_record.get("userId") or token_record.get("consumerId")})
     if not user:
         logger.error(f"[USERS] User not found for verification token: {verification.token}")
@@ -203,6 +203,7 @@ async def login_user(login_data: UserLogin):
     collections = get_collections()
     target_email = normalize_email(login_data.email)
     
+    # Find user by email - no tenant filtering for authentication
     user = await collections['users'].find_one({
         "$or": [
             {"email": target_email},
@@ -254,10 +255,23 @@ async def login_user(login_data: UserLogin):
 
 @router.get("/")
 async def get_users(user: dict = Depends(verify_token_middleware)):
-    """Get list of users (authenticated users only)"""
+    """Get list of users (authenticated users only) - tenant filtered"""
     collections = get_collections()
+    
+    # Get user's tenant_id for filtering
+    user_id = user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user"
+        )
+    
+    # Apply tenant filtering
+    from ..utils.tenant_middleware import tenant_filter_query
+    query = await tenant_filter_query(user_id, {})
+    
     users = await collections['users'].find(
-        {},
+        query,
         {"_id": 0, "password": 0}
     ).to_list(None)
     

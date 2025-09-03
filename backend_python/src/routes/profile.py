@@ -32,6 +32,7 @@ async def get_profile(user: dict = Depends(verify_token_middleware)):
     """Get user profile"""
     role = user.get("role")
     user_id = user.get("id")
+    tenant_id = user.get("tenantId")
     
     if not role or not user_id:
         raise HTTPException(
@@ -39,11 +40,17 @@ async def get_profile(user: dict = Depends(verify_token_middleware)):
             detail="Invalid user data"
         )
     
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     collections = get_collections()
     
     if role == "user":
         user_data = await collections['users'].find_one(
-            {"id": user_id},
+            {"id": user_id, "tenantId": tenant_id},
             {"_id": 0}
         )
     else:
@@ -73,6 +80,7 @@ async def update_profile(
     """Update user profile"""
     role = user.get("role")
     user_id = user.get("id")
+    tenant_id = user.get("tenantId")
     
     if not role or not user_id:
         raise HTTPException(
@@ -80,11 +88,17 @@ async def update_profile(
             detail="Invalid user data"
         )
     
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     collections = get_collections()
     
     # Get current user data
     if role == "user":
-        current_user = await collections['users'].find_one({"id": user_id})
+        current_user = await collections['users'].find_one({"id": user_id, "tenantId": tenant_id})
         collection = collections['users']
     else:
         raise HTTPException(
@@ -113,12 +127,12 @@ async def update_profile(
     
     # Update user in database
     await collection.update_one(
-        {"id": user_id},
+        {"id": user_id, "tenantId": tenant_id},
         {"$set": update_data}
     )
     
     # Get updated user data
-    updated_user = await collection.find_one({"id": user_id})
+    updated_user = await collection.find_one({"id": user_id, "tenantId": tenant_id})
     
     # Remove sensitive data before responding
     if "password" in updated_user:
@@ -134,6 +148,7 @@ async def get_profile_completeness(user: dict = Depends(verify_token_middleware)
     """Check if profile is complete"""
     role = user.get("role")
     user_id = user.get("id")
+    tenant_id = user.get("tenantId")
     
     if not role or not user_id:
         raise HTTPException(
@@ -141,10 +156,16 @@ async def get_profile_completeness(user: dict = Depends(verify_token_middleware)
             detail="Invalid user data"
         )
     
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     collections = get_collections()
     
     if role == "user":
-        user_data = await collections['users'].find_one({"id": user_id})
+        user_data = await collections['users'].find_one({"id": user_id, "tenantId": tenant_id})
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

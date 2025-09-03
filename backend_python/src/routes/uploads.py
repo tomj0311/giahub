@@ -102,10 +102,17 @@ async def upload_files(
     
     # Check if user has access to upload files
     user_id = user.get("id")
+    tenant_id = user.get("tenantId")
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid user"
+        )
+    
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
         )
     
     # Verify collection access for uploads
@@ -149,7 +156,8 @@ async def upload_files(
             timestamp = int(datetime.now().timestamp() * 1000)
             random_part = os.urandom(4).hex()
             filename = f"{timestamp}-{random_part}-{file.filename}"
-            object_name = f"{user_email}/{filename}"
+            # Use tenant-isolated path: tenant_id/user_id/filename
+            object_name = f"{tenant_id}/{user_id}/{filename}"
 
             # Upload to MinIO
             data_stream = BytesIO(content)
@@ -185,19 +193,33 @@ async def upload_files(
 @router.get("/files")
 async def get_user_files(user: dict = Depends(verify_token_middleware)):
     """Get user's uploaded files"""
+    user_id = user.get("id")
+    tenant_id = user.get("tenantId")
+    
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user"
+        )
+    
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     try:
         client = get_minio_client()
         bucket_name = get_bucket_name()
-        user_email = user.get("email") or "unknown"
 
-        # List objects with user's prefix
-        prefix = f"{user_email}/"
+        # List objects with tenant-isolated prefix: tenant_id/user_id/
+        prefix = f"{tenant_id}/{user_id}/"
         objs = client.list_objects(bucket_name, prefix=prefix, recursive=True)  # type: ignore
 
         file_list = []
         for obj in objs:
-            # obj.object_name like 'email/filename'
-            name = obj.object_name.split("/", 1)[1] if "/" in obj.object_name else obj.object_name
+            # obj.object_name like 'tenant_id/user_id/filename'
+            name = obj.object_name.split("/", 2)[2] if obj.object_name.count("/") >= 2 else obj.object_name
             file_list.append({
                 "filename": name,
                 "size": getattr(obj, "size", None),
@@ -221,12 +243,27 @@ async def download_file(
     user: dict = Depends(verify_token_middleware)
 ):
     """Download a file by filename"""
+    user_id = user.get("id")
+    tenant_id = user.get("tenantId")
+    
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user"
+        )
+    
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     try:
         client = get_minio_client()
         bucket_name = get_bucket_name()
-        user_email = user.get("email") or "unknown"
 
-        object_name = f"{user_email}/{filename}"
+        # Use tenant-isolated path: tenant_id/user_id/filename
+        object_name = f"{tenant_id}/{user_id}/{filename}"
         try:
             obj = client.get_object(bucket_name, object_name)  # type: ignore
         except Exception:
