@@ -352,6 +352,139 @@ class AuthService:
             "new_user": True
         }
 
+    @classmethod
+    async def handle_microsoft_oauth_callback(cls, user_info: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle Microsoft OAuth callback and process user data"""
+        import secrets
+        import string
+        from datetime import datetime
+        from ..services.rbac_service import RBACService
+        from ..services.user_service import UserService
+
+        collections = get_collections()
+
+        # Get email from Microsoft user info (can be in 'mail' or 'userPrincipalName')
+        email = user_info.get('mail', user_info.get('userPrincipalName', ''))
+        
+        # Check if user already exists
+        existing_user = await collections['users'].find_one({"email": email})
+
+        if existing_user:
+            # Handle existing user
+            return await cls._handle_existing_oauth_user(existing_user)
+        else:
+            # Handle new user - adapt user_info to match expected format
+            adapted_user_info = {
+                'email': email,
+                'given_name': user_info.get('givenName', ''),
+                'family_name': user_info.get('surname', ''),
+                'name': user_info.get('displayName', ''),
+                'sub': user_info.get('id'),  # Microsoft user ID
+            }
+            return await cls._handle_new_microsoft_oauth_user(adapted_user_info)
+
+    @classmethod
+    async def _handle_new_microsoft_oauth_user(cls, user_info: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle new Microsoft OAuth user registration"""
+        import secrets
+        import string
+        from datetime import datetime
+        from ..services.rbac_service import RBACService
+
+        collections = get_collections()
+
+        # Generate user ID first
+        new_user_id = secrets.token_urlsafe(16)
+
+        # Create default tenant
+        try:
+            default_tenant = await TenantService.create_default_tenant(user_info['email'], new_user_id)
+            logger.info(f"Created default tenant: {default_tenant['tenantId']} for {user_info['email']}")
+        except Exception as e:
+            logger.error(f"Failed to create default tenant for Microsoft OAuth user {user_info['email']}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create user organization. OAuth registration aborted."
+            )
+
+        # Create default role
+        try:
+            logger.info(f"Creating default role for new Microsoft OAuth user: {user_info['email']}")
+            default_role = await RBACService.create_default_user_role(
+                user_info['email'],
+                owner_id=new_user_id,
+                tenant_id=default_tenant['tenantId']
+            )
+            logger.info(f"Created default role: {default_role['roleId']} for {user_info['email']}")
+        except Exception as e:
+            # Clean up: delete the tenant since role creation failed
+            await collections['tenants'].delete_one({"ownerId": new_user_id})
+            logger.error(f"Failed to create default role for Microsoft OAuth user {user_info['email']}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create user security profile. OAuth registration aborted."
+            )
+
+        # Create user
+        random_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
+        new_user = {
+            "id": new_user_id,
+            "email": user_info['email'],
+            "name": f"{user_info.get('given_name', '')} {user_info.get('family_name', '')}".strip(),
+            "firstName": user_info.get('given_name', ''),
+            "lastName": user_info.get('family_name', ''),
+            "password": random_password,  # Not used for OAuth users
+            "role": "user",
+            "microsoftId": user_info.get('sub'),  # Microsoft user ID
+            "emailVerified": True,  # Microsoft emails are pre-verified
+            "active": True,
+            "tenantId": default_tenant['tenantId'],
+            "createdAt": datetime.utcnow().timestamp() * 1000,
+            "updatedAt": datetime.utcnow().timestamp() * 1000
+        }
+
+        # Validate tenantId is present
+        if not new_user.get("tenantId"):
+            await collections['tenants'].delete_one({"ownerId": new_user_id})
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="OAuth user creation failed: tenantId is required"
+            )
+
+        try:
+            await collections['users'].insert_one(new_user)
+            logger.info(f"Created new Microsoft OAuth user: {user_info['email']}")
+        except Exception as e:
+            # Clean up: delete the tenant and role since user creation failed
+            await collections['tenants'].delete_one({"ownerId": new_user_id})
+            logger.error(f"Failed to create Microsoft OAuth user {new_user_id}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create user account. OAuth registration aborted."
+            )
+
+        # Assign role to user
+        try:
+            await RBACService.assign_role_to_user(new_user_id, default_role["roleId"])
+            logger.info(f"Assigned role {default_role['roleId']} to user {new_user_id}")
+        except Exception as e:
+            # Clean up: delete the user and tenant since role assignment failed
+            await collections['users'].delete_one({"id": new_user_id})
+            await collections['tenants'].delete_one({"ownerId": new_user_id})
+            logger.error(f"Failed to assign role to Microsoft OAuth user {new_user_id}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to assign security role. OAuth registration aborted."
+            )
+
+        return {
+            "id": new_user['id'],
+            "role": "user",
+            "email": new_user['email'],
+            "name": new_user['name'],
+            "new_user": True
+        }
+
     @staticmethod
     async def get_current_user_info(user: Dict[str, Any]) -> Dict[str, Any]:
         """Get current user information"""

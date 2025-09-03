@@ -60,12 +60,6 @@ function AppShell({ children, themeKey, setThemeKey, isAuthenticated }) {
       <AppBar position="sticky" sx={{ background: theme.custom.appBarGradient, backgroundSize: '200% 200%', animation: 'appBarShift 12s ease infinite' }}>
         <Toolbar>
           <Typography variant="h6" sx={{ flexGrow: 1, color: '#ffffff', fontWeight: 600 }}>GiaHUB</Typography>
-          {!isAuthenticated && (
-            <>
-              <Button color="inherit" component={Link} to="/login">Login</Button>
-              <Button color="inherit" component={Link} to="/signup" sx={{ ml: 1 }}>Sign up</Button>
-            </>
-          )}
           <IconButton
             color="inherit"
             onClick={() => setThemeKey(getThemeKeyForMode(theme.palette.mode === 'dark' ? 'light' : 'dark'))}

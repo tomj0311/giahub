@@ -11,7 +11,7 @@ from typing import Optional
 
 from ..utils.auth import verify_token_middleware, generate_token
 from ..utils.log import logger
-from ..config.oauth import get_oauth_client
+from ..config.oauth import get_oauth_client, get_microsoft_oauth_client
 from ..services.auth_service import AuthService
 
 router = APIRouter(tags=["authentication"])
@@ -95,6 +95,69 @@ async def google_callback(request: Request):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"OAuth callback failed: {str(e)}"
+        )
+
+
+# Microsoft OAuth routes
+@router.get("/microsoft")
+async def microsoft_auth(request: Request):
+    """Initiate Microsoft OAuth flow"""
+    logger.info("[OAUTH] Initiating Microsoft OAuth flow")
+    try:
+        oauth_client = get_microsoft_oauth_client()
+        redirect_uri = f"{request.url.scheme}://{request.url.netloc}/auth/microsoft/callback"
+        logger.debug(f"[OAUTH] Microsoft Redirect URI: {redirect_uri}")
+        response = await oauth_client.authorize_redirect(request, redirect_uri)
+        logger.info("[OAUTH] Redirecting to Microsoft OAuth")
+        return response
+    except Exception as e:
+        logger.error(f"[OAUTH] Failed to initiate Microsoft OAuth: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Microsoft OAuth initialization failed: {str(e)}"
+        )
+
+
+@router.get("/microsoft/callback")
+async def microsoft_callback(request: Request):
+    """Handle Microsoft OAuth callback"""
+    logger.info("[OAUTH] Processing Microsoft OAuth callback")
+    try:
+        oauth_client = get_microsoft_oauth_client()
+        token = await oauth_client.authorize_access_token(request)
+        
+        # For Microsoft, we need to make an additional request to get user info
+        user_info = await oauth_client.get('https://graph.microsoft.com/v1.0/me', token=token)
+        user_data_raw = user_info.json()
+        
+        if not user_data_raw:
+            logger.error("[OAUTH] Failed to get user information from Microsoft")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to get user information from Microsoft"
+            )
+        
+        logger.info(f"[OAUTH] Processing Microsoft user data for: {user_data_raw.get('mail', user_data_raw.get('userPrincipalName', 'unknown'))}")
+        user_data = await AuthService.handle_microsoft_oauth_callback(user_data_raw)
+        logger.info(f"[OAUTH] Microsoft user authenticated: {user_data.get('email', 'unknown')}")
+        
+        token = generate_token({
+            "id": user_data['id'],
+            "role": user_data['role']
+        })
+        client_url = os.getenv('CLIENT_URL', 'http://localhost:5173')
+        logger.info(f"[OAUTH] Redirecting Microsoft user to frontend: {client_url}")
+        return RedirectResponse(
+            url=f"{client_url}/auth/callback?token={token}&name={user_data['name']}"
+        )
+    except HTTPException:
+        logger.error("[OAUTH] HTTPException during Microsoft callback")
+        raise
+    except Exception as e:
+        logger.error(f"[OAUTH] Exception during Microsoft callback: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Microsoft OAuth callback failed: {str(e)}"
         )
 
 
