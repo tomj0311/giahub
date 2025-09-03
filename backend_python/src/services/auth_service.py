@@ -265,6 +265,7 @@ class AuthService:
             "role": user_data.get('role', 'user'),
             "email": user_data['email'],
             "name": user_data.get('name', ''),
+            "tenantId": user_tenant_id,
             "new_user": False
         }
 
@@ -373,6 +374,7 @@ class AuthService:
             "role": "user",
             "email": new_user['email'],
             "name": new_user['name'],
+            "tenantId": default_tenant['tenantId'],
             "new_user": True
         }
 
@@ -506,6 +508,7 @@ class AuthService:
             "role": "user",
             "email": new_user['email'],
             "name": new_user['name'],
+            "tenantId": default_tenant['tenantId'],
             "new_user": True
         }
 

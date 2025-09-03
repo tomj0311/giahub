@@ -94,7 +94,9 @@ async def google_callback(request: Request):
         
         auth_token = generate_token({
             "id": user_data['id'],
-            "role": user_data['role']
+            "role": user_data['role'],
+            "tenantId": user_data.get('tenantId'),
+            "email": user_data.get('email')
         })
         client_url = os.getenv('CLIENT_URL', 'http://localhost:5173')
         logger.info(f"[OAUTH] Redirecting user to frontend: {client_url}")
@@ -142,7 +144,9 @@ async def google_callback(request: Request):
                             
                             auth_token = generate_token({
                                 "id": user_data['id'],
-                                "role": user_data['role']
+                                "role": user_data['role'],
+                                "tenantId": user_data.get('tenantId'),
+                                "email": user_data.get('email')
                             })
                             client_url = os.getenv('CLIENT_URL', 'http://localhost:5173')
                             return RedirectResponse(
@@ -202,7 +206,9 @@ async def microsoft_callback(request: Request):
         
         token = generate_token({
             "id": user_data['id'],
-            "role": user_data['role']
+            "role": user_data['role'],
+            "tenantId": user_data.get('tenantId'),
+            "email": user_data.get('email')
         })
         client_url = os.getenv('CLIENT_URL', 'http://localhost:5173')
         logger.info(f"[OAUTH] Redirecting Microsoft user to frontend: {client_url}")
