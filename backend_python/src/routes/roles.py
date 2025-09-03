@@ -135,52 +135,21 @@ async def update_role(
         )
     
     try:
-        collections = get_collections()
-
-        # Check if role exists
-        role = await RBACService.get_role_by_id(role_id)
-        if not role:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Role not found"
-            )
-
-        # Authorization: only owner can update
-        if role.get("ownerId") != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You can only update roles you own"
-            )
-
-        # Default roles are immutable
-        if role.get("isDefault"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Default personal roles cannot be modified"
-            )
-
-        # Prepare update data
-        update_data = {}
-        if role_data.description is not None:
-            update_data["description"] = role_data.description
-        if role_data.permissions is not None:
-            update_data["permissions"] = role_data.permissions
-
-        if not update_data:
-            # Include legacy mirrors
-            role = {**role, "name": role.get("roleName"), "role_id": role.get("roleId")}
-            return RoleResponse(**role)
-
-        # Update role
-        await collections['roles'].update_one(
-            {"roleId": role_id},
-            {"$set": update_data}
+        # Use service to update role
+        updated_role = await RBACService.update_role(
+            role_id, 
+            role_data.dict(exclude_unset=True), 
+            user_id
         )
-        # Get updated role
-        updated_role = await RBACService.get_role_by_id(role_id)
-        # Include legacy mirrors
-        updated_role = {**updated_role, "name": updated_role.get("roleName"), "role_id": updated_role.get("roleId")}
+        
+        # Include legacy mirrors for compatibility
+        updated_role = {
+            **updated_role, 
+            "name": updated_role.get("roleName"), 
+            "role_id": updated_role.get("roleId")
+        }
         return RoleResponse(**updated_role)
+        
     except HTTPException:
         raise
     except Exception as e:
@@ -208,42 +177,9 @@ async def delete_role(
         )
     
     try:
-        collections = get_collections()
+        result = await RBACService.delete_role(role_id, user_id)
+        return result
         
-        # Check if role exists
-        role = await RBACService.get_role_by_id(role_id)
-        if not role:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Role not found"
-            )
-        # Authorization: only owner can delete
-        if role.get("ownerId") != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You can only delete roles you own"
-            )
-        
-        # Prevent deletion of default personal roles
-        if role.get("isDefault"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot delete default personal roles"
-            )
-        
-        # Mark role as inactive instead of deleting
-        await collections['roles'].update_one(
-            {"roleId": role_id},
-            {"$set": {"active": False}}
-        )
-        
-        # Remove all user assignments for this role (FakeCollection compat)
-        assignments = await collections['userRoles'].find({"roleId": role_id}).to_list(None)
-        for a in assignments:
-            await collections['userRoles'].update_one({"userId": a.get("userId"), "roleId": role_id}, {"$set": {"active": False}})
-        
-        return {"message": "Role deleted successfully"}
-    
     except HTTPException:
         raise
     except Exception as e:

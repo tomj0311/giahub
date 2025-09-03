@@ -15,7 +15,7 @@ from ..services.tenant_service import TenantService
 from ..services.rbac_service import RBACService
 from ..utils.tenant_middleware import tenant_filter_query
 
-router = APIRouter()
+router = APIRouter(prefix="/api/tenant", tags=["tenant"])
 
 
 # Pydantic models

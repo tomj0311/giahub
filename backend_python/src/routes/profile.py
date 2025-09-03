@@ -4,6 +4,8 @@ from pydantic import BaseModel, validator
 
 from ..db import get_collections
 from ..utils.auth import verify_token_middleware, normalize_email
+from ..services.user_service import UserService
+from ..utils.log import logger
 
 router = APIRouter(prefix="/api")
 
@@ -30,46 +32,37 @@ class ProfileCompletenessResponse(BaseModel):
 @router.get("/profile")
 async def get_profile(user: dict = Depends(verify_token_middleware)):
     """Get user profile"""
-    role = user.get("role")
     user_id = user.get("id")
+    logger.info(f"[PROFILE] Getting profile for user: {user_id}")
+    
+    role = user.get("role")
     tenant_id = user.get("tenantId")
     
     if not role or not user_id:
+        logger.warning(f"[PROFILE] Invalid user data for profile request: {user}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid user data"
         )
     
     if not tenant_id:
+        logger.warning(f"[PROFILE] Missing tenant information for user: {user_id}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User tenant information missing. Please re-login."
         )
     
-    collections = get_collections()
-    
-    if role == "user":
-        user_data = await collections['users'].find_one(
-            {"id": user_id, "tenantId": tenant_id},
-            {"_id": 0}
-        )
-    else:
+    try:
+        logger.debug(f"[PROFILE] Fetching profile data for user: {user_id}")
+        profile = await UserService.get_user_profile(user_id)
+        logger.info(f"[PROFILE] Successfully retrieved profile for user: {user_id}")
+        return profile
+    except Exception as e:
+        logger.error(f"[PROFILE] Failed to get profile for user {user_id}: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid role"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get profile"
         )
-    
-    if not user_data:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    # Remove sensitive data
-    if "password" in user_data:
-        del user_data["password"]
-    
-    return user_data
 
 
 @router.put("/profile")
@@ -78,11 +71,15 @@ async def update_profile(
     user: dict = Depends(verify_token_middleware)
 ):
     """Update user profile"""
-    role = user.get("role")
     user_id = user.get("id")
+    logger.info(f"[PROFILE] Updating profile for user: {user_id}")
+    logger.debug(f"[PROFILE] Update data: {profile_update.dict(exclude_unset=True)}")
+    
+    role = user.get("role")
     tenant_id = user.get("tenantId")
     
     if not role or not user_id:
+        logger.warning(f"[PROFILE] Invalid user data for profile update: {user}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid user data"
@@ -94,53 +91,20 @@ async def update_profile(
             detail="User tenant information missing. Please re-login."
         )
     
-    collections = get_collections()
-    
-    # Get current user data
-    if role == "user":
-        current_user = await collections['users'].find_one({"id": user_id, "tenantId": tenant_id})
-        collection = collections['users']
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid role"
-        )
-    
-    if not current_user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    # Prepare update data
-    # Pydantic v2 prefers model_dump over dict
     try:
-        update_data = profile_update.model_dump(exclude_unset=True)  # type: ignore[attr-defined]
-    except Exception:
-        update_data = profile_update.dict(exclude_unset=True)
-    
-    # Update name if firstName or lastName changed
-    if profile_update.firstName is not None or profile_update.lastName is not None:
-        first_name = profile_update.firstName if profile_update.firstName is not None else current_user.get('firstName', '')
-        last_name = profile_update.lastName if profile_update.lastName is not None else current_user.get('lastName', '')
-        update_data['name'] = f"{first_name} {last_name}".strip()
-    
-    # Update user in database
-    await collection.update_one(
-        {"id": user_id, "tenantId": tenant_id},
-        {"$set": update_data}
-    )
-    
-    # Get updated user data
-    updated_user = await collection.find_one({"id": user_id, "tenantId": tenant_id})
-    
-    # Remove sensitive data before responding
-    if "password" in updated_user:
-        del updated_user["password"]
-    if "_id" in updated_user:
-        del updated_user["_id"]
-    
-    return updated_user
+        # Prepare update data
+        try:
+            update_data = profile_update.model_dump(exclude_unset=True)
+        except Exception:
+            update_data = profile_update.dict(exclude_unset=True)
+        
+        updated_profile = await UserService.update_user_profile(user_id, update_data)
+        return updated_profile
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update profile"
+        )
 
 
 @router.get("/profile/completeness", response_model=ProfileCompletenessResponse)
@@ -162,39 +126,13 @@ async def get_profile_completeness(user: dict = Depends(verify_token_middleware)
             detail="User tenant information missing. Please re-login."
         )
     
-    collections = get_collections()
-    
-    if role == "user":
-        user_data = await collections['users'].find_one({"id": user_id, "tenantId": tenant_id})
-    else:
+    try:
+        result = await UserService.get_profile_completeness(user_id, tenant_id, role)
+        return ProfileCompletenessResponse(**result)
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid role"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get profile completeness"
         )
-    
-    if not user_data:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    # Define required fields for each role
-    required_fields = {
-        "user": ["firstName", "lastName", "email"],
-    }
-    
-    required = required_fields.get(role, [])
-    missing = []
-    
-    for field in required:
-        field_value = user_data.get(field)
-        if not field_value or (isinstance(field_value, str) and field_value.strip() == ""):
-            missing.append(field)
-    
-    completion_percentage = round(((len(required) - len(missing)) / len(required)) * 100) if required else 100
-    
-    return ProfileCompletenessResponse(
-        isComplete=len(missing) == 0,
-        missingFields=missing,
-        completionPercentage=completion_percentage
-    )

@@ -1,16 +1,17 @@
-import os
+"""
+Payment processing routes using Stripe integration.
+Handles subscription management, checkout sessions, and payment verification.
+"""
+
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
-import stripe
 
 from ..utils.auth import verify_token_middleware
 from ..utils.log import logger
+from ..services.payment_service import PaymentService
 
-router = APIRouter()
-
-# Configure Stripe
-stripe.api_key = os.getenv('STRIPE_SECRET_KEY', 'sk_test')
+router = APIRouter(prefix="/api/payments", tags=["payments"])
 
 # Pydantic models
 class CheckoutSessionRequest(BaseModel):
@@ -22,6 +23,10 @@ class CheckoutSessionResponse(BaseModel):
     url: str
 
 
+class PaymentVerificationRequest(BaseModel):
+    session_id: str
+
+
 @router.post("/checkout-session", response_model=CheckoutSessionResponse)
 async def create_checkout_session(
     request: CheckoutSessionRequest,
@@ -29,48 +34,48 @@ async def create_checkout_session(
 ):
     """Create a Stripe checkout session"""
     try:
-        # Determine price based on plan
-        plan_prices = {
-            'freemium': 0,
-            'consultation': 5000,  # $50.00 in cents
-            'enterprise': 10000    # $100.00 in cents
-        }
-        
-        price = plan_prices.get(request.plan, 0)
-        client_url = os.getenv('CLIENT_URL', 'http://localhost:5173')
-        
-        # Create Stripe checkout session
-        session = stripe.checkout.Session.create(
-            payment_method_types=['card'],
-            line_items=[{
-                'price_data': {
-                    'currency': 'usd',
-                    'product_data': {
-                        'name': f'{request.plan} plan'
-                    },
-                    'unit_amount': price
-                },
-                'quantity': 1
-            }],
-            mode='payment',
-            success_url=f'{client_url}/payment-success',
-            cancel_url=f'{client_url}/payment-cancel'
-        )
-        
-        return CheckoutSessionResponse(
-            id=session.id,
-            url=session.url
-        )
-        
-    except stripe.StripeError as e:
-        logger.error(f"Stripe error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Stripe error"
-        )
+        result = await PaymentService.create_checkout_session(request.plan, user)
+        return CheckoutSessionResponse(**result)
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Payment session creation error: {e}")
+        logger.error(f"[PAYMENTS] Checkout session creation failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
+            detail="Failed to create checkout session"
+        )
+
+
+@router.post("/verify")
+async def verify_payment(
+    request: PaymentVerificationRequest,
+    user: dict = Depends(verify_token_middleware)
+):
+    """Verify a payment session"""
+    try:
+        result = await PaymentService.verify_payment(request.session_id)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[PAYMENTS] Payment verification failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to verify payment"
+        )
+
+
+@router.get("/subscription-status")
+async def get_subscription_status(user: dict = Depends(verify_token_middleware)):
+    """Get current user's subscription status"""
+    try:
+        result = await PaymentService.get_subscription_status(user)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[PAYMENTS] Failed to get subscription status: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get subscription status"
         )

@@ -404,3 +404,112 @@ async def init_default_roles():
             description="General user role template",
             permissions=["read_own_data", "update_own_profile"]
         )
+
+    @staticmethod
+    async def update_role(role_id: str, update_data: Dict, user_id: str) -> Dict:
+        """Update an existing role - only owner can update"""
+        collections = get_collections()
+        
+        # Check if role exists
+        role = await RBACService.get_role_by_id(role_id)
+        if not role:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Role not found"
+            )
+
+        # Authorization: only owner can update
+        if role.get("ownerId") != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only update roles you own"
+            )
+
+        # Default roles are immutable
+        if role.get("isDefault"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Default personal roles cannot be modified"
+            )
+
+        # Prepare update data
+        allowed_fields = ["description", "permissions"]
+        filtered_update = {k: v for k, v in update_data.items() if k in allowed_fields and v is not None}
+
+        if not filtered_update:
+            return role  # No updates to apply
+
+        # Update role
+        await collections['roles'].update_one(
+            {"roleId": role_id},
+            {"$set": filtered_update}
+        )
+        
+        # Get updated role
+        updated_role = await RBACService.get_role_by_id(role_id)
+        return updated_role
+
+    @staticmethod
+    async def delete_role(role_id: str, user_id: str) -> Dict:
+        """Delete a role - only owner can delete"""
+        collections = get_collections()
+        
+        # Check if role exists
+        role = await RBACService.get_role_by_id(role_id)
+        if not role:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Role not found"
+            )
+        
+        # Authorization: only owner can delete
+        if role.get("ownerId") != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only delete roles you own"
+            )
+        
+        # Prevent deletion of default personal roles
+        if role.get("isDefault"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete default personal roles"
+            )
+        
+        # Mark role as inactive instead of deleting
+        await collections['roles'].update_one(
+            {"roleId": role_id},
+            {"$set": {"active": False}}
+        )
+        
+        # Remove all user assignments for this role
+        assignments = await collections['userRoles'].find({"roleId": role_id}).to_list(None)
+        for a in assignments:
+            await collections['userRoles'].update_one(
+                {"userId": a.get("userId"), "roleId": role_id}, 
+                {"$set": {"active": False}}
+            )
+        
+        return {"message": "Role deleted successfully"}
+
+    @staticmethod
+    async def list_roles(user_id: str, tenant_id: str = None) -> List[Dict]:
+        """List roles accessible to the user"""
+        collections = get_collections()
+        
+        # Build query - user can see roles they own or system roles
+        query = {
+            "active": True,
+            "$or": [
+                {"ownerId": user_id},  # Roles owned by user
+                {"ownerId": {"$exists": False}},  # System roles
+                {"ownerId": None}  # System roles
+            ]
+        }
+        
+        if tenant_id:
+            query["$or"].append({"tenantId": tenant_id})
+        
+        cursor = collections['roles'].find(query).sort("roleName", 1)
+        roles = await cursor.to_list(length=None)
+        return roles

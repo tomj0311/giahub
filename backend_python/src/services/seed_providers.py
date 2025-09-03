@@ -46,6 +46,7 @@ BASE_AGENT = {
 
 async def seed_providers():
     """Seed initial providers in the database"""
+    logger.info("[SEED] Starting provider seeding process")
     collections = get_collections()
     
     # Check if providers already exist

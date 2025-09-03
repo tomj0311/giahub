@@ -11,6 +11,8 @@ from .model_config import router as model_config_router
 from .tool_config import router as tool_config_router
 from .knowledge import router as knowledge_router
 from .agents import router as agents_router
+from .agent_runtime import router as agent_runtime_router
+from .tenant import router as tenant_router
 
 __all__ = [
     "auth_router", 
@@ -25,5 +27,7 @@ __all__ = [
     "tool_config_router",
     "knowledge_router",
     "agents_router",
+    "agent_runtime_router",
+    "tenant_router",
 ]
 

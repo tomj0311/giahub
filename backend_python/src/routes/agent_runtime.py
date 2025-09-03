@@ -1,3 +1,8 @@
+"""
+Agent Runtime routes for executing and managing agent conversations.
+Handles real-time agent interactions, streaming responses, and conversation management.
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -5,7 +10,6 @@ import json
 import uuid
 from datetime import datetime
 from typing import List, Dict, Any, AsyncGenerator
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
@@ -13,6 +17,7 @@ from ..db import get_collections
 from ..utils.auth import verify_token_middleware
 from ..utils.agent_runtime import AgentRunManager, RunCallbacks
 from ..utils.log import logger
+from ..services.agent_service import AgentService
 
 router = APIRouter(prefix="/api/agent-runtime", tags=["agent-runtime"]) 
 
@@ -37,13 +42,13 @@ async def stream_agent_response(
     
     # Generate correlation ID
     correlation_id = str(uuid.uuid4())
+    logger.info(f"[AGENT_RUNTIME] Starting agent response stream with correlation ID: {correlation_id}")
+    logger.debug(f"[AGENT_RUNTIME] Request parameters - agent: {agent_name}, session: {session_prefix}, user: {user_id}, tenant: {tenant_id}")
     
     # Load agent configuration from database
     try:
-        agent_doc = await _agents_col().find_one({
-            "tenantId": tenant_id,
-            "name": agent_name
-        })
+        logger.info(f"[AGENT_RUNTIME] Loading agent configuration for: {agent_name}")
+        agent_doc = await AgentService.get_agent_by_name(agent_name, {"tenantId": tenant_id})
         
         if not agent_doc:
             logger.error(f"[AGENT_RUNTIME] Agent '{agent_name}' not found for tenant: {tenant_id}")

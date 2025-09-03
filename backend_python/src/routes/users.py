@@ -1,3 +1,8 @@
+"""
+User management routes for registration, authentication, and verification.
+Handles user CRUD operations and related functionality.
+"""
+
 import uuid
 import secrets
 import string
@@ -7,18 +12,13 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel, EmailStr, validator
 
 from ..utils.log import logger
-from ..db import get_collections
-from ..utils.auth import (
-    hash_password, 
-    verify_password, 
-    normalize_email,
-    verify_token_middleware
-)
+from ..utils.auth import verify_token_middleware
 from ..services.email_service import send_registration_email
 from ..services.rbac_service import RBACService
 from ..services.tenant_service import TenantService
+from ..services.user_service import UserService
 
-router = APIRouter()
+router = APIRouter(prefix="/api/users", tags=["users"])
 
 # Pydantic models
 class UserRegistration(BaseModel):
@@ -50,21 +50,6 @@ class VerifyToken(BaseModel):
     token: str
 
 
-# Helper functions
-async def email_exists(email: str) -> bool:
-    """Check if email exists in users collection - no tenant filtering for registration"""
-    target = normalize_email(email)
-    collections = get_collections()
-    user = await collections['users'].find_one({"email": target})
-    return bool(user)
-
-
-def generate_random_password() -> str:
-    """Generate a random password"""
-    alphabet = string.ascii_letters + string.digits
-    return ''.join(secrets.choice(alphabet) for _ in range(12))
-
-
 # Routes
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def register_user(registration: UserRegistration):
@@ -72,207 +57,66 @@ async def register_user(registration: UserRegistration):
     logger.info(f"[USERS] Registration attempt for email: {registration.email}")
     
     # Check for duplicate email
-    if await email_exists(registration.email):
+    if await UserService.email_exists(registration.email):
         logger.warning(f"[USERS] Registration failed - email already exists: {registration.email}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered. Please log in or use a different email."
         )
     
-    logger.debug(f"[USERS] Creating new user for: {registration.email}")
-    # Create user
-    collections = get_collections()
-    hashed_password = hash_password(registration.password)
-    user_id = str(uuid.uuid4())
-    logger.debug(f"[USERS] Generated user ID: {user_id}")
-    
-    # CREATE TENANT FIRST - MANDATORY
     try:
-        logger.info(f"[USERS] Creating default tenant for user: {user_id}")
-        default_tenant = await TenantService.create_default_tenant(registration.email, user_id)
-        logger.info(f"[USERS] Successfully created tenant: {default_tenant['tenantId']}")
+        result = await UserService.register_user(
+            registration.firstName,
+            registration.lastName,
+            registration.email,
+            registration.password
+        )
+        return result
     except Exception as e:
-        logger.error(f"[USERS] CRITICAL: Failed to create tenant for user {user_id}: {e}")
+        logger.error(f"[USERS] Registration failed for {registration.email}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create user organization. Registration aborted."
+            detail="Registration failed"
         )
-    
-    user_data = {
-        "id": user_id,
-        "role": "user",
-        "active": False,
-        "password": hashed_password,
-        "createdAt": datetime.utcnow().timestamp() * 1000,  # milliseconds
-        "firstName": registration.firstName,
-        "lastName": registration.lastName,
-        "name": f"{registration.firstName} {registration.lastName}".strip(),
-        "email": normalize_email(registration.email),
-        "emailOriginal": registration.email,
-        "tenantId": default_tenant["tenantId"]  # FUCKING TENANTID IS HERE NOW
-    }
-    
-    # CRITICAL: Validate tenantId is present before insertion
-    if not user_data.get("tenantId"):
-        await collections['tenants'].delete_one({"ownerId": user_id})  # Clean up tenant
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="User registration failed: tenantId is required"
-        )
-    
-    # Remove None values
-    user_data = {k: v for k, v in user_data.items() if v is not None}
-    
-    await collections['users'].insert_one(user_data)
-    
-    # Create default role for the user (owned by the user) and assign it
-    # CRITICAL: This MUST succeed or registration fails
-    try:
-        default_role = await RBACService.create_default_user_role(
-            registration.email, 
-            owner_id=user_id,
-            tenant_id=default_tenant["tenantId"]
-        )
-        await RBACService.assign_role_to_user(user_id, default_role["roleId"])
-    except Exception as e:
-        # Delete the user and tenant if role creation fails to maintain data consistency
-        await collections['users'].delete_one({"id": user_id})
-        await collections['tenants'].delete_one({"ownerId": user_id})
-        logger.error(f"[USERS] CRITICAL: Failed to create/assign default role for user {user_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create user security profile. Registration aborted."
-        )
-    
-    # Create verification token
-    verification_token = str(uuid.uuid4())
-    await collections['verificationTokens'].insert_one({
-        "token": verification_token,
-        "userId": user_id,
-        "createdAt": datetime.utcnow()
-    })
-    
-    # Send verification email
-    try:
-        await send_registration_email(user_data["email"], "user", verification_token)
-    except Exception as e:
-        logger.warning(f"[USERS] Failed to send verification email to {user_data['email']}: {e}")
-        pass  # Continue even if email fails
-    
-    return {"id": user_id, "verifyToken": verification_token}
 
 
 @router.post("/verify")
 async def verify_user(verification: VerifyToken):
     """Verify user email"""
-    collections = get_collections()
-    
-    # Find verification token - no tenant filtering for verification
-    token_record = await collections['verificationTokens'].find_one({"token": verification.token})
-    if not token_record:
-        logger.warning(f"[USERS] Invalid verification token attempted: {verification.token}")
+    try:
+        result = await UserService.verify_user(verification.token)
+        return result
+    except Exception as e:
+        logger.error(f"[USERS] Verification failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="invalid token"
+            detail="Verification failed"
         )
-    
-    # Find user - no tenant filtering for verification process
-    user = await collections['users'].find_one({"id": token_record.get("userId") or token_record.get("consumerId")})
-    if not user:
-        logger.error(f"[USERS] User not found for verification token: {verification.token}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="user not found"
-        )
-    
-    # Activate user
-    await collections['users'].update_one(
-        {"id": user["id"]},
-        {"$set": {"active": True}}
-    )
-    
-    # Remove verification token
-    await collections['verificationTokens'].delete_one({"token": verification.token})
-    
-    return {"status": "verified"}
 
 
 @router.post("/login")
 async def login_user(login_data: UserLogin):
     """Login user"""
-    collections = get_collections()
-    target_email = normalize_email(login_data.email)
-    
-    # Find user by email - no tenant filtering for authentication
-    user = await collections['users'].find_one({
-        "$or": [
-            {"email": target_email},
-            {"emailOriginal": target_email}
-        ]
-    })
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="invalid credentials"
-        )
-    
-    if not user.get("active"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="not verified"
-        )
-    
-    if not verify_password(login_data.password, user["password"]):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="invalid credentials"
-        )
-    
-    # CRITICAL: Ensure user has a default role assigned
-    # This fixes any legacy users who might not have roles
     try:
-        from ..services.rbac_service import RBACService
-        user_roles = await RBACService.get_user_roles(user["id"])
-        if not user_roles:
-            # User has no roles assigned, create and assign default role
-            default_role = await RBACService.create_default_user_role(user["email"], owner_id=user["id"])
-            await RBACService.assign_role_to_user(user["id"], default_role["roleId"])
+        result = await UserService.authenticate_user(login_data.email, login_data.password)
+        return result
     except Exception as e:
-        logger.error(f"[USERS] Failed to ensure default role for user {user['id']} during login: {e}")
+        logger.error(f"[USERS] Login failed for {login_data.email}: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to validate user security profile."
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed"
         )
-    
-    return {
-        "id": user["id"],
-        "name": user["name"],
-        "email": user["email"],
-        "role": "user"
-    }
 
 
 @router.get("/")
 async def get_users(user: dict = Depends(verify_token_middleware)):
     """Get list of users (authenticated users only) - tenant filtered"""
-    collections = get_collections()
-    
-    # Get user's tenant_id for filtering
-    user_id = user.get("id")
-    if not user_id:
+    try:
+        users = await UserService.get_users_by_tenant(user)
+        return users
+    except Exception as e:
+        logger.error(f"[USERS] Failed to get users: {e}")
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid user"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch users"
         )
-    
-    # Apply tenant filtering
-    from ..utils.tenant_middleware import tenant_filter_query
-    query = await tenant_filter_query(user_id, {})
-    
-    users = await collections['users'].find(
-        query,
-        {"_id": 0, "password": 0}
-    ).to_list(None)
-    
-    return users

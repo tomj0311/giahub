@@ -70,9 +70,9 @@ app = FastAPI(
     title="GIA Platform API",
     description="AI-powered platform API with authentication, role management, and agent capabilities",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
+    docs_url=None,  # Disable docs to avoid Pydantic schema generation error
+    redoc_url=None,  # Disable redoc
+    openapi_url=None,  # Disable OpenAPI
     lifespan=lifespan
 )
 
