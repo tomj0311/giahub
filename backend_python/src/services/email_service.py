@@ -57,7 +57,8 @@ async def send_email(to: str, subject: str, html_content: str, text_content: Opt
             logger.debug("[EMAIL] Configuring for Gmail SMTP")
             smtp_kwargs.update({
                 'port': int(os.getenv('SMTP_PORT', 465)),
-                'use_tls': True
+                'use_tls': True,
+                'start_tls': False  # For port 465, use SSL not STARTTLS
             })
         else:
             logger.debug("[EMAIL] Configuring for standard SMTP")

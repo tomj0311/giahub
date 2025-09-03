@@ -57,7 +57,7 @@ async def register_user(registration: UserRegistration):
     logger.info(f"[USERS] Registration attempt for email: {registration.email}")
     
     # Check for duplicate email
-    if await UserService.email_exists(registration.email):
+    if await UserService.check_email_exists(registration.email):
         logger.warning(f"[USERS] Registration failed - email already exists: {registration.email}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -65,12 +65,13 @@ async def register_user(registration: UserRegistration):
         )
     
     try:
-        result = await UserService.register_user(
-            registration.firstName,
-            registration.lastName,
-            registration.email,
-            registration.password
-        )
+        user_data = {
+            "firstName": registration.firstName,
+            "lastName": registration.lastName,
+            "email": registration.email,
+            "password": registration.password
+        }
+        result = await UserService.register_user(user_data)
         return result
     except Exception as e:
         logger.error(f"[USERS] Registration failed for {registration.email}: {e}")
@@ -84,7 +85,7 @@ async def register_user(registration: UserRegistration):
 async def verify_user(verification: VerifyToken):
     """Verify user email"""
     try:
-        result = await UserService.verify_user(verification.token)
+        result = await UserService.verify_user_email(verification.token)
         return result
     except Exception as e:
         logger.error(f"[USERS] Verification failed: {e}")
