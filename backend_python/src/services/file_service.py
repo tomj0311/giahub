@@ -213,6 +213,27 @@ class FileService:
         except Exception as e:
             logger.warning(f"[FILE] Failed to cleanup temp file {file_path}: {e}")
     
+    @staticmethod
+    async def upload_file_content(object_name: str, content: bytes, content_type: str = None) -> bool:
+        """Upload file content directly to MinIO with given object name"""
+        try:
+            logger.info(f"[FILE] Uploading content to object: {object_name}")
+            
+            # For now, use the placeholder MinIO upload
+            # TODO: Implement actual MinIO client upload when MinIO is configured
+            success = await FileService._upload_to_minio(object_name, content)
+            
+            if success:
+                logger.info(f"[FILE] Successfully uploaded content to {object_name}")
+                return True
+            else:
+                logger.error(f"[FILE] Failed to upload content to {object_name}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"[FILE] Error uploading content to {object_name}: {e}")
+            return False
+    
     # MinIO client methods (placeholder implementations)
     @staticmethod
     async def _upload_to_minio(file_path: str, content: bytes) -> bool:

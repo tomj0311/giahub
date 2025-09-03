@@ -104,10 +104,15 @@ class ToolConfigService:
         logger.debug(f"[TOOL] Query filter: {query}")
         
         collection = cls._get_tool_config_collection()
-        configs = await collection.find(
-            query,
-            {"_id": 0}
-        ).to_list(None)
+        configs_cursor = collection.find(query)
+        configs = []
+        
+        async for config in configs_cursor:
+            # Convert ObjectId to string for the id field
+            config_dict = dict(config)
+            config_dict["id"] = str(config_dict.pop("_id"))
+            configs.append(config_dict)
+        
         logger.info(f"[TOOL] Retrieved {len(configs)} tool configs for tenant: {tenant_id}")
         
         return configs
@@ -135,45 +140,70 @@ class ToolConfigService:
         return config
 
     @classmethod
-    async def update_tool_config(cls, name: str, updates: dict, user: dict) -> dict:
-        """Update a tool configuration"""
+    async def update_tool_config(cls, config_id: str, updates: dict, user: dict) -> dict:
+        """Update a tool configuration by ID"""
+        from bson import ObjectId
         tenant_id = await cls.validate_tenant_access(user)
-        logger.info(f"[TOOL] Updating tool config '{name}' for tenant: {tenant_id}")
+        logger.info(f"[TOOL] Updating tool config ID '{config_id}' for tenant: {tenant_id}")
         logger.debug(f"[TOOL] Update payload: {updates}")
         
-        # Check if config exists
-        await cls.get_tool_config_by_name(name, user)
+        try:
+            object_id = ObjectId(config_id)
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid configuration ID"
+            )
         
         # Add updated timestamp
         updates["updated_at"] = datetime.utcnow()
         
         collection = cls._get_tool_config_collection()
         result = await collection.update_one(
-            {"name": name, "tenantId": tenant_id},
+            {"_id": object_id, "tenantId": tenant_id},
             {"$set": updates}
         )
         
-        if result.modified_count == 0:
-            logger.warning(f"[TOOL] Update made no changes or config not found: name='{name}', tenant='{tenant_id}'")
+        if result.matched_count == 0:
+            logger.warning(f"[TOOL] Config not found: id='{config_id}', tenant='{tenant_id}'")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Tool configuration not found or no changes made"
+                detail="Tool configuration not found"
             )
         
-        logger.info(f"[TOOL] Successfully updated tool config '{name}' for tenant: {tenant_id}")
+        logger.info(f"[TOOL] Successfully updated tool config '{config_id}' for tenant: {tenant_id}")
         return {"message": "Tool configuration updated successfully"}
 
     @classmethod
-    async def delete_tool_config(cls, name: str, user: dict) -> dict:
-        """Delete a tool configuration"""
+    async def delete_tool_config(cls, config_id: str, user: dict) -> dict:
+        """Delete a tool configuration by ID"""
+        from bson import ObjectId
         tenant_id = await cls.validate_tenant_access(user)
-        logger.info(f"[TOOL] Deleting tool config '{name}' for tenant: {tenant_id}")
+        logger.info(f"[TOOL] Deleting tool config ID '{config_id}' for tenant: {tenant_id}")
+        
+        try:
+            object_id = ObjectId(config_id)
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid configuration ID"
+            )
         
         collection = cls._get_tool_config_collection()
         result = await collection.delete_one({
-            "name": name,
+            "_id": object_id,
             "tenantId": tenant_id
         })
+        
+        if result.deleted_count == 0:
+            logger.warning(f"[TOOL] Delete failed - config not found: id='{config_id}', tenant='{tenant_id}'")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Tool configuration not found"
+            )
+        
+        logger.info(f"[TOOL] Successfully deleted tool config '{config_id}' for tenant: {tenant_id}")
+        return {"message": "Tool configuration deleted successfully"}
         
         if result.deleted_count == 0:
             logger.warning(f"[TOOL] Tool config not found for deletion: name='{name}', tenant='{tenant_id}'")

@@ -75,3 +75,16 @@ async def delete_agent(name: str, user: dict = Depends(verify_token_middleware))
     except Exception as e:
         logger.error(f"[AGENTS] Error deleting agent {name}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/id/{agent_id}")
+async def delete_agent_by_id(agent_id: str, user: dict = Depends(verify_token_middleware)):
+    """Delete agent by ID."""
+    logger.info(f"[AGENTS] Deleting agent by ID: {agent_id}")
+    try:
+        result = await AgentService.delete_agent_by_id(agent_id, user)
+        logger.info(f"[AGENTS] Successfully deleted agent by ID: {agent_id}")
+        return result
+    except Exception as e:
+        logger.error(f"[AGENTS] Error deleting agent by ID {agent_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))

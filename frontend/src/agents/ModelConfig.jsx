@@ -110,37 +110,53 @@ export default function ModelConfig({ user }) {
     };
 
     const loadCategories = async () => {
+        console.log('🏷️ LOADING CATEGORIES...');
         try {
             setLoadingCategories(true);
             const response = await apiCall(`/api/model-config/categories`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
+            console.log('📡 Load categories response:', response.status, response.ok);
             if (response.ok) {
                 const data = await response.json();
+                console.log('📄 Categories data:', data);
                 setCategories(data.categories || []);
+                console.log('✅ Categories loaded successfully');
+            } else {
+                console.log('❌ Failed to load categories - bad response');
             }
         } catch (error) {
+            console.log('💥 ERROR loading categories:', error);
             console.error('Failed to load categories:', error);
         } finally {
             setLoadingCategories(false);
+            console.log('🏁 Load categories finished');
         }
     };
 
     const loadExistingConfigs = async () => {
+        console.log('🔄 LOADING EXISTING CONFIGS...');
         try {
             const resp = await apiCall(`/api/model-config/configs`, {
                 headers: {
                     ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 }
             });
+            console.log('📡 Load configs response:', resp.status, resp.ok);
             if (resp.ok) {
                 const data = await resp.json();
+                console.log('📄 Configs data:', data);
                 setExistingConfigs(data.configurations || []);
+                console.log('✅ Configs loaded successfully');
+            } else {
+                console.log('❌ Failed to load configs - bad response');
             }
         } catch (e) {
+            console.log('💥 ERROR loading configs:', e);
             console.error('Failed to load existing configurations:', e);
         } finally {
             setLoadingConfigs(false);
+            console.log('🏁 Load configs finished');
         }
     };
 
@@ -153,9 +169,13 @@ export default function ModelConfig({ user }) {
 
     // Run these functions only once on mount
     useEffect(() => {
+        console.log('🚀 COMPONENT MOUNTED - Starting initialization...');
+        console.log('User:', user);
+        console.log('Token available:', !!token);
         discoverComponents();
         loadExistingConfigs();
         loadCategories();
+        console.log('✅ Initialization functions called');
     }, []);
 
     function ensureIntrospection(path, kind) {
@@ -164,8 +184,11 @@ export default function ModelConfig({ user }) {
     }
 
     function loadExistingConfig(configName) {
+        console.log('🔍 LOADING EXISTING CONFIG:', configName);
         const config = existingConfigs.find(c => c.name === configName);
+        console.log('Found config:', config);
         if (config) {
+            console.log('✅ Config found, setting form...');
             setForm({
                 ...config,
                 id: config.id,
@@ -178,84 +201,113 @@ export default function ModelConfig({ user }) {
             if (config.model) {
                 ensureIntrospection(config.model, 'model');
             }
+            console.log('✅ Form set to edit mode');
         } else {
-            setForm({
-                id: null,
-                name: configName,
-                category: '',
-                model: '',
-                model_params: {}
-            });
+            console.log('⚠️ Config not found, creating new...');
+            setForm({ id: null, name: configName, category: '', model: '', model_params: {} });
             setIsEditMode(false);
+            console.log('✅ Form set to create mode');
         }
     }
 
     async function saveModelConfig() {
+        console.log('🚀 SAVE FUNCTION STARTED');
+        console.log('Form data:', form);
+        console.log('Token:', token ? 'Present' : 'Missing');
+        console.log('IsEditMode:', isEditMode);
+        
         if (!form.name || !form.model) {
+            console.log('❌ VALIDATION FAILED - Missing name or model');
             showError('Name and model selection are required');
             return;
         }
-
+        
+        console.log('✅ VALIDATION PASSED');
         setSaveState(s => ({ ...s, loading: true }));
-
+        console.log('💾 Save state set to loading');
+        
         const configToSave = {
             name: form.name,
             category: form.category || '',
             model: form.model,
             model_params: form.model_params,
-            type: 'model_config'
+            provider: form.model, // Add provider field - same as model
+            type: 'modelConfig'
         };
-
+        console.log('📦 Config to save:', configToSave);
+        
         try {
+            console.log('🌐 Starting API call...');
             let resp;
             if (isEditMode && form.id) {
-                // Update existing configuration
+                console.log('📝 UPDATE mode - ID:', form.id);
                 resp = await apiCall(`/api/model-config/configs/${form.id}`, {
                     method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                    },
+                    headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
                     body: JSON.stringify(configToSave)
                 });
             } else {
-                // Create new configuration
+                console.log('✨ CREATE mode');
                 resp = await apiCall(`/api/model-config/configs`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                    },
+                    headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
                     body: JSON.stringify(configToSave)
                 });
             }
-
+            console.log('📡 API response received:', resp.status, resp.ok);
+            
             const data = await resp.json().catch(() => ({}));
+            console.log('📄 Response data:', data);
+            console.log('📄 Response data detail:', JSON.stringify(data.detail, null, 2));
+            
             if (!resp.ok) {
-                showError(data.detail || `Save failed (HTTP ${resp.status})`);
+                console.log('❌ API ERROR:', data.detail || `Save failed (HTTP ${resp.status})`);
+                
+                // Handle validation errors (422) which come as an array
+                let errorMessage = `Save failed (HTTP ${resp.status})`;
+                if (data.detail) {
+                    if (Array.isArray(data.detail)) {
+                        // Extract error messages from validation error array
+                        errorMessage = data.detail.map(err => {
+                            if (typeof err === 'object' && err.msg) {
+                                return `${err.loc ? err.loc.join('.') + ': ' : ''}${err.msg}`;
+                            }
+                            return String(err);
+                        }).join(', ');
+                    } else {
+                        errorMessage = data.detail;
+                    }
+                }
+                
+                console.log('📝 Formatted error message:', errorMessage);
+                showError(errorMessage);
                 setSaveState({ loading: false });
+                console.log('🔄 Save state reset to not loading');
                 return;
             }
-
+            
             const action = isEditMode ? 'updated' : 'saved';
+            console.log('✅ SUCCESS! Action:', action);
             showSuccess(`Model configuration "${form.name}" ${action} successfully`);
             setSaveState({ loading: false });
-
-            // Reload existing configs and reset form after successful save
+            console.log('🔄 Save state reset to not loading');
+            
+            console.log('🔄 Reloading configs and categories...');
             loadExistingConfigs();
             loadCategories();
-            setForm({
-                id: null,
-                name: '',
-                category: '',
-                model: '',
-                model_params: {}
-            });
+            
+            console.log('🧹 Resetting form...');
+            setForm({ id: null, name: '', category: '', model: '', model_params: {} });
             setIsEditMode(false);
             setDialogOpen(false);
+            console.log('✨ SAVE FUNCTION COMPLETED SUCCESSFULLY');
+            
         } catch (e) {
+            console.log('💥 CATCH BLOCK ERROR:', e);
+            console.error('Full error object:', e);
             showError(e.message || 'Network error');
             setSaveState({ loading: false });
+            console.log('🔄 Save state reset to not loading (error)');
         }
     }
 
@@ -265,9 +317,7 @@ export default function ModelConfig({ user }) {
             setSaveState({ loading: true });
             const resp = await apiCall(`/api/model-config/configs/${id}`, {
                 method: 'DELETE',
-                headers: {
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                }
+                headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
             });
             const data = await resp.json().catch(() => ({}));
             if (!resp.ok) {
@@ -286,14 +336,18 @@ export default function ModelConfig({ user }) {
     }
 
     const openCreate = () => {
+        console.log('➕ OPENING CREATE DIALOG');
         setForm({ id: null, name: '', category: '', model: '', model_params: {} });
         setIsEditMode(false);
         setDialogOpen(true);
+        console.log('✅ Create dialog opened');
     };
 
     const openEdit = (configName) => {
+        console.log('✏️ OPENING EDIT DIALOG for:', configName);
         loadExistingConfig(configName);
         setDialogOpen(true);
+        console.log('✅ Edit dialog opened');
     };
 
     const modelIntro = form.model ? introspectCache[form.model] : null;
@@ -370,7 +424,7 @@ export default function ModelConfig({ user }) {
             <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
                 <DialogTitle>{isEditMode ? 'Edit Model Configuration' : 'Create Model Configuration'}</DialogTitle>
                 <DialogContent dividers>
-                    <Stack spacing={1} sx={{ mt: 1 }}>
+                    <Stack spacing={1}>
                         <Typography variant="body2" color="text.secondary">
                             {existingConfigs.length > 0 && 'Start typing to search existing configurations or enter a new name.'}
                         </Typography>
@@ -420,23 +474,14 @@ export default function ModelConfig({ user }) {
                             disabled={saveState.loading}
                             onChange={(e, val) => {
                                 setForm(f => ({ ...f, category: val || '' }));
-                                if (val && !categories.includes(val)) {
-                                    setCategories(prev => [...prev, val]);
-                                }
+                                if (val && !categories.includes(val)) setCategories(prev => [...prev, val]);
                             }}
                             onInputChange={(e, val) => {
                                 setForm(f => ({ ...f, category: val || '' }));
-                                if (val && !categories.includes(val)) {
-                                    setCategories(prev => [...prev, val]);
-                                }
+                                if (val && !categories.includes(val)) setCategories(prev => [...prev, val]);
                             }}
                             renderInput={(params) => (
-                                <TextField
-                                    {...params}
-                                    label="Category"
-                                    placeholder="Enter or select a category..."
-                                    size="small"
-                                />
+                                <TextField {...params} label="Category" placeholder="Enter or select a category..." size="small" />
                             )}
                         />
 
@@ -453,13 +498,7 @@ export default function ModelConfig({ user }) {
                                 }}
                                 renderInput={(params) => <TextField {...params} label="Select Model" />}
                             />
-                            <Button
-                                variant="gradientBorder"
-                                size="medium"
-                                onClick={discoverComponents}
-                            >
-                                Refresh
-                            </Button>
+                            <Button variant="gradientBorder" size="medium" onClick={discoverComponents}>Refresh</Button>
                         </Box>
 
                         {!modelIntro && form.model && (
@@ -476,11 +515,7 @@ export default function ModelConfig({ user }) {
                                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
                                     Model Parameters ({modelIntro.class_name})
                                 </Typography>
-                                <Box sx={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                                    gap: 2
-                                }}>
+                                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2 }}>
                                     {(modelIntro.formatted_params || []).map(paramFormatted => {
                                         const paramName = paramFormatted.split(':')[0].trim();
                                         const typeMatch = paramFormatted.match(/:\s*([^=\s]+)/);
@@ -498,11 +533,8 @@ export default function ModelConfig({ user }) {
                                         const hasDefault = defaultRaw !== '' && defaultRaw.toLowerCase() !== 'none';
                                         const placeholderText = hasDefault ? `Default: ${defaultRaw}` : `Enter ${paramName}`;
                                         let gridColumn = 'span 1';
-                                        if (paramType.includes('int') || paramType.includes('float') || paramType.includes('bool')) {
-                                            gridColumn = 'span 1';
-                                        } else if (paramType.includes('str') && (paramName.includes('key') || paramName.includes('token') || paramName.includes('url'))) {
-                                            gridColumn = 'span 2';
-                                        }
+                                        if (paramType.includes('int') || paramType.includes('float') || paramType.includes('bool')) gridColumn = 'span 1';
+                                        else if (paramType.includes('str') && (paramName.includes('key') || paramName.includes('token') || paramName.includes('url'))) gridColumn = 'span 2';
                                         return (
                                             <TextField
                                                 key={paramName}
@@ -510,10 +542,7 @@ export default function ModelConfig({ user }) {
                                                 label={paramName}
                                                 InputLabelProps={{ shrink: true }}
                                                 value={form.model_params[paramName] || ''}
-                                                onChange={(e) => setForm(f => ({
-                                                    ...f,
-                                                    model_params: { ...f.model_params, [paramName]: e.target.value }
-                                                }))}
+                                                onChange={(e) => setForm(f => ({ ...f, model_params: { ...f.model_params, [paramName]: e.target.value } }))}
                                                 placeholder={placeholderText}
                                                 sx={{ gridColumn }}
                                                 type={paramType.includes('int') || paramType.includes('float') ? 'number' : 'text'}

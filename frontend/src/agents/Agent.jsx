@@ -49,6 +49,7 @@ export default function Agent({ user }) {
   const [existingAgents, setExistingAgents] = useState([])
 
   const [form, setForm] = useState({
+    id: null,
     name: '',
     category: '',
     description: '',
@@ -63,6 +64,7 @@ export default function Agent({ user }) {
 
   const resetForm = () => {
     setForm({
+      id: null,
       name: '',
       category: '',
       description: '',
@@ -106,10 +108,10 @@ export default function Agent({ user }) {
 
   useEffect(() => { fetchAll() }, [])
 
-  const loadAgent = (name) => {
-    const agent = existingAgents.find(a => a.name === name)
+  const loadAgent = (agent) => {
     if (!agent) return
     setForm({
+      id: agent.id || null,
       name: agent.name || '',
       category: agent.category || '',
       description: agent.description || '',
@@ -144,17 +146,17 @@ export default function Agent({ user }) {
   }
 
   const handleDelete = async () => {
-    if (!form.name) return
+    if (!form.id) return
     setSaving(true)
     try {
-      const resp = await apiCall(`/api/agents/${encodeURIComponent(form.name)}`, {
+      const resp = await apiCall(`/api/agents/id/${form.id}`, {
         method: 'DELETE',
         headers: authHeaders,
       })
       const data = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(data.detail || `Delete failed (${resp.status})`)
       showSuccess(`Agent ${form.name} deleted`)
-      setForm(f => ({ ...f, name: '' }))
+      setForm(f => ({ ...f, id: null, name: '' }))
       await fetchAll()
       setDialogOpen(false)
     } catch (e) {
@@ -164,17 +166,17 @@ export default function Agent({ user }) {
     }
   }
 
-  const handleRowDelete = async (name) => {
-    if (!name) return
+  const handleRowDelete = async (agent) => {
+    if (!agent?.id) return
     try {
       setSaving(true)
-      const resp = await apiCall(`/api/agents/${encodeURIComponent(name)}`, {
+      const resp = await apiCall(`/api/agents/id/${agent.id}`, {
         method: 'DELETE',
         headers: authHeaders,
       })
       const data = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(data.detail || `Delete failed (${resp.status})`)
-      showSuccess(`Agent ${name} deleted`)
+      showSuccess(`Agent ${agent.name} deleted`)
       await fetchAll()
     } catch (e) {
       showError(e.message || 'Failed to delete')
@@ -188,8 +190,8 @@ export default function Agent({ user }) {
     setDialogOpen(true)
   }
 
-  const openEdit = (name) => {
-    loadAgent(name)
+  const openEdit = (agent) => {
+    loadAgent(agent)
     setDialogOpen(true)
   }
 
@@ -258,7 +260,7 @@ export default function Agent({ user }) {
                       ? `History (${a.memory?.history?.num ?? 3})`
                       : 'Off'
                     return (
-                      <TableRow key={a.name} hover>
+                      <TableRow key={a.id || a.name} hover>
                         <TableCell>
                           <Typography variant="body2" fontWeight="medium">{a.name}</Typography>
                           {a.description && (
@@ -286,10 +288,10 @@ export default function Agent({ user }) {
                           <Chip size="small" label={mem} color={a.memory?.history?.enabled ? 'primary' : 'default'} />
                         </TableCell>
                         <TableCell align="right">
-                          <IconButton size="small" color="primary" onClick={() => openEdit(a.name)}>
+                          <IconButton size="small" color="primary" onClick={() => openEdit(a)}>
                             <EditIcon size={16} />
                           </IconButton>
-                          <IconButton size="small" color="error" onClick={() => handleRowDelete(a.name)}>
+                          <IconButton size="small" color="error" onClick={() => handleRowDelete(a)}>
                             <DeleteIcon size={16} />
                           </IconButton>
                         </TableCell>
@@ -304,7 +306,7 @@ export default function Agent({ user }) {
       </Card>
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{form.name ? 'Edit Agent' : 'Create Agent'}</DialogTitle>
+        <DialogTitle>{form.id ? 'Edit Agent' : 'Create Agent'}</DialogTitle>
         <DialogContent dividers>
           <Grid container spacing={3} sx={{ mt: 0 }}>
             <Grid item xs={12} md={6}>
@@ -315,11 +317,17 @@ export default function Agent({ user }) {
                   value={form.name}
                   onChange={(_, v) => {
                     setForm(f => ({ ...f, name: v || '' }))
-                    if (v && existingAgents.some(a => a.name === v)) loadAgent(v)
+                    if (v && existingAgents.some(a => a.name === v)) {
+                      const agent = existingAgents.find(a => a.name === v)
+                      if (agent) loadAgent(agent)
+                    }
                   }}
                   onInputChange={(_, v) => {
                     setForm(f => ({ ...f, name: v || '' }))
-                    if (existingAgents.some(a => a.name === v)) loadAgent(v)
+                    if (existingAgents.some(a => a.name === v)) {
+                      const agent = existingAgents.find(a => a.name === v)
+                      if (agent) loadAgent(agent)
+                    }
                   }}
                   renderInput={(p) => <TextField {...p} label="Agent Name" size="small" required />}
                 />
@@ -394,7 +402,7 @@ export default function Agent({ user }) {
           </Grid>
         </DialogContent>
         <DialogActions>
-          {form.name && (
+          {form.id && (
             <Button color="error" onClick={handleDelete} disabled={saving} startIcon={<DeleteIcon size={16} />}>Delete</Button>
           )}
           <Box sx={{ flex: 1 }} />

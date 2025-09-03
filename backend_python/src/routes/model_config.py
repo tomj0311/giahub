@@ -17,6 +17,7 @@ class ModelConfigCreate(BaseModel):
     name: str
     provider: str
     model: str
+    category: str = ""
     description: str = ""
     parameters: Dict[str, Any] = {}
     api_key: str = ""
@@ -26,6 +27,7 @@ class ModelConfigCreate(BaseModel):
 class ModelConfigUpdate(BaseModel):
     provider: str = None
     model: str = None
+    category: str = None
     description: str = None
     parameters: Dict[str, Any] = None
     api_key: str = None
@@ -46,10 +48,10 @@ async def list_model_configs(user: dict = Depends(verify_token_middleware)):
     return {"configurations": configs}
 
 
-@router.get("/configs/{config_name}")
-async def get_model_config(config_name: str, user: dict = Depends(verify_token_middleware)):
+@router.get("/configs/{config_id}")
+async def get_model_config(config_id: str, user: dict = Depends(verify_token_middleware)):
     """Get specific model configuration"""
-    config = await ModelConfigService.get_model_config(config_name, user)
+    config = await ModelConfigService.get_model_config_by_id(config_id, user)
     return config
 
 
@@ -63,25 +65,25 @@ async def create_model_config(
     return result
 
 
-@router.put("/configs/{config_name}")
+@router.put("/configs/{config_id}")
 async def update_model_config(
-    config_name: str,
+    config_id: str,
     config_data: ModelConfigUpdate,
     user: dict = Depends(verify_token_middleware)
 ):
     """Update existing model configuration"""
-    result = await ModelConfigService.update_model_config(
-        config_name, 
+    result = await ModelConfigService.update_model_config_by_id(
+        config_id, 
         config_data.dict(exclude_unset=True), 
         user
     )
     return result
 
 
-@router.delete("/configs/{config_name}")
-async def delete_model_config(config_name: str, user: dict = Depends(verify_token_middleware)):
+@router.delete("/configs/{config_id}")
+async def delete_model_config(config_id: str, user: dict = Depends(verify_token_middleware)):
     """Delete model configuration"""
-    result = await ModelConfigService.delete_model_config(config_name, user)
+    result = await ModelConfigService.delete_model_config_by_id(config_id, user)
     return result
 
 

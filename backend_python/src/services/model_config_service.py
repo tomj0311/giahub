@@ -55,6 +55,7 @@ class ModelConfigService:
                     "name": doc.get("name"),
                     "provider": doc.get("provider"),
                     "model": doc.get("model"),
+                    "category": doc.get("category", ""),
                     "description": doc.get("description", ""),
                     "parameters": doc.get("parameters", {}),
                     "api_key_configured": bool(doc.get("api_key")),
@@ -90,6 +91,7 @@ class ModelConfigService:
                 "name": doc.get("name"),
                 "provider": doc.get("provider"),
                 "model": doc.get("model"),
+                "category": doc.get("category", ""),
                 "description": doc.get("description", ""),
                 "parameters": doc.get("parameters", {}),
                 "api_key_configured": bool(doc.get("api_key")),
@@ -132,7 +134,7 @@ class ModelConfigService:
                 raise HTTPException(status_code=409, detail="Model configuration with this name already exists")
             
             # Validate provider and model
-            cls._validate_provider_model(provider, model)
+            # cls._validate_provider_model(provider, model)  # REMOVED - No validation needed
             
             # Create configuration record
             record = {
@@ -141,6 +143,7 @@ class ModelConfigService:
                 "name": name,
                 "provider": provider,
                 "model": model,
+                "category": config_data.get("category", ""),
                 "description": config_data.get("description", ""),
                 "parameters": config_data.get("parameters", {}),
                 "api_key": config_data.get("api_key", ""),  # Store encrypted in production
@@ -173,16 +176,10 @@ class ModelConfigService:
             }
             
             # Only update allowed fields
-            allowed_fields = ["provider", "model", "description", "parameters", "api_key", "is_active"]
+            allowed_fields = ["provider", "model", "category", "description", "parameters", "api_key", "is_active"]
             for field in allowed_fields:
                 if field in config_data:
-                    if field in ["provider", "model"] and config_data[field]:
-                        # Validate provider/model combination
-                        provider = config_data.get("provider") or update_data.get("provider")
-                        model = config_data.get("model") or update_data.get("model")
-                        if provider and model:
-                            cls._validate_provider_model(provider, model)
-                    
+                    # No validation needed - allow any provider/model combination
                     update_data[field] = config_data[field]
             
             result = await cls._get_model_config_collection().update_one(
@@ -241,6 +238,133 @@ class ModelConfigService:
             raise
         except Exception as e:
             logger.error(f"[MODEL] Failed to delete model config '{config_name}': {e}")
+            raise HTTPException(status_code=500, detail="Failed to delete model configuration")
+    
+    # ID-based methods (preferred)
+    @classmethod
+    async def get_model_config_by_id(cls, config_id: str, user: dict) -> Dict[str, Any]:
+        """Get specific model configuration by ID"""
+        from bson import ObjectId
+        tenant_id = await cls.validate_tenant_access(user)
+        
+        try:
+            doc = await cls._get_model_config_collection().find_one({
+                "_id": ObjectId(config_id),
+                "tenantId": tenant_id
+            })
+            
+            if not doc:
+                raise HTTPException(status_code=404, detail="Model configuration not found")
+            
+            config = {
+                "id": str(doc["_id"]),
+                "name": doc.get("name"),
+                "provider": doc.get("provider"),
+                "model": doc.get("model"),
+                "category": doc.get("category", ""),
+                "description": doc.get("description", ""),
+                "parameters": doc.get("parameters", {}),
+                "api_key_configured": bool(doc.get("api_key")),
+                "created_at": doc.get("created_at"),
+                "updated_at": doc.get("updated_at"),
+                "is_active": doc.get("is_active", True)
+            }
+            
+            return config
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[MODEL] Failed to get model config {config_id}: {e}")
+            raise HTTPException(status_code=500, detail="Failed to retrieve model configuration")
+    
+    @classmethod
+    async def update_model_config_by_id(cls, config_id: str, config_data: Dict[str, Any], user: dict) -> Dict[str, str]:
+        """Update existing model configuration by ID"""
+        from bson import ObjectId
+        tenant_id = await cls.validate_tenant_access(user)
+        
+        logger.info(f"[MODEL] Updating model config '{config_id}' for tenant: {tenant_id}")
+        
+        try:
+            update_data = {
+                "updated_at": datetime.utcnow()
+            }
+            
+            # Only update allowed fields
+            allowed_fields = ["name", "provider", "model", "category", "description", "parameters", "api_key", "is_active"]
+            for field in allowed_fields:
+                if field in config_data:
+                    update_data[field] = config_data[field]
+            
+            result = await cls._get_model_config_collection().update_one(
+                {
+                    "_id": ObjectId(config_id),
+                    "tenantId": tenant_id
+                },
+                {"$set": update_data}
+            )
+            
+            if result.matched_count == 0:
+                raise HTTPException(status_code=404, detail="Model configuration not found")
+            
+            logger.info(f"[MODEL] Successfully updated model config '{config_id}'")
+            return {"message": "Model configuration updated"}
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[MODEL] Failed to update model config '{config_id}': {e}")
+            raise HTTPException(status_code=500, detail="Failed to update model configuration")
+    
+    @classmethod
+    async def delete_model_config_by_id(cls, config_id: str, user: dict) -> Dict[str, str]:
+        """Delete model configuration by ID"""
+        from bson import ObjectId
+        tenant_id = await cls.validate_tenant_access(user)
+        
+        logger.info(f"[MODEL] Deleting model config '{config_id}' for tenant: {tenant_id}")
+        
+        try:
+            # First get the config to check if it exists and get its name
+            doc = await cls._get_model_config_collection().find_one({
+                "_id": ObjectId(config_id),
+                "tenantId": tenant_id
+            })
+            
+            if not doc:
+                raise HTTPException(status_code=404, detail="Model configuration not found")
+            
+            config_name = doc.get("name")
+            
+            # Check if config is being used by any agents
+            agents_collection = get_collections()["agents"]
+            agents_using_config = await agents_collection.count_documents({
+                "tenantId": tenant_id,
+                "model.name": config_name
+            })
+            
+            if agents_using_config > 0:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Cannot delete model configuration. It is being used by {agents_using_config} agent(s)"
+                )
+            
+            result = await cls._get_model_config_collection().delete_one({
+                "_id": ObjectId(config_id),
+                "tenantId": tenant_id
+            })
+            
+            if result.deleted_count == 0:
+                raise HTTPException(status_code=404, detail="Model configuration not found")
+            
+            logger.info(f"[MODEL] Successfully deleted model config '{config_id}'")
+            return {"message": f"Model configuration deleted"}
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[MODEL] Failed to delete model config '{config_id}': {e}")
             raise HTTPException(status_code=500, detail="Failed to delete model configuration")
     
     @staticmethod

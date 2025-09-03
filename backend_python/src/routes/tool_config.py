@@ -44,7 +44,7 @@ async def get_tool_configs(
     """List tool configurations in user's tenant"""
     try:
         configs = await ToolConfigService.get_tool_configs(user, category)
-        return configs
+        return {"configurations": configs}
     except HTTPException:
         raise
     except Exception as e:

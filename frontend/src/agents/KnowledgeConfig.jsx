@@ -36,6 +36,7 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react'
 import { apiCall } from '../config/api'
+import { useSnackbar } from '../contexts/SnackbarContext'
 
 const api = {
   async getDefaults(token) {
@@ -111,16 +112,22 @@ const api = {
 export default function KnowledgeConfig({ user }) {
   const theme = useTheme()
   const token = user?.token
+  const { showSuccess, showError, showWarning } = useSnackbar()
 
   const [loading, setLoading] = useState(true)
   const [collections, setCollections] = useState([])
+  const [existingConfigs, setExistingConfigs] = useState([]) // Full collection configurations like ToolConfig
+  const [loadingConfigs, setLoadingConfigs] = useState(true)
   const [categories, setCategories] = useState([])
+  const [loadingCategories, setLoadingCategories] = useState(false)
   const [components, setComponents] = useState({ chunking: [] })
   const [introspection, setIntrospection] = useState({})
   const [defaults, setDefaults] = useState({ chunk_size: 5000, chunk_overlap: 0 })
   const [isEdit, setIsEdit] = useState(false)
+  const [isEditMode, setIsEditMode] = useState(false)
 
   const [form, setForm] = useState({
+    id: null,
     name: '',
     category: '',
     chunk_strategy: '',
@@ -132,43 +139,98 @@ export default function KnowledgeConfig({ user }) {
   const [pendingFiles, setPendingFiles] = useState([])
   const [saveBusy, setSaveBusy] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [saveState, setSaveState] = useState({ loading: false })
+
+  const loadCategories = async () => {
+    try {
+      setLoadingCategories(true)
+      const response = await api.getCategories(token)
+      setCategories(response.categories || [])
+    } catch (error) {
+      console.error('[KnowledgeConfig] Failed to load categories:', error)
+    } finally {
+      setLoadingCategories(false)
+    }
+  }
+
+  const loadExistingConfigs = async () => {
+    try {
+      setLoadingConfigs(true)
+      const collectionsResponse = await api.getCollections(token)
+      const collectionNames = collectionsResponse.collections || []
+      setCollections(collectionNames)
+      
+      // Load full data for each collection like ToolConfig loads configurations
+      const collectionsWithData = []
+      for (const name of collectionNames) {
+        try {
+          const data = await api.getCollection(name, token)
+          collectionsWithData.push({
+            id: name, // Use collection name as id like ToolConfig
+            name: data.collection || name,
+            category: data.category || '',
+            chunk_strategy: data.chunk?.strategy || '',
+            chunk_strategy_params: data.chunk?.params || {},
+            chunk_size: data.chunk?.chunk_size || 5000,
+            chunk_overlap: data.chunk?.chunk_overlap || 0
+          })
+        } catch (error) {
+          console.error(`[KnowledgeConfig] Failed to load collection ${name}:`, error)
+          // Add basic entry if collection data can't be loaded
+          collectionsWithData.push({
+            id: name,
+            name: name,
+            category: '',
+            chunk_strategy: '',
+            chunk_strategy_params: {},
+            chunk_size: 5000,
+            chunk_overlap: 0
+          })
+        }
+      }
+      setExistingConfigs(collectionsWithData)
+    } catch (error) {
+      console.error('[KnowledgeConfig] Failed to load collections:', error)
+    } finally {
+      setLoadingConfigs(false)
+    }
+  }
 
   useEffect(() => {
-    // Boot: defaults, categories, collections, chunking discovery
-    console.log('[KnowledgeConfig] Starting data load...')
-    Promise.all([
-      api.getDefaults(token),
-      api.getCategories(token),
-      api.getCollections(token),
-      api.discoverChunking(token)
-    ]).then(([d, c, p, comps]) => {
-      console.log('[KnowledgeConfig] API responses:', { d, c, p, comps })
-      console.log('[KnowledgeConfig] Full comps object:', JSON.stringify(comps, null, 2))
-      setDefaults(d.defaults || {})
-      setCategories(c.categories || [])
-      setCollections(p.collections || [])
-      
-      // Debug the response structure
-      console.log('[KnowledgeConfig] comps.components:', comps.components)
-      console.log('[KnowledgeConfig] comps.components keys:', Object.keys(comps.components || {}))
-      
-      // The backend returns full module paths, use them directly
-      const chunkingData = comps.components?.['ai.document.chunking'] || {}
-      console.log('[KnowledgeConfig] Chunking data object:', chunkingData)
-      
-      // Get the array from either 'chunking' or 'ai.document.chunking' key
-      const chunkingComponents = chunkingData['ai.document.chunking'] || chunkingData['chunking'] || []
-      console.log('[KnowledgeConfig] Chunking components (full paths):', chunkingComponents)
-      console.log('[KnowledgeConfig] Is array:', Array.isArray(chunkingComponents))
-      console.log('[KnowledgeConfig] Length:', chunkingComponents.length)
-      
-      setComponents({ chunking: Array.isArray(chunkingComponents) ? chunkingComponents : [] })
-    }).catch(err => {
-      console.error('[KnowledgeConfig] Error loading data:', err)
-    }).finally(() => {
-      console.log('[KnowledgeConfig] Setting loading to false')
-      setLoading(false)
-    })
+    // Load data like ToolConfig does
+    const loadData = async () => {
+      console.log('[KnowledgeConfig] Starting data load...')
+      try {
+        setLoading(true)
+        
+        // Load defaults and components first
+        const [d, comps] = await Promise.all([
+          api.getDefaults(token),
+          api.discoverChunking(token)
+        ])
+        
+        console.log('[KnowledgeConfig] API responses:', { d, comps })
+        setDefaults(d.defaults || {})
+        
+        // Process chunking components
+        const chunkingData = comps.components?.['ai.document.chunking'] || {}
+        const chunkingComponents = chunkingData['ai.document.chunking'] || chunkingData['chunking'] || []
+        setComponents({ chunking: Array.isArray(chunkingComponents) ? chunkingComponents : [] })
+        
+        // Load configs and categories like ToolConfig
+        await Promise.all([
+          loadExistingConfigs(),
+          loadCategories()
+        ])
+        
+      } catch (err) {
+        console.error('[KnowledgeConfig] Error loading data:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    loadData()
   }, [token])
 
   useEffect(() => {
@@ -183,29 +245,45 @@ export default function KnowledgeConfig({ user }) {
     }
   }, [form.chunk_strategy, token])
 
-  const loadExisting = async (name) => {
-    setLoading(true)
-    try {
-      const data = await api.getCollection(name, token)
+  function loadExistingConfig(configName) {
+    const config = existingConfigs.find(c => c.name === configName)
+    if (config) {
       setForm({
-        name: data.collection,
-        category: data.category || '',
-        chunk_strategy: data.chunk?.strategy || '',
-        chunk_strategy_params: data.chunk?.params || {},
-        chunk_size: data.chunk?.chunk_size ?? defaults.chunk_size ?? 5000,
-        chunk_overlap: data.chunk?.chunk_overlap ?? defaults.chunk_overlap ?? 0
+        ...config,
+        id: config.id,
+        name: config.name,
+        category: config.category || '',
+        chunk_strategy: config.chunk_strategy || '',
+        chunk_strategy_params: config.chunk_strategy_params || {},
+        chunk_size: config.chunk_size || defaults.chunk_size || 5000,
+        chunk_overlap: config.chunk_overlap || defaults.chunk_overlap || 0
       })
+      setIsEditMode(true)
       setIsEdit(true)
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoading(false)
+    } else {
+      setForm({ 
+        id: null, 
+        name: configName, 
+        category: '', 
+        chunk_strategy: '', 
+        chunk_strategy_params: {},
+        chunk_size: defaults.chunk_size || 5000,
+        chunk_overlap: defaults.chunk_overlap || 0
+      })
+      setIsEditMode(false)
+      setIsEdit(false)
     }
   }
 
   const save = async () => {
-    if (!form.name) return
+    if (!form.name) {
+      showError('Collection name is required')
+      return
+    }
+    
+    setSaveState(s => ({ ...s, loading: true }))
     setSaveBusy(true)
+    
     try {
       const payload = {
         collection: form.name,
@@ -221,50 +299,92 @@ export default function KnowledgeConfig({ user }) {
           chunk_overlap: form.chunk_overlap || defaults.chunk_overlap || 0
         }
       }
+      
       const res = await api.saveCollection(payload, token)
+      
       if (pendingFiles.length > 0) {
         await api.uploadFiles(form.name, pendingFiles, token)
         setPendingFiles([])
       }
+      
       if (res.exists) {
         // Save again forcing overwrite
         await api.saveCollection({ ...payload, overwrite: true }, token)
       }
-      // refresh lists
-      const collections = await api.getCollections(token)
-      setCollections(collections.collections || [])
-      const cat = await api.getCategories(token)
-      setCategories(cat.categories || [])
-      setIsEdit(true)
+      
+      const action = isEdit ? 'updated' : 'saved'
+      showSuccess(`Knowledge collection "${form.name}" ${action} successfully`)
+      
+      // Reload data like ToolConfig
+      await Promise.all([
+        loadExistingConfigs(),
+        loadCategories()
+      ])
+      
+      // Reset form and close dialog
+      setForm({ 
+        id: null, 
+        name: '', 
+        category: '', 
+        chunk_strategy: '', 
+        chunk_strategy_params: {},
+        chunk_size: defaults.chunk_size || 5000,
+        chunk_overlap: defaults.chunk_overlap || 0
+      })
+      setIsEdit(false)
+      setIsEditMode(false)
+      setDialogOpen(false)
+      
     } catch (e) {
       console.error(e)
+      showError(e.message || 'Failed to save collection')
     } finally {
+      setSaveState({ loading: false })
       setSaveBusy(false)
     }
   }
 
   const onDelete = async () => {
     if (!form.name) return
+    
+    setSaveState({ loading: true })
     setSaveBusy(true)
+    
     try {
       await api.deleteCollection(form.name, token)
-      setForm({ name: '', category: '', chunk_strategy: '', chunk_strategy_params: {}, chunk_size: defaults.chunk_size || 5000, chunk_overlap: defaults.chunk_overlap || 0 })
+      showSuccess('Knowledge collection deleted')
+      
+      // Reload configurations like ToolConfig
+      await loadExistingConfigs()
+      
+      // Reset form and close dialog
+      setForm({ 
+        id: null, 
+        name: '', 
+        category: '', 
+        chunk_strategy: '', 
+        chunk_strategy_params: {},
+        chunk_size: defaults.chunk_size || 5000,
+        chunk_overlap: defaults.chunk_overlap || 0
+      })
       setIsEdit(false)
-      const collections = await api.getCollections(token)
-      setCollections(collections.collections || [])
-  setDialogOpen(false)
+      setIsEditMode(false)
+      setDialogOpen(false)
+      
     } catch (e) {
       console.error(e)
+      showError(e.message || 'Failed to delete collection')
     } finally {
+      setSaveState({ loading: false })
       setSaveBusy(false)
     }
   }
 
   const chunkIntro = form.chunk_strategy ? introspection[form.chunk_strategy] : null
 
-  console.log('[KnowledgeConfig] Render - loading:', loading, 'collections:', collections.length, 'components:', components)
+  console.log('[KnowledgeConfig] Render - loading:', loading, 'existingConfigs:', existingConfigs.length, 'components:', components)
 
-  if (loading) {
+  if (loading || loadingConfigs) {
     console.log('[KnowledgeConfig] Showing loading spinner')
     return (
       <Paper sx={{ p: 4, textAlign: 'center' }}>
@@ -277,20 +397,30 @@ export default function KnowledgeConfig({ user }) {
   console.log('[KnowledgeConfig] Rendering main component')
 
   const openCreate = () => {
-    setForm({ name: '', category: '', chunk_strategy: '', chunk_strategy_params: {}, chunk_size: defaults.chunk_size || 5000, chunk_overlap: defaults.chunk_overlap || 0 })
+    setForm({ 
+      id: null, 
+      name: '', 
+      category: '', 
+      chunk_strategy: '', 
+      chunk_strategy_params: {},
+      chunk_size: defaults.chunk_size || 5000,
+      chunk_overlap: defaults.chunk_overlap || 0
+    })
     setIsEdit(false)
+    setIsEditMode(false)
     setPendingFiles([])
     setDialogOpen(true)
   }
 
   const openEdit = (name) => {
-    loadExisting(name).then(() => setDialogOpen(true))
+    loadExistingConfig(name)
+    setDialogOpen(true)
   }
 
   try {
     return (
     <Box>
-      {(saveBusy) && (
+      {(saveBusy || saveState.loading || loadingConfigs) && (
         <Fade in timeout={400}>
           <LinearProgress sx={{ mb: 2 }} />
         </Fade>
@@ -311,7 +441,7 @@ export default function KnowledgeConfig({ user }) {
       <Card>
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">All Collections ({collections.length})</Typography>
+            <Typography variant="h6">All Collections ({existingConfigs.length})</Typography>
           </Box>
           <TableContainer component={Paper} variant="outlined">
             <Table>
@@ -326,25 +456,30 @@ export default function KnowledgeConfig({ user }) {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {collections.length === 0 ? (
+                {existingConfigs.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                       <Typography color="text.secondary">No collections found</Typography>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  collections.map((p) => (
-                    <TableRow key={p} hover>
-                      <TableCell>{p}</TableCell>
-                      <TableCell>-</TableCell>
-                      <TableCell>-</TableCell>
-                      <TableCell>-</TableCell>
-                      <TableCell>-</TableCell>
+                  existingConfigs.map((cfg) => (
+                    <TableRow key={cfg.id || cfg.name} hover>
+                      <TableCell>{cfg.name}</TableCell>
+                      <TableCell>{cfg.category || '-'}</TableCell>
+                      <TableCell>{cfg.chunk_strategy || '-'}</TableCell>
+                      <TableCell>{cfg.chunk_size || '-'}</TableCell>
+                      <TableCell>{cfg.chunk_overlap || '-'}</TableCell>
                       <TableCell align="right">
-                        <IconButton size="small" color="primary" onClick={() => openEdit(p)}>
+                        <IconButton size="small" color="primary" onClick={() => openEdit(cfg.name)}>
                           <EditIcon size={16} />
                         </IconButton>
-                        <IconButton size="small" color="error" onClick={() => { setForm(f => ({ ...f, name: p })); setIsEdit(true); onDelete(); }}>
+                        <IconButton size="small" color="error" onClick={() => { 
+                          setForm(f => ({ ...f, name: cfg.name })); 
+                          setIsEdit(true); 
+                          setIsEditMode(true);
+                          onDelete(); 
+                        }}>
                           <DeleteIcon size={16} />
                         </IconButton>
                       </TableCell>
@@ -360,17 +495,35 @@ export default function KnowledgeConfig({ user }) {
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>{isEdit ? 'Edit Collection' : 'Create Collection'}</DialogTitle>
         <DialogContent dividers>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <Stack spacing={1}>
+            <Typography variant="body2" color="text.secondary">
+              {existingConfigs.length > 0 && 'Start typing to search existing collections or enter a new name.'}
+            </Typography>
+
             <Autocomplete
               freeSolo fullWidth
-              options={collections}
+              options={existingConfigs.map(c => c.name)}
               value={form.name}
+              loading={loadingConfigs}
+              loadingText="Loading collections…"
               onChange={(_, v) => {
-                if (v && collections.includes(v)) loadExisting(v)
-                else { setForm(f => ({ ...f, name: v || '' })); setIsEdit(false) }
+                if (v && existingConfigs.some(c => c.name === v)) {
+                  loadExistingConfig(v)
+                } else {
+                  setForm(f => ({ ...f, id: null, name: v || '' }))
+                  setIsEditMode(false)
+                  setIsEdit(false)
+                }
               }}
               onInputChange={(_, v) => {
-                setForm(f => ({ ...f, name: v || '' }))
+                setForm(f => ({ ...f, name: v }))
+                if (existingConfigs.some(c => c.name === v)) {
+                  loadExistingConfig(v)
+                } else {
+                  setForm(f => ({ ...f, id: null }))
+                  setIsEditMode(false)
+                  setIsEdit(false)
+                }
               }}
               renderInput={(params) => (
                 <TextField {...params} label="Collection Name" placeholder="Enter or select a collection…" size="small" required />
@@ -378,13 +531,23 @@ export default function KnowledgeConfig({ user }) {
             />
 
             <Autocomplete
-              freeSolo fullWidth size="small"
+              freeSolo
+              fullWidth
+              size="small"
               options={categories}
               value={form.category}
-              onChange={(_, v) => setForm(f => ({ ...f, category: v || '' }))}
-              onInputChange={(_, v) => setForm(f => ({ ...f, category: v || '' }))}
+              loading={loadingCategories}
+              disabled={saveState.loading}
+              onChange={(e, val) => {
+                setForm(f => ({ ...f, category: val || '' }))
+                if (val && !categories.includes(val)) setCategories(prev => [...prev, val])
+              }}
+              onInputChange={(e, val) => {
+                setForm(f => ({ ...f, category: val || '' }))
+                if (val && !categories.includes(val)) setCategories(prev => [...prev, val])
+              }}
               renderInput={(params) => (
-                <TextField {...params} label="Category" placeholder="Enter or select a category…" />
+                <TextField {...params} label="Category" placeholder="Enter or select a category..." size="small" />
               )}
             />
 
@@ -519,16 +682,16 @@ export default function KnowledgeConfig({ user }) {
                 </Box>
               </AccordionDetails>
             </Accordion>
-          </Box>
+          </Stack>
         </DialogContent>
         <DialogActions>
           {isEdit && (
-            <Button color="error" onClick={onDelete} startIcon={<DeleteIcon size={16} />} disabled={saveBusy}>Delete</Button>
+            <Button color="error" onClick={onDelete} startIcon={<DeleteIcon size={16} />} disabled={saveState.loading}>Delete</Button>
           )}
           <Box sx={{ flex: 1 }} />
-          <Button onClick={() => setDialogOpen(false)} disabled={saveBusy}>Cancel</Button>
-          <Button size="large" variant="contained" disabled={!form.name || saveBusy} onClick={save}>
-            {saveBusy ? (isEdit ? 'Updating…' : 'Saving…') : (isEdit ? 'Update Collection' : 'Create Collection')}
+          <Button onClick={() => setDialogOpen(false)} disabled={saveState.loading}>Cancel</Button>
+          <Button onClick={save} variant="contained" disabled={saveState.loading || !form.name}>
+            {saveState.loading ? (isEdit ? 'Updating…' : 'Saving…') : (isEdit ? 'Update Collection' : 'Create Collection')}
           </Button>
         </DialogActions>
       </Dialog>

@@ -14,6 +14,7 @@ from fastapi import HTTPException, status, UploadFile
 from ..db import get_collections
 from ..utils.log import logger
 from src.utils.component_discovery import discover_components, get_detailed_class_info
+from .file_service import FileService
 
 
 class KnowledgeService:
@@ -686,8 +687,6 @@ class KnowledgeService:
 
         # Load files from MinIO
         try:
-            from .file_service import FileService
-            
             # If ownerId saved in doc use it, else current user
             owner_id = doc.get("ownerId") or user.get("id")
             path_prefix = f"uploads/{tenant_id}/{owner_id}/{collection_name}/"
@@ -830,8 +829,6 @@ class KnowledgeService:
         MAX_FILE_SIZE = 200 * 1024 * 1024
 
         try:
-            from .file_service import FileService
-            
             results = []
             base_prefix = f"uploads/{tenant_id}/{user_id}/{collection_name}"
 

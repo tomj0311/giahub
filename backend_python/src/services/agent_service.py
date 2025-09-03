@@ -150,3 +150,32 @@ class AgentService:
         except Exception as e:
             logger.error(f"[AGENTS] Failed to delete agent '{name}' for tenant {tenant_id}: {e}")
             raise HTTPException(status_code=500, detail="Failed to delete agent")
+    
+    @classmethod
+    async def delete_agent_by_id(cls, agent_id: str, user: dict) -> Dict[str, str]:
+        """Delete an agent by ID"""
+        from bson import ObjectId
+        from bson.errors import InvalidId
+        
+        try:
+            object_id = ObjectId(agent_id)
+        except InvalidId:
+            logger.warning(f"[AGENTS] Invalid agent ID format: {agent_id}")
+            raise HTTPException(status_code=400, detail="Invalid agent ID format")
+        
+        tenant_id = await cls.validate_tenant_access(user)
+        logger.info(f"[AGENTS] Deleting agent by ID '{agent_id}' for tenant: {tenant_id}")
+        
+        try:
+            res = await cls._get_agents_collection().delete_one({"_id": object_id, "tenantId": tenant_id})
+            if res.deleted_count == 0:
+                logger.warning(f"[AGENTS] Agent with ID '{agent_id}' not found for deletion in tenant: {tenant_id}")
+                raise HTTPException(status_code=404, detail="Agent not found")
+            
+            logger.info(f"[AGENTS] Successfully deleted agent by ID '{agent_id}' for tenant: {tenant_id}")
+            return {"message": f"Agent deleted"}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[AGENTS] Failed to delete agent by ID '{agent_id}' for tenant {tenant_id}: {e}")
+            raise HTTPException(status_code=500, detail="Failed to delete agent")
