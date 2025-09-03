@@ -15,7 +15,7 @@ from ..utils.auth import verify_token_middleware
 from ..services.knowledge_service import KnowledgeService
 from ..utils.log import logger
 
-router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
+router = APIRouter(tags=["knowledge"])
 
 
 @router.get("/defaults")

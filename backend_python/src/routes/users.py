@@ -18,7 +18,7 @@ from ..services.rbac_service import RBACService
 from ..services.tenant_service import TenantService
 from ..services.user_service import UserService
 
-router = APIRouter(prefix="/api/users", tags=["users"])
+router = APIRouter(tags=["users"])
 
 # Pydantic models
 class UserRegistration(BaseModel):

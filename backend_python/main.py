@@ -95,12 +95,12 @@ app.include_router(profile_router)
 app.include_router(roles_router)
 app.include_router(role_management_router, prefix="/api/rbac")
 app.include_router(menu_router)
-app.include_router(model_config_router)
-app.include_router(tool_config_router)
-app.include_router(knowledge_router)
-app.include_router(agents_router)
+app.include_router(model_config_router, prefix="/api/model-config")
+app.include_router(tool_config_router, prefix="/api/tool-config")
+app.include_router(knowledge_router, prefix="/api/knowledge")
+app.include_router(agents_router, prefix="/api/agents")
 # app.include_router(agent_runtime_router)  # Temporarily disabled
-app.include_router(payments_router)
+app.include_router(payments_router, prefix="/api/payments")
 app.include_router(uploads_router)
 
 

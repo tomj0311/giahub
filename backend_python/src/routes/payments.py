@@ -11,7 +11,7 @@ from ..utils.auth import verify_token_middleware
 from ..utils.log import logger
 from ..services.payment_service import PaymentService
 
-router = APIRouter(prefix="/api/payments", tags=["payments"])
+router = APIRouter(tags=["payments"])
 
 # Pydantic models
 class CheckoutSessionRequest(BaseModel):

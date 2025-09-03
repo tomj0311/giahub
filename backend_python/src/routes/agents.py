@@ -17,7 +17,7 @@ from ..utils.auth import verify_token_middleware
 from ..services.agent_service import AgentService
 from ..utils.log import logger
 
-router = APIRouter(prefix="/api/agents", tags=["agents"])
+router = APIRouter(tags=["agents"])
 
 
 @router.get("")

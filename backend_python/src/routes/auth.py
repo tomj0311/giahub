@@ -14,7 +14,7 @@ from ..utils.log import logger
 from ..config.oauth import get_oauth_client
 from ..services.auth_service import AuthService
 
-router = APIRouter(prefix="/api/auth", tags=["authentication"])
+router = APIRouter(tags=["authentication"])
 
 # Pydantic models
 class LoginRequest(BaseModel):

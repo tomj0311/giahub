@@ -10,7 +10,7 @@ from ..utils.auth import verify_token_middleware
 from ..services.model_config_service import ModelConfigService
 from ..utils.log import logger
 
-router = APIRouter(prefix="/api/model-config", tags=["model-config"])
+router = APIRouter(tags=["model-config"])
 
 
 class ModelConfigCreate(BaseModel):
