@@ -29,7 +29,15 @@ def _agents_col():
 @router.get("")
 async def list_agents(user: dict = Depends(verify_token_middleware)):
     """List agents for current tenant."""
-    tenant_id = user.get("tenantId") or "system"
+    # CRITICAL: tenant_id is required - no fallbacks allowed
+    tenant_id = user.get("tenantId")
+    if not tenant_id:
+        from fastapi import status
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     logger.info(f"[AGENTS] Listing agents for tenant: {tenant_id}")
     
     try:
@@ -63,13 +71,22 @@ async def list_agents(user: dict = Depends(verify_token_middleware)):
 
 @router.get("/{name}")
 async def get_agent(name: str, user: dict = Depends(verify_token_middleware)):
-    tenant_id = user.get("tenantId") or "system"
+    # CRITICAL: tenant_id is required - no fallbacks allowed
+    tenant_id = user.get("tenantId")
+    if not tenant_id:
+        from fastapi import status
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     logger.info(f"[AGENTS] Getting agent '{name}' for tenant: {tenant_id}")
     
     try:
         doc = await _agents_col().find_one({"tenantId": tenant_id, "name": name})
         if not doc:
             logger.warning(f"[AGENTS] Agent '{name}' not found for tenant: {tenant_id}")
+            raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
             raise HTTPException(status_code=404, detail="Agent not found")
         
         doc["id"] = str(doc.pop("_id"))
@@ -90,7 +107,14 @@ async def upsert_agent(payload: dict, user: dict = Depends(verify_token_middlewa
         logger.warning("[AGENTS] Upsert agent failed - name is required")
         raise HTTPException(status_code=400, detail="name is required")
 
-    tenant_id = user.get("tenantId") or "system"
+    # CRITICAL: tenant_id is required - no fallbacks allowed
+    tenant_id = user.get("tenantId")
+    if not tenant_id:
+        from fastapi import status
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
     user_id = user.get("id") or user.get("userId") or "unknown"
     logger.info(f"[AGENTS] Upserting agent '{name}' for tenant: {tenant_id}, user: {user_id}")
 
@@ -129,7 +153,15 @@ async def upsert_agent(payload: dict, user: dict = Depends(verify_token_middlewa
 
 @router.delete("/{name}")
 async def delete_agent(name: str, user: dict = Depends(verify_token_middleware)):
-    tenant_id = user.get("tenantId") or "system"
+    # CRITICAL: tenant_id is required - no fallbacks allowed
+    tenant_id = user.get("tenantId")
+    if not tenant_id:
+        from fastapi import status
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     logger.info(f"[AGENTS] Deleting agent '{name}' for tenant: {tenant_id}")
     
     try:

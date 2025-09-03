@@ -124,8 +124,16 @@ async def upsert_prefix(payload: dict, user: dict = Depends(verify_token_middlew
     if not name:
         raise HTTPException(status_code=400, detail="name is required")
 
+    # CRITICAL: tenant_id is required - no fallbacks allowed
+    tenant_id = user.get("tenantId")
+    if not tenant_id:
+        from fastapi import status
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     user_id = user.get("id") or user.get("userId") or "unknown"
-    tenant_id = user.get("tenantId") or os.getenv("DEFAULT_TENANT_ID", "default")
 
     record = {
         "name": name,
@@ -215,8 +223,16 @@ async def upload_knowledge_files(
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded")
 
+    # CRITICAL: tenant_id is required - no fallbacks allowed
+    tenant_id = user.get("tenantId")
+    if not tenant_id:
+        from fastapi import status
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     user_id = user.get("id") or user.get("userId") or "unknown"
-    tenant_id = user.get("tenantId") or os.getenv("DEFAULT_TENANT_ID", "default")
 
     # Basic RBAC check (collection-level write)
     ok = await RBACMiddleware.verify_collection_access(user_id=user_id, collection_name="uploads", operation="write")
@@ -334,7 +350,16 @@ async def get_defaults(user: dict = Depends(verify_token_middleware)):
 async def list_categories(user: dict = Depends(verify_token_middleware)):
     """Return distinct knowledge categories for the user's tenant."""
     collections = get_collections()
-    tenant_id = user.get("tenantId") or "system"
+    
+    # CRITICAL: tenant_id is required - no fallbacks allowed
+    tenant_id = user.get("tenantId")
+    if not tenant_id:
+        from fastapi import status
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     cats = await collections['knowledgeConfig'].distinct("category", {"tenantId": tenant_id})
     # filter out empty
     categories = [c for c in cats if c]
@@ -344,7 +369,16 @@ async def list_categories(user: dict = Depends(verify_token_middleware)):
 @router.get("/prefixes")
 async def list_prefixes(user: dict = Depends(verify_token_middleware)):
     collections = get_collections()
-    tenant_id = user.get("tenantId") or "system"
+    
+    # CRITICAL: tenant_id is required - no fallbacks allowed
+    tenant_id = user.get("tenantId")
+    if not tenant_id:
+        from fastapi import status
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     cursor = collections['knowledgeConfig'].find({"tenantId": tenant_id}, {"prefix": 1}).sort("prefix", 1)
     docs = await cursor.to_list(length=None)
     prefixes = sorted({d.get("prefix") for d in docs if d.get("prefix")})
@@ -354,7 +388,16 @@ async def list_prefixes(user: dict = Depends(verify_token_middleware)):
 @router.get("/prefix/{prefix}")
 async def get_prefix(prefix: str, user: dict = Depends(verify_token_middleware)):
     collections = get_collections()
-    tenant_id = user.get("tenantId") or "system"
+    
+    # CRITICAL: tenant_id is required - no fallbacks allowed
+    tenant_id = user.get("tenantId")
+    if not tenant_id:
+        from fastapi import status
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     doc = await collections['knowledgeConfig'].find_one({"tenantId": tenant_id, "prefix": prefix})
     if not doc:
         raise HTTPException(status_code=404, detail="prefix not found")
@@ -394,7 +437,16 @@ async def get_prefix(prefix: str, user: dict = Depends(verify_token_middleware))
 async def save_prefix(payload: dict, user: dict = Depends(verify_token_middleware)):
     """Create or update a knowledge prefix configuration in MongoDB."""
     collections = get_collections()
-    tenant_id = user.get("tenantId") or "system"
+    
+    # CRITICAL: tenant_id is required - no fallbacks allowed
+    tenant_id = user.get("tenantId")
+    if not tenant_id:
+        from fastapi import status
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     user_id = user.get("id") or "unknown"
 
     prefix = payload.get("prefix") or payload.get("name")
@@ -437,7 +489,16 @@ async def save_prefix(payload: dict, user: dict = Depends(verify_token_middlewar
 @router.delete("/prefix/{prefix}")
 async def delete_prefix(prefix: str, user: dict = Depends(verify_token_middleware)):
     collections = get_collections()
-    tenant_id = user.get("tenantId") or "system"
+    
+    # CRITICAL: tenant_id is required - no fallbacks allowed
+    tenant_id = user.get("tenantId")
+    if not tenant_id:
+        from fastapi import status
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     res = await collections['knowledgeConfig'].delete_one({"tenantId": tenant_id, "prefix": prefix})
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="prefix not found")
@@ -464,7 +525,15 @@ async def upload_knowledge_files(
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
 
-    tenant_id = user.get("tenantId") or "system"
+    # CRITICAL: tenant_id is required - no fallbacks allowed
+    tenant_id = user.get("tenantId")
+    if not tenant_id:
+        from fastapi import status
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     user_id = user.get("id") or "unknown"
 
     try:

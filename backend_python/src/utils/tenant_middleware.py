@@ -19,7 +19,8 @@ class TenantMiddleware:
     async def filter_query_by_tenant(user_id: str, query: Dict) -> Dict:
         """Add tenant filtering to a MongoDB query"""
         logger.debug(f"[TENANT] Filtering query by tenant for user: {user_id}")
-        filtered_query = await TenantService.filter_by_tenant(user_id, query)
+        user_tenant_id = await TenantService.get_user_tenant_id(user_id)
+        filtered_query = await TenantService.filter_by_tenant_id(user_tenant_id, query)
         logger.debug(f"[TENANT] Query filtered: original={query}, filtered={filtered_query}")
         return filtered_query
     
@@ -27,7 +28,8 @@ class TenantMiddleware:
     async def add_tenant_to_record(user_id: str, record: Dict) -> Dict:
         """Add tenant_id to a record before saving"""
         logger.debug(f"[TENANT] Adding tenant ID to record for user: {user_id}")
-        updated_record = await TenantService.add_tenant_to_record(user_id, record)
+        user_tenant_id = await TenantService.get_user_tenant_id(user_id)
+        updated_record = await TenantService.add_tenant_to_record_by_id(user_tenant_id, record)
         logger.debug(f"[TENANT] Tenant ID added to record")
         return updated_record
     
@@ -49,8 +51,6 @@ class TenantMiddleware:
         if not user_tenant_id:
             logger.warning(f"[TENANT] No tenant ID found for user: {user_id}")
             return []
-        
-        logger.debug(f"[TENANT] User {user_id} belongs to tenant: {user_tenant_id}")
         
         filtered_records = []
         for record in records:

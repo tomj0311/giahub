@@ -173,7 +173,6 @@ export default function RoleManagement({ user }) {
   }
 
   const getRoleTypeColor = (roleName) => {
-    if (roleName === 'system_admin') return 'error'
     if (roleName.includes('admin')) return 'warning'
     if (roleName.includes('@')) return 'info'
     return 'primary'
@@ -266,7 +265,7 @@ export default function RoleManagement({ user }) {
                             size="small"
                             color="primary"
                             onClick={() => openEditForm(role)}
-                            disabled={role.roleName === 'system_admin'}
+                            disabled={role.roleName.includes('@')}
                           >
                             <EditIcon fontSize="small" />
                           </IconButton>
@@ -274,7 +273,7 @@ export default function RoleManagement({ user }) {
                             size="small"
                             color="error"
                             onClick={() => handleDeleteRole(role)}
-                            disabled={role.roleName === 'system_admin' || role.roleName.includes('@')}
+                            disabled={role.roleName.includes('@')}
                           >
                             <DeleteIcon fontSize="small" />
                           </IconButton>

@@ -1,6 +1,7 @@
 """
 Tool Configuration CRUD routes for MongoDB operations
 Handles tool configurations stored in MongoDB with categories
+All operations are tenant-isolated
 """
 
 from fastapi import APIRouter, HTTPException, Depends, status
@@ -39,14 +40,6 @@ async def create_tool_config(
         # Use unified key 'tool' (alias for function module path)
         tool_module = config.get("tool") or config.get("function")
 
-        # Ensure unique name
-        existing = await collections['toolConfig'].find_one({"name": config.get("name")})
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Tool configuration with name '{config.get('name')}' already exists"
-            )
-
         doc = {
             "name": config.get("name"),
             "category": config.get("category", ""),
@@ -57,6 +50,15 @@ async def create_tool_config(
             "updated_at": datetime.utcnow(),
             "created_by": user.get("id", user.get("username"))
         }
+        
+        # Add tenant ID to the record - REQUIRED, no hardcoded fallbacks
+        tenant_id = user.get("tenantId")
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User tenant information missing. Please re-login."
+            )
+        doc["tenantId"] = tenant_id
 
         res = await collections['toolConfig'].insert_one(doc)
         created = await collections['toolConfig'].find_one({"_id": res.inserted_id})
@@ -83,13 +85,22 @@ async def get_tool_configs(
     category: Optional[str] = None,
     user: dict = Depends(verify_token_middleware)
 ):
-    """List tool configurations"""
+    """List tool configurations in user's tenant"""
     try:
         collections = get_collections()
-        query = {"type": "toolConfig"}
+        base_query = {"type": "toolConfig"}
         if category:
-            query["category"] = category
-        cursor = collections['toolConfig'].find(query)
+            base_query["category"] = category
+        
+        # Apply tenant filtering - REQUIRED, no hardcoded fallbacks
+        tenant_id = user.get("tenantId")
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User tenant information missing. Please re-login."
+            )
+        base_query["tenantId"] = tenant_id
+        cursor = collections['toolConfig'].find(base_query)
         configs = await cursor.to_list(length=None)
         return {
             "configurations": [
@@ -115,7 +126,19 @@ async def get_tool_config(config_id: str, user: dict = Depends(verify_token_midd
     try:
         collections = get_collections()
         from bson import ObjectId
-        c = await collections['toolConfig'].find_one({"_id": ObjectId(config_id)})
+        
+        # Check if config exists and belongs to user's tenant
+        tenant_id = user.get("tenantId")
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User tenant information missing. Please re-login."
+            )
+        
+        c = await collections['toolConfig'].find_one({
+            "_id": ObjectId(config_id),
+            "tenantId": tenant_id
+        })
         if not c:
             raise HTTPException(status_code=404, detail=f"Tool configuration with ID '{config_id}' not found")
         return {
@@ -140,18 +163,24 @@ async def update_tool_config(config_id: str, config_update: dict, user: dict = D
     try:
         collections = get_collections()
         from bson import ObjectId
-        existing = await collections['toolConfig'].find_one({"_id": ObjectId(config_id)})
+        
+        # Check if config exists and belongs to user's tenant
+        tenant_id = user.get("tenantId")
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User tenant information missing. Please re-login."
+            )
+        
+        existing = await collections['toolConfig'].find_one({
+            "_id": ObjectId(config_id),
+            "tenantId": tenant_id
+        })
         if not existing:
             raise HTTPException(status_code=404, detail=f"Tool configuration with ID '{config_id}' not found")
 
         update_doc = {"updated_at": datetime.utcnow()}
         if "name" in config_update:
-            conflict = await collections['toolConfig'].find_one({
-                "name": config_update["name"],
-                "_id": {"$ne": ObjectId(config_id)}
-            })
-            if conflict:
-                raise HTTPException(status_code=409, detail=f"Tool configuration with name '{config_update['name']}' already exists")
             update_doc["name"] = config_update["name"]
         if "category" in config_update:
             update_doc["category"] = config_update["category"]
@@ -185,7 +214,19 @@ async def delete_tool_config(config_id: str, user: dict = Depends(verify_token_m
     try:
         collections = get_collections()
         from bson import ObjectId
-        existing = await collections['toolConfig'].find_one({"_id": ObjectId(config_id)})
+        
+        # Check if config exists and belongs to user's tenant
+        tenant_id = user.get("tenantId")
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User tenant information missing. Please re-login."
+            )
+        
+        existing = await collections['toolConfig'].find_one({
+            "_id": ObjectId(config_id),
+            "tenantId": tenant_id
+        })
         if not existing:
             raise HTTPException(status_code=404, detail=f"Tool configuration with ID '{config_id}' not found")
         await collections['toolConfig'].delete_one({"_id": ObjectId(config_id)})
@@ -201,7 +242,15 @@ async def delete_tool_config(config_id: str, user: dict = Depends(verify_token_m
 async def get_tool_categories(user: dict = Depends(verify_token_middleware)):
     try:
         collections = get_collections()
-        cats = await collections['toolConfig'].distinct("category")
+        
+        # Apply tenant filtering to get categories only from user's tenant - REQUIRED
+        tenant_id = user.get("tenantId")
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User tenant information missing. Please re-login."
+            )
+        cats = await collections['toolConfig'].distinct("category", {"tenantId": tenant_id})
         cats = [c for c in cats if c and c.strip()]
         cats.sort()
         return {"categories": cats}

@@ -146,10 +146,6 @@ class RBACMiddleware:
             True if access is allowed
         """
         
-        # System admins have access to everything
-        if await RBACService.user_has_role(user_id, "system_admin"):
-            return True
-        
         # For specific record access, check record roles
         if record and "roles" in record:
             return await can_user_access_record(user_id, record)

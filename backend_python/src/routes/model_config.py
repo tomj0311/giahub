@@ -1,6 +1,7 @@
 """
 Model Configuration CRUD routes for MongoDB operations
 Handles model configurations stored in MongoDB with categories
+All operations are tenant-isolated except menuItems
 """
 
 from fastapi import APIRouter, HTTPException, Depends, status
@@ -41,16 +42,6 @@ async def create_model_config(
                 detail="Model is required"
             )
         
-        logger.debug(f"[MODEL_CONFIG] Checking for existing config with name: {config.get('name')}")
-        # Check if config with same name already exists
-        existing = await collections['modelConfig'].find_one({"name": config.get("name")})
-        if existing:
-            logger.warning(f"[MODEL_CONFIG] Config with name '{config.get('name')}' already exists")
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Model configuration with name '{config.get('name')}' already exists"
-            )
-        
         # Create the config document
         config_doc = {
             "name": config.get("name"),
@@ -62,6 +53,16 @@ async def create_model_config(
             "updated_at": datetime.utcnow(),
             "created_by": user.get("id", user.get("username"))
         }
+        
+        # Add tenant ID to the record - REQUIRED, no hardcoded fallbacks
+        tenant_id = user.get("tenantId")
+        if not tenant_id:
+            logger.error(f"[MODEL_CONFIG] No tenantId found for user: {user.get('id', user.get('username'))}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User tenant information missing. Please re-login."
+            )
+        config_doc["tenantId"] = tenant_id
         
         logger.debug(f"[MODEL_CONFIG] Inserting config into database")
         # Insert into MongoDB
@@ -106,13 +107,23 @@ async def get_model_configs(
     try:
         collections = get_collections()
         
-        # Build query
-        query = {"type": "model_config"}
+        # Build query with tenant isolation
+        base_query = {"type": "model_config"}
         if category:
-            query["category"] = category
+            base_query["category"] = category
+        
+        # Apply tenant filtering - REQUIRED, no hardcoded fallbacks
+        tenant_id = user.get("tenantId")
+        if not tenant_id:
+            logger.error(f"[MODEL_CONFIG] No tenantId found for user: {user.get('id', user.get('username'))}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User tenant information missing. Please re-login."
+            )
+        base_query["tenantId"] = tenant_id
         
         # Fetch configurations
-        cursor = collections['modelConfig'].find(query)
+        cursor = collections['modelConfig'].find(base_query)
         configs = await cursor.to_list(length=None)
         
         # Convert to response format
@@ -160,6 +171,20 @@ async def get_model_config(
                 detail=f"Model configuration with ID '{config_id}' not found"
             )
         
+        # Verify tenant access - REQUIRED, no hardcoded fallbacks
+        tenant_id = user.get("tenantId")
+        if not tenant_id:
+            logger.error(f"[MODEL_CONFIG] No tenantId found for user: {user.get('id', user.get('username'))}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User tenant information missing. Please re-login."
+            )
+        if config.get("tenantId") != tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied - configuration belongs to different organization"
+            )
+        
         # Convert to response format
         response_config = {
             "id": str(config["_id"]),
@@ -204,21 +229,25 @@ async def update_model_config(
                 detail=f"Model configuration with ID '{config_id}' not found"
             )
         
+        # Verify tenant access - REQUIRED, no hardcoded fallbacks
+        tenant_id = user.get("tenantId")
+        if not tenant_id:
+            logger.error(f"[MODEL_CONFIG] No tenantId found for user: {user.get('id', user.get('username'))}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User tenant information missing. Please re-login."
+            )
+        if existing_config.get("tenantId") != tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied - configuration belongs to different organization"
+            )
+        
         # Build update document
         update_doc = {"updated_at": datetime.utcnow()}
         
         # Only update provided fields
         if "name" in config_update:
-            # Check if new name conflicts with existing configs
-            existing_name = await collections['modelConfig'].find_one({
-                "name": config_update["name"],
-                "_id": {"$ne": ObjectId(config_id)}
-            })
-            if existing_name:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=f"Model configuration with name '{config_update['name']}' already exists"
-                )
             update_doc["name"] = config_update["name"]
             
         if "category" in config_update:
@@ -275,12 +304,27 @@ async def delete_model_config(
         
         from bson import ObjectId
         
-        # Check if config exists
-        existing_config = await collections['modelConfig'].find_one({"_id": ObjectId(config_id)})
+        # Check if config exists and belongs to user's tenant
+        tenant_id = user.get("tenantId")
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User tenant information missing. Please re-login."
+            )
+        
+        existing_config = await collections['modelConfig'].find_one({
+            "_id": ObjectId(config_id),
+            "tenantId": tenant_id
+        })
         if not existing_config:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Model configuration with ID '{config_id}' not found"
+            )
+        if existing_config.get("tenantId") != tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied - configuration belongs to different organization"
             )
         
         # Delete the configuration
@@ -301,12 +345,18 @@ async def delete_model_config(
 
 @router.get("/categories")
 async def get_categories(user: dict = Depends(verify_token_middleware)):
-    """Get distinct categories from model configurations"""
+    """Get distinct categories from model configurations in user's tenant"""
     try:
         collections = get_collections()
         
-        # Get distinct categories
-        categories = await collections['modelConfig'].distinct("category")
+        # Apply tenant filtering to get categories only from user's tenant - REQUIRED
+        tenant_id = user.get("tenantId")
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User tenant information missing. Please re-login."
+            )
+        categories = await collections['modelConfig'].distinct("category", {"tenantId": tenant_id})
         
         # Filter out empty categories and sort
         categories = [cat for cat in categories if cat and cat.strip()]

@@ -221,7 +221,7 @@ async def assign_multiple_roles(
 ):
     """Assign multiple roles to a user.
 
-    Allowed for system_admin or role owners (can only assign roles they own).
+    Allowed for role owners (can only assign roles they own within their tenant).
     """
     
     current_user_id = user.get("id")
@@ -230,8 +230,6 @@ async def assign_multiple_roles(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid user"
         )
-    
-    is_admin = await RBACService.user_has_role(current_user_id, "system_admin")
     
     try:
         collections = get_collections()
@@ -256,7 +254,7 @@ async def assign_multiple_roles(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Role with ID {role_id} not found"
                 )
-            if not is_admin and role.get("ownerId") != current_user_id:
+            if role.get("ownerId") != current_user_id:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You can only assign roles you own"
@@ -299,7 +297,7 @@ async def remove_user_role(
 ):
     """Remove a specific role from a user.
 
-    Allowed for system_admin or role owners (can only remove roles they own). Cannot remove default personal role.
+    Allowed for role owners (can only remove roles they own within their tenant). Cannot remove default personal role.
     """
     
     current_user_id = user.get("id")
@@ -308,8 +306,6 @@ async def remove_user_role(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid user"
         )
-    
-    is_admin = await RBACService.user_has_role(current_user_id, "system_admin")
     
     try:
         collections = get_collections()
@@ -331,7 +327,7 @@ async def remove_user_role(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Role not found"
             )
-        if not is_admin and role.get("ownerId") != current_user_id:
+        if role.get("ownerId") != current_user_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You can only remove roles you own"

@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import List, Dict, Any, AsyncGenerator
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
 from ..db import get_collections
@@ -157,7 +157,14 @@ async def run_agent(body: Dict[str, Any], user: dict = Depends(verify_token_midd
     if not prompt:
         raise HTTPException(status_code=400, detail="prompt is required")
 
-    tenant_id = user.get("tenantId") or "system"
+    # CRITICAL: tenant_id is required - no fallbacks allowed
+    tenant_id = user.get("tenantId")
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     user_id = user.get("id") or user.get("userId")
     
     return StreamingResponse(
@@ -178,7 +185,14 @@ async def run_agent(body: Dict[str, Any], user: dict = Depends(verify_token_midd
 
 @router.get("/conversations")
 async def list_conversations(user: dict = Depends(verify_token_middleware)):
-    tenant_id = user.get("tenantId") or "system"
+    # CRITICAL: tenant_id is required - no fallbacks allowed
+    tenant_id = user.get("tenantId")
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     cursor = _conversations_col().find({"tenantId": tenant_id}).sort("updated_at", -1)
     docs = await cursor.to_list(length=None)
     items: List[Dict[str, Any]] = []
@@ -194,7 +208,14 @@ async def list_conversations(user: dict = Depends(verify_token_middleware)):
 
 @router.get("/conversations/{conversation_id}")
 async def get_conversation(conversation_id: str, user: dict = Depends(verify_token_middleware)):
-    tenant_id = user.get("tenantId") or "system"
+    # CRITICAL: tenant_id is required - no fallbacks allowed
+    tenant_id = user.get("tenantId")
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     doc = await _conversations_col().find_one({"tenantId": tenant_id, "conversation_id": conversation_id})
     if not doc:
         raise HTTPException(status_code=404, detail="Conversation not found")
@@ -220,7 +241,14 @@ async def save_conversation(body: Dict[str, Any], user: dict = Depends(verify_to
     if not conversation_id or not agent_name:
         raise HTTPException(status_code=400, detail="conversation_id and agent_name are required")
 
-    tenant_id = user.get("tenantId") or "system"
+    # CRITICAL: tenant_id is required - no fallbacks allowed
+    tenant_id = user.get("tenantId")
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     user_id = user.get("id") or user.get("userId") or "unknown"
     title = None
     for m in messages:
@@ -249,7 +277,14 @@ async def save_conversation(body: Dict[str, Any], user: dict = Depends(verify_to
 
 @router.delete("/conversations/{conversation_id}")
 async def delete_conversation(conversation_id: str, user: dict = Depends(verify_token_middleware)):
-    tenant_id = user.get("tenantId") or "system"
+    # CRITICAL: tenant_id is required - no fallbacks allowed
+    tenant_id = user.get("tenantId")
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User tenant information missing. Please re-login."
+        )
+    
     res = await _conversations_col().delete_one({"tenantId": tenant_id, "conversation_id": conversation_id})
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Conversation not found")

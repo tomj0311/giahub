@@ -210,7 +210,6 @@ export default function UserInvitation({ user }) {
   }
 
   const getUserTypeColor = (userRoles) => {
-    if (userRoles.some(role => role.roleName === 'system_admin')) return 'error'
     if (userRoles.some(role => role.roleName.includes('admin'))) return 'warning'
     return 'primary'
   }

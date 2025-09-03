@@ -8,6 +8,7 @@ DEFAULT_DB = os.getenv("MONGO_DB", "giap")
 
 client = None
 db = None
+_collections_cache = None
 
 
 async def connect_db(uri: str = DEFAULT_URI, db_name: str = DEFAULT_DB):
@@ -32,14 +33,18 @@ def get_db():
     if db is None:
         logger.error("[DB] Database not connected - call connect_db() first")
         raise RuntimeError("DB not connected. Call connect_db() first.")
-    logger.debug("[DB] Returning database connection")
+    # Removed debug log to reduce noise during frequent calls
     return db
 
 
 def get_collections():
+    global _collections_cache
+    if _collections_cache is not None:
+        return _collections_cache
+        
     logger.debug("[DB] Getting database collections")
     database = get_db()
-    collections = {
+    _collections_cache = {
         "users": database["users"],
         "verificationTokens": database["verificationTokens"],
         "roles": database["roles"],
@@ -52,8 +57,14 @@ def get_collections():
     "agents": database["agents"],
     "conversations": database["conversations"],
     }
-    logger.debug(f"[DB] Retrieved {len(collections)} collections")
-    return collections
+    logger.debug(f"[DB] Retrieved {len(_collections_cache)} collections")
+    return _collections_cache
+
+
+def clear_collections_cache():
+    """Clear the collections cache to force refresh on next call"""
+    global _collections_cache
+    _collections_cache = None
 
 
 def get_bucket(bucket_name: str = "uploads"):
@@ -130,10 +141,10 @@ async def ensure_indexes():
 
         logger.debug("[DB] Creating multi-tenancy indexes")
         # Add tenant_id indexes to existing collections for multi-tenancy
+        # NOTE: menuItems collection is intentionally global (no tenantId isolation)
         await collections["users"].create_index("tenantId")
         await collections["roles"].create_index("tenantId")
         await collections["userRoles"].create_index("tenantId")
-        await collections["menuItems"].create_index("tenantId")
         await collections["modelConfig"].create_index("tenantId")
         await collections["toolConfig"].create_index("tenantId")
 
@@ -169,9 +180,10 @@ async def init_database(uri: str = DEFAULT_URI, db_name: str = DEFAULT_DB):
 
 async def close_database():
     """Close database connection"""
-    global client, db
+    global client, db, _collections_cache
     if client:
         client.close()
         client = None
         db = None
+        _collections_cache = None  # Clear cache on close
         logger.info("[DB] Database connection closed")

@@ -323,10 +323,9 @@ class RBACService:
     
     @staticmethod
     async def get_all_roles(user_id: str = None) -> List[Dict]:
-        """Get roles per owner-managed visibility.
+        """Get roles per tenant-based and owner-managed visibility.
 
-        - system_admin: see all active roles.
-        - regular users: see only roles they own (ownerId == user_id).
+        Users can only see roles they own (ownerId == user_id) within their tenant.
         """
         collections = get_collections()
 
@@ -335,13 +334,8 @@ class RBACService:
         roles = [r for r in raw_roles if r.get("active", True)]
 
         if user_id:
-            # If user is system admin, keep all; otherwise only roles owned by the user
-            try:
-                if not await RBACService.user_has_role(user_id, "system_admin"):
-                    roles = [r for r in roles if r.get("ownerId") == user_id]
-            except Exception:
-                # On any lookup error, fall back to owned-only filtering
-                roles = [r for r in roles if r.get("ownerId") == user_id]
+            # Users can only see roles they own
+            roles = [r for r in roles if r.get("ownerId") == user_id]
 
         # Helper to coerce createdAt to numeric milliseconds
         def _ts_ms(val):
@@ -382,16 +376,24 @@ class RBACService:
 
 
 async def init_default_roles():
-    """Initialize default system roles"""
+    """Initialize default tenant-based roles"""
     collections = get_collections()
     
-    # System admin role
-    admin_role = await RBACService.get_role_by_name("system_admin")
+    # Remove any existing system_admin roles (legacy cleanup)
+    try:
+        result = await collections['roles'].delete_many({"roleName": "system_admin"})
+        if result.deleted_count > 0:
+            logger.info(f"[RBAC] Removed {result.deleted_count} legacy system_admin roles")
+    except Exception as e:
+        logger.warning(f"[RBAC] Failed to remove legacy system_admin roles: {e}")
+    
+    # Tenant admin role template (not assigned to specific users)
+    admin_role = await RBACService.get_role_by_name("tenant_admin")
     if not admin_role:
         await RBACService.create_role(
-            role_name="system_admin",
-            description="System administrator with full access",
-            permissions=["*"]  # All permissions
+            role_name="tenant_admin",
+            description="Tenant administrator with full access within their organization",
+            permissions=["manage_users", "manage_roles", "manage_settings", "full_access"]
         )
     
     # General user role template (not assigned to specific users)

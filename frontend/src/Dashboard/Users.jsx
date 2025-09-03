@@ -64,7 +64,6 @@ export default function Users({ user }) {
   }
 
   const getRoleColor = (roleName) => {
-    if (roleName === 'system_admin') return 'error'
     if (roleName.includes('admin')) return 'warning'
     if (roleName.includes('@')) return 'info'
     return 'primary'

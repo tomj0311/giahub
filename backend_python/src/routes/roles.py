@@ -267,13 +267,8 @@ async def get_roles(user: dict = Depends(verify_token_middleware)):
     try:
         roles = await RBACService.get_all_roles(user_id)
         # Extra safeguard: enforce owner-managed visibility at the route level too.
-        # If the caller is NOT a system admin, filter roles to only those owned by the caller.
-        try:
-            is_admin = await RBACService.user_has_role(user_id, "system_admin")
-        except Exception:
-            is_admin = False
-        if not is_admin:
-            roles = [r for r in roles if r.get("ownerId") == user_id]
+        # Filter roles to only those owned by the caller (tenant-based isolation)
+        roles = [r for r in roles if r.get("ownerId") == user_id]
         # Include legacy mirrors
         roles = [{**r, "name": r.get("roleName"), "role_id": r.get("roleId")} for r in roles]
         return [RoleResponse(**role) for role in roles]

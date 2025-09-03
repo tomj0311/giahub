@@ -46,11 +46,43 @@ class TenantService:
         try:
             await collections['tenants'].insert_one(tenant_data)
             logger.info(f"[TENANT] Successfully created tenant: {tenant_id} for user: {user_email}")
+            
+            # Create a tenant admin role for the owner
+            await TenantService.create_tenant_admin_role(user_id, tenant_id, user_email)
+            
         except Exception as e:
             logger.error(f"[TENANT] Failed to create tenant for user {user_email}: {e}")
             raise
             
         return tenant_data
+    
+    @staticmethod
+    async def create_tenant_admin_role(user_id: str, tenant_id: str, user_email: str) -> None:
+        """Create and assign a tenant admin role to the tenant owner"""
+        from .rbac_service import RBACService
+        
+        logger.info(f"[TENANT] Creating tenant admin role for user: {user_id} in tenant: {tenant_id}")
+        
+        try:
+            # Create a tenant-specific admin role
+            admin_role_name = f"admin@{user_email}_tenant_{tenant_id[:8]}"
+            admin_role = await RBACService.create_role(
+                role_name=admin_role_name,
+                description=f"Tenant administrator for {user_email}",
+                permissions=["manage_users", "manage_roles", "manage_settings", "full_access"],
+                owner_id=user_id,
+                is_default=False,
+                tenant_id=tenant_id
+            )
+            
+            # Assign the admin role to the user
+            await RBACService.assign_role_to_user(user_id, admin_role["roleId"])
+            logger.info(f"[TENANT] Successfully assigned tenant admin role to user: {user_id}")
+            
+        except Exception as e:
+            logger.error(f"[TENANT] Failed to create tenant admin role for user {user_id}: {e}")
+            # Don't raise here to avoid breaking tenant creation
+            pass
     
     @staticmethod
     async def get_tenant_by_id(tenant_id: str) -> Optional[Dict]:
@@ -119,16 +151,26 @@ class TenantService:
     async def filter_by_tenant(user_id: str, query: Dict) -> Dict:
         """Add tenant filtering to a MongoDB query"""
         user_tenant_id = await TenantService.get_user_tenant_id(user_id)
-        if user_tenant_id:
-            query["tenantId"] = user_tenant_id
+        return await TenantService.filter_by_tenant_id(user_tenant_id, query)
+    
+    @staticmethod
+    async def filter_by_tenant_id(tenant_id: Optional[str], query: Dict) -> Dict:
+        """Add tenant filtering to a MongoDB query using tenant_id directly"""
+        if tenant_id:
+            query["tenantId"] = tenant_id
         return query
     
     @staticmethod
     async def add_tenant_to_record(user_id: str, record: Dict) -> Dict:
         """Add tenant_id to a record before saving"""
         user_tenant_id = await TenantService.get_user_tenant_id(user_id)
-        if user_tenant_id:
-            record["tenantId"] = user_tenant_id
+        return await TenantService.add_tenant_to_record_by_id(user_tenant_id, record)
+    
+    @staticmethod
+    async def add_tenant_to_record_by_id(tenant_id: Optional[str], record: Dict) -> Dict:
+        """Add tenant_id to a record before saving using tenant_id directly"""
+        if tenant_id:
+            record["tenantId"] = tenant_id
         return record
     
     @staticmethod
