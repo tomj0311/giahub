@@ -87,6 +87,14 @@ const api = {
     if (!r.ok) throw new Error('Upload failed')
     return r.json()
   },
+  async deleteFile(collection, filename, token) {
+    const r = await apiCall(`/api/knowledge/collection/${encodeURIComponent(collection)}/file/${encodeURIComponent(filename)}`, {
+      method: 'DELETE',
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    })
+    if (!r.ok) throw new Error('Failed to delete file')
+    return r.json()
+  },
   async discoverChunking(token) {
     const r = await apiCall('/api/knowledge/components?folder=ai.document.chunking', {
       headers: token ? { Authorization: `Bearer ${token}` } : {}
@@ -137,6 +145,8 @@ export default function KnowledgeConfig({ user }) {
   })
 
   const [pendingFiles, setPendingFiles] = useState([])
+  const [existingFiles, setExistingFiles] = useState([]) // Files already in the collection
+  const [filesToDelete, setFilesToDelete] = useState([]) // Files marked for deletion
   const [saveBusy, setSaveBusy] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saveState, setSaveState] = useState({ loading: false })
@@ -172,7 +182,8 @@ export default function KnowledgeConfig({ user }) {
             chunk_strategy: data.chunk?.strategy || '',
             chunk_strategy_params: data.chunk?.params || {},
             chunk_size: data.chunk?.chunk_size || 5000,
-            chunk_overlap: data.chunk?.chunk_overlap || 0
+            chunk_overlap: data.chunk?.chunk_overlap || 0,
+            files: data.files || [] // Include files from the collection
           })
         } catch (error) {
           console.error(`[KnowledgeConfig] Failed to load collection ${name}:`, error)
@@ -184,7 +195,8 @@ export default function KnowledgeConfig({ user }) {
             chunk_strategy: '',
             chunk_strategy_params: {},
             chunk_size: 5000,
-            chunk_overlap: 0
+            chunk_overlap: 0,
+            files: [] // Empty files array for failed loads
           })
         }
       }
@@ -245,9 +257,10 @@ export default function KnowledgeConfig({ user }) {
     }
   }, [form.chunk_strategy, token])
 
-  function loadExistingConfig(configName) {
+  async function loadExistingConfig(configName) {
     const config = existingConfigs.find(c => c.name === configName)
     if (config) {
+      console.log('[KnowledgeConfig] Loading config:', config) // Keep this debug temporarily
       setForm({
         ...config,
         id: config.id,
@@ -260,6 +273,11 @@ export default function KnowledgeConfig({ user }) {
       })
       setIsEditMode(true)
       setIsEdit(true)
+      
+      // Set existing files from config data
+      console.log('[KnowledgeConfig] Setting existing files to:', config.files)
+      setExistingFiles(config.files || [])
+      setFilesToDelete([])
     } else {
       setForm({ 
         id: null, 
@@ -272,6 +290,8 @@ export default function KnowledgeConfig({ user }) {
       })
       setIsEditMode(false)
       setIsEdit(false)
+      setExistingFiles([])
+      setFilesToDelete([])
     }
   }
 
@@ -285,6 +305,18 @@ export default function KnowledgeConfig({ user }) {
     setSaveBusy(true)
     
     try {
+      // Delete files marked for deletion first
+      if (filesToDelete.length > 0) {
+        for (const filename of filesToDelete) {
+          try {
+            await api.deleteFile(form.name, filename, token)
+          } catch (error) {
+            console.error(`Failed to delete file ${filename}:`, error)
+            showWarning(`Failed to delete file: ${filename}`)
+          }
+        }
+      }
+
       const payload = {
         collection: form.name,
         category: form.category || '',
@@ -333,6 +365,9 @@ export default function KnowledgeConfig({ user }) {
       })
       setIsEdit(false)
       setIsEditMode(false)
+      setExistingFiles([])
+      setFilesToDelete([])
+      setPendingFiles([])
       setDialogOpen(false)
       
     } catch (e) {
@@ -369,6 +404,9 @@ export default function KnowledgeConfig({ user }) {
       })
       setIsEdit(false)
       setIsEditMode(false)
+      setExistingFiles([])
+      setFilesToDelete([])
+      setPendingFiles([])
       setDialogOpen(false)
       
     } catch (e) {
@@ -408,6 +446,8 @@ export default function KnowledgeConfig({ user }) {
     })
     setIsEdit(false)
     setIsEditMode(false)
+    setExistingFiles([])
+    setFilesToDelete([])
     setPendingFiles([])
     setDialogOpen(true)
   }
@@ -553,6 +593,48 @@ export default function KnowledgeConfig({ user }) {
 
             <Paper variant="soft" sx={{ p: 2 }}>
               <Typography variant="h6" gutterBottom>File Upload</Typography>
+              
+              {console.log('[KnowledgeConfig] Render files - existingFiles.length:', existingFiles.length, 'existingFiles:', existingFiles)}
+              
+              {/* Existing Files */}
+              {existingFiles.length > 0 && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main' }}>
+                    Existing Files ({existingFiles.length})
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                    {existingFiles.filter(filename => !filesToDelete.includes(filename)).map((filename, i) => (
+                      <Chip 
+                        key={`existing-${i}`} 
+                        label={filename}
+                        color="primary"
+                        variant="outlined"
+                        onDelete={() => setFilesToDelete(prev => [...prev, filename])}
+                        deleteIcon={<DeleteIcon size={16} />}
+                      />
+                    ))}
+                  </Box>
+                  {filesToDelete.length > 0 && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="subtitle2" sx={{ mb: 1, color: 'error.main' }}>
+                        Files to Delete ({filesToDelete.length})
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                        {filesToDelete.map((filename, i) => (
+                          <Chip 
+                            key={`delete-${i}`} 
+                            label={filename}
+                            color="error"
+                            onDelete={() => setFilesToDelete(prev => prev.filter(f => f !== filename))}
+                          />
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
+                </Box>
+              )}
+              
+              {/* File Upload */}
               <Box sx={{ border: '2px dashed', borderColor: 'grey.300', borderRadius: 2, p: 2, textAlign: 'center', mb: 2 }}>
                 <input type="file" multiple style={{ display: 'none' }} id="kc-file-upload"
                   onChange={(e) => setPendingFiles(Array.from(e.target.files || []))}
@@ -563,11 +645,23 @@ export default function KnowledgeConfig({ user }) {
                   </Button>
                 </label>
               </Box>
+              
+              {/* Pending Files */}
               {pendingFiles.length > 0 && (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                  {pendingFiles.map((f, i) => (
-                    <Chip key={i} label={`${f.name} (${(f.size/1024).toFixed(1)} KB)`} onDelete={() => setPendingFiles(prev => prev.filter((_, idx) => idx !== i))} />
-                  ))}
+                <Box>
+                  <Typography variant="subtitle2" sx={{ mb: 1, color: 'secondary.main' }}>
+                    Files to Upload ({pendingFiles.length})
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {pendingFiles.map((f, i) => (
+                      <Chip 
+                        key={`pending-${i}`} 
+                        label={`${f.name} (${(f.size/1024).toFixed(1)} KB)`} 
+                        color="secondary"
+                        onDelete={() => setPendingFiles(prev => prev.filter((_, idx) => idx !== i))} 
+                      />
+                    ))}
+                  </Box>
                 </Box>
               )}
             </Paper>

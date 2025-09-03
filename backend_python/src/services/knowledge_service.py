@@ -685,17 +685,19 @@ class KnowledgeService:
         if not doc:
             raise HTTPException(status_code=404, detail="collection not found")
 
-        # Load files from MinIO
-        try:
-            # If ownerId saved in doc use it, else current user
-            owner_id = doc.get("ownerId") or user.get("id")
-            path_prefix = f"uploads/{tenant_id}/{owner_id}/{collection_name}/"
-            
-            file_names = await FileService.list_files_by_prefix(path_prefix)
-            doc["files"] = file_names
-        except Exception as e:
-            logger.warning(f"[KNOWLEDGE] MinIO listing failed for collection {collection_name}: {e}")
-            doc["files"] = []
+        # Load files from MinIO (fallback if not in doc)
+        if "files" not in doc or not doc.get("files"):
+            try:
+                # If ownerId saved in doc use it, else current user
+                owner_id = doc.get("ownerId") or user.get("id")
+                path_prefix = f"uploads/{tenant_id}/{owner_id}/{collection_name}/"
+                
+                file_names = await FileService.list_files_by_prefix(path_prefix)
+                doc["files"] = file_names
+            except Exception as e:
+                logger.warning(f"[KNOWLEDGE] MinIO listing failed for collection {collection_name}: {e}")
+                if "files" not in doc:
+                    doc["files"] = []
 
         # shape compatible with UI
         owner_id = doc.get("ownerId") or user.get("id")
@@ -706,7 +708,7 @@ class KnowledgeService:
             "chunk": doc.get("chunk", {}),
             "created_at": doc.get("created_at"),
             "updated_at": doc.get("updated_at"),
-            "files": [f"{doc.get('collection')}/{fn}" for fn in doc.get("files", [])],
+            "files": doc.get("files", []),  # Return files as stored in MongoDB without prefix
             "doc_counts": doc.get("doc_counts", {}),
             "files_by_type": doc.get("files_by_type", {}),
             "file_count": len(doc.get("files", [])),
