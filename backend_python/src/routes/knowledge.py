@@ -130,3 +130,23 @@ async def get_chunking_components():
 async def get_chunking_component_details(component_name: str):
     """Get detailed information about a specific chunking component."""
     return await KnowledgeService.get_component_details(component_name)
+
+
+@router.post("/introspect")
+async def introspect_knowledge_component(
+    request: dict,
+    user: dict = Depends(verify_token_middleware)
+):
+    """Introspect a knowledge component to get its parameters"""
+    try:
+        module_path = request.get("module_path")
+        kind = request.get("kind", "chunk")
+        
+        if not module_path:
+            raise HTTPException(status_code=400, detail="module_path is required")
+            
+        result = await KnowledgeService.introspect_component(module_path)
+        return result
+    except Exception as e:
+        logger.error(f"Error introspecting knowledge component: {e}")
+        raise HTTPException(status_code=500, detail="Failed to introspect knowledge component")

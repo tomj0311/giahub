@@ -93,6 +93,7 @@ const api = {
     return r.json()
   },
   async introspect(module_path, token) {
+    console.log('[API] Introspecting module_path:', module_path)
     const r = await apiCall('/api/knowledge/introspect', {
       method: 'POST',
       headers: {
@@ -101,7 +102,9 @@ const api = {
       },
       body: JSON.stringify({ module_path, kind: 'chunk' })
     })
-    return r.json()
+    const result = await r.json()
+    console.log('[API] Introspection response:', result)
+    return result
   }
 }
 
@@ -140,24 +143,26 @@ export default function KnowledgeConfig({ user }) {
       api.discoverChunking(token)
     ]).then(([d, c, p, comps]) => {
       console.log('[KnowledgeConfig] API responses:', { d, c, p, comps })
+      console.log('[KnowledgeConfig] Full comps object:', JSON.stringify(comps, null, 2))
       setDefaults(d.defaults || {})
       setCategories(c.categories || [])
       setCollections(p.collections || [])
       
-      // The backend returns full module paths, we need just the component names
-      const chunkingComponents = comps.components?.['ai.document.chunking'] || []
-      console.log('[KnowledgeConfig] Raw chunking components:', chunkingComponents)
+      // Debug the response structure
+      console.log('[KnowledgeConfig] comps.components:', comps.components)
+      console.log('[KnowledgeConfig] comps.components keys:', Object.keys(comps.components || {}))
       
-      // Extract just the component names from full module paths
-      const chunkingNames = chunkingComponents.map(comp => {
-        if (typeof comp === 'string') {
-          return comp.split('.').pop() // Get last part after dots
-        }
-        return comp
-      })
-      console.log('[KnowledgeConfig] Processed chunking names:', chunkingNames)
+      // The backend returns full module paths, use them directly
+      const chunkingData = comps.components?.['ai.document.chunking'] || {}
+      console.log('[KnowledgeConfig] Chunking data object:', chunkingData)
       
-      setComponents({ chunking: chunkingNames })
+      // Get the array from either 'chunking' or 'ai.document.chunking' key
+      const chunkingComponents = chunkingData['ai.document.chunking'] || chunkingData['chunking'] || []
+      console.log('[KnowledgeConfig] Chunking components (full paths):', chunkingComponents)
+      console.log('[KnowledgeConfig] Is array:', Array.isArray(chunkingComponents))
+      console.log('[KnowledgeConfig] Length:', chunkingComponents.length)
+      
+      setComponents({ chunking: Array.isArray(chunkingComponents) ? chunkingComponents : [] })
     }).catch(err => {
       console.error('[KnowledgeConfig] Error loading data:', err)
     }).finally(() => {
@@ -168,9 +173,13 @@ export default function KnowledgeConfig({ user }) {
 
   useEffect(() => {
     if (form.chunk_strategy && !introspection[form.chunk_strategy]) {
+      console.log('[KnowledgeConfig] Introspecting chunk strategy:', form.chunk_strategy)
       api.introspect(form.chunk_strategy, token).then(info => {
+        console.log('[KnowledgeConfig] Introspection result:', info)
         setIntrospection(prev => ({ ...prev, [form.chunk_strategy]: info }))
-      }).catch(() => {})
+      }).catch(err => {
+        console.error('[KnowledgeConfig] Introspection error:', err)
+      })
     }
   }, [form.chunk_strategy, token])
 
@@ -411,15 +420,16 @@ export default function KnowledgeConfig({ user }) {
                       <MenuItem value="">
                         <em>None</em>
                       </MenuItem>
-                      {(components.chunking || []).map(c => (
+                      {Array.isArray(components.chunking) ? components.chunking.map(c => (
                         <MenuItem key={c} value={c}>{c}</MenuItem>
-                      ))}
+                      )) : []}
                     </Select>
                   </FormControl>
                   <Button variant="outlined" size="small" onClick={async () => {
                     const comps = await api.discoverChunking(token)
-                    const chunking = comps.components?.['ai.document.chunking'] || []
-                    setComponents({ chunking })
+                    const chunkingData = comps.components?.['ai.document.chunking'] || {}
+                    const chunking = chunkingData['ai.document.chunking'] || chunkingData['chunking'] || []
+                    setComponents({ chunking: Array.isArray(chunking) ? chunking : [] })
                   }}>Refresh</Button>
                 </Box>
 
@@ -443,12 +453,15 @@ export default function KnowledgeConfig({ user }) {
                     <Typography variant="subtitle2" sx={{ mb: 1 }}>
                       Chunking Parameters ({chunkIntro.class_name || form.chunk_strategy.split('.').pop()})
                     </Typography>
+                    {console.log('[KnowledgeConfig] chunkIntro:', chunkIntro)}
+                    {console.log('[KnowledgeConfig] formatted_params:', chunkIntro.formatted_params)}
                     <Box sx={{
                       display: 'grid',
                       gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
                       gap: 2
                     }}>
                       {(chunkIntro.formatted_params || []).map((paramFormatted, idx) => {
+                        console.log('[KnowledgeConfig] Processing param:', paramFormatted)
                         const paramName = paramFormatted.split(':')[0].trim();
                         const typeMatch = paramFormatted.match(/:\s*([^=\s]+)/);
                         const paramType = typeMatch ? typeMatch[1].toLowerCase() : 'str';

@@ -529,13 +529,24 @@ class KnowledgeService:
         logger.info(f"[KNOWLEDGE] Introspecting component: {module_name}")
         
         try:
-            class_info = get_detailed_class_info(module_name, module_name.split('.')[-1])
-            return {
-                "module": module_name,
-                "description": class_info.get("description", ""),
-                "parameters": class_info.get("parameters", {}),
-                "examples": class_info.get("examples", {})
-            }
+            component_name = module_name.split('.')[-1]
+            class_info = get_detailed_class_info(module_name, component_name)
+            
+            if not class_info:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"No class information found for {module_name}"
+                )
+
+            # Flatten formatted_params for frontend compatibility (like ModelConfig)
+            # If only one class, put its formatted_params at top level
+            if "classes" in class_info and class_info["classes"]:
+                first_class = next(iter(class_info["classes"].values()))
+                class_info["class_name"] = first_class.get("class_name", "")
+                class_info["formatted_params"] = first_class.get("formatted_params", [])
+
+            return class_info
+            
         except Exception as e:
             logger.error(f"[KNOWLEDGE] Failed to introspect {module_name}: {e}")
             raise HTTPException(
