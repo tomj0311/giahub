@@ -17,13 +17,9 @@ def get_logger(logger_name: str) -> logging.Logger:
     if logger_name in _loggers:
         return _loggers[logger_name]
     
-    # Find the root directory of the program
-    try:
-        # Assuming the entry point is in the root directory
-        root_dir = path.dirname(path.abspath(sys.argv[0]))
-    except (AttributeError, IndexError):
-        # Fallback to current working directory
-        root_dir = path.abspath('.')
+    # Find the root directory of the program - always use project root
+    current_file_dir = path.dirname(path.abspath(__file__))
+    root_dir = path.dirname(current_file_dir)  # Go up one level from logger/ to project root
     
     # Console handler (Rich)
     rich_handler = RichHandler(
@@ -90,7 +86,3 @@ def set_global_log_level(level: int):
     """Set log level for all existing loggers."""
     for logger in _loggers.values():
         logger.setLevel(level)
-
-
-# Default logger for the application
-default_logger = get_logger("app")

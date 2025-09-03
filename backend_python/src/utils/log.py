@@ -37,13 +37,9 @@ def get_logger(logger_name: str) -> logging.Logger:
 
 def _get_local_logger(logger_name: str) -> logging.Logger:
     """Local logger implementation (fallback)."""
-    # Find the root directory of the program
-    try:
-        # Assuming the entry point is in the root directory
-        root_dir = path.dirname(path.abspath(sys.argv[0]))
-    except (AttributeError, IndexError):
-        # Fallback to current working directory
-        root_dir = path.abspath('.')
+    # Find the root directory of the program - always use project root
+    current_file_dir = path.dirname(path.abspath(__file__))
+    root_dir = path.dirname(path.dirname(path.dirname(current_file_dir)))  # Go up to project root
     
     # Console handler (Rich)
     rich_handler = RichHandler(

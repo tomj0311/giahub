@@ -16,7 +16,7 @@ from datetime import datetime
 from io import BytesIO
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, status
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, status, Query
 from fastapi.responses import JSONResponse
 
 from ..db import get_collections
@@ -209,7 +209,7 @@ router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
 
 # ---------------------- Component discovery & introspection -------------------
 @router.get("/components")
-async def get_components(folder: Optional[str] = None):
+async def get_components(folder: Optional[str] = None, user: dict = Depends(verify_token_middleware)):
     """Discover components in a specific folder. Example: folder=chunking"""
     if not folder:
         raise HTTPException(status_code=400, detail="folder parameter is required")
@@ -462,19 +462,7 @@ async def upload_knowledge_files(
     except Exception as e:
         logger.error("Upload failed: %s", e)
         raise HTTPException(status_code=500, detail="Upload failed")
-import os
-import sys
-from datetime import datetime
-from io import BytesIO
-from typing import List, Optional
-
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Query
-from fastapi.responses import JSONResponse
-
-from ..db import get_collections
-from ..utils.auth import verify_token_middleware
-
-router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
+# Duplicate imports and router definition removed - using the first router definition
 
 
 # ---- MinIO helpers (mirrors uploads.py with different pathing) ----------------

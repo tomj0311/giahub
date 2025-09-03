@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Box,
   Typography,
@@ -36,11 +36,6 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react'
 import { apiCall } from '../config/api'
-
-function useAuthToken() {
-  const token = useMemo(() => localStorage.getItem('token'), [])
-  return token
-}
 
 const api = {
   async getDefaults(token) {
@@ -110,9 +105,9 @@ const api = {
   }
 }
 
-export default function KnowledgeConfig() {
+export default function KnowledgeConfig({ user }) {
   const theme = useTheme()
-  const token = useAuthToken()
+  const token = user?.token
 
   const [loading, setLoading] = useState(true)
   const [collections, setCollections] = useState([])
@@ -422,13 +417,50 @@ export default function KnowledgeConfig() {
                     <Typography variant="subtitle2" sx={{ mb: 1 }}>
                       Chunking Parameters ({chunkIntro.class_name || form.chunk_strategy.split('.').pop()})
                     </Typography>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                      {(chunkIntro.formatted_params || []).map((p, idx) => (
-                        <TextField key={idx} size="small" label={p.split(':')[0]} placeholder={p} onChange={(e) => {
-                          const key = p.split(':')[0]
-                          setForm(f => ({ ...f, chunk_strategy_params: { ...(f.chunk_strategy_params || {}), [key]: e.target.value } }))
-                        }} />
-                      ))}
+                    <Box sx={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                      gap: 2
+                    }}>
+                      {(chunkIntro.formatted_params || []).map((paramFormatted, idx) => {
+                        const paramName = paramFormatted.split(':')[0].trim();
+                        const typeMatch = paramFormatted.match(/:\s*([^=\s]+)/);
+                        const paramType = typeMatch ? typeMatch[1].toLowerCase() : 'str';
+                        let defaultRaw = '';
+                        const descSplitIdx = paramFormatted.indexOf(' - ');
+                        const mainPart = descSplitIdx !== -1 ? paramFormatted.slice(0, descSplitIdx) : paramFormatted;
+                        const eqIdx = mainPart.indexOf('=');
+                        if (eqIdx !== -1) {
+                          defaultRaw = mainPart.slice(eqIdx + 1).trim();
+                          if ((defaultRaw.startsWith("'") && defaultRaw.endsWith("'")) || (defaultRaw.startsWith('"') && defaultRaw.endsWith('"'))) {
+                            defaultRaw = defaultRaw.slice(1, -1);
+                          }
+                        }
+                        const hasDefault = defaultRaw !== '' && defaultRaw.toLowerCase() !== 'none';
+                        const placeholderText = hasDefault ? `Default: ${defaultRaw}` : `Enter ${paramName}`;
+                        let gridColumn = 'span 1';
+                        if (paramType.includes('int') || paramType.includes('float') || paramType.includes('bool')) {
+                          gridColumn = 'span 1';
+                        } else if (paramType.includes('str') && (paramName.includes('key') || paramName.includes('token') || paramName.includes('url'))) {
+                          gridColumn = 'span 2';
+                        }
+                        return (
+                          <TextField
+                            key={paramName}
+                            size="small"
+                            label={paramName}
+                            InputLabelProps={{ shrink: true }}
+                            value={form.chunk_strategy_params[paramName] || ''}
+                            onChange={(e) => setForm(f => ({
+                              ...f,
+                              chunk_strategy_params: { ...(f.chunk_strategy_params || {}), [paramName]: e.target.value }
+                            }))}
+                            placeholder={placeholderText}
+                            sx={{ gridColumn }}
+                            type={paramType.includes('int') || paramType.includes('float') ? 'number' : 'text'}
+                          />
+                        );
+                      })}
                     </Box>
                   </Box>
                 )}
