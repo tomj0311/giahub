@@ -95,17 +95,20 @@ class ToolConfigService:
     async def get_tool_configs(cls, user: dict, category: Optional[str] = None) -> List[dict]:
         """Get all tool configurations for the user's tenant, optionally filtered by category"""
         tenant_id = await cls.validate_tenant_access(user)
+        logger.info(f"[TOOL] Listing tool configs for tenant: {tenant_id}")
         
         # Build query filter
         query = {"tenantId": tenant_id}
         if category:
             query["category"] = category
+        logger.debug(f"[TOOL] Query filter: {query}")
         
         collection = cls._get_tool_config_collection()
         configs = await collection.find(
             query,
             {"_id": 0}
         ).to_list(None)
+        logger.info(f"[TOOL] Retrieved {len(configs)} tool configs for tenant: {tenant_id}")
         
         return configs
 
@@ -113,6 +116,7 @@ class ToolConfigService:
     async def get_tool_config_by_name(cls, name: str, user: dict) -> dict:
         """Get a specific tool configuration by name"""
         tenant_id = await cls.validate_tenant_access(user)
+        logger.info(f"[TOOL] Fetching tool config '{name}' for tenant: {tenant_id}")
         
         collection = cls._get_tool_config_collection()
         config = await collection.find_one(
@@ -121,17 +125,21 @@ class ToolConfigService:
         )
         
         if not config:
+            logger.warning(f"[TOOL] Tool config not found: name='{name}', tenant='{tenant_id}'")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Tool configuration not found"
             )
         
+        logger.info(f"[TOOL] Found tool config '{name}' for tenant: {tenant_id}")
         return config
 
     @classmethod
     async def update_tool_config(cls, name: str, updates: dict, user: dict) -> dict:
         """Update a tool configuration"""
         tenant_id = await cls.validate_tenant_access(user)
+        logger.info(f"[TOOL] Updating tool config '{name}' for tenant: {tenant_id}")
+        logger.debug(f"[TOOL] Update payload: {updates}")
         
         # Check if config exists
         await cls.get_tool_config_by_name(name, user)
@@ -146,17 +154,20 @@ class ToolConfigService:
         )
         
         if result.modified_count == 0:
+            logger.warning(f"[TOOL] Update made no changes or config not found: name='{name}', tenant='{tenant_id}'")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Tool configuration not found or no changes made"
             )
         
+        logger.info(f"[TOOL] Successfully updated tool config '{name}' for tenant: {tenant_id}")
         return {"message": "Tool configuration updated successfully"}
 
     @classmethod
     async def delete_tool_config(cls, name: str, user: dict) -> dict:
         """Delete a tool configuration"""
         tenant_id = await cls.validate_tenant_access(user)
+        logger.info(f"[TOOL] Deleting tool config '{name}' for tenant: {tenant_id}")
         
         collection = cls._get_tool_config_collection()
         result = await collection.delete_one({
@@ -165,17 +176,20 @@ class ToolConfigService:
         })
         
         if result.deleted_count == 0:
+            logger.warning(f"[TOOL] Tool config not found for deletion: name='{name}', tenant='{tenant_id}'")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Tool configuration not found"
             )
         
+        logger.info(f"[TOOL] Successfully deleted tool config '{name}' for tenant: {tenant_id}")
         return {"message": "Tool configuration deleted successfully"}
 
     @classmethod
     async def discover_tool_components(cls, folder: str = "ai.functions") -> List[dict]:
         """Discover available tool components"""
         try:
+            logger.info(f"[TOOL] Discovering tool components in folder: {folder}")
             components = discover_components(folder=folder)
             result = []
             
@@ -198,6 +212,7 @@ class ToolConfigService:
                         "error": str(e)
                     })
             
+            logger.info(f"[TOOL] Discovered {len(result)} tool components in {folder}")
             return result
             
         except Exception as e:
@@ -211,10 +226,13 @@ class ToolConfigService:
     async def get_tool_categories(cls, user: dict) -> List[str]:
         """Get all unique categories for the user's tenant"""
         tenant_id = await cls.validate_tenant_access(user)
+        logger.debug(f"[TOOL] Fetching tool categories for tenant: {tenant_id}")
         
         collection = cls._get_tool_config_collection()
         categories = await collection.distinct("category", {"tenantId": tenant_id})
         
         # Filter out empty categories and sort
         categories = [cat for cat in categories if cat and cat.strip()]
-        return sorted(categories)
+        categories_sorted = sorted(categories)
+        logger.info(f"[TOOL] Found {len(categories_sorted)} categories for tenant: {tenant_id}")
+        return categories_sorted
