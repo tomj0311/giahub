@@ -625,6 +625,7 @@ export default function KnowledgeConfig({ user }) {
                             key={`delete-${i}`} 
                             label={filename}
                             color="error"
+                            variant="outlined"
                             onDelete={() => setFilesToDelete(prev => prev.filter(f => f !== filename))}
                           />
                         ))}
@@ -658,6 +659,7 @@ export default function KnowledgeConfig({ user }) {
                         key={`pending-${i}`} 
                         label={`${f.name} (${(f.size/1024).toFixed(1)} KB)`} 
                         color="secondary"
+                        variant="outlined"
                         onDelete={() => setPendingFiles(prev => prev.filter((_, idx) => idx !== i))} 
                       />
                     ))}
