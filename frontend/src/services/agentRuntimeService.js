@@ -1,8 +1,8 @@
-import { api } from '../config/api'
+import { apiCall } from '../config/api'
 
 export const agentRuntimeService = {
   async runStream(body, token, onEvent) {
-    const res = await api(`/api/agent-runtime/run`, {
+    const res = await apiCall(`/api/agent-runtime/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
       body: JSON.stringify(body)
@@ -45,7 +45,7 @@ export const agentRuntimeService = {
     }
   },
   async run(body, token) {
-    const res = await api(`/api/agent-runtime/run`, {
+    const res = await apiCall(`/api/agent-runtime/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
       body: JSON.stringify(body)
@@ -58,7 +58,7 @@ export const agentRuntimeService = {
     const fd = new FormData()
     fd.append('prefix', prefix)
     for (const f of files) fd.append('files', f)
-    const res = await api(`/api/knowledge/upload?prefix=${encodeURIComponent(prefix)}`, {
+    const res = await apiCall(`/api/knowledge/upload?prefix=${encodeURIComponent(prefix)}`, {
       method: 'POST',
       headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
       body: fd
@@ -68,7 +68,7 @@ export const agentRuntimeService = {
     return j
   },
   async saveConversation(body, token) {
-    const res = await api(`/api/agent-runtime/conversations`, {
+    const res = await apiCall(`/api/agent-runtime/conversations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
       body: JSON.stringify(body)
@@ -78,19 +78,19 @@ export const agentRuntimeService = {
     return j
   },
   async listConversations(token) {
-    const res = await api(`/api/agent-runtime/conversations`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} })
+    const res = await apiCall(`/api/agent-runtime/conversations`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} })
     const j = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(j.detail || `HTTP ${res.status}`)
     return j.conversations || []
   },
   async getConversation(id, token) {
-    const res = await api(`/api/agent-runtime/conversations/${encodeURIComponent(id)}`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} })
+    const res = await apiCall(`/api/agent-runtime/conversations/${encodeURIComponent(id)}`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} })
     const j = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(j.detail || `HTTP ${res.status}`)
     return j
   },
   async deleteConversation(id, token) {
-    const res = await api(`/api/agent-runtime/conversations/${encodeURIComponent(id)}`, { method: 'DELETE', headers: token ? { 'Authorization': `Bearer ${token}` } : {} })
+    const res = await apiCall(`/api/agent-runtime/conversations/${encodeURIComponent(id)}`, { method: 'DELETE', headers: token ? { 'Authorization': `Bearer ${token}` } : {} })
     if (!res.ok) {
       const j = await res.json().catch(() => ({}))
       throw new Error(j.detail || `HTTP ${res.status}`)

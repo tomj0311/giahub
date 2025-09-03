@@ -7,7 +7,7 @@ import Stack from '@mui/material/Stack'
 import Divider from '@mui/material/Divider'
 import PasswordField from '../components/PasswordField'
 import { useSnackbar } from '../contexts/SnackbarContext'
-import { apiCall, API_BASE_URL, api } from '../config/api'
+import { apiCall, API_BASE_URL } from '../config/api'
 
 export default function LoginPage({ onLogin }) {
   const [username, setUsername] = useState('')

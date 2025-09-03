@@ -27,7 +27,7 @@ import {
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
 
-import { api } from '../config/api'
+import { apiCall } from '../config/api'
 
 export default function Agent({ user }) {
   const token = user?.token
@@ -78,11 +78,11 @@ export default function Agent({ user }) {
     setLoading(true)
     try {
       const [modelsRes, toolsRes, modelCatsRes, prefixesRes, agentsRes] = await Promise.all([
-        api(`/api/model-config/configs`, { headers: authHeaders }),
-        api(`/api/tool-config/configs`, { headers: authHeaders }),
-        api(`/api/model-config/categories`, { headers: authHeaders }),
-        api(`/api/knowledge/prefixes`, { headers: authHeaders }),
-        api(`/api/agents`, { headers: authHeaders }),
+        apiCall(`/api/model-config/configs`, { headers: authHeaders }),
+        apiCall(`/api/tool-config/configs`, { headers: authHeaders }),
+        apiCall(`/api/model-config/categories`, { headers: authHeaders }),
+        apiCall(`/api/knowledge/prefixes`, { headers: authHeaders }),
+        apiCall(`/api/agents`, { headers: authHeaders }),
       ])
 
       const modelsJson = await modelsRes.json().catch(() => ({}))
@@ -126,7 +126,7 @@ export default function Agent({ user }) {
     if (!form.model?.name) { showError('Select a model configuration'); return }
     setSaving(true)
     try {
-      const resp = await api(`/api/agents`, {
+      const resp = await apiCall(`/api/agents`, {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify(form),
@@ -147,7 +147,7 @@ export default function Agent({ user }) {
     if (!form.name) return
     setSaving(true)
     try {
-      const resp = await api(`/api/agents/${encodeURIComponent(form.name)}`, {
+      const resp = await apiCall(`/api/agents/${encodeURIComponent(form.name)}`, {
         method: 'DELETE',
         headers: authHeaders,
       })
@@ -168,7 +168,7 @@ export default function Agent({ user }) {
     if (!name) return
     try {
       setSaving(true)
-      const resp = await api(`/api/agents/${encodeURIComponent(name)}`, {
+      const resp = await apiCall(`/api/agents/${encodeURIComponent(name)}`, {
         method: 'DELETE',
         headers: authHeaders,
       })

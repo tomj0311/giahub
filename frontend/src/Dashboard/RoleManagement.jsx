@@ -32,7 +32,7 @@ import {
   Shield as SecurityIcon
 } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
-import { api } from '../config/api'
+import { apiCall } from '../config/api'
 
 export default function RoleManagement({ user }) {
   const [roles, setRoles] = useState([])
@@ -54,7 +54,7 @@ export default function RoleManagement({ user }) {
   const fetchRoles = async () => {
     try {
       setLoading(true)
-  const response = await api('/api/roles', {
+  const response = await apiCall('/api/roles', {
         headers: user?.token ? { 'Authorization': `Bearer ${user.token}` } : {}
       })
 
@@ -75,7 +75,7 @@ export default function RoleManagement({ user }) {
     try {
       const permissions = formData.permissions.split(',').map(p => p.trim()).filter(p => p)
 
-  const response = await api('/api/roles', {
+  const response = await apiCall('/api/roles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(user?.token ? { 'Authorization': `Bearer ${user.token}` } : {}) },
         body: JSON.stringify({
@@ -103,7 +103,7 @@ export default function RoleManagement({ user }) {
     try {
       const permissions = formData.permissions.split(',').map(p => p.trim()).filter(p => p)
 
-  const response = await api(`/api/roles/${selectedRole.roleId}`, {
+  const response = await apiCall(`/api/roles/${selectedRole.roleId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...(user?.token ? { 'Authorization': `Bearer ${user.token}` } : {}) },
         body: JSON.stringify({
@@ -133,7 +133,7 @@ export default function RoleManagement({ user }) {
     }
 
     try {
-  const response = await api(`/api/roles/${role.roleId}`, {
+  const response = await apiCall(`/api/roles/${role.roleId}`, {
         method: 'DELETE',
         headers: user?.token ? { 'Authorization': `Bearer ${user.token}` } : {}
       })

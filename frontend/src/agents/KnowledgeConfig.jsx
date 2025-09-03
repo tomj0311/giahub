@@ -72,7 +72,7 @@ const api = {
     return r.json()
   },
   async deleteCollection(collection, token) {
-    const r = await api(`/api/knowledge/collection/${encodeURIComponent(collection)}`, {
+    const r = await apiCall(`/api/knowledge/collection/${encodeURIComponent(collection)}`, {
       method: 'DELETE',
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     })
@@ -83,7 +83,7 @@ const api = {
     const fd = new FormData()
     fd.append('collection', collection)
     for (const f of files) fd.append('files', f)
-    const r = await api(`/api/knowledge/upload?collection=${encodeURIComponent(collection)}`, {
+    const r = await apiCall(`/api/knowledge/upload?collection=${encodeURIComponent(collection)}`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: fd
@@ -92,13 +92,13 @@ const api = {
     return r.json()
   },
   async discoverChunking(token) {
-    const r = await api('/api/knowledge/components?folder=ai.document.chunking', {
+    const r = await apiCall('/api/knowledge/components?folder=ai.document.chunking', {
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     })
     return r.json()
   },
   async introspect(module_path, token) {
-    const r = await api('/api/knowledge/introspect', {
+    const r = await apiCall('/api/knowledge/introspect', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -153,11 +153,11 @@ export default function KnowledgeConfig() {
 
   useEffect(() => {
     if (form.chunk_strategy && !introspection[form.chunk_strategy]) {
-      api.introspect(form.chunk_strategy).then(info => {
+      api.introspect(form.chunk_strategy, token).then(info => {
         setIntrospection(prev => ({ ...prev, [form.chunk_strategy]: info }))
       }).catch(() => {})
     }
-  }, [form.chunk_strategy])
+  }, [form.chunk_strategy, token])
 
   const loadExisting = async (name) => {
     setLoading(true)
@@ -387,8 +387,11 @@ export default function KnowledgeConfig() {
                     <InputLabel id="chunk-strategy-label">Chunk Strategy</InputLabel>
                     <Select labelId="chunk-strategy-label" label="Chunk Strategy" value={form.chunk_strategy || ''}
                       onChange={(e) => setForm(f => ({ ...f, chunk_strategy: e.target.value, chunk_strategy_params: {} }))}>
+                      <MenuItem value="">
+                        <em>None</em>
+                      </MenuItem>
                       {(components.chunking || []).map(c => (
-                        <MenuItem key={c} value={c}>{c.split('.').pop()}</MenuItem>
+                        <MenuItem key={c} value={c}>{c}</MenuItem>
                       ))}
                     </Select>
                   </FormControl>
