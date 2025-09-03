@@ -8,6 +8,7 @@ from pydantic import BaseModel, EmailStr
 
 from ..db import get_collections
 from ..utils.auth import verify_token_middleware
+from ..utils.log import logger
 from ..services.rbac_service import RBACService
 from ..services.tenant_service import TenantService
 from ..utils.tenant_middleware import tenant_filter_query, tenant_filter_records
@@ -195,21 +196,29 @@ async def get_all_users(user: dict = Depends(verify_token_middleware)):
     # Additional tenant filtering for safety
     tenant_users = await tenant_filter_records(current_user_id, all_users)
 
+    logger.debug(f"[RBAC] Found {len(tenant_users)} tenant users")
+    
     # Build user list with their roles (tenant-filtered)
     users = []
     for u in tenant_users:
-        user_id_field = u.get('id') or u.get('user_id')
+        logger.debug(f"[RBAC] Processing user: {u.keys()}")
+        user_id_field = u.get('id') or u.get('user_id') or u.get('_id')
+        logger.debug(f"[RBAC] User ID field: {user_id_field}")
         if not user_id_field:
+            logger.warning(f"[RBAC] Skipping user with no ID: {u}")
             continue
 
         # Get user's roles (already tenant-filtered via RBAC service)
-        user_roles = await RBACService.get_user_roles(user_id_field)
+        user_roles = await RBACService.get_user_roles(str(user_id_field))
+        logger.debug(f"[RBAC] User {user_id_field} has roles: {len(user_roles)}")
         
         # Build user data without password and _id (ObjectId serialization issue)
-        user_data = {k: v for k, v in u.items() if k not in ["password", "_id"]}
+        user_data = {k: v for k, v in u.items() if k not in ["password", "_id", "password_hash"]}
+        user_data["id"] = str(user_id_field)
         user_data["roles"] = user_roles
         users.append(user_data)
 
+    logger.info(f"[RBAC] Returning {len(users)} users")
     return users
 
 

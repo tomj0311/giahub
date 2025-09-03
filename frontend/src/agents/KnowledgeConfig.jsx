@@ -132,18 +132,38 @@ export default function KnowledgeConfig({ user }) {
 
   useEffect(() => {
     // Boot: defaults, categories, collections, chunking discovery
+    console.log('[KnowledgeConfig] Starting data load...')
     Promise.all([
       api.getDefaults(token),
       api.getCategories(token),
       api.getCollections(token),
       api.discoverChunking(token)
     ]).then(([d, c, p, comps]) => {
+      console.log('[KnowledgeConfig] API responses:', { d, c, p, comps })
       setDefaults(d.defaults || {})
       setCategories(c.categories || [])
       setCollections(p.collections || [])
-      const chunking = comps.components?.['ai.document.chunking'] || []
-      setComponents({ chunking })
-    }).catch(err => console.error(err)).finally(() => setLoading(false))
+      
+      // The backend returns full module paths, we need just the component names
+      const chunkingComponents = comps.components?.['ai.document.chunking'] || []
+      console.log('[KnowledgeConfig] Raw chunking components:', chunkingComponents)
+      
+      // Extract just the component names from full module paths
+      const chunkingNames = chunkingComponents.map(comp => {
+        if (typeof comp === 'string') {
+          return comp.split('.').pop() // Get last part after dots
+        }
+        return comp
+      })
+      console.log('[KnowledgeConfig] Processed chunking names:', chunkingNames)
+      
+      setComponents({ chunking: chunkingNames })
+    }).catch(err => {
+      console.error('[KnowledgeConfig] Error loading data:', err)
+    }).finally(() => {
+      console.log('[KnowledgeConfig] Setting loading to false')
+      setLoading(false)
+    })
   }, [token])
 
   useEffect(() => {
@@ -233,7 +253,10 @@ export default function KnowledgeConfig({ user }) {
 
   const chunkIntro = form.chunk_strategy ? introspection[form.chunk_strategy] : null
 
+  console.log('[KnowledgeConfig] Render - loading:', loading, 'collections:', collections.length, 'components:', components)
+
   if (loading) {
+    console.log('[KnowledgeConfig] Showing loading spinner')
     return (
       <Paper sx={{ p: 4, textAlign: 'center' }}>
         <CircularProgress />
@@ -241,6 +264,8 @@ export default function KnowledgeConfig({ user }) {
       </Paper>
     )
   }
+
+  console.log('[KnowledgeConfig] Rendering main component')
 
   const openCreate = () => {
     setForm({ name: '', category: '', chunk_strategy: '', chunk_strategy_params: {}, chunk_size: defaults.chunk_size || 5000, chunk_overlap: defaults.chunk_overlap || 0 })
@@ -253,7 +278,8 @@ export default function KnowledgeConfig({ user }) {
     loadExisting(name).then(() => setDialogOpen(true))
   }
 
-  return (
+  try {
+    return (
     <Box>
       {(saveBusy) && (
         <Fade in timeout={400}>
@@ -495,4 +521,12 @@ export default function KnowledgeConfig({ user }) {
       </Dialog>
     </Box>
   )
+  } catch (error) {
+    console.error('[KnowledgeConfig] Render error:', error)
+    return (
+      <Box sx={{ p: 4, textAlign: 'center' }}>
+        <Typography color="error">Error rendering Knowledge Config: {error.message}</Typography>
+      </Box>
+    )
+  }
 }

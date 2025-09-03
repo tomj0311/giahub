@@ -98,14 +98,21 @@ class UserService:
             # Create default tenant
             tenant_info = await TenantService.create_default_tenant(email, user_id)
             
+            # Update user record with tenant_id
+            await cls._get_users_collection().update_one(
+                {"_id": user_id},
+                {"$set": {"tenantId": tenant_info["tenantId"]}}
+            )
+            logger.debug(f"[USER] Updated user {user_id} with tenant_id: {tenant_info['tenantId']}")
+            
             # Send verification email
-            await send_registration_email(email, verification_token, user_data["firstName"])
+            await send_registration_email(email, "user", verification_token)
             
             logger.info(f"[USER] Successfully registered user: {email}")
             return {
                 "message": "Registration successful. Please check your email to verify your account.",
                 "user_id": user_id,
-                "tenant_id": tenant_info["tenant_id"]
+                "tenant_id": tenant_info["tenantId"]
             }
             
         except HTTPException:
@@ -347,3 +354,51 @@ class UserService:
             "missingFields": missing,
             "completionPercentage": completion_percentage
         }
+    
+    @classmethod
+    async def get_users_by_tenant(cls, user: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Get all users filtered by tenant"""
+        user_id = user.get("id")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid user"
+            )
+        
+        try:
+            from ..utils.tenant_middleware import tenant_filter_query, tenant_filter_records
+            
+            collections = get_collections()
+            
+            # Filter users by tenant
+            user_query = await tenant_filter_query(user_id, {})
+            all_users = await collections['users'].find(user_query).to_list(None)
+            
+            # Additional tenant filtering for safety
+            tenant_users = await tenant_filter_records(user_id, all_users)
+            
+            # Build user list with their roles (tenant-filtered)
+            users = []
+            for u in tenant_users:
+                user_id_field = u.get('id') or u.get('_id')
+                if not user_id_field:
+                    continue
+                
+                # Get user's roles (already tenant-filtered via RBAC service)
+                user_roles = await RBACService.get_user_roles(str(user_id_field))
+                
+                # Build user data without password and _id (ObjectId serialization issue)
+                user_data = {k: v for k, v in u.items() if k not in ["password", "_id", "password_hash"]}
+                user_data["id"] = str(user_id_field)
+                user_data["roles"] = user_roles
+                users.append(user_data)
+            
+            logger.info(f"[USER] Retrieved {len(users)} users for tenant")
+            return users
+            
+        except Exception as e:
+            logger.error(f"[USER] Failed to get users by tenant: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to retrieve users"
+            )

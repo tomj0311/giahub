@@ -11,6 +11,7 @@ import IconButton from '@mui/material/IconButton'
 import { Moon as Brightness4Icon, Sun as Brightness7Icon } from 'lucide-react'
 import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
+import VerifyPage from './pages/VerifyPage'
 import AuthCallback from './pages/AuthCallback'
 import Dashboard from './Dashboard/Dashboard'
 import { buildTheme, getThemeKeyForMode } from './theme'
@@ -140,6 +141,7 @@ export default function App() {
         {/* Public routes */}
         <Route path="/login" element={!auth.token ? <LoginPage onLogin={auth.login} /> : <Navigate to="/dashboard" replace />} />
         <Route path="/signup" element={!auth.token ? <SignupPage /> : <Navigate to="/dashboard" replace />} />
+        <Route path="/verify" element={<VerifyPage />} />
         <Route path="/auth/callback" element={<AuthCallback onLogin={auth.login} />} />
 
         {/* Protected routes */}

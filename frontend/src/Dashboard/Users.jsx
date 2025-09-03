@@ -70,7 +70,18 @@ export default function Users({ user }) {
   }
 
   const getInitials = (name) => {
+    if (!name) return '??'
     return name.split(' ').map(n => n[0]).join('').toUpperCase()
+  }
+
+  const getFullName = (userData) => {
+    if (userData.name) return userData.name
+    if (userData.firstName && userData.lastName) {
+      return `${userData.firstName} ${userData.lastName}`
+    }
+    if (userData.firstName) return userData.firstName
+    if (userData.lastName) return userData.lastName
+    return userData.email || 'Unknown User'
   }
 
   const handleManageRoles = () => {
@@ -175,11 +186,11 @@ export default function Users({ user }) {
                           <TableCell>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                               <Avatar sx={{ width: 32, height: 32 }}>
-                                {getInitials(userData.name)}
+                                {getInitials(getFullName(userData))}
                               </Avatar>
                               <Box>
                                 <Typography variant="body2" fontWeight="medium">
-                                  {userData.name}
+                                  {getFullName(userData)}
                                 </Typography>
                                 {userData.isInvited && (
                                   <Typography variant="caption" color="text.secondary">
@@ -223,13 +234,13 @@ export default function Users({ user }) {
                           </TableCell>
                           <TableCell>
                             <Chip
-                              label={userData.active ? 'Active' : 'Inactive'}
-                              color={getStatusColor(userData.active)}
+                              label={userData.verified ? 'Active' : 'Pending'}
+                              color={getStatusColor(userData.verified)}
                               size="small"
                             />
                           </TableCell>
                           <TableCell>
-                            {new Date(userData.createdAt).toLocaleDateString()}
+                            {new Date(userData.created_at || userData.createdAt).toLocaleDateString()}
                           </TableCell>
                           <TableCell align="right">
                             <IconButton size="small" color="primary">

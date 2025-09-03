@@ -107,6 +107,19 @@ async def diag():
 
 
 # Component discovery routes
+@router.get("/components")
+async def get_knowledge_components(folder: str = "ai.document.chunking", user: dict = Depends(verify_token_middleware)):
+    """Discover available knowledge components"""
+    try:
+        from src.utils.component_discovery import discover_components
+        
+        components = discover_components(folder=folder)
+        return {"components": {folder: components}, "message": "OK"}
+    except Exception as e:
+        logger.error(f"Error discovering knowledge components: {e}")
+        raise HTTPException(status_code=500, detail="Failed to discover knowledge components")
+
+
 @router.get("/components/chunking")
 async def get_chunking_components():
     """Get available chunking components."""

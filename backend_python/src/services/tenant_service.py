@@ -101,13 +101,38 @@ class TenantService:
         """Get tenant_id for a user"""
         logger.debug(f"[TENANT] Getting tenant ID for user: {user_id}")
         collections = get_collections()
-        user = await collections['users'].find_one({"id": user_id})
+        user = await collections['users'].find_one({"_id": user_id})
         tenant_id = user.get("tenantId") if user else None
         if tenant_id:
             logger.debug(f"[TENANT] User {user_id} belongs to tenant: {tenant_id}")
         else:
             logger.warning(f"[TENANT] No tenant found for user: {user_id}")
         return tenant_id
+    
+    @staticmethod
+    async def get_user_tenant_info(user_id: str) -> Optional[Dict]:
+        """Get tenant information for a user"""
+        logger.debug(f"[TENANT] Getting tenant info for user: {user_id}")
+        
+        # Get user's tenant_id
+        tenant_id = await TenantService.get_user_tenant_id(user_id)
+        if not tenant_id:
+            logger.warning(f"[TENANT] No tenant found for user: {user_id}")
+            return None
+        
+        # Get tenant details
+        tenant = await TenantService.get_tenant_by_id(tenant_id)
+        if not tenant:
+            logger.warning(f"[TENANT] Tenant details not found for ID: {tenant_id}")
+            return None
+        
+        return {
+            "tenant_id": tenant_id,
+            "tenant_name": tenant.get("name"),
+            "tenant_description": tenant.get("description"),
+            "is_owner": tenant.get("ownerId") == user_id,
+            "settings": tenant.get("settings", {})
+        }
     
     @staticmethod
     async def verify_tenant_access(user_id: str, tenant_id: str) -> bool:
