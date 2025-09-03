@@ -216,6 +216,18 @@ async def get_all_users(user: dict = Depends(verify_token_middleware)):
         user_data = {k: v for k, v in u.items() if k not in ["password", "_id", "password_hash"]}
         user_data["id"] = str(user_id_field)
         user_data["roles"] = user_roles
+        
+        # Ensure name field is always present and meaningful
+        if not user_data.get("name") or user_data["name"].strip() == "":
+            first_name = user_data.get("firstName", "")
+            last_name = user_data.get("lastName", "")
+            if first_name or last_name:
+                user_data["name"] = f"{first_name} {last_name}".strip()
+            else:
+                # Fallback to email prefix if no name components
+                email = user_data.get("email", "")
+                user_data["name"] = email.split('@')[0] if email else "Unknown User"
+        
         users.append(user_data)
 
     logger.info(f"[RBAC] Returning {len(users)} users")

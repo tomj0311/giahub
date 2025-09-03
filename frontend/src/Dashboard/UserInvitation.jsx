@@ -268,7 +268,10 @@ export default function UserInvitation({ user }) {
                       <TableRow key={userData.id}>
                         <TableCell>
                           <Typography variant="body2" fontWeight="medium">
-                            {userData.name}
+                            {userData.name || 
+                             (userData.firstName || userData.lastName ? 
+                              `${userData.firstName || ''} ${userData.lastName || ''}`.trim() : 
+                              userData.email?.split('@')[0] || 'Unknown User')}
                           </Typography>
                         </TableCell>
                         <TableCell>{userData.email}</TableCell>
@@ -394,7 +397,12 @@ export default function UserInvitation({ user }) {
 
       {/* Assign Roles Dialog */}
       <Dialog open={openAssignDialog} onClose={handleCloseDialogs} maxWidth="sm" fullWidth>
-        <DialogTitle>Manage Roles for {selectedUser?.name}</DialogTitle>
+        <DialogTitle>
+          Manage Roles for {selectedUser?.name || 
+                           (selectedUser?.firstName || selectedUser?.lastName ? 
+                            `${selectedUser?.firstName || ''} ${selectedUser?.lastName || ''}`.trim() : 
+                            selectedUser?.email?.split('@')[0] || 'User')}
+        </DialogTitle>
         <DialogContent>
           <FormControl fullWidth sx={{ mt: 1 }}>
             <InputLabel>Assign Roles</InputLabel>

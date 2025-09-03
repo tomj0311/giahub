@@ -77,24 +77,24 @@ export default function Agent({ user }) {
   async function fetchAll() {
     setLoading(true)
     try {
-      const [modelsRes, toolsRes, modelCatsRes, prefixesRes, agentsRes] = await Promise.all([
+      const [modelsRes, toolsRes, modelCatsRes, collectionsRes, agentsRes] = await Promise.all([
         apiCall(`/api/model-config/configs`, { headers: authHeaders }),
         apiCall(`/api/tool-config/configs`, { headers: authHeaders }),
         apiCall(`/api/model-config/categories`, { headers: authHeaders }),
-        apiCall(`/api/knowledge/prefixes`, { headers: authHeaders }),
+        apiCall(`/api/knowledge/collections`, { headers: authHeaders }),
         apiCall(`/api/agents`, { headers: authHeaders }),
       ])
 
       const modelsJson = await modelsRes.json().catch(() => ({}))
       const toolsJson = await toolsRes.json().catch(() => ({}))
       const catsJson = await modelCatsRes.json().catch(() => ({}))
-      const prefJson = await prefixesRes.json().catch(() => ({}))
+      const collectionsJson = await collectionsRes.json().catch(() => ({}))
       const agentsJson = await agentsRes.json().catch(() => ({}))
 
       setModels((modelsJson.configurations || []).map(c => c.name).sort())
       setTools((toolsJson.configurations || []).map(c => c.name).sort())
       setCategories((catsJson.categories || []).sort())
-      setKnowledgePrefixes((prefJson.prefixes || []).sort())
+      setKnowledgePrefixes((collectionsJson.collections || []).sort())
       setExistingAgents(agentsJson.agents || [])
     } catch (e) {
       console.error(e)
