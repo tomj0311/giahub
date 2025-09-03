@@ -7,7 +7,7 @@ from rich.logging import RichHandler
 
 # Import centralized logging
 try:
-    from logger.logger import get_logger as centralized_get_logger
+    from logger.logger import get_logger as centralized_get_logger, set_log_level_to_debug as centralized_set_debug, set_log_level_to_info as centralized_set_info
     CENTRALIZED_LOGGING_AVAILABLE = True
 except ImportError:
     CENTRALIZED_LOGGING_AVAILABLE = False
@@ -77,7 +77,6 @@ logger: logging.Logger = get_logger(LOGGER_NAME)
 
 def set_log_level_to_debug():
     if CENTRALIZED_LOGGING_AVAILABLE:
-        from logger.logger import set_log_level_to_debug as centralized_set_debug
         centralized_set_debug(LOGGER_NAME)
     else:
         _logger = logging.getLogger(LOGGER_NAME)
@@ -86,7 +85,6 @@ def set_log_level_to_debug():
 
 def set_log_level_to_info():
     if CENTRALIZED_LOGGING_AVAILABLE:
-        from logger.logger import set_log_level_to_info as centralized_set_info
         centralized_set_info(LOGGER_NAME)
     else:
         _logger = logging.getLogger(LOGGER_NAME)

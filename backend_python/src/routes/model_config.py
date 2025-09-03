@@ -299,7 +299,7 @@ async def get_categories(user: dict = Depends(verify_token_middleware)):
         collections = get_collections()
         
         # Get distinct categories
-        categories = await collections['modelconfigs'].distinct("category")
+        categories = await collections['modelConfig'].distinct("category")
         
         # Filter out empty categories and sort
         categories = [cat for cat in categories if cat and cat.strip()]
