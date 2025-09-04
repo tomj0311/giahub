@@ -20,10 +20,10 @@ class Semantic(SemanticChunking):
         # Core parameters
         embedder: Optional[Embedder] = None,
         chunk_size: int = 5000,
-        similarity_threshold: Optional[float] = 0.5,
+        similarity_threshold: float = 0.5,
         
         # Embedder configuration shortcuts
-        embedding_model: str = "text-embedding-3-small",
+        embedding_model: Optional[str] = "text-embedding-3-small",
         api_key: Optional[str] = None,
         
         # Pass through any additional parameters

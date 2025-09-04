@@ -15,19 +15,19 @@ class Azure(AzureOpenAIChatBase):
         self,
         # Core parameters
         id: str,  # Required for Azure
-        api_key: Optional[str] = None,
+        api_key: str = None,
         
         # Azure-specific parameters
-        api_version: Optional[str] = None,
-        azure_endpoint: Optional[str] = None,
-        azure_deployment: Optional[str] = None,
+        api_version: str = None,
+        azure_endpoint: str = None,
+        azure_deployment: str = None,
         azure_ad_token: Optional[str] = None,
         azure_ad_token_provider: Optional[Any] = None,
         
         # Fine-tuning parameters - commonly used Azure OpenAI settings
-        temperature: Optional[float] = None,
+        temperature: float = None,
         max_tokens: Optional[int] = None,
-        top_p: Optional[float] = None,
+        top_p: float = None,
         frequency_penalty: Optional[float] = None,
         presence_penalty: Optional[float] = None,
         stop: Optional[Union[str, List[str]]] = None,
