@@ -312,6 +312,58 @@ class FileService:
         """Public method to get file content from a specific MinIO path"""
         return await FileService._get_file_from_minio(file_path)
 
+    @classmethod
+    async def delete_all_files_from_collection(
+        cls, tenant_id: str, user_id: str, collection: str
+    ) -> Dict[str, Any]:
+        """Delete all files from a specific collection in MinIO"""
+        logger.info(
+            f"[FILE] Deleting all files from collection '{collection}' for tenant: {tenant_id}, user: {user_id}"
+        )
+        
+        try:
+            # Create collection path
+            collection_path = f"uploads/{tenant_id}/{user_id}/{collection}/"
+            
+            # List all files in the collection
+            files = await cls._list_files_in_minio(collection_path)
+            
+            if not files:
+                logger.info(f"[FILE] No files found in collection '{collection}' to delete")
+                return {"deleted_files": [], "deleted_count": 0}
+            
+            deleted_files = []
+            failed_files = []
+            
+            # Delete each file
+            for file_path in files:
+                try:
+                    success = await cls._delete_from_minio(file_path)
+                    if success:
+                        deleted_files.append(file_path)
+                        logger.debug(f"[FILE] Deleted file: {file_path}")
+                    else:
+                        failed_files.append(file_path)
+                        logger.warning(f"[FILE] Failed to delete file: {file_path}")
+                except Exception as e:
+                    failed_files.append(file_path)
+                    logger.error(f"[FILE] Error deleting file {file_path}: {e}")
+            
+            logger.info(
+                f"[FILE] Collection cleanup completed. Deleted: {len(deleted_files)}, Failed: {len(failed_files)}"
+            )
+            
+            return {
+                "deleted_files": deleted_files,
+                "failed_files": failed_files,
+                "deleted_count": len(deleted_files),
+                "failed_count": len(failed_files)
+            }
+            
+        except Exception as e:
+            logger.error(f"[FILE] Failed to delete files from collection {collection}: {e}")
+            return {"deleted_files": [], "failed_files": [], "deleted_count": 0, "failed_count": 0, "error": str(e)}
+
     # MinIO client methods
     @staticmethod
     def _get_minio_client():

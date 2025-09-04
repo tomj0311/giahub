@@ -660,6 +660,20 @@ class KnowledgeService:
                 detail="User ID missing. Please re-login."
             )
         
+        logger.info(f"[KNOWLEDGE] Deleting collection '{collection_name}' for tenant {tenant_id}, user {user_id}")
+        
+        # First, get the collection info to see what files exist
+        collection_info = None
+        try:
+            collection_info = await MongoStorageService.find_one(
+                "knowledgeConfig", 
+                {"collection": collection_name}, 
+                tenant_id=tenant_id
+            )
+        except Exception as e:
+            logger.warning(f"[KNOWLEDGE] Could not retrieve collection info before deletion: {e}")
+        
+        # Delete the MongoDB configuration document
         result = await MongoStorageService.delete_one(
             "knowledgeConfig", 
             {"collection": collection_name}, 
@@ -667,14 +681,35 @@ class KnowledgeService:
         )
         if not result:
             raise HTTPException(status_code=404, detail="collection not found")
+
+        # Delete all files from MinIO storage
+        file_deletion_result = {"deleted_files": [], "failed_files": [], "deleted_count": 0, "failed_count": 0}
+        try:
+            from .file_service import FileService
+            file_deletion_result = await FileService.delete_all_files_from_collection(
+                tenant_id, user_id, collection_name
+            )
+            logger.info(f"[KNOWLEDGE] File deletion result: {file_deletion_result['deleted_count']} deleted, {file_deletion_result['failed_count']} failed")
+        except Exception as e:
+            logger.error(f"[KNOWLEDGE] Failed to delete files from MinIO for collection '{collection_name}': {e}")
+            file_deletion_result["error"] = str(e)
         
         # Also try to delete the vector DB collection
+        vector_deletion_success = False
         try:
             await cls._delete_vector_collection(tenant_id, user_id, collection_name)
+            vector_deletion_success = True
+            logger.info(f"[KNOWLEDGE] Successfully deleted vector collection for '{collection_name}'")
         except Exception as e:
             logger.warning(f"[KNOWLEDGE] Failed to delete vector collection: {e}")
         
-        return {"deleted": True, "collection": collection_name, "vector_collection": f"{collection_name}_user@{user_id}"}
+        return {
+            "deleted": True, 
+            "collection": collection_name, 
+            "vector_collection": f"{collection_name}_user@{user_id}",
+            "vector_deletion_success": vector_deletion_success,
+            "file_deletion": file_deletion_result
+        }
     
     @classmethod
     async def delete_file_from_collection(cls, collection_name: str, filename: str, user: dict) -> Dict[str, Any]:
