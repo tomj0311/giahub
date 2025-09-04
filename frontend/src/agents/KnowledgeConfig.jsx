@@ -576,14 +576,6 @@ export default function KnowledgeConfig({ user }) {
                         <IconButton size="small" color="primary" onClick={() => openEdit(cfg.name)}>
                           <EditIcon size={16} />
                         </IconButton>
-                        <IconButton size="small" color="error" onClick={() => { 
-                          setForm(f => ({ ...f, name: cfg.name })); 
-                          setIsEdit(true); 
-                          setIsEditMode(true);
-                          onDelete(); 
-                        }}>
-                          <DeleteIcon size={16} />
-                        </IconButton>
                       </TableCell>
                     </TableRow>
                   ))
