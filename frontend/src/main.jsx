@@ -3,13 +3,16 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import { SnackbarProvider } from './contexts/SnackbarContext'
+import { ConfirmationProvider } from './contexts/ConfirmationContext'
 
 const root = createRoot(document.getElementById('root'))
 
 const AppTree = (
   <BrowserRouter>
     <SnackbarProvider>
-      <App />
+      <ConfirmationProvider>
+        <App />
+      </ConfirmationProvider>
     </SnackbarProvider>
   </BrowserRouter>
 )

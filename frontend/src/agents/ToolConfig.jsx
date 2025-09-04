@@ -27,10 +27,12 @@ import {
 import { apiCall } from '../config/api';
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react';
 import { useSnackbar } from '../contexts/SnackbarContext';
+import { useConfirmation } from '../contexts/ConfirmationContext';
 
 export default function ToolConfig({ user }) {
     const token = user?.token;
     const { showSuccess, showError, showWarning } = useSnackbar();
+    const { showDeleteConfirmation } = useConfirmation();
     
 
     const [components, setComponents] = useState({ functions: [] });
@@ -222,8 +224,16 @@ export default function ToolConfig({ user }) {
         }
     }
 
-    async function deleteToolConfig(id) {
+    async function deleteToolConfig(id, configName) {
         if (!id) return;
+        
+        const confirmed = await showDeleteConfirmation({
+            itemName: configName || 'configuration',
+            itemType: 'tool configuration',
+        });
+        
+        if (!confirmed) return;
+        
         try {
             setSaveState({ loading: true });
             const resp = await apiCall(`/api/tool-config/configs/${id}`, {
@@ -313,11 +323,6 @@ export default function ToolConfig({ user }) {
                                                 <IconButton size="small" color="primary" onClick={() => openEdit(cfg.name)}>
                                                     <EditIcon size={16} />
                                                 </IconButton>
-                                                {cfg.id && (
-                                                    <IconButton size="small" color="error" onClick={() => deleteToolConfig(cfg.id)}>
-                                                        <DeleteIcon size={16} />
-                                                    </IconButton>
-                                                )}
                                             </TableCell>
                                         </TableRow>
                                     ))
@@ -463,7 +468,7 @@ export default function ToolConfig({ user }) {
                 </DialogContent>
                 <DialogActions>
                     {isEditMode && form.id && (
-                        <Button color="error" onClick={() => deleteToolConfig(form.id)} startIcon={<DeleteIcon size={16} />}>Delete</Button>
+                        <Button color="error" onClick={() => deleteToolConfig(form.id, form.name)} startIcon={<DeleteIcon size={16} />}>Delete</Button>
                     )}
                     <Box sx={{ flex: 1 }} />
                     <Button onClick={() => setDialogOpen(false)}>Cancel</Button>

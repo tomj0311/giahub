@@ -27,12 +27,14 @@ import {
 import { apiCall } from '../config/api';
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react';
 import { useSnackbar } from '../contexts/SnackbarContext';
+import { useConfirmation } from '../contexts/ConfirmationContext';
 
 export default function ModelConfig({ user }) {
     // Use the user token from props (same pattern as other dashboard components)
     const token = user?.token;
 
     const { showSuccess, showError, showWarning, showInfo } = useSnackbar();
+    const { showDeleteConfirmation } = useConfirmation();
 
     // Simple backend base function replacement
     
@@ -312,8 +314,16 @@ export default function ModelConfig({ user }) {
         }
     }
 
-    async function deleteModelConfig(id) {
+    async function deleteModelConfig(id, configName) {
         if (!id) return;
+        
+        const confirmed = await showDeleteConfirmation({
+            itemName: configName || 'configuration',
+            itemType: 'model configuration',
+        });
+        
+        if (!confirmed) return;
+        
         try {
             setSaveState({ loading: true });
             const resp = await apiCall(`/api/model-config/configs/${id}`, {
@@ -407,11 +417,6 @@ export default function ModelConfig({ user }) {
                                                 <IconButton size="small" color="primary" onClick={() => openEdit(cfg.name)}>
                                                     <EditIcon size={16} />
                                                 </IconButton>
-                                                {cfg.id && (
-                                                    <IconButton size="small" color="error" onClick={() => deleteModelConfig(cfg.id)}>
-                                                        <DeleteIcon size={16} />
-                                                    </IconButton>
-                                                )}
                                             </TableCell>
                                         </TableRow>
                                     ))
@@ -557,7 +562,7 @@ export default function ModelConfig({ user }) {
                 </DialogContent>
                 <DialogActions>
                     {isEditMode && form.id && (
-                        <Button color="error" onClick={() => deleteModelConfig(form.id)} startIcon={<DeleteIcon size={16} />}>Delete</Button>
+                        <Button color="error" onClick={() => deleteModelConfig(form.id, form.name)} startIcon={<DeleteIcon size={16} />}>Delete</Button>
                     )}
                     <Box sx={{ flex: 1 }} />
                     <Button onClick={() => setDialogOpen(false)}>Cancel</Button>

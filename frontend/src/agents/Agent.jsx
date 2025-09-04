@@ -26,12 +26,14 @@ import {
 } from '@mui/material'
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
+import { useConfirmation } from '../contexts/ConfirmationContext'
 
 import { apiCall } from '../config/api'
 
 export default function Agent({ user }) {
   const token = user?.token
   const { showSuccess, showError } = useSnackbar()
+  const { showDeleteConfirmation } = useConfirmation()
 
   const authHeaders = useMemo(() => ({
     'Content-Type': 'application/json',
@@ -146,7 +148,15 @@ export default function Agent({ user }) {
   }
 
   const handleDelete = async () => {
-    if (!form.id) return
+    if (!form.id || !form.name) return
+    
+    const confirmed = await showDeleteConfirmation({
+      itemName: form.name,
+      itemType: 'agent',
+    })
+    
+    if (!confirmed) return
+    
     setSaving(true)
     try {
       const resp = await apiCall(`/api/agents/id/${form.id}`, {
@@ -159,25 +169,6 @@ export default function Agent({ user }) {
       setForm(f => ({ ...f, id: null, name: '' }))
       await fetchAll()
       setDialogOpen(false)
-    } catch (e) {
-      showError(e.message || 'Failed to delete')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleRowDelete = async (agent) => {
-    if (!agent?.id) return
-    try {
-      setSaving(true)
-      const resp = await apiCall(`/api/agents/id/${agent.id}`, {
-        method: 'DELETE',
-        headers: authHeaders,
-      })
-      const data = await resp.json().catch(() => ({}))
-      if (!resp.ok) throw new Error(data.detail || `Delete failed (${resp.status})`)
-      showSuccess(`Agent ${agent.name} deleted`)
-      await fetchAll()
     } catch (e) {
       showError(e.message || 'Failed to delete')
     } finally {
@@ -290,9 +281,6 @@ export default function Agent({ user }) {
                         <TableCell align="right">
                           <IconButton size="small" color="primary" onClick={() => openEdit(a)}>
                             <EditIcon size={16} />
-                          </IconButton>
-                          <IconButton size="small" color="error" onClick={() => handleRowDelete(a)}>
-                            <DeleteIcon size={16} />
                           </IconButton>
                         </TableCell>
                       </TableRow>

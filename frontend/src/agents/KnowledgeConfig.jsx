@@ -37,6 +37,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react'
 import { apiCall } from '../config/api'
 import { useSnackbar } from '../contexts/SnackbarContext'
+import { useConfirmation } from '../contexts/ConfirmationContext'
 
 const api = {
   async getDefaults(token) {
@@ -127,6 +128,7 @@ export default function KnowledgeConfig({ user }) {
   const theme = useTheme()
   const token = user?.token
   const { showSuccess, showError, showWarning } = useSnackbar()
+  const { showDeleteConfirmation } = useConfirmation()
 
   const [loading, setLoading] = useState(true)
   const [collections, setCollections] = useState([])
@@ -431,6 +433,13 @@ export default function KnowledgeConfig({ user }) {
 
   const onDelete = async () => {
     if (!form.name) return
+    
+    const confirmed = await showDeleteConfirmation({
+      itemName: form.name,
+      itemType: 'knowledge collection',
+    })
+    
+    if (!confirmed) return
     
     setSaveState({ loading: true })
     setSaveBusy(true)
