@@ -576,6 +576,7 @@ class KnowledgeService:
             "vector_collection": doc.get("vector_collection", f"{doc.get('collection', '')}_user@{owner_id}"),
             "category": doc.get("category", ""),
             "chunk": doc.get("chunk", {}),
+            "embedder": doc.get("embedder", {}),  # Include embedder field from MongoDB
             "created_at": doc.get("created_at"),
             "updated_at": doc.get("updated_at"),
             "files": doc.get("files", []),  # Return files as stored in MongoDB without path

@@ -159,12 +159,12 @@ export default function ToolConfig({ user }) {
                 id: config.id,
                 name: config.name,
                 category: config.category || '',
-                tool: config.tool,
-                tool_params: config.tool_params || {}
+                tool: config.tool?.strategy || '',
+                tool_params: config.tool?.params || {}
             });
             setIsEditMode(true);
-            if (config.tool) {
-                ensureIntrospection(config.tool, 'tool');
+            if (config.tool?.strategy) {
+                ensureIntrospection(config.tool.strategy, 'tool');
             }
         } else {
             setForm({ id: null, name: configName, category: '', tool: '', tool_params: {} });
@@ -181,8 +181,10 @@ export default function ToolConfig({ user }) {
         const configToSave = {
             name: form.name,
             category: form.category || '',
-            tool: form.tool,
-            tool_params: form.tool_params,
+            tool: {
+                strategy: form.tool,
+                params: form.tool_params
+            },
             type: 'toolConfig'
         };
         try {
@@ -305,8 +307,8 @@ export default function ToolConfig({ user }) {
                                         <TableRow key={cfg.id || cfg.name} hover>
                                             <TableCell>{cfg.name}</TableCell>
                                             <TableCell>{cfg.category || '-'}</TableCell>
-                                            <TableCell>{cfg.tool || '-'}</TableCell>
-                                            <TableCell>{Object.keys(cfg.tool_params || {}).length}</TableCell>
+                                            <TableCell>{cfg.tool?.strategy || '-'}</TableCell>
+                                            <TableCell>{Object.keys(cfg.tool?.params || {}).length}</TableCell>
                                             <TableCell align="right">
                                                 <IconButton size="small" color="primary" onClick={() => openEdit(cfg.name)}>
                                                     <EditIcon size={16} />

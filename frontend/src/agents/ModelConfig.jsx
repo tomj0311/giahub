@@ -194,12 +194,12 @@ export default function ModelConfig({ user }) {
                 id: config.id,
                 name: config.name,
                 category: config.category || '',
-                model: config.model,
-                model_params: config.model_params || {}
+                model: config.model?.strategy || '',
+                model_params: config.model?.params || {}
             });
             setIsEditMode(true);
-            if (config.model) {
-                ensureIntrospection(config.model, 'model');
+            if (config.model?.strategy) {
+                ensureIntrospection(config.model.strategy, 'model');
             }
             console.log('✅ Form set to edit mode');
         } else {
@@ -229,9 +229,10 @@ export default function ModelConfig({ user }) {
         const configToSave = {
             name: form.name,
             category: form.category || '',
-            model: form.model,
-            model_params: form.model_params,
-            provider: form.model, // Add provider field - same as model
+            model: {
+                strategy: form.model,
+                params: form.model_params
+            },
             type: 'modelConfig'
         };
         console.log('📦 Config to save:', configToSave);
@@ -400,8 +401,8 @@ export default function ModelConfig({ user }) {
                                         <TableRow key={cfg.id || cfg.name} hover>
                                             <TableCell>{cfg.name}</TableCell>
                                             <TableCell>{cfg.category || '-'}</TableCell>
-                                            <TableCell>{cfg.model || '-'}</TableCell>
-                                            <TableCell>{Object.keys(cfg.model_params || {}).length}</TableCell>
+                                            <TableCell>{cfg.model?.strategy || '-'}</TableCell>
+                                            <TableCell>{Object.keys(cfg.model?.params || {}).length}</TableCell>
                                             <TableCell align="right">
                                                 <IconButton size="small" color="primary" onClick={() => openEdit(cfg.name)}>
                                                     <EditIcon size={16} />

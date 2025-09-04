@@ -146,8 +146,8 @@ export default function KnowledgeConfig({ user }) {
     category: '',
     chunk_strategy: '',
     chunk_strategy_params: {},
-    chunk_size: 5000,
-    chunk_overlap: 0,
+    chunk_size: null,
+    chunk_overlap: null,
     embedder_strategy: '',
     embedder_strategy_params: {}
   })
@@ -193,8 +193,8 @@ export default function KnowledgeConfig({ user }) {
             category: data.category || '',
             chunk_strategy: chunkConfig.strategy || '',
             chunk_strategy_params: chunkConfig.params || {},
-            chunk_size: chunkConfig.chunk_size || 5000,
-            chunk_overlap: chunkConfig.chunk_overlap || 0,
+            chunk_size: chunkConfig.chunk_size || null,
+            chunk_overlap: chunkConfig.chunk_overlap || null,
             embedder_strategy: data.embedder?.strategy || '',
             embedder_strategy_params: data.embedder?.params || {},
             files: data.files || [] // Include files from the collection
@@ -208,8 +208,8 @@ export default function KnowledgeConfig({ user }) {
             category: '',
             chunk_strategy: '',
             chunk_strategy_params: {},
-            chunk_size: 5000,
-            chunk_overlap: 0,
+            chunk_size: null,
+            chunk_overlap: null,
             embedder_strategy: '',
             embedder_strategy_params: {},
             files: [] // Empty files array for failed loads
@@ -305,8 +305,8 @@ export default function KnowledgeConfig({ user }) {
         category: config.category || '',
         chunk_strategy: config.chunk_strategy || '',
         chunk_strategy_params: config.chunk_strategy_params || {},
-        chunk_size: config.chunk_size || defaults.chunk_size || 5000,
-        chunk_overlap: config.chunk_overlap || defaults.chunk_overlap || 0,
+        chunk_size: config.chunk_size || null,
+        chunk_overlap: config.chunk_overlap || null,
         embedder_strategy: config.embedder_strategy || '',
         embedder_strategy_params: config.embedder_strategy_params || {}
       })
@@ -324,8 +324,8 @@ export default function KnowledgeConfig({ user }) {
         category: '', 
         chunk_strategy: '', 
         chunk_strategy_params: {},
-        chunk_size: defaults.chunk_size || 5000,
-        chunk_overlap: defaults.chunk_overlap || 0,
+        chunk_size: null,
+        chunk_overlap: null,
         embedder_strategy: '',
         embedder_strategy_params: {}
       })
@@ -374,8 +374,8 @@ export default function KnowledgeConfig({ user }) {
           chunk: {
             strategy: form.chunk_strategy || '',
             params: form.chunk_strategy_params || {},
-            chunk_size: form.chunk_size || defaults.chunk_size || 5000,
-            chunk_overlap: form.chunk_overlap || defaults.chunk_overlap || 0
+            ...(form.chunk_size !== null && { chunk_size: form.chunk_size }),
+            ...(form.chunk_overlap !== null && { chunk_overlap: form.chunk_overlap })
           }
         } : undefined
       }
@@ -408,8 +408,8 @@ export default function KnowledgeConfig({ user }) {
         category: '', 
         chunk_strategy: '', 
         chunk_strategy_params: {},
-        chunk_size: defaults.chunk_size || 5000,
-        chunk_overlap: defaults.chunk_overlap || 0,
+        chunk_size: null,
+        chunk_overlap: null,
         embedder_strategy: '',
         embedder_strategy_params: {}
       })
@@ -449,8 +449,8 @@ export default function KnowledgeConfig({ user }) {
         category: '', 
         chunk_strategy: '', 
         chunk_strategy_params: {},
-        chunk_size: defaults.chunk_size || 5000,
-        chunk_overlap: defaults.chunk_overlap || 0,
+        chunk_size: null,
+        chunk_overlap: null,
         embedder_strategy: '',
         embedder_strategy_params: {}
       })
@@ -494,8 +494,8 @@ export default function KnowledgeConfig({ user }) {
       category: '', 
       chunk_strategy: '', 
       chunk_strategy_params: {},
-      chunk_size: defaults.chunk_size || 5000,
-      chunk_overlap: defaults.chunk_overlap || 0,
+      chunk_size: null,
+      chunk_overlap: null,
       embedder_strategy: '',
       embedder_strategy_params: {}
     })
@@ -544,17 +544,15 @@ export default function KnowledgeConfig({ user }) {
                 <TableRow>
                   <TableCell>Name</TableCell>
                   <TableCell>Category</TableCell>
-                  <TableCell>Chunk Strategy</TableCell>
-                  <TableCell>Chunk Size</TableCell>
-                  <TableCell>Overlap</TableCell>
                   <TableCell>Embedder Strategy</TableCell>
+                  <TableCell>Chunk Strategy</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {existingConfigs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
                       <Typography color="text.secondary">No collections found</Typography>
                     </TableCell>
                   </TableRow>
@@ -563,10 +561,8 @@ export default function KnowledgeConfig({ user }) {
                     <TableRow key={cfg.id || cfg.name} hover>
                       <TableCell>{cfg.name}</TableCell>
                       <TableCell>{cfg.category || '-'}</TableCell>
-                      <TableCell>{cfg.chunk_strategy || '-'}</TableCell>
-                      <TableCell>{cfg.chunk_size || '-'}</TableCell>
-                      <TableCell>{cfg.chunk_overlap || '-'}</TableCell>
                       <TableCell>{cfg.embedder_strategy || '-'}</TableCell>
+                      <TableCell>{cfg.chunk_strategy || '-'}</TableCell>
                       <TableCell align="right">
                         <IconButton size="small" color="primary" onClick={() => openEdit(cfg.name)}>
                           <EditIcon size={16} />
@@ -929,16 +925,26 @@ export default function KnowledgeConfig({ user }) {
                     )}
 
                     <Box>
-                      <Typography variant="subtitle2" sx={{ mb: 1 }}>Basic Configuration</Typography>
+                      <Typography variant="subtitle2" sx={{ mb: 1 }}>Basic Configuration (Optional)</Typography>
                       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-                        <TextField size="small" label="Chunk Size" type="number"
-                          value={form.chunk_size || defaults.chunk_size || 5000}
-                          onChange={(e) => setForm(f => ({ ...f, chunk_size: parseInt(e.target.value) || defaults.chunk_size || 5000 }))}
-                          sx={{ width: 140 }} />
-                        <TextField size="small" label="Chunk Overlap" type="number"
-                          value={form.chunk_overlap || defaults.chunk_overlap || 0}
-                          onChange={(e) => setForm(f => ({ ...f, chunk_overlap: parseInt(e.target.value) || defaults.chunk_overlap || 0 }))}
-                          sx={{ width: 140 }} />
+                        <TextField 
+                          size="small" 
+                          label="Chunk Size (Optional)" 
+                          type="number"
+                          value={form.chunk_size || ''}
+                          onChange={(e) => setForm(f => ({ ...f, chunk_size: e.target.value ? parseInt(e.target.value) : null }))}
+                          placeholder={`Default: ${defaults.chunk_size || 5000}`}
+                          sx={{ width: 160 }} 
+                        />
+                        <TextField 
+                          size="small" 
+                          label="Chunk Overlap (Optional)" 
+                          type="number"
+                          value={form.chunk_overlap || ''}
+                          onChange={(e) => setForm(f => ({ ...f, chunk_overlap: e.target.value ? parseInt(e.target.value) : null }))}
+                          placeholder={`Default: ${defaults.chunk_overlap || 0}`}
+                          sx={{ width: 170 }} 
+                        />
                       </Box>
                     </Box>
                   </>
