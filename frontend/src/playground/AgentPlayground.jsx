@@ -55,8 +55,8 @@ export default function AgentPlayground({ user }) {
   const [uploadedFiles, setUploadedFiles] = useState([])
   const [uploading, setUploading] = useState(false)
 
-  // Session prefix for uploaded knowledge (uuid-like hex)
-  const [sessionPrefix, setSessionPrefix] = useState(() => genUuidHex())
+  // Session collection for uploaded knowledge (uuid-like hex)
+  const [sessionCollection, setSessionCollection] = useState(() => genUuidHex())
 
   // History dialog
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -131,11 +131,11 @@ export default function AgentPlayground({ user }) {
   // Upload knowledge files to backend and mark as uploaded
   const uploadStagedFiles = async () => {
     if (stagedFiles.length === 0) return []
-    if (!sessionPrefix) setSessionPrefix(genUuidHex())
+    if (!sessionCollection) setSessionCollection(genUuidHex())
     setUploading(true)
     try {
       const files = stagedFiles.map(sf => sf.file)
-      const res = await agentRuntimeService.uploadKnowledge(sessionPrefix, files, token)
+      const res = await agentRuntimeService.uploadKnowledge(sessionCollection, files, token)
       const names = (res?.files || []).map(f => f.filename)
       setUploadedFiles(prev => [...prev, ...names])
       setStagedFiles([])
@@ -171,7 +171,7 @@ export default function AgentPlayground({ user }) {
         { 
           agent_name: selected, 
           prompt: userMsg.content, 
-          session_prefix: sessionPrefix 
+          session_collection: sessionCollection 
         }, 
         token,
         (event) => {
@@ -212,7 +212,7 @@ export default function AgentPlayground({ user }) {
           agent_name: selected,
           messages,
           uploaded_files: uploadedFiles,
-          session_prefix: sessionPrefix
+          session_collection: sessionCollection
         }, token)
         if (!currentConversationId) setCurrentConversationId(convId)
       } catch {}
@@ -238,7 +238,7 @@ export default function AgentPlayground({ user }) {
       setSelected(conv.agent_name)
       setMessages(conv.messages || [])
       setUploadedFiles(conv.uploaded_files || [])
-      setSessionPrefix(conv.session_prefix || genUuidHex())
+      setSessionCollection(conv.session_collection || genUuidHex())
       setCurrentConversationId(conv.conversation_id)
       setHistoryOpen(false)
     } catch (e) {

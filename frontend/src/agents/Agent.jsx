@@ -45,7 +45,7 @@ export default function Agent({ user }) {
   const [models, setModels] = useState([])
   const [tools, setTools] = useState([])
   const [categories, setCategories] = useState([])
-  const [knowledgePrefixes, setKnowledgePrefixes] = useState([])
+  const [knowledgeCollections, setKnowledgeCollections] = useState([])
   const [existingAgents, setExistingAgents] = useState([])
 
   const [form, setForm] = useState({
@@ -96,7 +96,7 @@ export default function Agent({ user }) {
       setModels((modelsJson.configurations || []).map(c => c.name).sort())
       setTools((toolsJson.configurations || []).map(c => c.name).sort())
       setCategories((catsJson.categories || []).sort())
-      setKnowledgePrefixes((collectionsJson.collections || []).sort())
+      setKnowledgeCollections((collectionsJson.collections || []).sort())
       setExistingAgents(agentsJson.agents || [])
     } catch (e) {
       console.error(e)
@@ -369,10 +369,10 @@ export default function Agent({ user }) {
                 />
 
                 <Autocomplete
-                  options={knowledgePrefixes}
-                  value={form.collection || ''}
-                  onChange={(_, v) => setForm(f => ({ ...f, collection: v || '' }))}
-                  renderInput={(p) => <TextField {...p} label="Knowledge Prefix" size="small" />}
+                  options={knowledgeCollections}
+                  value={form.knowledge || []}
+                  onChange={(_, v) => setForm(f => ({ ...f, knowledge: v }))}
+                  renderInput={(p) => <TextField {...p} label="Knowledge Collections" size="small" />}
                 />
 
                 <Paper variant="outlined" sx={{ p: 2 }}>

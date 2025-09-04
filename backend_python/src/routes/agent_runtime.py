@@ -238,14 +238,13 @@ async def get_conversation(conversation_id: str, user: dict = Depends(verify_tok
 
 @router.post("/conversations")
 async def save_conversation(body: Dict[str, Any], user: dict = Depends(verify_token_middleware)):
-    conversation_id = body.get("conversation_id")
-    agent_name = body.get("agent_name")
-    messages = body.get("messages") or []
-    uploaded_files = body.get("uploaded_files") or []
-    session_prefix = body.get("session_prefix") or None
-    if not conversation_id or not agent_name:
-        raise HTTPException(status_code=400, detail="conversation_id and agent_name are required")
-
+    """Save conversation to MongoDB."""
+    conversation_id = body.get("conversation_id") or str(uuid.uuid4())
+    messages = body.get("messages", [])
+    uploaded_files = body.get("uploaded_files", [])
+    session_prefix = body.get("session_prefix", "")
+    agent_name = body.get("agent_name", "")
+    
     # CRITICAL: tenant_id is required - no fallbacks allowed
     tenant_id = user.get("tenantId")
     if not tenant_id:
@@ -255,22 +254,16 @@ async def save_conversation(body: Dict[str, Any], user: dict = Depends(verify_to
         )
     
     user_id = user.get("id") or user.get("userId") or "unknown"
-    title = None
-    for m in messages:
-        if m.get("role") == "user":
-            title = (m.get("content") or "").strip()[:80]
-            break
-    record = {
+    
+    # Accept frontend structure as-is and only add required backend fields
+    record = dict(body)  # Preserve original structure
+    record.update({
         "tenantId": tenant_id,
         "userId": user_id,
         "conversation_id": conversation_id,
-        "agent_name": agent_name,
-        "messages": messages,
-        "uploaded_files": uploaded_files,
-        "session_prefix": session_prefix,
-        "title": title,
         "updated_at": datetime.utcnow(),
-    }
+    })
+    
     existing = await _conversations_col().find_one({"tenantId": tenant_id, "conversation_id": conversation_id})
     if existing:
         await _conversations_col().update_one({"_id": existing["_id"]}, {"$set": record})

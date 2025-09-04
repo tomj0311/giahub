@@ -115,11 +115,8 @@ class ModelConfigService:
         user_id = user.get("id") or user.get("userId")
         
         name = config_data.get("name", "").strip()
-        provider = config_data.get("provider", "").strip()
-        model = config_data.get("model", "").strip()
-        
-        if not all([name, provider, model]):
-            raise HTTPException(status_code=400, detail="Name, provider, and model are required")
+        if not name:
+            raise HTTPException(status_code=400, detail="Name is required")
         
         logger.info(f"[MODEL] Creating model config '{name}' for tenant: {tenant_id}")
         
@@ -133,24 +130,14 @@ class ModelConfigService:
             if existing:
                 raise HTTPException(status_code=409, detail="Model configuration with this name already exists")
             
-            # Validate provider and model
-            # cls._validate_provider_model(provider, model)  # REMOVED - No validation needed
-            
-            # Create configuration record
-            record = {
+            # Accept frontend structure as-is and only add required backend fields
+            record = dict(config_data)  # Preserve original structure
+            record.update({
                 "tenantId": tenant_id,
                 "userId": user_id,
-                "name": name,
-                "provider": provider,
-                "model": model,
-                "category": config_data.get("category", ""),
-                "description": config_data.get("description", ""),
-                "parameters": config_data.get("parameters", {}),
-                "api_key": config_data.get("api_key", ""),  # Store encrypted in production
-                "is_active": config_data.get("is_active", True),
                 "created_at": datetime.utcnow(),
                 "updated_at": datetime.utcnow()
-            }
+            })
             
             await cls._get_model_config_collection().insert_one(record)
             
@@ -171,16 +158,9 @@ class ModelConfigService:
         logger.info(f"[MODEL] Updating model config '{config_name}' for tenant: {tenant_id}")
         
         try:
-            update_data = {
-                "updated_at": datetime.utcnow()
-            }
-            
-            # Only update allowed fields
-            allowed_fields = ["provider", "model", "category", "description", "parameters", "api_key", "is_active"]
-            for field in allowed_fields:
-                if field in config_data:
-                    # No validation needed - allow any provider/model combination
-                    update_data[field] = config_data[field]
+            # Accept frontend structure as-is and only add/update backend fields
+            update_data = dict(config_data)  # Preserve original structure
+            update_data["updated_at"] = datetime.utcnow()
             
             result = await cls._get_model_config_collection().update_one(
                 {
@@ -287,21 +267,20 @@ class ModelConfigService:
         logger.info(f"[MODEL] Updating model config '{config_id}' for tenant: {tenant_id}")
         
         try:
-            update_data = {
-                "updated_at": datetime.utcnow()
-            }
-            
-            # Only update allowed fields
-            allowed_fields = ["name", "provider", "model", "category", "description", "parameters", "api_key", "is_active"]
-            for field in allowed_fields:
-                if field in config_data:
-                    update_data[field] = config_data[field]
+            object_id = ObjectId(config_id)
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid configuration ID"
+            )
+        
+        try:
+            # Accept frontend structure as-is and only add/update backend fields
+            update_data = dict(config_data)  # Preserve original structure
+            update_data["updated_at"] = datetime.utcnow()
             
             result = await cls._get_model_config_collection().update_one(
-                {
-                    "_id": ObjectId(config_id),
-                    "tenantId": tenant_id
-                },
+                {"_id": object_id, "tenantId": tenant_id},
                 {"$set": update_data}
             )
             

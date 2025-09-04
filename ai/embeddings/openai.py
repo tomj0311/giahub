@@ -17,7 +17,7 @@ class OpenAI(OpenAIEmbedder):
         self,
         # Core parameters
         model: str = "text-embedding-ada-002",
-        api_key: Optional[str] = None,
+        api_key: str = None,
         
         # Embedding-specific parameters
         dimensions: int = 1536,

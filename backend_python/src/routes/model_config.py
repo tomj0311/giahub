@@ -57,24 +57,24 @@ async def get_model_config(config_id: str, user: dict = Depends(verify_token_mid
 
 @router.post("/configs", status_code=status.HTTP_201_CREATED)
 async def create_model_config(
-    config_data: ModelConfigCreate, 
+    config_data: dict, 
     user: dict = Depends(verify_token_middleware)
 ):
     """Create new model configuration"""
-    result = await ModelConfigService.create_model_config(config_data.dict(), user)
+    result = await ModelConfigService.create_model_config(config_data, user)
     return result
 
 
 @router.put("/configs/{config_id}")
 async def update_model_config(
     config_id: str,
-    config_data: ModelConfigUpdate,
+    config_data: dict,
     user: dict = Depends(verify_token_middleware)
 ):
     """Update existing model configuration"""
     result = await ModelConfigService.update_model_config_by_id(
         config_id, 
-        config_data.dict(exclude_unset=True), 
+        config_data, 
         user
     )
     return result

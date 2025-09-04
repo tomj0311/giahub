@@ -96,7 +96,13 @@ const api = {
     return r.json()
   },
   async discoverChunking(token) {
-    const r = await apiCall('/api/knowledge/components?folder=ai.document.chunking', {
+    const r = await apiCall('/api/knowledge/components?folder=ai.chunking', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    })
+    return r.json()
+  },
+  async discoverEmbedders(token) {
+    const r = await apiCall('/api/knowledge/components?folder=ai.embeddings', {
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     })
     return r.json()
@@ -128,7 +134,7 @@ export default function KnowledgeConfig({ user }) {
   const [loadingConfigs, setLoadingConfigs] = useState(true)
   const [categories, setCategories] = useState([])
   const [loadingCategories, setLoadingCategories] = useState(false)
-  const [components, setComponents] = useState({ chunking: [] })
+  const [components, setComponents] = useState({ chunking: [], embedders: [] })
   const [introspection, setIntrospection] = useState({})
   const [defaults, setDefaults] = useState({ chunk_size: 5000, chunk_overlap: 0 })
   const [isEdit, setIsEdit] = useState(false)
@@ -141,7 +147,9 @@ export default function KnowledgeConfig({ user }) {
     chunk_strategy: '',
     chunk_strategy_params: {},
     chunk_size: 5000,
-    chunk_overlap: 0
+    chunk_overlap: 0,
+    embedder_strategy: '',
+    embedder_strategy_params: {}
   })
 
   const [pendingFiles, setPendingFiles] = useState([])
@@ -175,14 +183,20 @@ export default function KnowledgeConfig({ user }) {
       for (const name of collectionNames) {
         try {
           const data = await api.getCollection(name, token)
+          
+          // Extract chunk configuration - prefer from embedder.chunk, fallback to root chunk
+          const chunkConfig = data.embedder?.chunk || data.chunk || {}
+          
           collectionsWithData.push({
             id: name, // Use collection name as id like ToolConfig
             name: data.collection || name,
             category: data.category || '',
-            chunk_strategy: data.chunk?.strategy || '',
-            chunk_strategy_params: data.chunk?.params || {},
-            chunk_size: data.chunk?.chunk_size || 5000,
-            chunk_overlap: data.chunk?.chunk_overlap || 0,
+            chunk_strategy: chunkConfig.strategy || '',
+            chunk_strategy_params: chunkConfig.params || {},
+            chunk_size: chunkConfig.chunk_size || 5000,
+            chunk_overlap: chunkConfig.chunk_overlap || 0,
+            embedder_strategy: data.embedder?.strategy || '',
+            embedder_strategy_params: data.embedder?.params || {},
             files: data.files || [] // Include files from the collection
           })
         } catch (error) {
@@ -196,6 +210,8 @@ export default function KnowledgeConfig({ user }) {
             chunk_strategy_params: {},
             chunk_size: 5000,
             chunk_overlap: 0,
+            embedder_strategy: '',
+            embedder_strategy_params: {},
             files: [] // Empty files array for failed loads
           })
         }
@@ -216,18 +232,27 @@ export default function KnowledgeConfig({ user }) {
         setLoading(true)
         
         // Load defaults and components first
-        const [d, comps] = await Promise.all([
+        const [d, comps, embedderComps] = await Promise.all([
           api.getDefaults(token),
-          api.discoverChunking(token)
+          api.discoverChunking(token),
+          api.discoverEmbedders(token)
         ])
         
-        console.log('[KnowledgeConfig] API responses:', { d, comps })
+        console.log('[KnowledgeConfig] API responses:', { d, comps, embedderComps })
         setDefaults(d.defaults || {})
         
         // Process chunking components
-        const chunkingData = comps.components?.['ai.document.chunking'] || {}
-        const chunkingComponents = chunkingData['ai.document.chunking'] || chunkingData['chunking'] || []
-        setComponents({ chunking: Array.isArray(chunkingComponents) ? chunkingComponents : [] })
+        const chunkingData = comps.components?.['ai.chunking'] || {}
+        const chunkingComponents = chunkingData['ai.chunking'] || chunkingData['chunking'] || []
+        
+        // Process embedder components
+        const embedderData = embedderComps.components?.['ai.embeddings'] || {}
+        const embedderComponents = embedderData['ai.embeddings'] || embedderData['embeddings'] || []
+        
+        setComponents({ 
+          chunking: Array.isArray(chunkingComponents) ? chunkingComponents : [],
+          embedders: Array.isArray(embedderComponents) ? embedderComponents : []
+        })
         
         // Load configs and categories like ToolConfig
         await Promise.all([
@@ -257,6 +282,18 @@ export default function KnowledgeConfig({ user }) {
     }
   }, [form.chunk_strategy, token])
 
+  useEffect(() => {
+    if (form.embedder_strategy && !introspection[form.embedder_strategy]) {
+      console.log('[KnowledgeConfig] Introspecting embedder strategy:', form.embedder_strategy)
+      api.introspect(form.embedder_strategy, token).then(info => {
+        console.log('[KnowledgeConfig] Embedder introspection result:', info)
+        setIntrospection(prev => ({ ...prev, [form.embedder_strategy]: info }))
+      }).catch(err => {
+        console.error('[KnowledgeConfig] Embedder introspection error:', err)
+      })
+    }
+  }, [form.embedder_strategy, token])
+
   async function loadExistingConfig(configName) {
     const config = existingConfigs.find(c => c.name === configName)
     if (config) {
@@ -269,7 +306,9 @@ export default function KnowledgeConfig({ user }) {
         chunk_strategy: config.chunk_strategy || '',
         chunk_strategy_params: config.chunk_strategy_params || {},
         chunk_size: config.chunk_size || defaults.chunk_size || 5000,
-        chunk_overlap: config.chunk_overlap || defaults.chunk_overlap || 0
+        chunk_overlap: config.chunk_overlap || defaults.chunk_overlap || 0,
+        embedder_strategy: config.embedder_strategy || '',
+        embedder_strategy_params: config.embedder_strategy_params || {}
       })
       setIsEditMode(true)
       setIsEdit(true)
@@ -286,7 +325,9 @@ export default function KnowledgeConfig({ user }) {
         chunk_strategy: '', 
         chunk_strategy_params: {},
         chunk_size: defaults.chunk_size || 5000,
-        chunk_overlap: defaults.chunk_overlap || 0
+        chunk_overlap: defaults.chunk_overlap || 0,
+        embedder_strategy: '',
+        embedder_strategy_params: {}
       })
       setIsEditMode(false)
       setIsEdit(false)
@@ -298,6 +339,12 @@ export default function KnowledgeConfig({ user }) {
   const save = async () => {
     if (!form.name) {
       showError('Collection name is required')
+      return
+    }
+    
+    // Validate embedder strategy is required when files are present
+    if ((existingFiles.length > 0 || pendingFiles.length > 0) && !form.embedder_strategy) {
+      showError('Embedder strategy is required when files are present')
       return
     }
     
@@ -321,15 +368,16 @@ export default function KnowledgeConfig({ user }) {
         collection: form.name,
         category: form.category || '',
         overwrite: isEdit,
-        chunk: form.chunk_strategy ? {
-          strategy: form.chunk_strategy,
-          params: form.chunk_strategy_params || {},
-          chunk_size: form.chunk_size || defaults.chunk_size || 5000,
-          chunk_overlap: form.chunk_overlap || defaults.chunk_overlap || 0
-        } : {
-          chunk_size: form.chunk_size || defaults.chunk_size || 5000,
-          chunk_overlap: form.chunk_overlap || defaults.chunk_overlap || 0
-        }
+        embedder: form.embedder_strategy ? {
+          strategy: form.embedder_strategy,
+          params: form.embedder_strategy_params || {},
+          chunk: {
+            strategy: form.chunk_strategy || '',
+            params: form.chunk_strategy_params || {},
+            chunk_size: form.chunk_size || defaults.chunk_size || 5000,
+            chunk_overlap: form.chunk_overlap || defaults.chunk_overlap || 0
+          }
+        } : undefined
       }
       
       const res = await api.saveCollection(payload, token)
@@ -361,7 +409,9 @@ export default function KnowledgeConfig({ user }) {
         chunk_strategy: '', 
         chunk_strategy_params: {},
         chunk_size: defaults.chunk_size || 5000,
-        chunk_overlap: defaults.chunk_overlap || 0
+        chunk_overlap: defaults.chunk_overlap || 0,
+        embedder_strategy: '',
+        embedder_strategy_params: {}
       })
       setIsEdit(false)
       setIsEditMode(false)
@@ -400,7 +450,9 @@ export default function KnowledgeConfig({ user }) {
         chunk_strategy: '', 
         chunk_strategy_params: {},
         chunk_size: defaults.chunk_size || 5000,
-        chunk_overlap: defaults.chunk_overlap || 0
+        chunk_overlap: defaults.chunk_overlap || 0,
+        embedder_strategy: '',
+        embedder_strategy_params: {}
       })
       setIsEdit(false)
       setIsEditMode(false)
@@ -419,6 +471,7 @@ export default function KnowledgeConfig({ user }) {
   }
 
   const chunkIntro = form.chunk_strategy ? introspection[form.chunk_strategy] : null
+  const embedderIntro = form.embedder_strategy ? introspection[form.embedder_strategy] : null
 
   console.log('[KnowledgeConfig] Render - loading:', loading, 'existingConfigs:', existingConfigs.length, 'components:', components)
 
@@ -442,7 +495,9 @@ export default function KnowledgeConfig({ user }) {
       chunk_strategy: '', 
       chunk_strategy_params: {},
       chunk_size: defaults.chunk_size || 5000,
-      chunk_overlap: defaults.chunk_overlap || 0
+      chunk_overlap: defaults.chunk_overlap || 0,
+      embedder_strategy: '',
+      embedder_strategy_params: {}
     })
     setIsEdit(false)
     setIsEditMode(false)
@@ -492,13 +547,14 @@ export default function KnowledgeConfig({ user }) {
                   <TableCell>Chunk Strategy</TableCell>
                   <TableCell>Chunk Size</TableCell>
                   <TableCell>Overlap</TableCell>
+                  <TableCell>Embedder Strategy</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {existingConfigs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                       <Typography color="text.secondary">No collections found</Typography>
                     </TableCell>
                   </TableRow>
@@ -510,6 +566,7 @@ export default function KnowledgeConfig({ user }) {
                       <TableCell>{cfg.chunk_strategy || '-'}</TableCell>
                       <TableCell>{cfg.chunk_size || '-'}</TableCell>
                       <TableCell>{cfg.chunk_overlap || '-'}</TableCell>
+                      <TableCell>{cfg.embedder_strategy || '-'}</TableCell>
                       <TableCell align="right">
                         <IconButton size="small" color="primary" onClick={() => openEdit(cfg.name)}>
                           <EditIcon size={16} />
@@ -668,59 +725,62 @@ export default function KnowledgeConfig({ user }) {
               )}
             </Paper>
 
-            <Accordion>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>Advanced Configuration</AccordionSummary>
-              <AccordionDetails>
+            {/* Embedder Strategy - Required when files are present */}
+            {(existingFiles.length > 0 || pendingFiles.length > 0) && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="h6" gutterBottom>
+                  Embedder Strategy *
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Select an embedder strategy for vector indexing of your documents.
+                </Typography>
+                
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
                   <FormControl size="small" sx={{ minWidth: 220 }}>
-                    <InputLabel id="chunk-strategy-label">Chunk Strategy</InputLabel>
-                    <Select labelId="chunk-strategy-label" label="Chunk Strategy" value={form.chunk_strategy || ''}
-                      onChange={(e) => setForm(f => ({ ...f, chunk_strategy: e.target.value, chunk_strategy_params: {} }))}>
+                    <InputLabel id="embedder-strategy-label">Embedder Strategy</InputLabel>
+                    <Select 
+                      labelId="embedder-strategy-label" 
+                      label="Embedder Strategy" 
+                      value={form.embedder_strategy || ''}
+                      error={!form.embedder_strategy && (existingFiles.length > 0 || pendingFiles.length > 0)}
+                      onChange={(e) => setForm(f => ({ ...f, embedder_strategy: e.target.value, embedder_strategy_params: {} }))}
+                    >
                       <MenuItem value="">
-                        <em>None</em>
+                        <em>Select an embedder...</em>
                       </MenuItem>
-                      {Array.isArray(components.chunking) ? components.chunking.map(c => (
+                      {Array.isArray(components.embedders) ? components.embedders.map(c => (
                         <MenuItem key={c} value={c}>{c}</MenuItem>
                       )) : []}
                     </Select>
                   </FormControl>
                   <Button variant="outlined" size="small" onClick={async () => {
-                    const comps = await api.discoverChunking(token)
-                    const chunkingData = comps.components?.['ai.document.chunking'] || {}
-                    const chunking = chunkingData['ai.document.chunking'] || chunkingData['chunking'] || []
-                    setComponents({ chunking: Array.isArray(chunking) ? chunking : [] })
+                    const comps = await api.discoverEmbedders(token)
+                    const embedderData = comps.components?.['ai.embeddings'] || {}
+                    const embedders = embedderData['ai.embeddings'] || embedderData['embeddings'] || []
+                    setComponents(prev => ({ ...prev, embedders: Array.isArray(embedders) ? embedders : [] }))
                   }}>Refresh</Button>
                 </Box>
 
-                {!form.chunk_strategy && (
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontStyle: 'italic' }}>
-                    Select a chunking strategy to configure additional parameters.
-                  </Typography>
-                )}
-
-                {!chunkIntro && form.chunk_strategy && (
+                {!embedderIntro && form.embedder_strategy && (
                   <Fade in>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                       <CircularProgress size={16} />
-                      <Typography variant="caption" sx={{ opacity: 0.7 }}>Fetching chunking parameters…</Typography>
+                      <Typography variant="caption" sx={{ opacity: 0.7 }}>Fetching embedder parameters…</Typography>
                     </Box>
                   </Fade>
                 )}
 
-                {chunkIntro && (
+                {embedderIntro && (
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                      Chunking Parameters ({chunkIntro.class_name || form.chunk_strategy.split('.').pop()})
+                      Embedder Parameters ({embedderIntro.class_name || form.embedder_strategy.split('.').pop()})
                     </Typography>
-                    {console.log('[KnowledgeConfig] chunkIntro:', chunkIntro)}
-                    {console.log('[KnowledgeConfig] formatted_params:', chunkIntro.formatted_params)}
                     <Box sx={{
                       display: 'grid',
                       gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
                       gap: 2
                     }}>
-                      {(chunkIntro.formatted_params || []).map((paramFormatted, idx) => {
-                        console.log('[KnowledgeConfig] Processing param:', paramFormatted)
+                      {(embedderIntro.formatted_params || []).map((paramFormatted, idx) => {
                         const paramName = paramFormatted.split(':')[0].trim();
                         const typeMatch = paramFormatted.match(/:\s*([^=\s]+)/);
                         const paramType = typeMatch ? typeMatch[1].toLowerCase() : 'str';
@@ -748,10 +808,10 @@ export default function KnowledgeConfig({ user }) {
                             size="small"
                             label={paramName}
                             InputLabelProps={{ shrink: true }}
-                            value={form.chunk_strategy_params[paramName] || ''}
+                            value={form.embedder_strategy_params[paramName] || ''}
                             onChange={(e) => setForm(f => ({
                               ...f,
-                              chunk_strategy_params: { ...(f.chunk_strategy_params || {}), [paramName]: e.target.value }
+                              embedder_strategy_params: { ...(f.embedder_strategy_params || {}), [paramName]: e.target.value }
                             }))}
                             placeholder={placeholderText}
                             sx={{ gridColumn }}
@@ -762,20 +822,136 @@ export default function KnowledgeConfig({ user }) {
                     </Box>
                   </Box>
                 )}
+              </Box>
+            )}
 
-                <Box>
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>Basic Configuration</Typography>
-                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <TextField size="small" label="Chunk Size" type="number"
-                      value={form.chunk_size || defaults.chunk_size || 5000}
-                      onChange={(e) => setForm(f => ({ ...f, chunk_size: parseInt(e.target.value) || defaults.chunk_size || 5000 }))}
-                      sx={{ width: 140 }} />
-                    <TextField size="small" label="Chunk Overlap" type="number"
-                      value={form.chunk_overlap || defaults.chunk_overlap || 0}
-                      onChange={(e) => setForm(f => ({ ...f, chunk_overlap: parseInt(e.target.value) || defaults.chunk_overlap || 0 }))}
-                      sx={{ width: 140 }} />
-                  </Box>
-                </Box>
+            <Accordion>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>Advanced Configuration</AccordionSummary>
+              <AccordionDetails>
+                {/* Chunking Configuration - only show when embedder is selected and files are present */}
+                {form.embedder_strategy && (existingFiles.length > 0 || pendingFiles.length > 0) ? (
+                  <>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
+                      <FormControl size="small" sx={{ minWidth: 220 }}>
+                        <InputLabel id="chunk-strategy-label">
+                          Chunk Strategy (Optional)
+                        </InputLabel>
+                        <Select 
+                          labelId="chunk-strategy-label" 
+                          label="Chunk Strategy (Optional)"
+                          value={form.chunk_strategy || ''}
+                          onChange={(e) => setForm(f => ({ ...f, chunk_strategy: e.target.value, chunk_strategy_params: {} }))}>
+                          <MenuItem value="">
+                            <em>Select chunking strategy...</em>
+                          </MenuItem>
+                          {Array.isArray(components.chunking) ? components.chunking.map(c => (
+                            <MenuItem key={c} value={c}>{c}</MenuItem>
+                          )) : []}
+                        </Select>
+                      </FormControl>
+                      <Button variant="outlined" size="small" onClick={async () => {
+                        const comps = await api.discoverChunking(token)
+                        const chunkingData = comps.components?.['ai.chunking'] || {}
+                        const chunking = chunkingData['ai.chunking'] || chunkingData['chunking'] || []
+                        setComponents(prev => ({ ...prev, chunking: Array.isArray(chunking) ? chunking : [] }))
+                      }}>Refresh</Button>
+                    </Box>
+
+                    {!form.chunk_strategy && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontStyle: 'italic' }}>
+                        No chunking strategy selected. Default chunking will be applied by the backend.
+                      </Typography>
+                    )}
+
+                    {!chunkIntro && form.chunk_strategy && (
+                      <Fade in>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                          <CircularProgress size={16} />
+                          <Typography variant="caption" sx={{ opacity: 0.7 }}>Fetching chunking parameters…</Typography>
+                        </Box>
+                      </Fade>
+                    )}
+
+                    {chunkIntro && (
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                          Chunking Parameters ({chunkIntro.class_name || form.chunk_strategy.split('.').pop()})
+                        </Typography>
+                        {console.log('[KnowledgeConfig] chunkIntro:', chunkIntro)}
+                        {console.log('[KnowledgeConfig] formatted_params:', chunkIntro.formatted_params)}
+                        <Box sx={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                          gap: 2
+                        }}>
+                          {(chunkIntro.formatted_params || []).map((paramFormatted, idx) => {
+                            console.log('[KnowledgeConfig] Processing param:', paramFormatted)
+                            const paramName = paramFormatted.split(':')[0].trim();
+                            const typeMatch = paramFormatted.match(/:\s*([^=\s]+)/);
+                            const paramType = typeMatch ? typeMatch[1].toLowerCase() : 'str';
+                            let defaultRaw = '';
+                            const descSplitIdx = paramFormatted.indexOf(' - ');
+                            const mainPart = descSplitIdx !== -1 ? paramFormatted.slice(0, descSplitIdx) : paramFormatted;
+                            const eqIdx = mainPart.indexOf('=');
+                            if (eqIdx !== -1) {
+                              defaultRaw = mainPart.slice(eqIdx + 1).trim();
+                              if ((defaultRaw.startsWith("'") && defaultRaw.endsWith("'")) || (defaultRaw.startsWith('"') && defaultRaw.endsWith('"'))) {
+                                defaultRaw = defaultRaw.slice(1, -1);
+                              }
+                            }
+                            const hasDefault = defaultRaw !== '' && defaultRaw.toLowerCase() !== 'none';
+                            const placeholderText = hasDefault ? `Default: ${defaultRaw}` : `Enter ${paramName}`;
+                            let gridColumn = 'span 1';
+                            if (paramType.includes('int') || paramType.includes('float') || paramType.includes('bool')) {
+                              gridColumn = 'span 1';
+                            } else if (paramType.includes('str') && (paramName.includes('key') || paramName.includes('token') || paramName.includes('url'))) {
+                              gridColumn = 'span 2';
+                            }
+                            return (
+                              <TextField
+                                key={paramName}
+                                size="small"
+                                label={paramName}
+                                InputLabelProps={{ shrink: true }}
+                                value={form.chunk_strategy_params[paramName] || ''}
+                                onChange={(e) => setForm(f => ({
+                                  ...f,
+                                  chunk_strategy_params: { ...(f.chunk_strategy_params || {}), [paramName]: e.target.value }
+                                }))}
+                                placeholder={placeholderText}
+                                sx={{ gridColumn }}
+                                type={paramType.includes('int') || paramType.includes('float') ? 'number' : 'text'}
+                              />
+                            );
+                          })}
+                        </Box>
+                      </Box>
+                    )}
+
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ mb: 1 }}>Basic Configuration</Typography>
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <TextField size="small" label="Chunk Size" type="number"
+                          value={form.chunk_size || defaults.chunk_size || 5000}
+                          onChange={(e) => setForm(f => ({ ...f, chunk_size: parseInt(e.target.value) || defaults.chunk_size || 5000 }))}
+                          sx={{ width: 140 }} />
+                        <TextField size="small" label="Chunk Overlap" type="number"
+                          value={form.chunk_overlap || defaults.chunk_overlap || 0}
+                          onChange={(e) => setForm(f => ({ ...f, chunk_overlap: parseInt(e.target.value) || defaults.chunk_overlap || 0 }))}
+                          sx={{ width: 140 }} />
+                      </Box>
+                    </Box>
+                  </>
+                ) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                    {!(existingFiles.length > 0 || pendingFiles.length > 0) 
+                      ? 'Upload files to configure chunking options.'
+                      : !form.embedder_strategy 
+                        ? 'Select an embedder strategy to configure chunking options.'
+                        : 'Configure chunking options for your documents.'
+                    }
+                  </Typography>
+                )}
               </AccordionDetails>
             </Accordion>
           </Stack>

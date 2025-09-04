@@ -254,36 +254,36 @@ class KnowledgeService:
         except Exception as e:
             logger.error(f"[KNOWLEDGE] Failed to update config '{collection_name}': {e}")
             raise HTTPException(status_code=500, detail="Failed to update knowledge configuration")
-    
+
     @classmethod
-    async def delete_knowledge_config(cls, collection_name: str, user: dict) -> Dict[str, str]:
-        """Delete knowledge configuration and associated vector collection"""
+    async def delete_knowledge_config(cls, name: str, user: dict) -> dict:
+        """Delete a knowledge collection configuration"""
         tenant_id = await cls.validate_tenant_access(user)
         user_id = user.get("id") or user.get("userId")
         
-        logger.info(f"[KNOWLEDGE] Deleting config '{collection_name}' for tenant: {tenant_id}")
+        logger.info(f"[KNOWLEDGE] Deleting config '{name}' for tenant: {tenant_id}")
         
         try:
             # Delete configuration
             result = await cls._get_knowledge_config_collection().delete_one({
                 "tenantId": tenant_id,
                 "userId": user_id,
-                "name": collection_name
+                "name": name
             })
             
             if result.deleted_count == 0:
                 raise HTTPException(status_code=404, detail="Knowledge configuration not found")
             
             # Delete vector collection
-            await cls._delete_vector_collection(tenant_id, user_id, collection_name)
+            await cls._delete_vector_collection(tenant_id, user_id, name)
             
-            logger.info(f"[KNOWLEDGE] Successfully deleted config '{collection_name}'")
-            return {"message": f"Knowledge configuration '{collection_name}' deleted"}
+            logger.info(f"[KNOWLEDGE] Successfully deleted config '{name}'")
+            return {"message": f"Knowledge configuration '{name}' deleted"}
             
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"[KNOWLEDGE] Failed to delete config '{collection_name}': {e}")
+            logger.error(f"[KNOWLEDGE] Failed to delete config '{name}': {e}")
             raise HTTPException(status_code=500, detail="Failed to delete knowledge configuration")
     
     @classmethod
@@ -332,7 +332,7 @@ class KnowledgeService:
             )
     
     @classmethod
-    async def upload_files(cls, user: dict, files: List[UploadFile], knowledge_prefix: str):
+    async def upload_files(cls, user: dict, files: List[UploadFile], knowledge_collection: str):
         """Upload files to MinIO and index them in vector database using FileService"""
         tenant_id = await cls.validate_tenant_access(user)
         user_id = user.get("id")
@@ -343,19 +343,19 @@ class KnowledgeService:
                 detail="User ID missing from token"
             )
         
-        # Validate knowledge prefix exists
-        config = await cls.get_knowledge_config(knowledge_prefix, user)
+        # Validate knowledge collection exists
+        config = await cls.get_knowledge_config(knowledge_collection, user)
         if not config:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Knowledge prefix '{knowledge_prefix}' not found"
+                detail=f"Knowledge collection '{knowledge_collection}' not found"
             )
         
-        logger.info(f"[KNOWLEDGE] Uploading {len(files)} files for prefix: {knowledge_prefix}")
+        logger.info(f"[KNOWLEDGE] Uploading {len(files)} files for collection: {knowledge_collection}")
         
         try:
             # Upload files using FileService
-            upload_result = await FileService.upload_multiple_files(files, tenant_id, user_id, knowledge_prefix)
+            upload_result = await FileService.upload_multiple_files(files, tenant_id, user_id, knowledge_collection)
             
             uploaded_files = upload_result.get("uploaded_files", [])
             
@@ -367,7 +367,7 @@ class KnowledgeService:
                     
                     # Index to vector database using VectorService
                     await VectorService.index_file(
-                        user_id, knowledge_prefix,
+                        user_id, knowledge_collection,
                         file_info["filename"], file_content, file_info["file_path"]
                     )
                     
@@ -441,7 +441,7 @@ class KnowledgeService:
     
     @classmethod
     async def upsert_knowledge_config(cls, user: dict, payload: dict) -> dict:
-        """Create or update a knowledge prefix configuration"""
+        """Create or update a knowledge collection configuration"""
         from datetime import datetime
         
         tenant_id = await cls.validate_tenant_access(user)
@@ -485,11 +485,11 @@ class KnowledgeService:
                 logger.error(f"[KNOWLEDGE] Failed to initialize vector collection for {name}: {e}")
                 # Don't fail the entire operation for vector DB issues
 
-        return {"message": f"Prefix {action}", "name": name}
+        return {"message": f"Collection {action}", "name": name}
     
     @classmethod
     async def delete_knowledge_config(cls, user: dict, name: str) -> dict:
-        """Delete a knowledge prefix configuration"""
+        """Delete a knowledge collection configuration"""
         tenant_id = await cls.validate_tenant_access(user)
         user_id = user.get("id") or user.get("userId") or "unknown"
         
@@ -498,7 +498,7 @@ class KnowledgeService:
         # Check if config exists
         existing = await collection.find_one({"name": name, "tenantId": tenant_id})
         if not existing:
-            raise HTTPException(status_code=404, detail="Prefix not found")
+            raise HTTPException(status_code=404, detail="Collection not found")
         
         # Delete from MongoDB
         result = await collection.delete_one({"name": name, "tenantId": tenant_id})
@@ -510,7 +510,7 @@ class KnowledgeService:
             logger.error(f"[KNOWLEDGE] Failed to delete vector collection for {name}: {e}")
             # Don't fail the entire operation for vector DB cleanup issues
         
-        return {"message": f"Prefix '{name}' deleted"}
+        return {"message": f"Collection '{name}' deleted"}
     
     @classmethod
     async def get_defaults(cls, user: dict) -> Dict[str, Any]:
@@ -592,7 +592,7 @@ class KnowledgeService:
             "chunk": doc.get("chunk", {}),
             "created_at": doc.get("created_at"),
             "updated_at": doc.get("updated_at"),
-            "files": doc.get("files", []),  # Return files as stored in MongoDB without prefix
+            "files": doc.get("files", []),  # Return files as stored in MongoDB without path
             "doc_counts": doc.get("doc_counts", {}),
             "files_by_type": doc.get("files_by_type", {}),
             "file_count": len(doc.get("files", [])),
@@ -626,20 +626,16 @@ class KnowledgeService:
         # Create vector collection name for storage in MongoDB
         vector_collection_name = f"{collection_name}_user@{user_id}"
 
-        record = {
+        # Accept frontend structure as-is and only add required backend fields
+        record = dict(payload)  # Preserve original structure
+        record.update({
             "tenantId": tenant_id,
             "ownerId": user_id,
             "collection": collection_name,
-            "vector_collection": vector_collection_name,  # Store vector collection name
-            "category": payload.get("category", ""),
-            "chunk": payload.get("chunk", {
-                "chunk_size": payload.get("chunk_size"),
-                "chunk_overlap": payload.get("chunk_overlap"),
-                "add_context": payload.get("add_context"),
-                "search_knowledge": payload.get("search_knowledge"),
-            }),
+            "vector_collection": vector_collection_name,
             "updated_at": now_ms,
-        }
+        })
+        
         if not doc:
             record["created_at"] = now_ms
 
@@ -757,8 +753,9 @@ class KnowledgeService:
         MAX_FILE_SIZE = 200 * 1024 * 1024
 
         try:
+            # First, upload all files to MinIO
             results = []
-            base_prefix = f"uploads/{tenant_id}/{user_id}/{collection_name}"
+            base_path = f"uploads/{tenant_id}/{user_id}/{collection_name}"
 
             for f in files:
                 if f.content_type and f.content_type not in ALLOWED_TYPES:
@@ -769,7 +766,7 @@ class KnowledgeService:
                     raise HTTPException(status_code=400, detail=f"File too large: {f.filename}")
 
                 # Use plain filename without timestamp
-                object_name = f"{base_prefix}/{f.filename}"
+                object_name = f"{base_path}/{f.filename}"
                 
                 # Check if file already exists
                 file_exists = await FileService.check_file_exists(object_name)
@@ -793,41 +790,81 @@ class KnowledgeService:
                     
                 results.append(result_item)
 
-            # Index uploaded files to vector database
-            indexed_files = []
-            for file_result in results:
-                try:
-                    await VectorService.index_file(
-                        user_id=user_id,
-                        collection=collection_name,
-                        filename=file_result["filename"],
-                        content=file_result["content"],
-                        file_path=file_result["key"]
-                    )
-                    indexed_files.append(file_result["filename"])
-                except Exception as e:
-                    logger.error(f"[KNOWLEDGE] Failed to index file {file_result['filename']}: {e}")
-
-            # Update the MongoDB collection with file information
+            # Update the MongoDB collection with file information first (before indexing)
             vector_collection_name = f"{collection_name}_user@{user_id}"
             
-            await cls._get_knowledge_config_collection().update_one(
-                {"tenantId": tenant_id, "collection": collection_name},
-                {
-                    "$addToSet": {"files": {"$each": [r["filename"] for r in results]}},
-                    "$set": {
-                        "updated_at": int(datetime.utcnow().timestamp() * 1000),
-                        "vector_collection": vector_collection_name,
-                    }
-                },
-                upsert=True
-            )
+            try:
+                await cls._get_knowledge_config_collection().update_one(
+                    {"tenantId": tenant_id, "collection": collection_name},
+                    {
+                        "$addToSet": {"files": {"$each": [r["filename"] for r in results]}},
+                        "$set": {
+                            "updated_at": int(datetime.utcnow().timestamp() * 1000),
+                            "vector_collection": vector_collection_name,
+                        }
+                    },
+                    upsert=True
+                )
+                logger.info(f"[KNOWLEDGE] Updated MongoDB collection config for {collection_name}")
+            except Exception as db_error:
+                logger.error(f"[KNOWLEDGE] Failed to update MongoDB collection config: {db_error}")
+                # Continue with indexing even if MongoDB update fails
+
+            # Now attempt batch indexing (but don't fail upload if indexing fails)
+            indexed_files = []
+            indexing_errors = []
+            
+            # Try batch indexing first for better performance
+            try:
+                file_keys = [r["key"] for r in results]
+                logger.info(f"[KNOWLEDGE] Attempting batch indexing of {len(file_keys)} files")
+                
+                # Get MinIO client for batch processing
+                minio_client = FileService._get_client()
+                
+                total_docs = await VectorService.index_files_batch(
+                    user_id=user_id,
+                    collection=collection_name,
+                    files=file_keys,
+                    vector_collection=vector_collection_name,
+                    chunk=1024,
+                    category=None,
+                    minio_client=minio_client
+                )
+                
+                # If batch indexing succeeds, mark all files as indexed
+                indexed_files = [r["filename"] for r in results]
+                logger.info(f"[KNOWLEDGE] Batch indexing successful: {total_docs} documents indexed")
+                
+            except Exception as batch_error:
+                logger.warning(f"[KNOWLEDGE] Batch indexing failed, falling back to individual indexing: {batch_error}")
+                
+                # Fall back to individual file indexing
+                for file_result in results:
+                    try:
+                        success = await VectorService.index_file(
+                            user_id=user_id,
+                            collection=collection_name,
+                            filename=file_result["filename"],
+                            content=file_result["content"],
+                            file_path=file_result["key"]
+                        )
+                        if success:
+                            indexed_files.append(file_result["filename"])
+                            logger.info(f"[KNOWLEDGE] Successfully indexed file: {file_result['filename']}")
+                        else:
+                            indexing_errors.append(f"Failed to index {file_result['filename']}: Unknown error")
+                            logger.warning(f"[KNOWLEDGE] Failed to index file {file_result['filename']}: Unknown error")
+                    except Exception as e:
+                        error_msg = f"Failed to index {file_result['filename']}: {str(e)}"
+                        indexing_errors.append(error_msg)
+                        logger.error(f"[KNOWLEDGE] {error_msg}")
 
             # Remove content from results before returning (too large for response)
             for result in results:
                 result.pop("content", None)
 
-            return {
+            response = {
                 "uploaded": results, 
                 "collection": collection_name,
                 "vector_collection": vector_collection_name,
@@ -835,6 +872,13 @@ class KnowledgeService:
                 "tenant_id": tenant_id,
                 "user_id": user_id
             }
+            
+            # Include indexing errors if any occurred
+            if indexing_errors:
+                response["indexing_errors"] = indexing_errors
+                response["warning"] = f"Files uploaded successfully but {len(indexing_errors)} indexing errors occurred"
+            
+            return response
 
         except HTTPException:
             raise

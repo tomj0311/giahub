@@ -54,11 +54,11 @@ export const agentRuntimeService = {
     if (!res.ok) throw new Error(j.detail || `HTTP ${res.status}`)
     return j
   },
-  async uploadKnowledge(prefix, files, token) {
+  async uploadKnowledge(collection, files, token) {
     const fd = new FormData()
-    fd.append('prefix', prefix)
+    fd.append('collection', collection)
     for (const f of files) fd.append('files', f)
-    const res = await apiCall(`/api/knowledge/upload?prefix=${encodeURIComponent(prefix)}`, {
+    const res = await apiCall(`/api/knowledge/upload?collection=${encodeURIComponent(collection)}`, {
       method: 'POST',
       headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
       body: fd

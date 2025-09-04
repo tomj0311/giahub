@@ -149,10 +149,22 @@ async def ensure_indexes():
         await collections["toolConfig"].create_index("tenantId")
 
         logger.debug("[DB] Creating knowledge collection indexes")
-        # Knowledge collection indexes
-        await collections["knowledgeConfig"].create_index(
-            [("tenantId", 1), ("prefix", 1)], unique=True
-        )
+        # Knowledge collection indexes - handle transition from prefix to collection
+        try:
+            # Try to drop old index if it exists
+            try:
+                await collections["knowledgeConfig"].drop_index("tenantId_1_prefix_1")
+                logger.info("[DB] Dropped old tenantId_1_prefix_1 index")
+            except Exception:
+                pass  # Index might not exist
+            
+            # Create new index with collection field
+            await collections["knowledgeConfig"].create_index(
+                [("tenantId", 1), ("collection", 1)], unique=True
+            )
+        except Exception as e:
+            logger.warning(f"[DB] Index creation warning: {e}")
+            
         await collections["knowledgeConfig"].create_index("category")
         await collections["knowledgeConfig"].create_index("created_at")
 

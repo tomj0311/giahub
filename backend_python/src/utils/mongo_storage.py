@@ -73,6 +73,11 @@ def agent_run_upsert(run_data: Dict[str, Any]) -> None:
             logger.error(f"[TENANT_ENFORCEMENT] CRITICAL: agent_run_upsert requires tenant_id but none found in run_data for correlation_id: {correlation_id}")
             raise ValueError("tenant_id is required for agent_runs upsert operations")
         
+        # Accept run_data structure as-is - no transformation needed
+        # Only add backend-required fields if not present
+        if 'updated_at' not in run_data:
+            run_data['updated_at'] = datetime.utcnow()
+        
         # Upsert based on correlation_id AND tenant_id for isolation
         result = agent_runs.replace_one(
             {"correlation_id": correlation_id, "tenantId": tenant_id},

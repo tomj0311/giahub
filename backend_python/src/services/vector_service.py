@@ -50,14 +50,14 @@ class VectorService:
         )
     
     @classmethod
-    def get_vector_db_client_with_prefix(cls, prefix: str):
-        """Get a vector database client for the specified prefix"""
+    def get_vector_db_client_with_collection(cls, collection: str):
+        """Get a vector database client for the specified collection"""
         from ai.vectordb.qdrant import Qdrant
         
         qdrant_config = cls._get_qdrant_client()
         
         return Qdrant(
-            collection=prefix,
+            collection=collection,
             **qdrant_config
         )
     
@@ -109,7 +109,7 @@ class VectorService:
 
     @classmethod
     async def index_files_batch(cls, user_id: str, collection: str, files: List[str], 
-                               prefix: str, chunk: int = 1024, category: str = None,
+                               vector_collection: str, chunk: int = 1024, category: str = None,
                                minio_client=None) -> int:
         """Index multiple files using knowledge bases"""
         try:
@@ -157,24 +157,24 @@ class VectorService:
                 logger.info("[VECTOR] Indexing complete, finalizing")
                 
                 # Get final document count
-                collection_info = vector_db.client.get_collection(prefix)
+                collection_info = vector_db.client.get_collection(vector_collection)
                 total_docs = collection_info.points_count
                 
                 # Save metadata
                 try:
                     from ..utils.mongo_storage import knowledge_meta_save, knowledge_meta_get
-                    meta = knowledge_meta_get(prefix) or {}
+                    meta = knowledge_meta_get(vector_collection) or {}
                     meta.update({
-                        'prefix': prefix,
+                        'collection': vector_collection,
                         'chunk': chunk,
                         'files': files,
                         'doc_count': total_docs,
                         'category': category  # Preserve the category
                     })
-                    logger.info(f'[VECTOR] Final metadata save for prefix: {prefix}, meta: {meta}')
-                    knowledge_meta_save(prefix, meta)
+                    logger.info(f'[VECTOR] Final metadata save for collection: {vector_collection}, meta: {meta}')
+                    knowledge_meta_save(vector_collection, meta)
                 except Exception as e:
-                    logger.error(f'[VECTOR] Save meta error for prefix: {prefix}, error: {str(e)}')
+                    logger.error(f'[VECTOR] Save meta error for collection: {vector_collection}, error: {str(e)}')
                 
                 logger.info(f"[VECTOR] Batch indexing completed. Total documents: {total_docs}")
                 return total_docs
@@ -186,6 +186,61 @@ class VectorService:
                 detail=f"Failed to index files batch: {str(e)}"
             )
     
+    @classmethod
+    async def index_file(cls, user_id: str, collection: str, filename: str, content: bytes, file_path: str) -> bool:
+        """Index a single file to the vector database"""
+        try:
+            import tempfile
+            from pathlib import Path
+            
+            vector_db = cls.get_vector_db_client(user_id, collection)
+            vector_collection_name = cls._get_vector_collection_name(user_id, collection)
+            
+            logger.info(f"[VECTOR] Indexing file {filename} to collection {vector_collection_name}")
+            
+            # Create a temporary file for processing
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+                file_ext = Path(filename).suffix.lower()
+                
+                # Write content to temporary file
+                temp_file_path = temp_path / filename
+                temp_file_path.write_bytes(content)
+                
+                # Import knowledge base classes
+                from ai.knowledge.pdf import PDFKnowledgeBase
+                from ai.knowledge.text import TextKnowledgeBase
+                from ai.knowledge.docx import DocxKnowledgeBase
+                from ai.knowledge.combined import CombinedKnowledgeBase
+                
+                # Create appropriate knowledge base based on file type
+                knowledge_base = None
+                if file_ext in ['.pdf']:
+                    knowledge_base = PDFKnowledgeBase(path=str(temp_path), vector_db=vector_db)
+                elif file_ext in ['.docx', '.doc']:
+                    knowledge_base = DocxKnowledgeBase(path=str(temp_path), vector_db=vector_db)
+                elif file_ext in ['.txt', '.py', '.js', '.json', '.csv']:
+                    knowledge_base = TextKnowledgeBase(path=str(temp_path), vector_db=vector_db)
+                else:
+                    # Use combined knowledge base for unknown types
+                    pdf_kb = PDFKnowledgeBase(path=str(temp_path), vector_db=vector_db)
+                    text_kb = TextKnowledgeBase(path=str(temp_path), vector_db=vector_db)
+                    docx_kb = DocxKnowledgeBase(path=str(temp_path), vector_db=vector_db)
+                    knowledge_base = CombinedKnowledgeBase(sources=[pdf_kb, text_kb, docx_kb], vector_db=vector_db)
+                
+                if knowledge_base:
+                    logger.info(f"[VECTOR] Loading file {filename} using knowledge base")
+                    knowledge_base.load(recreate=False, upsert=True)
+                    logger.info(f"[VECTOR] Successfully indexed file {filename}")
+                    return True
+                else:
+                    logger.error(f"[VECTOR] No suitable knowledge base found for file {filename}")
+                    return False
+                
+        except Exception as e:
+            logger.error(f"[VECTOR] Failed to index file {filename}: {e}")
+            return False
+
     @classmethod
     async def search(cls, user_id: str, collection: str, query: str, limit: int = 5) -> List[Dict[str, Any]]:
         """Search for documents in the vector database"""

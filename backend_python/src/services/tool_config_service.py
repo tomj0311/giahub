@@ -45,40 +45,19 @@ class ToolConfigService:
         tenant_id = await cls.validate_tenant_access(user)
         user_id = user.get("id")
         
-        if not config.get("name"):
+        name = config.get("name")
+        if not name:
             logger.warning("[TOOL] Creation failed - name is required")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Name is required"
             )
 
-        if not config.get("tool") and not config.get("function"):
-            logger.warning("[TOOL] Creation failed - tool/function is required")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Tool (module path) is required"
-            )
-
-        # Use unified key 'tool' (alias for function module path)
-        tool_module = config.get("tool") or config.get("function")
-
-        doc = {
-            "name": config.get("name"),
-            "category": config.get("category", ""),
-            "tool": tool_module,
-            "tool_params": config.get("tool_params", {}),
-            "type": "toolConfig",
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow(),
-            "tenantId": tenant_id,
-            "userId": user_id
-        }
-
         collection = cls._get_tool_config_collection()
         
         # Check for duplicate names within tenant
         existing = await collection.find_one({
-            "name": config.get("name"),
+            "name": name,
             "tenantId": tenant_id
         })
         
@@ -88,8 +67,17 @@ class ToolConfigService:
                 detail="Tool configuration with this name already exists"
             )
 
+        # Accept frontend structure as-is and only add required backend fields
+        doc = dict(config)  # Preserve original structure
+        doc.update({
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+            "tenantId": tenant_id,
+            "userId": user_id
+        })
+
         result = await collection.insert_one(doc)
-        return {"id": str(result.inserted_id), "name": config.get("name")}
+        return {"id": str(result.inserted_id), "name": name}
 
     @classmethod
     async def get_tool_configs(cls, user: dict, category: Optional[str] = None) -> List[dict]:
@@ -155,13 +143,14 @@ class ToolConfigService:
                 detail="Invalid configuration ID"
             )
         
-        # Add updated timestamp
-        updates["updated_at"] = datetime.utcnow()
+        # Accept frontend structure as-is and only add/update backend fields
+        update_data = dict(updates)  # Preserve original structure
+        update_data["updated_at"] = datetime.utcnow()
         
         collection = cls._get_tool_config_collection()
         result = await collection.update_one(
             {"_id": object_id, "tenantId": tenant_id},
-            {"$set": updates}
+            {"$set": update_data}
         )
         
         if result.matched_count == 0:

@@ -4,8 +4,8 @@ Knowledge Configuration and Upload routes (HTTP only)
 Features:
 - List available chunking components via filesystem discovery
 - Introspect a chunking module to get constructor parameters
-- CRUD knowledge prefix configurations stored in MongoDB collection 'knowledgeConfig'
-- Upload files to MinIO at uploads/{tenant_id}/{user_id}/{prefix}/
+- CRUD knowledge collection configurations stored in MongoDB collection 'knowledgeConfig'
+- Upload files to MinIO at uploads/{tenant_id}/{user_id}/{collection}/
 """
 
 from typing import List
