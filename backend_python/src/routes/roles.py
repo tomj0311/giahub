@@ -6,9 +6,9 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends, status, Response
 from pydantic import BaseModel, EmailStr
 
-from ..db import get_collections
 from ..utils.auth import verify_token_middleware
 from ..services.rbac_service import RBACService
+from ..services.tenant_service import TenantService
 from ..utils.log import logger
 
 router = APIRouter(prefix="/api")
@@ -177,7 +177,8 @@ async def delete_role(
         )
     
     try:
-        result = await RBACService.delete_role(role_id, user_id)
+        tenant_id = await TenantService.get_user_tenant_id(user.get("id"))
+        result = await RBACService.delete_role(role_id, user_id, tenant_id=tenant_id)
         return result
         
     except HTTPException:
@@ -201,7 +202,8 @@ async def get_roles(user: dict = Depends(verify_token_middleware)):
         )
     
     try:
-        roles = await RBACService.get_all_roles(user_id)
+        tenant_id = await TenantService.get_user_tenant_id(user.get("id"))
+        roles = await RBACService.get_all_roles(user_id, tenant_id=tenant_id)
         # Extra safeguard: enforce owner-managed visibility at the route level too.
         # Filter roles to only those owned by the caller (tenant-based isolation)
         roles = [r for r in roles if r.get("ownerId") == user_id]
@@ -227,7 +229,8 @@ async def get_my_roles(user: dict = Depends(verify_token_middleware)):
         )
     
     try:
-        roles = await RBACService.get_user_roles(user_id)
+        tenant_id = await TenantService.get_user_tenant_id(user_id)
+        roles = await RBACService.get_user_roles(user_id, tenant_id=tenant_id)
         roles = [{**r, "name": r.get("roleName"), "role_id": r.get("roleId")} for r in roles]
         return [RoleResponse(**role) for role in roles]
     except Exception as e:
@@ -252,7 +255,8 @@ async def assign_role(
             detail="Invalid user"
         )
     # Check ownership of the role
-    if not await RBACService.is_role_owner(user_id, assignment.roleId):
+    tenant_id = await TenantService.get_user_tenant_id(user_id)
+    if not await RBACService.is_role_owner(user_id, assignment.roleId, tenant_id=tenant_id):
         logger.warning(f"[ROLES] User {user_id} attempted to assign role {assignment.roleId} without ownership")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -262,7 +266,8 @@ async def assign_role(
     try:
         await RBACService.assign_role_to_user(
             user_id=assignment.userId,
-            role_id=assignment.roleId
+            role_id=assignment.roleId,
+            tenant_id=tenant_id
         )
         return {"message": "Role assigned successfully"}
     except Exception as e:
@@ -287,7 +292,8 @@ async def remove_role(
             detail="Invalid user"
         )
     # Check ownership of the role
-    if not await RBACService.is_role_owner(user_id, assignment.roleId):
+    tenant_id = await TenantService.get_user_tenant_id(user_id)
+    if not await RBACService.is_role_owner(user_id, assignment.roleId, tenant_id=tenant_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only role owners can remove roles"
@@ -296,7 +302,8 @@ async def remove_role(
     try:
         success = await RBACService.remove_role_from_user(
             user_id=assignment.userId,
-            role_id=assignment.roleId
+            role_id=assignment.roleId,
+            tenant_id=tenant_id
         )
         
         if success:
@@ -330,8 +337,9 @@ async def get_user_roles(
         )
     
     # Users can see their own roles; role owners can see users for whom they own any assigned role
+    tenant_id = await TenantService.get_user_tenant_id(current_user_id)
     if current_user_id != user_id:
-        target_roles = await RBACService.get_user_roles(user_id)
+        target_roles = await RBACService.get_user_roles(user_id, tenant_id=tenant_id)
         # Allow if any target role is owned by requester OR role is unowned (system role)
         if not any((r.get("ownerId") == current_user_id) or (not r.get("ownerId")) for r in target_roles):
             raise HTTPException(
@@ -340,7 +348,7 @@ async def get_user_roles(
             )
     
     try:
-        roles = await RBACService.get_user_roles(user_id)
+        roles = await RBACService.get_user_roles(user_id, tenant_id=tenant_id)
         roles = [{**r, "name": r.get("roleName"), "role_id": r.get("roleId")} for r in roles]
         return [RoleResponse(**role) for role in roles]
     except Exception as e:

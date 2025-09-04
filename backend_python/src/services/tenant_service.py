@@ -12,7 +12,7 @@ from typing import Dict, Optional
 from fastapi import HTTPException, status
 
 from ..utils.log import logger
-from ..db import get_collections
+from ..utils.mongo_storage import MongoStorageService
 
 
 class TenantService:
@@ -22,7 +22,7 @@ class TenantService:
     async def create_default_tenant(user_email: str, user_id: str) -> Dict:
         """Create a default tenant for a new user registration"""
         logger.info(f"[TENANT] Creating default tenant for user: {user_email} (ID: {user_id})")
-        collections = get_collections()
+
         
         tenant_id = str(uuid.uuid4())
         tenant_name = f"Organization of {user_email.split('@')[0]}"
@@ -44,7 +44,7 @@ class TenantService:
         }
         
         try:
-            await collections['tenants'].insert_one(tenant_data)
+            await MongoStorageService.insert_one("tenants", tenant_data)
             logger.info(f"[TENANT] Successfully created tenant: {tenant_id} for user: {user_email}")
             
             # Create a tenant admin role for the owner
@@ -76,7 +76,7 @@ class TenantService:
             )
             
             # Assign the admin role to the user
-            await RBACService.assign_role_to_user(user_id, admin_role["roleId"])
+            await RBACService.assign_role_to_user(user_id, admin_role["roleId"], tenant_id=tenant_id)
             logger.info(f"[TENANT] Successfully assigned tenant admin role to user: {user_id}")
             
         except Exception as e:
@@ -88,8 +88,8 @@ class TenantService:
     async def get_tenant_by_id(tenant_id: str) -> Optional[Dict]:
         """Get tenant by ID"""
         logger.debug(f"[TENANT] Fetching tenant by ID: {tenant_id}")
-        collections = get_collections()
-        tenant = await collections['tenants'].find_one({"tenantId": tenant_id})
+
+        tenant = await MongoStorageService.find_one("tenants", {"tenantId": tenant_id})
         if tenant:
             logger.debug(f"[TENANT] Found tenant: {tenant['name']}")
         else:
@@ -100,8 +100,10 @@ class TenantService:
     async def get_user_tenant_id(user_id: str) -> Optional[str]:
         """Get tenant_id for a user"""
         logger.debug(f"[TENANT] Getting tenant ID for user: {user_id}")
-        collections = get_collections()
-        user = await collections['users'].find_one({"_id": user_id})
+
+        # Use MongoStorageService properly - users collection is exempt from tenant enforcement during OAuth flows
+        user = await MongoStorageService.find_one("users", {"_id": user_id})
+            
         tenant_id = user.get("tenantId") if user else None
         if tenant_id:
             logger.debug(f"[TENANT] User {user_id} belongs to tenant: {tenant_id}")
@@ -130,8 +132,7 @@ class TenantService:
             "tenant_id": tenant_id,
             "tenant_name": tenant.get("name"),
             "tenant_description": tenant.get("description"),
-            "is_owner": tenant.get("ownerId") == user_id,
-            "settings": tenant.get("settings", {})
+            "owner_id": tenant.get("ownerId")
         }
     
     @staticmethod
@@ -144,7 +145,7 @@ class TenantService:
     async def add_user_to_tenant(user_id: str, tenant_id: str) -> bool:
         """Add user to a tenant (used for invitations)"""
         logger.info(f"[TENANT] Adding user {user_id} to tenant: {tenant_id}")
-        collections = get_collections()
+
         
         # Verify tenant exists
         tenant = await TenantService.get_tenant_by_id(tenant_id)
@@ -157,7 +158,8 @@ class TenantService:
         
         # Update user with tenant_id
         try:
-            result = await collections['users'].update_one(
+            result = await MongoStorageService.update_one(
+                "users",
                 {"id": user_id},
                 {"$set": {"tenantId": tenant_id}}
             )

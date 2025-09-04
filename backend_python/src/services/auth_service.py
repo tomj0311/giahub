@@ -11,21 +11,7 @@ from typing import Optional, Dict, Any
 from fastapi import HTTPException, status
 
 from ..utils.log import logger
-from ..db import get_collections
-"""
-Authentication Service
-
-This service handles authentication-related business logic including login,
-token generation, password verification, and user authentication flows.
-"""
-
-import os
-from datetime import datetime
-from typing import Optional, Dict, Any
-from fastapi import HTTPException, status
-
-from ..utils.log import logger
-from ..db import get_collections
+from ..utils.mongo_storage import MongoStorageService
 from ..utils.auth import (
     generate_token,
     verify_password,
@@ -44,11 +30,6 @@ class AuthService:
     # Admin credentials with development fallbacks
     ADMIN_USER = os.getenv('ADMIN_USER', 'admin')
     ADMIN_PASS = os.getenv('ADMIN_PASS', '123')
-
-    @staticmethod
-    def _get_users_collection():
-        """Get the users collection"""
-        return get_collections()["users"]
 
     @classmethod
     async def authenticate_user(cls, username: str, password: str) -> Dict[str, Any]:
@@ -92,7 +73,7 @@ class AuthService:
         logger.debug(f"[AUTH] Authenticating regular user: {normalized_username}")
         try:
             logger.debug(f"[AUTH] Looking up user in database: {normalized_username}")
-            user = await cls._get_users_collection().find_one({"email": normalized_username})
+            user = await MongoStorageService.find_one("users", {"email": normalized_username})
 
             if not user:
                 logger.warning(f"[AUTH] User not found: {normalized_username}")
@@ -138,7 +119,7 @@ class AuthService:
             token = generate_token(token_payload)
 
             # Update last login
-            await cls._update_last_login(user["_id"])
+            await cls._update_last_login(user["_id"], tenant_id=tenant_info.get("tenant_id") if tenant_info else None)
 
             logger.info(f"[AUTH] User login successful for: {normalized_username}")
             return {
@@ -157,19 +138,19 @@ class AuthService:
             )
 
     @classmethod
-    async def _update_last_login(cls, user_id):
+    async def _update_last_login(cls, user_id, tenant_id: Optional[str] = None):
         """Update user's last login timestamp"""
         try:
             current_time = datetime.utcnow()
-            await cls._get_users_collection().update_one(
+            await MongoStorageService.update_one(
+                "users",
                 {"_id": user_id},
                 {
-                    "$set": {
-                        "last_login": current_time,
-                        "updated_at": current_time,
-                        "updatedAt": current_time.timestamp() * 1000  # Timestamp in milliseconds
-                    }
-                }
+                    "last_login": current_time,
+                    "updated_at": current_time,
+                    "updatedAt": current_time.timestamp() * 1000  # Timestamp in milliseconds
+                },
+                tenant_id=tenant_id
             )
         except Exception as e:
             logger.error(f"[AUTH] Failed to update last login for user {user_id}: {e}")
@@ -206,10 +187,15 @@ class AuthService:
         from ..services.rbac_service import RBACService
         from ..services.user_service import UserService
 
-        collections = get_collections()
 
-        # Check if user already exists
-        existing_user = await collections['users'].find_one({"email": user_info.get('email')})
+
+        # Check if user already exists - use MongoStorageService properly
+        # During OAuth flows, we can query users without tenant filtering since we don't know the tenant yet
+        try:
+            existing_user = await MongoStorageService.find_one("users", {"email": user_info.get('email')})
+        except Exception as e:
+            logger.error(f"[OAUTH] Failed to check for existing user: {e}")
+            existing_user = None
 
         if existing_user:
             # Handle existing user
@@ -223,7 +209,7 @@ class AuthService:
         """Handle existing OAuth user login"""
         from ..services.rbac_service import RBACService
 
-        collections = get_collections()
+
 
         # Get the user ID - handle both _id and id fields
         user_id = user_data.get('_id') or user_data.get('id')
@@ -239,14 +225,16 @@ class AuthService:
         if not user_tenant_id:
             logger.warning(f"Existing OAuth user {user_data['email']} has no tenantId. Creating default tenant...")
             default_tenant = await TenantService.create_default_tenant(user_data['email'], user_id)
-            await collections['users'].update_one(
+            await MongoStorageService.update_one(
+                "users",
                 {"_id": user_id},
-                {"$set": {"tenantId": default_tenant["tenantId"]}}
+                {"$set": {"tenantId": default_tenant["tenantId"]}},
+                tenant_id=default_tenant["tenantId"]  # Provide tenant_id for the update operation
             )
             user_tenant_id = default_tenant["tenantId"]
             logger.info(f"Created and assigned default tenant for {user_data['email']}")
 
-        user_roles = await RBACService.get_user_roles(user_id)
+        user_roles = await RBACService.get_user_roles(user_id, tenant_id=user_tenant_id)
         if not user_roles:
             logger.warning(f"Existing OAuth user {user_data['email']} has no roles. Creating default role...")
             default_role = await RBACService.create_default_user_role(
@@ -254,11 +242,11 @@ class AuthService:
                 owner_id=user_id,
                 tenant_id=user_tenant_id
             )
-            await RBACService.assign_role_to_user(user_id, default_role["roleId"])
+            await RBACService.assign_role_to_user(user_id, default_role["roleId"], tenant_id=user_tenant_id)
             logger.info(f"Created and assigned default role for {user_data['email']}")
 
         # Update last login timestamp
-        await cls._update_last_login(user_id)
+        await cls._update_last_login(user_id, tenant_id=user_tenant_id)
 
         return {
             "id": user_id,
@@ -277,7 +265,7 @@ class AuthService:
         from datetime import datetime
         from ..services.rbac_service import RBACService
 
-        collections = get_collections()
+
 
         # Generate user ID first
         new_user_id = secrets.token_urlsafe(16)
@@ -304,7 +292,7 @@ class AuthService:
             logger.info(f"Created default role: {default_role['roleId']} for {user_info['email']}")
         except Exception as e:
             # Clean up: delete the tenant since role creation failed
-            await collections['tenants'].delete_one({"ownerId": new_user_id})
+            await MongoStorageService.delete_one("tenants", {"ownerId": new_user_id})
             logger.error(f"Failed to create default role for Google OAuth user {user_info['email']}: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -337,18 +325,18 @@ class AuthService:
 
         # Validate tenantId is present
         if not new_user.get("tenantId"):
-            await collections['tenants'].delete_one({"ownerId": new_user_id})
+            await MongoStorageService.delete_one("tenants", {"ownerId": new_user_id})
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="OAuth user creation failed: tenantId is required"
             )
 
         try:
-            await collections['users'].insert_one(new_user)
+            await MongoStorageService.insert_one("users", new_user, tenant_id=default_tenant['tenantId'])
             logger.info(f"Created new Google OAuth user: {user_info['email']}")
         except Exception as e:
             # Clean up: delete the tenant and role since user creation failed
-            await collections['tenants'].delete_one({"ownerId": new_user_id})
+            await MongoStorageService.delete_one("tenants", {"ownerId": new_user_id})
             logger.error(f"Failed to create Google OAuth user {new_user_id}: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -357,12 +345,12 @@ class AuthService:
 
         # Assign role to user
         try:
-            await RBACService.assign_role_to_user(new_user_id, default_role["roleId"])
+            await RBACService.assign_role_to_user(new_user_id, default_role["roleId"], tenant_id=default_tenant['tenantId'])
             logger.info(f"Assigned role {default_role['roleId']} to user {new_user_id}")
         except Exception as e:
             # Clean up: delete the user and tenant since role assignment failed
-            await collections['users'].delete_one({"_id": new_user_id})
-            await collections['tenants'].delete_one({"ownerId": new_user_id})
+            await MongoStorageService.delete_one("users", {"_id": new_user_id}, tenant_id=default_tenant['tenantId'])
+            await MongoStorageService.delete_one("tenants", {"ownerId": new_user_id})
             logger.error(f"Failed to assign role to Google OAuth user {new_user_id}: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -387,13 +375,17 @@ class AuthService:
         from ..services.rbac_service import RBACService
         from ..services.user_service import UserService
 
-        collections = get_collections()
+
 
         # Get email from Microsoft user info (can be in 'mail' or 'userPrincipalName')
         email = user_info.get('mail', user_info.get('userPrincipalName', ''))
         
-        # Check if user already exists
-        existing_user = await collections['users'].find_one({"email": email})
+        # Check if user already exists - use MongoStorageService properly
+        try:
+            existing_user = await MongoStorageService.find_one("users", {"email": email})
+        except Exception as e:
+            logger.error(f"[OAUTH] Failed to check for existing Microsoft user: {e}")
+            existing_user = None
 
         if existing_user:
             # Handle existing user
@@ -417,7 +409,7 @@ class AuthService:
         from datetime import datetime
         from ..services.rbac_service import RBACService
 
-        collections = get_collections()
+
 
         # Generate user ID first
         new_user_id = secrets.token_urlsafe(16)
@@ -444,7 +436,7 @@ class AuthService:
             logger.info(f"Created default role: {default_role['roleId']} for {user_info['email']}")
         except Exception as e:
             # Clean up: delete the tenant since role creation failed
-            await collections['tenants'].delete_one({"ownerId": new_user_id})
+            await MongoStorageService.delete_one("tenants", {"ownerId": new_user_id})
             logger.error(f"Failed to create default role for Microsoft OAuth user {user_info['email']}: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -471,18 +463,18 @@ class AuthService:
 
         # Validate tenantId is present
         if not new_user.get("tenantId"):
-            await collections['tenants'].delete_one({"ownerId": new_user_id})
+            await MongoStorageService.delete_one("tenants", {"ownerId": new_user_id})
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="OAuth user creation failed: tenantId is required"
             )
 
         try:
-            await collections['users'].insert_one(new_user)
+            await MongoStorageService.insert_one("users", new_user, tenant_id=default_tenant['tenantId'])
             logger.info(f"Created new Microsoft OAuth user: {user_info['email']}")
         except Exception as e:
             # Clean up: delete the tenant and role since user creation failed
-            await collections['tenants'].delete_one({"ownerId": new_user_id})
+            await MongoStorageService.delete_one("tenants", {"ownerId": new_user_id})
             logger.error(f"Failed to create Microsoft OAuth user {new_user_id}: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -491,12 +483,12 @@ class AuthService:
 
         # Assign role to user
         try:
-            await RBACService.assign_role_to_user(new_user_id, default_role["roleId"])
+            await RBACService.assign_role_to_user(new_user_id, default_role["roleId"], tenant_id=default_tenant['tenantId'])
             logger.info(f"Assigned role {default_role['roleId']} to user {new_user_id}")
         except Exception as e:
             # Clean up: delete the user and tenant since role assignment failed
-            await collections['users'].delete_one({"id": new_user_id})
-            await collections['tenants'].delete_one({"ownerId": new_user_id})
+            await MongoStorageService.delete_one("users", {"id": new_user_id}, tenant_id=default_tenant['tenantId'])
+            await MongoStorageService.delete_one("tenants", {"ownerId": new_user_id})
             logger.error(f"Failed to assign role to Microsoft OAuth user {new_user_id}: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -515,7 +507,7 @@ class AuthService:
     @staticmethod
     async def get_current_user_info(user: Dict[str, Any]) -> Dict[str, Any]:
         """Get current user information"""
-        collections = get_collections()
+
 
         # For admin users, return username; for regular users, get name from database
         if user.get("role") == "admin":
@@ -527,7 +519,7 @@ class AuthService:
             }
         else:
             # For regular users, fetch additional info from database
-            user_doc = await collections['users'].find_one({"id": user.get("id")})
+            user_doc = await MongoStorageService.find_one("users", {"id": user.get("id")})
             return {
                 "role": user.get("role"),
                 "id": user.get("id"),

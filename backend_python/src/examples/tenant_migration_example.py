@@ -8,6 +8,8 @@ BEFORE: Manual tenant filtering (error-prone)
 AFTER: Automatic tenant filtering (secure by default)
 """
 
+from ..utils.mongo_storage import MongoStorageService
+
 # BEFORE: Manual tenant filtering - error-prone and can be forgotten
 """
 @router.get("/users")
@@ -21,7 +23,7 @@ async def get_users_old(user: dict = Depends(verify_token_middleware)):
     
     # PROBLEM: Developer must remember to add tenantId filter
     query = {"tenantId": tenant_id}  # Easy to forget!
-    users = await collections['users'].find(query).to_list(None)
+    users = await MongoStorageService.find_many("users", query)
     return users
 
 
@@ -36,8 +38,8 @@ async def create_user_old(user_data: dict, user: dict = Depends(verify_token_mid
     
     # PROBLEM: Developer must remember to add tenantId to record
     user_data["tenantId"] = tenant_id  # Easy to forget!
-    result = await collections['users'].insert_one(user_data)
-    return {"id": str(result.inserted_id)}
+    result = await MongoStorageService.insert_one("users", user_data)
+    return {"id": str(result.get("inserted_id", ""))}
 """
 
 # AFTER: Automatic tenant filtering - secure by default
@@ -57,10 +59,10 @@ async def get_users_v1(user: dict = Depends(verify_token_middleware), collection
     The @with_tenant_db decorator automatically injects tenant-aware collections.
     """
     # collections is now tenant-aware - automatic filtering by tenant_id
-    users = await collections['users'].find({}).to_list(None)
+    users = await MongoStorageService.find_many("users", {})
     
     # Optional: filter by additional criteria
-    active_users = await collections['users'].find({"active": True}).to_list(None)
+    active_users = await MongoStorageService.find_many("users", {"active": True})
     
     return {"users": users, "active_users": active_users}
 
@@ -75,10 +77,10 @@ async def get_users_v2(
     Get users using dependency injection for tenant-aware collections.
     """
     # Automatic tenant filtering - no manual tenant_id needed
-    users = await collections['users'].find({}).to_list(None)
+    users = await MongoStorageService.find_many("users", {})
     
     # Count users in tenant
-    user_count = await collections['users'].count_documents({})
+    user_count = await MongoStorageService.count_documents("users", {})
     
     return {"users": users, "count": user_count}
 
@@ -95,12 +97,12 @@ async def create_user(
     Create user with automatic tenant_id injection.
     """
     # tenant_id is automatically added to user_data during insert
-    result = await collections['users'].insert_one(user_data)
+    result = await MongoStorageService.insert_one("users", user_data)
     
     # Get the created user (also tenant-filtered)
-    created_user = await collections['users'].find_one({"_id": result.inserted_id})
+    created_user = await MongoStorageService.find_one("users", {"_id": result.get("inserted_id")})
     
-    return {"id": str(result.inserted_id), "user": created_user}
+    return {"id": str(result.get("inserted_id", "")), "user": created_user}
 
 
 # Method 4: Complex operations with multiple collections
@@ -113,9 +115,9 @@ async def get_user_roles(
     Get users and their roles - all automatically tenant-filtered.
     """
     # All operations are automatically tenant-filtered
-    users = await collections['users'].find({}).to_list(None)
-    roles = await collections['roles'].find({}).to_list(None)
-    user_roles = await collections['userRoles'].find({}).to_list(None)
+    users = await MongoStorageService.find_many("users", {})
+    roles = await MongoStorageService.find_many("roles", {})
+    user_roles = await MongoStorageService.find_many("userRoles", {})
     
     # Build user-role mapping
     role_map = {role['roleId']: role for role in roles}
@@ -146,7 +148,7 @@ async def get_menu_items(user: dict = Depends(verify_token_middleware)):
     collections = get_collections()
     
     # menuItems are global - no tenant filtering
-    menu_items = await collections['menuItems'].find({}).to_list(None)
+    menu_items = await MongoStorageService.find_many("menuItems", {})
     
     return {"menuItems": menu_items}
 
@@ -162,12 +164,12 @@ async def get_protected_data(
     """
     try:
         # This will automatically fail if user has no tenant_id
-        data = await collections['users'].find({}).to_list(None)
+        data = await MongoStorageService.find_many("users", {})
         
         # Complex query - still tenant-filtered
-        recent_data = await collections['users'].find({
+        recent_data = await MongoStorageService.find_many("users", {
             "createdAt": {"$gte": "2024-01-01"}
-        }).sort("createdAt", -1).limit(10).to_list(None)
+        }, sort_field="createdAt", sort_order=-1, limit=10)
         
         return {"data": data, "recent": recent_data}
         

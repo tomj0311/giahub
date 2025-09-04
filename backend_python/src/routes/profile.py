@@ -2,7 +2,6 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel, validator
 
-from ..db import get_collections
 from ..utils.auth import verify_token_middleware, normalize_email
 from ..services.user_service import UserService
 from ..utils.log import logger

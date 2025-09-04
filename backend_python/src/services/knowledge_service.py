@@ -11,8 +11,8 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from fastapi import HTTPException, status, UploadFile
 
-from ..db import get_collections
 from ..utils.log import logger
+from ..utils.mongo_storage import MongoStorageService
 from src.utils.component_discovery import discover_components, get_detailed_class_info
 from .file_service import FileService
 from .vector_service import VectorService
@@ -20,11 +20,6 @@ from .vector_service import VectorService
 
 class KnowledgeService:
     """Service for managing knowledge configurations and operations"""
-    
-    @staticmethod
-    def _get_knowledge_config_collection():
-        """Get the knowledge config collection"""
-        return get_collections()["knowledgeConfig"]
     
     @staticmethod
     async def validate_tenant_access(user: dict) -> str:
@@ -105,12 +100,13 @@ class KnowledgeService:
         logger.info(f"[KNOWLEDGE] Listing configs for tenant: {tenant_id}, user: {user_id}")
         
         try:
-            cursor = cls._get_knowledge_config_collection().find({
-                "tenantId": tenant_id,
-                "userId": user_id
-            }).sort("name", 1)
-            
-            docs = await cursor.to_list(length=None)
+            docs = await MongoStorageService.find_many(
+                "knowledgeConfig",
+                {"userId": user_id},
+                tenant_id=tenant_id,
+                sort_field="name",
+                sort_order=1
+            )
             
             configs = []
             for doc in docs:
@@ -139,11 +135,11 @@ class KnowledgeService:
         user_id = user.get("id") or user.get("userId")
         
         try:
-            doc = await cls._get_knowledge_config_collection().find_one({
-                "tenantId": tenant_id,
-                "userId": user_id,
-                "name": collection_name
-            })
+            doc = await MongoStorageService.find_one(
+                "knowledgeConfig",
+                {"userId": user_id, "name": collection_name},
+                tenant_id=tenant_id
+            )
             
             if not doc:
                 raise HTTPException(status_code=404, detail="Knowledge configuration not found")
@@ -180,28 +176,25 @@ class KnowledgeService:
         
         try:
             # Check if config already exists
-            existing = await cls._get_knowledge_config_collection().find_one({
-                "tenantId": tenant_id,
-                "userId": user_id,
-                "name": name
-            })
+            existing = await MongoStorageService.find_one(
+                "knowledgeConfig",
+                {"userId": user_id, "name": name},
+                tenant_id=tenant_id
+            )
             
             if existing:
                 raise HTTPException(status_code=409, detail="Configuration with this name already exists")
             
             # Create configuration record
             record = {
-                "tenantId": tenant_id,
                 "userId": user_id,
                 "name": name,
                 "description": config_data.get("description", ""),
                 "chunker": config_data.get("chunker", {}),
-                "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow(),
                 "file_count": 0
             }
             
-            await cls._get_knowledge_config_collection().insert_one(record)
+            await MongoStorageService.insert_one("knowledgeConfig", record, tenant_id=tenant_id)
             
             # Initialize vector collection
             await cls._initialize_vector_collection(tenant_id, user_id, name)
@@ -224,9 +217,7 @@ class KnowledgeService:
         logger.info(f"[KNOWLEDGE] Updating config '{collection_name}' for tenant: {tenant_id}")
         
         try:
-            update_data = {
-                "updated_at": datetime.utcnow()
-            }
+            update_data = {}
             
             # Only update allowed fields
             allowed_fields = ["description", "chunker"]
@@ -234,16 +225,14 @@ class KnowledgeService:
                 if field in config_data:
                     update_data[field] = config_data[field]
             
-            result = await cls._get_knowledge_config_collection().update_one(
-                {
-                    "tenantId": tenant_id,
-                    "userId": user_id,
-                    "name": collection_name
-                },
-                {"$set": update_data}
+            result = await MongoStorageService.update_one(
+                "knowledgeConfig",
+                {"userId": user_id, "name": collection_name},
+                update_data,
+                tenant_id=tenant_id
             )
             
-            if result.matched_count == 0:
+            if not result:
                 raise HTTPException(status_code=404, detail="Knowledge configuration not found")
             
             logger.info(f"[KNOWLEDGE] Successfully updated config '{collection_name}'")
@@ -265,13 +254,13 @@ class KnowledgeService:
         
         try:
             # Delete configuration
-            result = await cls._get_knowledge_config_collection().delete_one({
-                "tenantId": tenant_id,
-                "userId": user_id,
-                "name": name
-            })
+            result = await MongoStorageService.delete_one(
+                "knowledgeConfig",
+                {"userId": user_id, "name": name},
+                tenant_id=tenant_id
+            )
             
-            if result.deleted_count == 0:
+            if not result:
                 raise HTTPException(status_code=404, detail="Knowledge configuration not found")
             
             # Delete vector collection
@@ -399,10 +388,9 @@ class KnowledgeService:
     async def list_categories(cls, user: dict) -> List[str]:
         """List knowledge categories for current tenant"""
         tenant_id = await cls.validate_tenant_access(user)
-        collection = cls._get_knowledge_config_collection()
         
         try:
-            categories = await collection.distinct("category", {"tenantId": tenant_id})
+            categories = await MongoStorageService.distinct("knowledgeConfig", "category", {}, tenant_id=tenant_id)
             return sorted(categories)
         except Exception as e:
             logger.error(f"[KNOWLEDGE] Failed to list categories: {e}")
@@ -466,16 +454,15 @@ class KnowledgeService:
             "updated_at": datetime.utcnow(),
         }
 
-        collection = cls._get_knowledge_config_collection()
         
         # Create vs update
-        existing = await collection.find_one({"name": name, "tenantId": tenant_id})
+        existing = await MongoStorageService.find_one("knowledgeConfig", {"name": name}, tenant_id=tenant_id)
         if existing:
-            await collection.update_one({"_id": existing["_id"]}, {"$set": record})
+            await MongoStorageService.update_one("knowledgeConfig", {"_id": existing["_id"]}, {"$set": record}, tenant_id=tenant_id)
             action = "updated"
         else:
             record["created_at"] = datetime.utcnow()
-            await collection.insert_one(record)
+            await MongoStorageService.insert_one("knowledgeConfig", record, tenant_id=tenant_id)
             action = "created"
             
             # Initialize vector collection for new knowledge config
@@ -493,15 +480,14 @@ class KnowledgeService:
         tenant_id = await cls.validate_tenant_access(user)
         user_id = user.get("id") or user.get("userId") or "unknown"
         
-        collection = cls._get_knowledge_config_collection()
         
         # Check if config exists
-        existing = await collection.find_one({"name": name, "tenantId": tenant_id})
+        existing = await MongoStorageService.find_one("knowledgeConfig", {"name": name}, tenant_id=tenant_id)
         if not existing:
             raise HTTPException(status_code=404, detail="Collection not found")
         
         # Delete from MongoDB
-        result = await collection.delete_one({"name": name, "tenantId": tenant_id})
+        result = await MongoStorageService.delete_one("knowledgeConfig", {"name": name}, tenant_id=tenant_id)
         
         # Delete vector collection
         try:
@@ -529,9 +515,8 @@ class KnowledgeService:
         tenant_id = await cls.validate_tenant_access(user)
         
         try:
-            collection = cls._get_knowledge_config_collection()
-            logger.debug(f"[KNOWLEDGE] Got collection for categories: {collection}")
-            cats = await collection.distinct("category", {"tenantId": tenant_id})
+            logger.debug(f"[KNOWLEDGE] Getting categories for tenant: {tenant_id}")
+            cats = await MongoStorageService.distinct("knowledgeConfig", "category", {}, tenant_id=tenant_id)
             # filter out empty
             categories = [c for c in cats if c]
             return {"categories": categories}
@@ -547,10 +532,8 @@ class KnowledgeService:
         tenant_id = await cls.validate_tenant_access(user)
         
         try:
-            collection = cls._get_knowledge_config_collection()
-            logger.debug(f"[KNOWLEDGE] Got collection for list: {collection}")
-            cursor = collection.find({"tenantId": tenant_id}, {"collection": 1}).sort("collection", 1)
-            docs = await cursor.to_list(length=None)
+            logger.debug(f"[KNOWLEDGE] Getting collections list for tenant: {tenant_id}")
+            docs = await MongoStorageService.find_many("knowledgeConfig", {}, tenant_id=tenant_id, projection={"collection": 1}, sort_field="collection", sort_order=1)
             collections_list = sorted({d.get("collection") for d in docs if d.get("collection")})
             return {"collections": list(collections_list)}
         except Exception as e:
@@ -564,8 +547,11 @@ class KnowledgeService:
         """Get collection details with files from MinIO"""
         tenant_id = await cls.validate_tenant_access(user)
         
-        collection = cls._get_knowledge_config_collection()
-        doc = await collection.find_one({"tenantId": tenant_id, "collection": collection_name})
+        doc = await MongoStorageService.find_one(
+            "knowledgeConfig", 
+            {"collection": collection_name}, 
+            tenant_id=tenant_id
+        )
         if not doc:
             raise HTTPException(status_code=404, detail="collection not found")
 
@@ -619,7 +605,11 @@ class KnowledgeService:
         overwrite = bool(payload.get("overwrite"))
         now_ms = int(datetime.utcnow().timestamp() * 1000)
 
-        doc = await cls._get_knowledge_config_collection().find_one({"tenantId": tenant_id, "collection": collection_name})
+        doc = await MongoStorageService.find_one(
+            "knowledgeConfig", 
+            {"collection": collection_name}, 
+            tenant_id=tenant_id
+        )
         if doc and not overwrite:
             return {"exists": True, "message": "collection exists"}
 
@@ -640,9 +630,11 @@ class KnowledgeService:
             record["created_at"] = now_ms
 
         # Upsert
-        await cls._get_knowledge_config_collection().update_one(
-            {"tenantId": tenant_id, "collection": collection_name},
-            {"$set": record},
+        await MongoStorageService.update_one(
+            "knowledgeConfig",
+            {"collection": collection_name},
+            record,
+            tenant_id=tenant_id,
             upsert=True
         )
 
@@ -667,8 +659,12 @@ class KnowledgeService:
                 detail="User ID missing. Please re-login."
             )
         
-        res = await cls._get_knowledge_config_collection().delete_one({"tenantId": tenant_id, "collection": collection_name})
-        if res.deleted_count == 0:
+        result = await MongoStorageService.delete_one(
+            "knowledgeConfig", 
+            {"collection": collection_name}, 
+            tenant_id=tenant_id
+        )
+        if not result:
             raise HTTPException(status_code=404, detail="collection not found")
         
         # Also try to delete the vector DB collection
@@ -707,9 +703,11 @@ class KnowledgeService:
             # This would require identifying and deleting specific vectors based on file metadata
             
             # Remove the file from the MongoDB collection's files array
-            await cls._get_knowledge_config_collection().update_one(
-                {"tenantId": tenant_id, "collection": collection_name},
-                {"$pull": {"files": filename}}
+            await MongoStorageService.update_one(
+                "knowledgeConfig",
+                {"collection": collection_name},
+                {"$pull": {"files": filename}},
+                tenant_id=tenant_id
             )
             
             logger.info(f"[KNOWLEDGE] Successfully deleted file '{filename}' from collection '{collection_name}'")
@@ -794,8 +792,9 @@ class KnowledgeService:
             vector_collection_name = f"{collection_name}_user@{user_id}"
             
             try:
-                await cls._get_knowledge_config_collection().update_one(
-                    {"tenantId": tenant_id, "collection": collection_name},
+                await MongoStorageService.update_one(
+                    "knowledgeConfig",
+                    {"collection": collection_name},
                     {
                         "$addToSet": {"files": {"$each": [r["filename"] for r in results]}},
                         "$set": {
@@ -803,6 +802,7 @@ class KnowledgeService:
                             "vector_collection": vector_collection_name,
                         }
                     },
+                    tenant_id=tenant_id,
                     upsert=True
                 )
                 logger.info(f"[KNOWLEDGE] Updated MongoDB collection config for {collection_name}")

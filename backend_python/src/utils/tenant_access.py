@@ -8,6 +8,7 @@ in FastAPI routes and services.
 from functools import wraps
 from typing import Callable, Any, Dict
 from fastapi import HTTPException, status, Depends
+from .mongo_storage import MongoStorageService
 
 from ..db import get_collections, get_db
 from .tenant_db_wrapper import get_tenant_aware_collections, get_tenant_aware_db
@@ -29,7 +30,7 @@ def with_tenant_db(func: Callable) -> Callable:
         @with_tenant_db
         async def get_users(user: dict = Depends(verify_token_middleware), collections=None):
             # collections is now tenant-aware - no need for manual tenant filtering
-            users = await collections['users'].find({}).to_list(None)
+            users = await MongoStorageService.find_many("users", {})
             return users
     """
     @wraps(func)
@@ -72,8 +73,7 @@ def with_tenant_database(func: Callable) -> Callable:
         @with_tenant_database
         async def get_users(user: dict = Depends(verify_token_middleware), db=None):
             # db is now tenant-aware
-            users_collection = db['users']
-            users = await users_collection.find({}).to_list(None)
+            users = await MongoStorageService.find_many("users", {})
             return users
     """
     @wraps(func)
@@ -116,7 +116,7 @@ class TenantAwareDependency:
         
         @router.get("/users")
         async def get_users(collections = Depends(tenant_db.collections)):
-            users = await collections['users'].find({}).to_list(None)
+            users = await MongoStorageService.find_many("users", {})
             return users
     """
     

@@ -8,19 +8,13 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from fastapi import HTTPException, status
 
-from ..db import get_collections
 from ..utils.log import logger
+from ..utils.mongo_storage import MongoStorageService
 from src.utils.component_discovery import discover_components, get_detailed_class_info
 
 
 class ToolConfigService:
     """Service for managing tool configurations"""
-    
-    @staticmethod
-    def _get_tool_config_collection():
-        """Get the tool config collection"""
-        logger.debug("[TOOL] Accessing tool config collection")
-        return get_collections()["toolConfig"]
     
     @staticmethod
     async def validate_tenant_access(user: dict) -> str:
@@ -53,13 +47,11 @@ class ToolConfigService:
                 detail="Name is required"
             )
 
-        collection = cls._get_tool_config_collection()
         
         # Check for duplicate names within tenant
-        existing = await collection.find_one({
-            "name": name,
-            "tenantId": tenant_id
-        })
+        existing = await MongoStorageService.find_one("toolConfig", {
+            "name": name
+        }, tenant_id=tenant_id)
         
         if existing:
             raise HTTPException(
@@ -76,8 +68,8 @@ class ToolConfigService:
             "userId": user_id
         })
 
-        result = await collection.insert_one(doc)
-        return {"id": str(result.inserted_id), "name": name}
+        result_id = await MongoStorageService.insert_one("toolConfig", doc, tenant_id=tenant_id)
+        return {"id": str(result_id), "name": name}
 
     @classmethod
     async def get_tool_configs(cls, user: dict, category: Optional[str] = None) -> List[dict]:
@@ -86,16 +78,15 @@ class ToolConfigService:
         logger.info(f"[TOOL] Listing tool configs for tenant: {tenant_id}")
         
         # Build query filter
-        query = {"tenantId": tenant_id}
+        query = {}
         if category:
             query["category"] = category
         logger.debug(f"[TOOL] Query filter: {query}")
         
-        collection = cls._get_tool_config_collection()
-        configs_cursor = collection.find(query)
+        configs_list = await MongoStorageService.find_many("toolConfig", query, tenant_id=tenant_id)
         configs = []
         
-        async for config in configs_cursor:
+        for config in configs_list:
             # Convert ObjectId to string for the id field
             config_dict = dict(config)
             config_dict["id"] = str(config_dict.pop("_id"))
@@ -111,10 +102,10 @@ class ToolConfigService:
         tenant_id = await cls.validate_tenant_access(user)
         logger.info(f"[TOOL] Fetching tool config '{name}' for tenant: {tenant_id}")
         
-        collection = cls._get_tool_config_collection()
-        config = await collection.find_one(
-            {"name": name, "tenantId": tenant_id},
-            {"_id": 0}
+        config = await MongoStorageService.find_one("toolConfig",
+            {"name": name},
+            projection={"_id": 0},
+            tenant_id=tenant_id
         )
         
         if not config:
@@ -147,13 +138,13 @@ class ToolConfigService:
         update_data = dict(updates)  # Preserve original structure
         update_data["updated_at"] = datetime.utcnow()
         
-        collection = cls._get_tool_config_collection()
-        result = await collection.update_one(
-            {"_id": object_id, "tenantId": tenant_id},
-            {"$set": update_data}
+        result = await MongoStorageService.update_one("toolConfig",
+            {"_id": object_id},
+            {"$set": update_data},
+            tenant_id=tenant_id
         )
         
-        if result.matched_count == 0:
+        if not result:
             logger.warning(f"[TOOL] Config not found: id='{config_id}', tenant='{tenant_id}'")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -178,13 +169,11 @@ class ToolConfigService:
                 detail="Invalid configuration ID"
             )
         
-        collection = cls._get_tool_config_collection()
-        result = await collection.delete_one({
-            "_id": object_id,
-            "tenantId": tenant_id
-        })
+        result = await MongoStorageService.delete_one("toolConfig", {
+            "_id": object_id
+        }, tenant_id=tenant_id)
         
-        if result.deleted_count == 0:
+        if not result:
             logger.warning(f"[TOOL] Delete failed - config not found: id='{config_id}', tenant='{tenant_id}'")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -247,8 +236,7 @@ class ToolConfigService:
         tenant_id = await cls.validate_tenant_access(user)
         logger.debug(f"[TOOL] Fetching tool categories for tenant: {tenant_id}")
         
-        collection = cls._get_tool_config_collection()
-        categories = await collection.distinct("category", {"tenantId": tenant_id})
+        categories = await MongoStorageService.distinct("toolConfig", "category", {}, tenant_id=tenant_id)
         
         # Filter out empty categories and sort
         categories = [cat for cat in categories if cat and cat.strip()]

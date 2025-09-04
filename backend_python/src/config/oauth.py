@@ -5,6 +5,7 @@ from fastapi import HTTPException, status
 from dotenv import load_dotenv
 
 from ..utils.log import logger
+from ..utils.mongo_storage import MongoStorageService
 
 # Ensure environment variables are loaded
 load_dotenv()
@@ -98,7 +99,6 @@ def get_microsoft_oauth_client():
 
 async def handle_google_user_data(user_info: Dict[str, Any]) -> Dict[str, Any]:
     """Process Google user data and check if user exists in database"""
-    from ..db import get_collections
     from ..utils.auth import normalize_email
     
     email = normalize_email(user_info.get('email', ''))
@@ -108,10 +108,8 @@ async def handle_google_user_data(user_info: Dict[str, Any]) -> Dict[str, Any]:
     
     print(f"🔍 Checking if Google OAuth user exists: {email}")
     
-    collections = get_collections()
-    
     # Try to find existing user by email
-    user = await collections['users'].find_one({"email": email})
+    user = await MongoStorageService.find_one("users", {"email": email})
     
     if user:
         print(f"✅ Found existing user: {email} (ID: {user['id']})")
@@ -133,9 +131,10 @@ async def handle_google_user_data(user_info: Dict[str, Any]) -> Dict[str, Any]:
             update_data['updated_at'] = current_time
             update_data['updatedAt'] = current_time.timestamp() * 1000  # Timestamp in milliseconds
             
-            await collections['users'].update_one(
+            await MongoStorageService.update_one(
+                "users",
                 {"id": user['id']},
-                {"$set": update_data}
+                update_data
             )
             print(f"📝 Updated user data for: {email}")
         
@@ -152,14 +151,13 @@ async def handle_google_user_data(user_info: Dict[str, Any]) -> Dict[str, Any]:
                 
                 from datetime import datetime
                 current_time = datetime.utcnow()
-                await collections['users'].update_one(
+                await MongoStorageService.update_one(
+                    "users",
                     {"id": user['id']},
                     {
-                        "$set": {
-                            "tenantId": default_tenant["tenantId"],
-                            "updated_at": current_time,
-                            "updatedAt": current_time.timestamp() * 1000
-                        }
+                        "tenantId": default_tenant["tenantId"],
+                        "updated_at": current_time,
+                        "updatedAt": current_time.timestamp() * 1000
                     }
                 )
                 user_tenant_id = default_tenant["tenantId"]
@@ -203,7 +201,6 @@ async def handle_google_user_data(user_info: Dict[str, Any]) -> Dict[str, Any]:
 
 async def handle_microsoft_user_data(user_info: Dict[str, Any]) -> Dict[str, Any]:
     """Process Microsoft user data and check if user exists in database"""
-    from ..db import get_collections
     from ..utils.auth import normalize_email
     
     email = normalize_email(user_info.get('mail', user_info.get('userPrincipalName', '')))
@@ -213,10 +210,8 @@ async def handle_microsoft_user_data(user_info: Dict[str, Any]) -> Dict[str, Any
     
     print(f"🔍 Checking if Microsoft OAuth user exists: {email}")
     
-    collections = get_collections()
-    
     # Try to find existing user by email
-    user = await collections['users'].find_one({"email": email})
+    user = await MongoStorageService.find_one("users", {"email": email})
     
     if user:
         print(f"✅ Found existing user: {email} (ID: {user['id']})")
@@ -238,9 +233,10 @@ async def handle_microsoft_user_data(user_info: Dict[str, Any]) -> Dict[str, Any
             update_data['updated_at'] = current_time
             update_data['updatedAt'] = current_time.timestamp() * 1000  # Timestamp in milliseconds
             
-            await collections['users'].update_one(
+            await MongoStorageService.update_one(
+                "users",
                 {"id": user['id']},
-                {"$set": update_data}
+                update_data
             )
             print(f"📝 Updated user data for: {email}")
         
@@ -257,14 +253,13 @@ async def handle_microsoft_user_data(user_info: Dict[str, Any]) -> Dict[str, Any
                 
                 from datetime import datetime
                 current_time = datetime.utcnow()
-                await collections['users'].update_one(
+                await MongoStorageService.update_one(
+                    "users",
                     {"id": user['id']},
                     {
-                        "$set": {
-                            "tenantId": default_tenant["tenantId"],
-                            "updated_at": current_time,
-                            "updatedAt": current_time.timestamp() * 1000
-                        }
+                        "tenantId": default_tenant["tenantId"],
+                        "updated_at": current_time,
+                        "updatedAt": current_time.timestamp() * 1000
                     }
                 )
                 user_tenant_id = default_tenant["tenantId"]

@@ -13,7 +13,7 @@ from typing import Optional, List, Dict, Any
 from fastapi import HTTPException, status
 
 from ..utils.log import logger
-from ..db import get_collections
+from ..utils.mongo_storage import MongoStorageService
 from ..utils.auth import (
     hash_password, 
     normalize_email
@@ -27,17 +27,11 @@ class UserService:
     """Service for managing users"""
     
     @staticmethod
-    def _get_users_collection():
-        """Get the users collection"""
-        logger.debug("[USER] Accessing users collection")
-        return get_collections()["users"]
-    
-    @staticmethod
     async def check_email_exists(email: str) -> bool:
         """Check if email exists in users collection - no tenant filtering for registration"""
         target = normalize_email(email)
         logger.debug(f"[USER] Checking if email exists: {target}")
-        user = await UserService._get_users_collection().find_one({"email": target})
+        user = await MongoStorageService.find_one("users", {"email": target})
         result = bool(user)
         logger.debug(f"[USER] Email exists check result: {result}")
         return result
@@ -102,13 +96,13 @@ class UserService:
                 user_record["googleId"] = user_data["google_id"]  # Standardized field name
             
             # Insert user
-            await cls._get_users_collection().insert_one(user_record)
+            await MongoStorageService.insert_one("users", user_record)
             
             # Create default tenant
             tenant_info = await TenantService.create_default_tenant(email, user_id)
             
             # Update user record with tenant_id
-            await cls._get_users_collection().update_one(
+            await MongoStorageService.update_one("users",
                 {"_id": user_id},
                 {"$set": {"tenantId": tenant_info["tenantId"]}}
             )
@@ -145,7 +139,7 @@ class UserService:
             )
         
         try:
-            user = await cls._get_users_collection().find_one({"verification_token": token})
+            user = await MongoStorageService.find_one("users", {"verification_token": token})
             
             if not user:
                 logger.warning(f"[USER] Invalid verification token: {token[:10]}...")
@@ -160,7 +154,7 @@ class UserService:
             
             # Update user as verified
             current_time = datetime.utcnow()
-            await cls._get_users_collection().update_one(
+            await MongoStorageService.update_one("users",
                 {"_id": user["_id"]},
                 {
                     "$set": {
@@ -197,7 +191,7 @@ class UserService:
             )
         
         try:
-            user_doc = await cls._get_users_collection().find_one({"_id": user_id})
+            user_doc = await MongoStorageService.find_one("users", {"_id": user_id})
             if not user_doc:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -261,14 +255,14 @@ class UserService:
         # Update name field if firstName or lastName changed
         if "firstName" in update_record or "lastName" in update_record:
             # Get current user data to build name
-            user_doc = await cls._get_users_collection().find_one({"_id": user_id})
+            user_doc = await MongoStorageService.find_one("users", {"_id": user_id})
             if user_doc:
                 first_name = update_record.get("firstName", user_doc.get("firstName", ""))
                 last_name = update_record.get("lastName", user_doc.get("lastName", ""))
                 update_record["name"] = f"{first_name} {last_name}".strip()
         
         try:
-            result = await cls._get_users_collection().update_one(
+            result = await MongoStorageService.update_one("users",
                 {"_id": user_id},
                 {"$set": update_record}
             )
@@ -302,7 +296,7 @@ class UserService:
         email = google_user_data["email"]
         
         # Check if user exists
-        existing_user = await cls._get_users_collection().find_one({"email": email})
+        existing_user = await MongoStorageService.find_one("users", {"email": email})
         
         if existing_user:
             # Update existing user with Google info if missing
@@ -318,7 +312,7 @@ class UserService:
                 update_data["verified"] = True
                 update_data["verified_at"] = datetime.utcnow()
             
-            await cls._get_users_collection().update_one(
+            await MongoStorageService.update_one("users",
                 {"_id": existing_user["_id"]},
                 {"$set": update_data}
             )
@@ -341,10 +335,9 @@ class UserService:
     @classmethod
     async def get_profile_completeness(cls, user_id: str, tenant_id: str, role: str) -> Dict[str, Any]:
         """Check profile completeness for a user"""
-        collections = get_collections()
         
         if role == "user":
-            user_data = await collections['users'].find_one({"id": user_id, "tenantId": tenant_id})
+            user_data = await MongoStorageService.find_one("users", {"id": user_id}, tenant_id=tenant_id)
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -391,11 +384,9 @@ class UserService:
         try:
             from ..utils.tenant_middleware import tenant_filter_query, tenant_filter_records
             
-            collections = get_collections()
-            
             # Filter users by tenant
             user_query = await tenant_filter_query(user_id, {})
-            all_users = await collections['users'].find(user_query).to_list(None)
+            all_users = await MongoStorageService.find_many("users", user_query)
             
             # Additional tenant filtering for safety
             tenant_users = await tenant_filter_records(user_id, all_users)

@@ -13,22 +13,16 @@ from typing import List, Dict, Any, AsyncGenerator
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
-from ..db import get_collections
 from ..utils.auth import verify_token_middleware
 from ..utils.agent_runtime import AgentRunManager, RunCallbacks
 from ..utils.log import logger
+from ..utils.mongo_storage import MongoStorageService
 from ..services.agent_service import AgentService
 
 router = APIRouter(prefix="/api/agent-runtime", tags=["agent-runtime"]) 
 
 # Global agent manager instance
 agent_manager = AgentRunManager(agents_dir="")  # Not using filesystem
-
-def _conversations_col():
-    return get_collections()["conversations"]
-
-def _agents_col():
-    return get_collections()["agents"]
 
 
 async def stream_agent_response(
@@ -198,8 +192,13 @@ async def list_conversations(user: dict = Depends(verify_token_middleware)):
             detail="User tenant information missing. Please re-login."
         )
     
-    cursor = _conversations_col().find({"tenantId": tenant_id}).sort("updated_at", -1)
-    docs = await cursor.to_list(length=None)
+    docs = await MongoStorageService.find_many(
+        "conversations", 
+        filter_dict={}, 
+        tenant_id=tenant_id, 
+        sort_field="updated_at",
+        sort_order=-1
+    )
     items: List[Dict[str, Any]] = []
     for d in docs:
         items.append({
@@ -221,7 +220,11 @@ async def get_conversation(conversation_id: str, user: dict = Depends(verify_tok
             detail="User tenant information missing. Please re-login."
         )
     
-    doc = await _conversations_col().find_one({"tenantId": tenant_id, "conversation_id": conversation_id})
+    doc = await MongoStorageService.find_one(
+        "conversations", 
+        {"conversation_id": conversation_id}, 
+        tenant_id=tenant_id
+    )
     if not doc:
         raise HTTPException(status_code=404, detail="Conversation not found")
     # sanitize
@@ -264,12 +267,21 @@ async def save_conversation(body: Dict[str, Any], user: dict = Depends(verify_to
         "updated_at": datetime.utcnow(),
     })
     
-    existing = await _conversations_col().find_one({"tenantId": tenant_id, "conversation_id": conversation_id})
+    existing = await MongoStorageService.find_one(
+        "conversations", 
+        {"conversation_id": conversation_id}, 
+        tenant_id=tenant_id
+    )
     if existing:
-        await _conversations_col().update_one({"_id": existing["_id"]}, {"$set": record})
+        await MongoStorageService.update_one(
+            "conversations",
+            {"conversation_id": conversation_id},
+            record,
+            tenant_id=tenant_id
+        )
     else:
         record["created_at"] = datetime.utcnow()
-        await _conversations_col().insert_one(record)
+        await MongoStorageService.insert_one("conversations", record, tenant_id=tenant_id)
     return {"message": "saved"}
 
 
@@ -283,7 +295,11 @@ async def delete_conversation(conversation_id: str, user: dict = Depends(verify_
             detail="User tenant information missing. Please re-login."
         )
     
-    res = await _conversations_col().delete_one({"tenantId": tenant_id, "conversation_id": conversation_id})
-    if res.deleted_count == 0:
+    deleted = await MongoStorageService.delete_one(
+        "conversations",
+        {"conversation_id": conversation_id},
+        tenant_id=tenant_id
+    )
+    if not deleted:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return {"message": "deleted"}

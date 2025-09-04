@@ -9,8 +9,8 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
 
 from ..utils.log import logger
-from ..db import get_collections
 from ..utils.auth import verify_token_middleware
+from ..utils.mongo_storage import MongoStorageService
 from ..services.tenant_service import TenantService
 from ..services.rbac_service import RBACService
 from ..utils.tenant_middleware import tenant_filter_query
@@ -73,14 +73,12 @@ async def get_tenant_stats(user: dict = Depends(verify_token_middleware)):
             detail="Invalid user"
         )
     
-    collections = get_collections()
-    
     # Get tenant-filtered counts
     user_query = await tenant_filter_query(user_id, {})
     role_query = await tenant_filter_query(user_id, {})
     
-    total_users = await collections['users'].count_documents(user_query)
-    total_roles = await collections['roles'].count_documents(role_query)
+    total_users = await MongoStorageService.count_documents("users", user_query)
+    total_roles = await MongoStorageService.count_documents("roles", role_query)
     
     # Get active users (logged in recently)
     import time
@@ -90,7 +88,7 @@ async def get_tenant_stats(user: dict = Depends(verify_token_middleware)):
     # Note: You'd need a lastLogin field to track this properly
     # For now, just count all active users
     active_users_query["active"] = True
-    active_users = await collections['users'].count_documents(active_users_query)
+    active_users = await MongoStorageService.count_documents("users", active_users_query)
     
     return {
         "totalUsers": total_users,
@@ -147,10 +145,10 @@ async def update_my_tenant(
         return TenantResponse(**tenant)
     
     # Update tenant
-    collections = get_collections()
-    await collections['tenants'].update_one(
+    await MongoStorageService.update_one(
+        "tenants",
         {"tenantId": tenant_id},
-        {"$set": update_data}
+        update_data
     )
     
     # Get updated tenant
@@ -168,17 +166,16 @@ async def get_tenant_users(user: dict = Depends(verify_token_middleware)):
             detail="Invalid user"
         )
     
-    collections = get_collections()
-    
     # Get tenant-filtered users
     query = await tenant_filter_query(user_id, {})
-    users = await collections['users'].find(query).to_list(None)
+    users = await MongoStorageService.find_many("users", query)
     
     # Remove password fields and add role information
     result = []
+    tenant_id = await TenantService.get_user_tenant_id(user_id)
     for user_data in users:
         user_data.pop("password", None)
-        user_roles = await RBACService.get_user_roles(user_data.get("id"))
+        user_roles = await RBACService.get_user_roles(user_data.get("id"), tenant_id=tenant_id)
         user_data["roles"] = user_roles
         result.append(user_data)
     
@@ -196,7 +193,8 @@ async def get_tenant_roles(user: dict = Depends(verify_token_middleware)):
         )
     
     # Use existing RBAC service which already filters by tenant and ownership
-    roles = await RBACService.get_all_roles(user_id)
+    tenant_id = await TenantService.get_user_tenant_id(user.get("id"))
+    roles = await RBACService.get_all_roles(user_id, tenant_id=tenant_id)
     return roles
 
 
@@ -210,15 +208,13 @@ async def get_tenant_activity(user: dict = Depends(verify_token_middleware)):
             detail="Invalid user"
         )
     
-    collections = get_collections()
-    
     # Get recent user registrations in tenant
     query = await tenant_filter_query(user_id, {})
-    recent_users = await collections['users'].find(query).sort("createdAt", -1).limit(5).to_list(None)
+    recent_users = await MongoStorageService.find_many("users", query, sort_field="createdAt", sort_order=-1, limit=5)
     
     # Get recent role assignments in tenant
     role_query = await tenant_filter_query(user_id, {})
-    recent_assignments = await collections['userRoles'].find(role_query).sort("assignedAt", -1).limit(5).to_list(None)
+    recent_assignments = await MongoStorageService.find_many("userRoles", role_query, sort_field="assignedAt", sort_order=-1, limit=5)
     
     # Format activity feed
     activity = []
@@ -233,11 +229,12 @@ async def get_tenant_activity(user: dict = Depends(verify_token_middleware)):
     
     for assignment in recent_assignments:
         # Get role name
-        role = await RBACService.get_role_by_id(assignment.get("roleId"))
+        tenant_id = await TenantService.get_user_tenant_id(user_id)
+        role = await RBACService.get_role_by_id(assignment.get("roleId"), tenant_id=tenant_id)
         role_name = role.get("roleName") if role else "Unknown Role"
         
         # Get user name
-        user_data = await collections['users'].find_one({"id": assignment.get("userId")})
+        user_data = await MongoStorageService.find_one("users", {"id": assignment.get("userId")})
         user_name = user_data.get("name", user_data.get("email")) if user_data else "Unknown User"
         
         activity.append({

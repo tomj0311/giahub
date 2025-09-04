@@ -2,8 +2,8 @@ import uuid
 import secrets
 from typing import Dict, Any
 
-from ..db import get_collections
 from ..utils.log import logger
+from ..utils.mongo_storage import MongoStorageService
 
 # Base AI agent configuration
 BASE_AGENT = {
@@ -47,10 +47,9 @@ BASE_AGENT = {
 async def seed_providers():
     """Seed initial providers in the database"""
     logger.info("[SEED] Starting provider seeding process")
-    collections = get_collections()
     
     # Check if providers already exist
-    count = await collections['providers'].estimated_document_count()
+    count = await MongoStorageService.count_documents("providers", {})
     if count > 0:
         logger.info('[SEED] Providers already exist, skipping seed')
         return
@@ -84,6 +83,6 @@ async def seed_providers():
         providers.append(provider)
     
     # Insert providers into database
-    await collections['providers'].insert_many(providers)
+    await MongoStorageService.insert_many("providers", providers)
     
     logger.info('[SEED] Providers seeded successfully')

@@ -8,8 +8,8 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from typing import Optional
 from datetime import datetime
 
-from ..db import get_collections
 from ..utils.auth import verify_token_middleware
+from ..utils.mongo_storage import MongoStorageService
 from src.utils.component_discovery import discover_components, get_detailed_class_info
 from ..utils.log import logger
 from ..services.tool_config_service import ToolConfigService
@@ -97,8 +97,6 @@ async def delete_tool_config(config_id: str, user: dict = Depends(verify_token_m
 @router.get("/categories")
 async def get_tool_categories(user: dict = Depends(verify_token_middleware)):
     try:
-        collections = get_collections()
-        
         # Apply tenant filtering to get categories only from user's tenant - REQUIRED
         tenant_id = user.get("tenantId")
         if not tenant_id:
@@ -106,7 +104,7 @@ async def get_tool_categories(user: dict = Depends(verify_token_middleware)):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User tenant information missing. Please re-login."
             )
-        cats = await collections['toolConfig'].distinct("category", {"tenantId": tenant_id})
+        cats = await MongoStorageService.distinct("toolConfig", "category", {}, tenant_id=tenant_id)
         cats = [c for c in cats if c and c.strip()]
         cats.sort()
         return {"categories": cats}

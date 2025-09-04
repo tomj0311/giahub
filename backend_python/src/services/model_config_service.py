@@ -9,18 +9,12 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from fastapi import HTTPException, status
 
-from ..db import get_collections
 from ..utils.log import logger
+from ..utils.mongo_storage import MongoStorageService
 
 
 class ModelConfigService:
     """Service for managing model configurations"""
-    
-    @staticmethod
-    def _get_model_config_collection():
-        """Get the model config collection"""
-        logger.debug("[MODEL] Accessing model config collection")
-        return get_collections()["modelConfig"]
     
     @staticmethod
     async def validate_tenant_access(user: dict) -> str:
@@ -44,8 +38,7 @@ class ModelConfigService:
         
         try:
             logger.debug(f"[MODEL] Querying database for model configs - tenant: {tenant_id}")
-            cursor = cls._get_model_config_collection().find({"tenantId": tenant_id}).sort("name", 1)
-            docs = await cursor.to_list(length=None)
+            docs = await MongoStorageService.find_many("modelConfig", {}, tenant_id=tenant_id, sort_field="name", sort_order=1)
             logger.debug(f"[MODEL] Found {len(docs)} model configs for tenant: {tenant_id}")
             
             configs = []
@@ -78,7 +71,7 @@ class ModelConfigService:
         tenant_id = await cls.validate_tenant_access(user)
         
         try:
-            doc = await cls._get_model_config_collection().find_one({
+            doc = await MongoStorageService.find_one("modelConfig", {
                 "tenantId": tenant_id,
                 "name": config_name
             })
@@ -122,7 +115,7 @@ class ModelConfigService:
         
         try:
             # Check if config already exists
-            existing = await cls._get_model_config_collection().find_one({
+            existing = await MongoStorageService.find_one("modelConfig", {
                 "tenantId": tenant_id,
                 "name": name
             })
@@ -139,7 +132,7 @@ class ModelConfigService:
                 "updated_at": datetime.utcnow()
             })
             
-            await cls._get_model_config_collection().insert_one(record)
+            await MongoStorageService.insert_one("modelConfig", record, tenant_id=tenant_id)
             
             logger.info(f"[MODEL] Successfully created model config '{name}'")
             return {"message": "Model configuration created", "name": name}
@@ -162,15 +155,17 @@ class ModelConfigService:
             update_data = dict(config_data)  # Preserve original structure
             update_data["updated_at"] = datetime.utcnow()
             
-            result = await cls._get_model_config_collection().update_one(
+            result = await MongoStorageService.update_one(
+                "modelConfig",
                 {
                     "tenantId": tenant_id,
                     "name": config_name
                 },
-                {"$set": update_data}
+                {"$set": update_data},
+                tenant_id=tenant_id
             )
             
-            if result.matched_count == 0:
+            if not result:
                 raise HTTPException(status_code=404, detail="Model configuration not found")
             
             logger.info(f"[MODEL] Successfully updated model config '{config_name}'")
@@ -191,8 +186,7 @@ class ModelConfigService:
         
         try:
             # Check if config is being used by any agents
-            agents_collection = get_collections()["agents"]
-            agents_using_config = await agents_collection.count_documents({
+            agents_using_config = await MongoStorageService.count_documents("agents", {
                 "tenantId": tenant_id,
                 "model.name": config_name
             })
@@ -203,12 +197,12 @@ class ModelConfigService:
                     detail=f"Cannot delete model configuration. It is being used by {agents_using_config} agent(s)"
                 )
             
-            result = await cls._get_model_config_collection().delete_one({
+            result = await MongoStorageService.delete_one("modelConfig", {
                 "tenantId": tenant_id,
                 "name": config_name
-            })
+            }, tenant_id=tenant_id)
             
-            if result.deleted_count == 0:
+            if not result:
                 raise HTTPException(status_code=404, detail="Model configuration not found")
             
             logger.info(f"[MODEL] Successfully deleted model config '{config_name}'")
@@ -228,7 +222,7 @@ class ModelConfigService:
         tenant_id = await cls.validate_tenant_access(user)
         
         try:
-            doc = await cls._get_model_config_collection().find_one({
+            doc = await MongoStorageService.find_one("modelConfig", {
                 "_id": ObjectId(config_id),
                 "tenantId": tenant_id
             })
@@ -279,12 +273,14 @@ class ModelConfigService:
             update_data = dict(config_data)  # Preserve original structure
             update_data["updated_at"] = datetime.utcnow()
             
-            result = await cls._get_model_config_collection().update_one(
-                {"_id": object_id, "tenantId": tenant_id},
-                {"$set": update_data}
+            result = await MongoStorageService.update_one(
+                "modelConfig",
+                {"_id": object_id},
+                {"$set": update_data},
+                tenant_id=tenant_id
             )
             
-            if result.matched_count == 0:
+            if not result:
                 raise HTTPException(status_code=404, detail="Model configuration not found")
             
             logger.info(f"[MODEL] Successfully updated model config '{config_id}'")
@@ -306,7 +302,7 @@ class ModelConfigService:
         
         try:
             # First get the config to check if it exists and get its name
-            doc = await cls._get_model_config_collection().find_one({
+            doc = await MongoStorageService.find_one("modelConfig", {
                 "_id": ObjectId(config_id),
                 "tenantId": tenant_id
             })
@@ -317,8 +313,7 @@ class ModelConfigService:
             config_name = doc.get("name")
             
             # Check if config is being used by any agents
-            agents_collection = get_collections()["agents"]
-            agents_using_config = await agents_collection.count_documents({
+            agents_using_config = await MongoStorageService.count_documents("agents", {
                 "tenantId": tenant_id,
                 "model.name": config_name
             })
@@ -329,12 +324,12 @@ class ModelConfigService:
                     detail=f"Cannot delete model configuration. It is being used by {agents_using_config} agent(s)"
                 )
             
-            result = await cls._get_model_config_collection().delete_one({
+            result = await MongoStorageService.delete_one("modelConfig", {
                 "_id": ObjectId(config_id),
                 "tenantId": tenant_id
-            })
+            }, tenant_id=tenant_id)
             
-            if result.deleted_count == 0:
+            if not result:
                 raise HTTPException(status_code=404, detail="Model configuration not found")
             
             logger.info(f"[MODEL] Successfully deleted model config '{config_id}'")
@@ -461,8 +456,7 @@ class ModelConfigService:
         tenant_id = await cls.validate_tenant_access(user)
         
         try:
-            collection = cls._get_model_config_collection()
-            categories = await collection.distinct("category", {"tenantId": tenant_id})
+            categories = await MongoStorageService.distinct("modelConfig", "category", {}, tenant_id=tenant_id)
             
             # Filter out empty categories and sort
             categories = [cat for cat in categories if cat and cat.strip()]

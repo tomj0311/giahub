@@ -6,9 +6,9 @@ from typing import List
 from fastapi import APIRouter, HTTPException, Depends, status, Body, Response
 from pydantic import BaseModel, EmailStr
 
-from ..db import get_collections
 from ..utils.auth import verify_token_middleware
 from ..utils.log import logger
+from ..utils.mongo_storage import MongoStorageService
 from ..services.rbac_service import RBACService
 from ..services.tenant_service import TenantService
 from ..utils.tenant_middleware import tenant_filter_query, tenant_filter_records
@@ -58,7 +58,7 @@ async def invite_user(
         import secrets
         import string
 
-        collections = get_collections()
+
 
         # Extract payload (support both shapes)
         email = request.get("email")
@@ -71,7 +71,7 @@ async def invite_user(
 
         # Check if email already exists - no tenant filtering for email uniqueness check
         normalized_email = normalize_email(email)
-        existing_user = await collections['users'].find_one({"email": normalized_email})
+        existing_user = await MongoStorageService.find_one("users", {"email": normalized_email})
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -79,8 +79,9 @@ async def invite_user(
             )
 
         # Validate role IDs and ownership
+        tenant_id = await TenantService.get_user_tenant_id(user_id)
         for role_id in incoming_role_ids:
-            role = await RBACService.get_role_by_id(role_id)
+            role = await RBACService.get_role_by_id(role_id, tenant_id=tenant_id)
             if not role:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -135,7 +136,7 @@ async def invite_user(
             "updatedAt": current_time.timestamp() * 1000
         }
 
-        await collections['users'].insert_one(user_data)
+        await MongoStorageService.insert_one("users", user_data, tenant_id=inviter_tenant_id)
 
     # Create default personal role for the invited user (immutable, owned by them)
         default_role = await RBACService.create_default_user_role(
@@ -143,11 +144,11 @@ async def invite_user(
             owner_id=new_user_id,
             tenant_id=inviter_tenant_id  # ASSIGN SAME TENANT TO ROLE
         )
-        await RBACService.assign_role_to_user(new_user_id, default_role["roleId"])
+        await RBACService.assign_role_to_user(new_user_id, default_role["roleId"], tenant_id=inviter_tenant_id)
 
         # Assign additional roles if specified
         for role_id in incoming_role_ids:
-            await RBACService.assign_role_to_user(new_user_id, role_id)
+            await RBACService.assign_role_to_user(new_user_id, role_id, tenant_id=inviter_tenant_id)
 
         # Best-effort email
         try:
@@ -167,7 +168,7 @@ async def invite_user(
             }
 
     # Otherwise return rich response (200)
-        assigned_roles = await RBACService.get_user_roles(new_user_id)
+        assigned_roles = await RBACService.get_user_roles(new_user_id, tenant_id=inviter_tenant_id)
         return {
             "message": "User invited successfully",
             "userId": new_user_id,
@@ -195,11 +196,11 @@ async def get_all_users(user: dict = Depends(verify_token_middleware)):
             detail="Invalid user"
         )
 
-    collections = get_collections()
+
     
     # Filter users by tenant
     user_query = await tenant_filter_query(current_user_id, {})
-    all_users = await collections['users'].find(user_query).to_list(None)
+    all_users = await MongoStorageService.find_many("users", user_query)
     
     # Additional tenant filtering for safety
     tenant_users = await tenant_filter_records(current_user_id, all_users)
@@ -208,6 +209,7 @@ async def get_all_users(user: dict = Depends(verify_token_middleware)):
     
     # Build user list with their roles (tenant-filtered)
     users = []
+    tenant_id = await TenantService.get_user_tenant_id(current_user_id)
     for u in tenant_users:
         logger.debug(f"[RBAC] Processing user: {u.keys()}")
         user_id_field = u.get('id') or u.get('user_id') or u.get('_id')
@@ -217,7 +219,7 @@ async def get_all_users(user: dict = Depends(verify_token_middleware)):
             continue
 
         # Get user's roles (already tenant-filtered via RBAC service)
-        user_roles = await RBACService.get_user_roles(str(user_id_field))
+        user_roles = await RBACService.get_user_roles(str(user_id_field), tenant_id=tenant_id)
         logger.debug(f"[RBAC] User {user_id_field} has roles: {len(user_roles)}")
         
         # Build user data without password and _id (ObjectId serialization issue)
@@ -261,10 +263,10 @@ async def assign_multiple_roles(
         )
     
     try:
-        collections = get_collections()
+
         
         # Check if target user exists (support legacy key)
-        target_user = await collections['users'].find_one({
+        target_user = await MongoStorageService.find_one("users", {
             "$or": [{"id": user_id}, {"user_id": user_id}]
         })
         if not target_user:
@@ -276,8 +278,9 @@ async def assign_multiple_roles(
         ids = request.roleIds if request.roleIds is not None else (request.role_ids or [])
 
         # Validate all role IDs and check ownership for non-admin
+        tenant_id = await TenantService.get_user_tenant_id(current_user_id)
         for role_id in ids:
-            role = await RBACService.get_role_by_id(role_id)
+            role = await RBACService.get_role_by_id(role_id, tenant_id=tenant_id)
             if not role:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -292,8 +295,8 @@ async def assign_multiple_roles(
         # Assign all roles
         assigned_roles = []
         for role_id in ids:
-            assignment = await RBACService.assign_role_to_user(user_id, role_id)
-            role = await RBACService.get_role_by_id(role_id)
+            assignment = await RBACService.assign_role_to_user(user_id, role_id, tenant_id=tenant_id)
+            role = await RBACService.get_role_by_id(role_id, tenant_id=tenant_id)
             assigned_roles.append({
                 "roleId": role_id,
                 # Support both new and legacy role shapes
@@ -337,10 +340,10 @@ async def remove_user_role(
         )
     
     try:
-        collections = get_collections()
+
         
         # Check if target user exists (support legacy key)
-        target_user = await collections['users'].find_one({
+        target_user = await MongoStorageService.find_one("users", {
             "$or": [{"id": user_id}, {"user_id": user_id}]
         })
         if not target_user:
@@ -350,7 +353,8 @@ async def remove_user_role(
             )
         
         # Check if role exists
-        role = await RBACService.get_role_by_id(role_id)
+        tenant_id = await TenantService.get_user_tenant_id(current_user_id)
+        role = await RBACService.get_role_by_id(role_id, tenant_id=tenant_id)
         if not role:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -371,7 +375,7 @@ async def remove_user_role(
             )
         
         # Remove role
-        success = await RBACService.remove_role_from_user(user_id, role_id)
+        success = await RBACService.remove_role_from_user(user_id, role_id, tenant_id=tenant_id)
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

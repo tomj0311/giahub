@@ -11,7 +11,7 @@ from typing import List, Dict, Optional, Set
 from fastapi import HTTPException, status
 
 from ..utils.log import logger
-from ..db import get_collections
+from ..utils.mongo_storage import MongoStorageService
 
 
 class RBACService:
@@ -33,25 +33,25 @@ class RBACService:
         - For system roles (owner_id None), keep uniqueness by name among system roles.
         """
         logger.info(f"[RBAC] Creating role: {role_name} (owner: {owner_id}, tenant: {tenant_id})")
-        collections = get_collections()
         
         if permissions is None:
             permissions = []
         logger.debug(f"[RBAC] Role permissions: {permissions}")
 
-        # Uniqueness: per-owner scope. For system roles (owner_id None), enforce uniqueness among system roles.
+        # Uniqueness: per-owner and per-tenant scope. 
+        # Check for existing role with same name in same tenant/owner context
         query = {"roleName": role_name}
+        if tenant_id:
+            query["tenantId"] = tenant_id
         if owner_id is None:
             query["$or"] = [{"ownerId": {"$exists": False}}, {"ownerId": None}]
         else:
             query["ownerId"] = owner_id
-        existing = await collections['roles'].find_one(query)
+            
+        existing = await MongoStorageService.find_one("roles", query, tenant_id=tenant_id)
         if existing:
-            logger.warning(f"[RBAC] Role '{role_name}' already exists for owner: {owner_id}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Role '{role_name}' already exists for this owner"
-            )
+            logger.warning(f"[RBAC] Role '{role_name}' already exists for owner: {owner_id} in tenant: {tenant_id}")
+            return existing  # Return existing role instead of throwing error for OAuth flows
         
         role_id = str(uuid.uuid4())
         logger.debug(f"[RBAC] Generated role ID: {role_id}")
@@ -72,7 +72,7 @@ class RBACService:
             role_data["tenantId"] = tenant_id
         
         try:
-            await collections['roles'].insert_one(role_data)
+            await MongoStorageService.insert_one("roles", role_data, tenant_id=tenant_id)
             logger.info(f"[RBAC] Successfully created role: {role_name} (ID: {role_id})")
         except Exception as e:
             logger.error(f"[RBAC] Failed to create role {role_name}: {e}")
@@ -81,17 +81,16 @@ class RBACService:
         return role_data
     
     @staticmethod
-    async def get_role_by_name(role_name: str) -> Optional[Dict]:
+    async def get_role_by_name(role_name: str, tenant_id: Optional[str] = None) -> Optional[Dict]:
         """Get role by name"""
         logger.debug(f"[RBAC] Fetching role by name: {role_name}")
-        collections = get_collections()
         # Support legacy 'name' as well
-        role = await collections['roles'].find_one({
+        role = await MongoStorageService.find_one("roles", {
             "$or": [
                 {"roleName": role_name},
                 {"name": role_name}
             ]
-        })
+        }, tenant_id=tenant_id)
         if role:
             logger.debug(f"[RBAC] Found role: {role['roleName']} (ID: {role.get('roleId', 'N/A')})")
         else:
@@ -99,16 +98,15 @@ class RBACService:
         return role
     
     @staticmethod
-    async def get_role_by_id(role_id: str) -> Optional[Dict]:
+    async def get_role_by_id(role_id: str, tenant_id: Optional[str] = None) -> Optional[Dict]:
         """Get role by ID"""
         logger.debug(f"[RBAC] Fetching role by ID: {role_id}")
-        collections = get_collections()
-        role = await collections['roles'].find_one({
+        role = await MongoStorageService.find_one("roles", {
             "$or": [
                 {"roleId": role_id},
                 {"role_id": role_id}
             ]
-        })
+        }, tenant_id=tenant_id)
         if role:
             logger.debug(f"[RBAC] Found role: {role.get('roleName', 'N/A')}")
         else:
@@ -129,7 +127,7 @@ class RBACService:
         role_name = await RBACService.get_default_role_name(email)
         
         # Check if role already exists
-        existing = await RBACService.get_role_by_name(role_name)
+        existing = await RBACService.get_role_by_name(role_name, tenant_id=tenant_id)
         if existing:
             return existing
             
@@ -144,15 +142,15 @@ class RBACService:
         )
     
     @staticmethod
-    async def assign_role_to_user(user_id: str, role_id: str) -> Dict:
+    async def assign_role_to_user(user_id: str, role_id: str, tenant_id: Optional[str] = None) -> Dict:
         """Assign a role to a user"""
-        collections = get_collections()
+
         
         # Check if assignment already exists
-        existing = await collections['userRoles'].find_one({
+        existing = await MongoStorageService.find_one("userRoles", {
             "userId": user_id,
             "roleId": role_id
-        })
+        }, tenant_id=tenant_id)
         if existing:
             logger.warning(f"[RBAC] Role assignment already exists: user {user_id} -> role {role_id}")
             return existing
@@ -166,7 +164,7 @@ class RBACService:
             }
             
             # Get tenant_id from role to maintain consistency
-            role = await RBACService.get_role_by_id(role_id)
+            role = await RBACService.get_role_by_id(role_id, tenant_id=tenant_id)
             if not role:
                 logger.error(f"[RBAC] Cannot assign non-existent role {role_id} to user {user_id}")
                 raise HTTPException(
@@ -174,38 +172,40 @@ class RBACService:
                     detail=f"Role {role_id} not found"
                 )
                 
-            if role and role.get("tenantId"):
-                assignment_data["tenantId"] = role["tenantId"]
+            # Ensure tenantId is included in assignment data
+            role_tenant_id = role.get("tenantId") or tenant_id
+            if role_tenant_id:
+                assignment_data["tenantId"] = role_tenant_id
             
-            await collections['userRoles'].insert_one(assignment_data)
+            await MongoStorageService.insert_one("userRoles", assignment_data, tenant_id=role_tenant_id)
             return assignment_data
         except Exception as e:
             logger.error(f"[RBAC] Failed to assign role {role_id} to user {user_id}: {e}")
             raise
     
     @staticmethod
-    async def remove_role_from_user(user_id: str, role_id: str) -> bool:
+    async def remove_role_from_user(user_id: str, role_id: str, tenant_id: Optional[str] = None) -> bool:
         """Remove a role from a user"""
-        collections = get_collections()
+
         
-        result = await collections['userRoles'].delete_one({
+        result = await MongoStorageService.delete_one("userRoles", {
             "userId": user_id,
             "roleId": role_id
-        })
+        }, tenant_id=tenant_id)
         
-        return result.deleted_count > 0
+        return result
     
     @staticmethod
-    async def get_user_roles(user_id: str) -> List[Dict]:
+    async def get_user_roles(user_id: str, tenant_id: Optional[str] = None) -> List[Dict]:
         """Get all roles assigned to a user"""
-        collections = get_collections()
+
         # Get user role assignments (support legacy keys and missing 'active')
-        assignments = await collections['userRoles'].find({
+        assignments = await MongoStorageService.find_many("userRoles", {
             "$or": [
                 {"userId": user_id},
                 {"user_id": user_id}
             ]
-        }).to_list(None)
+        }, tenant_id=tenant_id)
 
         if not assignments:
             return []
@@ -219,7 +219,7 @@ class RBACService:
         role_ids = {a.get("roleId") or a.get("role_id") for a in assignments}
 
         # Fetch roles and filter active (treat missing as True)
-        all_roles = await collections['roles'].find(None).to_list(None)
+        all_roles = await MongoStorageService.find_many("roles", {}, tenant_id=tenant_id)
         roles = [
             r for r in all_roles
             if (r.get("roleId") or r.get("role_id")) in role_ids and r.get("active", True)
@@ -258,53 +258,53 @@ class RBACService:
         return normalized
     
     @staticmethod
-    async def get_user_role_names(user_id: str) -> Set[str]:
+    async def get_user_role_names(user_id: str, tenant_id: Optional[str] = None) -> Set[str]:
         """Get all role names assigned to a user"""
-        roles = await RBACService.get_user_roles(user_id)
+        roles = await RBACService.get_user_roles(user_id, tenant_id=tenant_id)
         return {role["roleName"] for role in roles}
     
     @staticmethod
-    async def user_has_role(user_id: str, role_name: str) -> bool:
+    async def user_has_role(user_id: str, role_name: str, tenant_id: Optional[str] = None) -> bool:
         """Check if user has a specific role"""
-        user_roles = await RBACService.get_user_role_names(user_id)
+        user_roles = await RBACService.get_user_role_names(user_id, tenant_id=tenant_id)
         return role_name in user_roles
     
     @staticmethod
-    async def get_users_with_role(role_name: str) -> List[str]:
+    async def get_users_with_role(role_name: str, tenant_id: Optional[str] = None) -> List[str]:
         """Get all user IDs that have a specific role"""
-        collections = get_collections()
+
         
         # Get role
-        role = await RBACService.get_role_by_name(role_name)
+        role = await RBACService.get_role_by_name(role_name, tenant_id=tenant_id)
         if not role:
             return []
         
         # Get user assignments
-        user_roles = await collections['userRoles'].find({
+        user_roles = await MongoStorageService.find_many("userRoles", {
             "roleId": role["roleId"],
             "active": True
-        }).to_list(None)
+        }, tenant_id=tenant_id)
         
         return [ur["userId"] for ur in user_roles]
     
     @staticmethod
-    async def can_user_access_resource(user_id: str, resource_roles: List[str]) -> bool:
+    async def can_user_access_resource(user_id: str, resource_roles: List[str], tenant_id: Optional[str] = None) -> bool:
         """Check if user can access a resource based on required roles"""
         if not resource_roles:  # No role restriction
             return True
             
-        user_roles = await RBACService.get_user_role_names(user_id)
+        user_roles = await RBACService.get_user_role_names(user_id, tenant_id=tenant_id)
         
         # Check if user has any of the required roles
         return bool(user_roles.intersection(set(resource_roles)))
     
     @staticmethod
-    async def filter_accessible_records(user_id: str, records: List[Dict], role_field: str = "roles") -> List[Dict]:
+    async def filter_accessible_records(user_id: str, records: List[Dict], role_field: str = "roles", tenant_id: Optional[str] = None) -> List[Dict]:
         """Filter records that user can access based on roles"""
         if not records:
             return []
         
-        user_roles = await RBACService.get_user_role_names(user_id)
+        user_roles = await RBACService.get_user_role_names(user_id, tenant_id=tenant_id)
         accessible_records = []
         
         for record in records:
@@ -322,15 +322,15 @@ class RBACService:
         return accessible_records
     
     @staticmethod
-    async def get_all_roles(user_id: str = None) -> List[Dict]:
+    async def get_all_roles(user_id: str = None, tenant_id: Optional[str] = None) -> List[Dict]:
         """Get roles per tenant-based and owner-managed visibility.
 
         Users can only see roles they own (ownerId == user_id) within their tenant.
         """
-        collections = get_collections()
+
 
         # Fetch all and filter active (treat missing as True)
-        raw_roles = await collections['roles'].find(None, {"_id": 0}).to_list(None)
+        raw_roles = await MongoStorageService.find_many("roles", {}, projection={"_id": 0}, tenant_id=tenant_id)
         roles = [r for r in raw_roles if r.get("active", True)]
 
         if user_id:
@@ -367,9 +367,9 @@ class RBACService:
         return normalized
 
     @staticmethod
-    async def is_role_owner(user_id: str, role_id: str) -> bool:
+    async def is_role_owner(user_id: str, role_id: str, tenant_id: Optional[str] = None) -> bool:
         """Check if a user is the owner of a role"""
-        role = await RBACService.get_role_by_id(role_id)
+        role = await RBACService.get_role_by_id(role_id, tenant_id=tenant_id)
         if not role:
             return False
         return role.get("ownerId") == user_id
@@ -377,13 +377,13 @@ class RBACService:
 
 async def init_default_roles():
     """Initialize default tenant-based roles"""
-    collections = get_collections()
+
     
     # Remove any existing system_admin roles (legacy cleanup)
     try:
-        result = await collections['roles'].delete_many({"roleName": "system_admin"})
-        if result.deleted_count > 0:
-            logger.info(f"[RBAC] Removed {result.deleted_count} legacy system_admin roles")
+        result = await MongoStorageService.delete_many("roles", {"roleName": "system_admin"})
+        if result and result.get("deleted_count", 0) > 0:
+            logger.info(f"[RBAC] Removed {result['deleted_count']} legacy system_admin roles")
     except Exception as e:
         logger.warning(f"[RBAC] Failed to remove legacy system_admin roles: {e}")
     
@@ -408,7 +408,7 @@ async def init_default_roles():
     @staticmethod
     async def update_role(role_id: str, update_data: Dict, user_id: str) -> Dict:
         """Update an existing role - only owner can update"""
-        collections = get_collections()
+
         
         # Check if role exists
         role = await RBACService.get_role_by_id(role_id)
@@ -440,7 +440,8 @@ async def init_default_roles():
             return role  # No updates to apply
 
         # Update role
-        await collections['roles'].update_one(
+        await MongoStorageService.update_one(
+            "roles",
             {"roleId": role_id},
             {"$set": filtered_update}
         )
@@ -450,12 +451,12 @@ async def init_default_roles():
         return updated_role
 
     @staticmethod
-    async def delete_role(role_id: str, user_id: str) -> Dict:
+    async def delete_role(role_id: str, user_id: str, tenant_id: Optional[str] = None) -> Dict:
         """Delete a role - only owner can delete"""
-        collections = get_collections()
+
         
         # Check if role exists
-        role = await RBACService.get_role_by_id(role_id)
+        role = await RBACService.get_role_by_id(role_id, tenant_id=tenant_id)
         if not role:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -477,17 +478,21 @@ async def init_default_roles():
             )
         
         # Mark role as inactive instead of deleting
-        await collections['roles'].update_one(
+        await MongoStorageService.update_one(
+            "roles",
             {"roleId": role_id},
-            {"$set": {"active": False}}
+            {"$set": {"active": False}},
+            tenant_id=tenant_id
         )
         
         # Remove all user assignments for this role
-        assignments = await collections['userRoles'].find({"roleId": role_id}).to_list(None)
+        assignments = await MongoStorageService.find_many("userRoles", {"roleId": role_id}, tenant_id=tenant_id)
         for a in assignments:
-            await collections['userRoles'].update_one(
+            await MongoStorageService.update_one(
+                "userRoles",
                 {"userId": a.get("userId"), "roleId": role_id}, 
-                {"$set": {"active": False}}
+                {"$set": {"active": False}},
+                tenant_id=tenant_id
             )
         
         return {"message": "Role deleted successfully"}
@@ -495,7 +500,7 @@ async def init_default_roles():
     @staticmethod
     async def list_roles(user_id: str, tenant_id: str = None) -> List[Dict]:
         """List roles accessible to the user"""
-        collections = get_collections()
+
         
         # Build query - user can see roles they own or system roles
         query = {
@@ -510,6 +515,5 @@ async def init_default_roles():
         if tenant_id:
             query["$or"].append({"tenantId": tenant_id})
         
-        cursor = collections['roles'].find(query).sort("roleName", 1)
-        roles = await cursor.to_list(length=None)
+        roles = await MongoStorageService.find_many("roles", query, sort_field="roleName", sort_order=1, tenant_id=tenant_id)
         return roles

@@ -331,7 +331,7 @@ def get_tenant_aware_collections(collections: Dict[str, Any], user_id: str) -> D
     Usage:
         collections = get_collections()
         tenant_collections = get_tenant_aware_collections(collections, user_id)
-        user = await tenant_collections['users'].find_one({"email": "user@example.com"})
+        user = await MongoStorageService.find_one("users", {"email": "user@example.com"})
     """
     if not user_id:
         raise HTTPException(

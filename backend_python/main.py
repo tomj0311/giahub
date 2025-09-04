@@ -52,9 +52,9 @@ async def lifespan(app: FastAPI):
     await init_database()
     logger.info("Database initialized")
     
-    # Initialize default roles
-    await init_default_roles()
-    logger.info("Default roles initialized")
+    # Initialize default roles - DISABLED due to tenant enforcement
+    # await init_default_roles()
+    # logger.info("Default roles initialized")
     
     # Initialize default menu items
     await MenuService.seed_default_menu_items()

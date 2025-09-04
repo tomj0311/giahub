@@ -9,17 +9,12 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 from fastapi import HTTPException, status
 
-from ..db import get_collections
 from ..utils.log import logger
+from ..utils.mongo_storage import MongoStorageService
 
 
 class AgentService:
     """Service for managing agents"""
-    
-    @staticmethod
-    def _get_agents_collection():
-        """Get the agents collection"""
-        return get_collections()["agents"]
     
     @staticmethod
     async def validate_tenant_access(user: dict) -> str:
@@ -39,8 +34,7 @@ class AgentService:
         logger.info(f"[AGENTS] Listing agents for tenant: {tenant_id}")
         
         try:
-            cursor = cls._get_agents_collection().find({"tenantId": tenant_id}).sort("name", 1)
-            docs = await cursor.to_list(length=None)
+            docs = await MongoStorageService.find_many("agents", {}, tenant_id=tenant_id, sort_field="name", sort_order=1)
             logger.debug(f"[AGENTS] Found {len(docs)} agents for tenant: {tenant_id}")
             
             items: List[Dict[str, Any]] = []
@@ -73,7 +67,7 @@ class AgentService:
         logger.info(f"[AGENTS] Getting agent '{name}' for tenant: {tenant_id}")
         
         try:
-            doc = await cls._get_agents_collection().find_one({"tenantId": tenant_id, "name": name})
+            doc = await MongoStorageService.find_one("agents", {"name": name}, tenant_id=tenant_id)
             if not doc:
                 logger.warning(f"[AGENTS] Agent '{name}' not found for tenant: {tenant_id}")
                 raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
@@ -114,15 +108,15 @@ class AgentService:
                 "updated_at": datetime.utcnow(),
             }
 
-            existing = await cls._get_agents_collection().find_one({"tenantId": tenant_id, "name": name})
+            existing = await MongoStorageService.find_one("agents", {"name": name}, tenant_id=tenant_id)
             if existing:
                 logger.debug(f"[AGENTS] Updating existing agent '{name}' for tenant: {tenant_id}")
-                await cls._get_agents_collection().update_one({"_id": existing["_id"]}, {"$set": record})
+                await MongoStorageService.update_one("agents", {"_id": existing["_id"]}, {"$set": record}, tenant_id=tenant_id)
                 action = "updated"
             else:
                 logger.debug(f"[AGENTS] Creating new agent '{name}' for tenant: {tenant_id}")
                 record["created_at"] = datetime.utcnow()
-                await cls._get_agents_collection().insert_one(record)
+                await MongoStorageService.insert_one("agents", record, tenant_id=tenant_id)
                 action = "created"
 
             logger.info(f"[AGENTS] Successfully {action} agent '{name}' for tenant: {tenant_id}")
@@ -138,8 +132,8 @@ class AgentService:
         logger.info(f"[AGENTS] Deleting agent '{name}' for tenant: {tenant_id}")
         
         try:
-            res = await cls._get_agents_collection().delete_one({"tenantId": tenant_id, "name": name})
-            if res.deleted_count == 0:
+            result = await MongoStorageService.delete_one("agents", {"name": name}, tenant_id=tenant_id)
+            if not result:
                 logger.warning(f"[AGENTS] Agent '{name}' not found for deletion in tenant: {tenant_id}")
                 raise HTTPException(status_code=404, detail="Agent not found")
             
@@ -167,8 +161,8 @@ class AgentService:
         logger.info(f"[AGENTS] Deleting agent by ID '{agent_id}' for tenant: {tenant_id}")
         
         try:
-            res = await cls._get_agents_collection().delete_one({"_id": object_id, "tenantId": tenant_id})
-            if res.deleted_count == 0:
+            result = await MongoStorageService.delete_one("agents", {"_id": object_id}, tenant_id=tenant_id)
+            if not result:
                 logger.warning(f"[AGENTS] Agent with ID '{agent_id}' not found for deletion in tenant: {tenant_id}")
                 raise HTTPException(status_code=404, detail="Agent not found")
             
