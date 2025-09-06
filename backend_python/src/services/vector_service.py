@@ -31,9 +31,12 @@ def module_loader(module_path: str):
                     class_name = node.name
                     break
         if class_name:
+            logger.info(f"[VECTOR] module_loader found class {class_name} in {module_path}")
             return getattr(module, class_name)
+        else:
+            logger.error(f"[VECTOR] module_loader could not find any class in {module_path}")
     except Exception as e:
-        pass
+        logger.error(f"[VECTOR] module_loader failed for {module_path}: {e}")
     return None
 
 
@@ -174,44 +177,45 @@ class VectorService:
                         
                         # Load chunking strategy if present
                         chunking_strategy = None
-                        if payload and isinstance(payload, dict) and 'embedder' in payload:
-                            embedder_config = payload['embedder']
+                        # TODO semnatic chunking
+                        # if payload and isinstance(payload, dict) and 'embedder' in payload:
+                        #     embedder_config = payload['embedder']
                             
-                            # Load embedder for chunking
-                            embedder_instance = None
-                            embedder_module_path = embedder_config.get("strategy")
-                            embedder_params = embedder_config.get("params", {})
-                            embedder_class = module_loader(embedder_module_path)
-                            if embedder_class:
-                                try:
-                                    embedder_instance = embedder_class(**embedder_params)
-                                except Exception as e:
-                                    embedder_instance = None
+                        #     # Load embedder for chunking
+                        #     embedder_instance = None
+                        #     embedder_module_path = embedder_config.get("strategy")
+                        #     embedder_params = embedder_config.get("params", {})
+                        #     embedder_class = module_loader(embedder_module_path)
+                        #     if embedder_class:
+                        #         try:
+                        #             embedder_instance = embedder_class(**embedder_params)
+                        #         except Exception as e:
+                        #             embedder_instance = None
                             
-                            if 'chunk' in embedder_config:
-                                chunk_config = embedder_config['chunk']
-                                chunk_module_path = chunk_config.get("strategy")
-                                chunk_params = chunk_config.get("params", {})
-                                chunk_class = module_loader(chunk_module_path)
-                                if chunk_class and embedder_instance:
-                                    try:
-                                        chunking_strategy = chunk_class(embedder=embedder_instance, **chunk_params)
-                                    except Exception as e:
-                                        chunking_strategy = None
+                        #     if 'chunk' in embedder_config:
+                        #         chunk_config = embedder_config['chunk']
+                        #         chunk_module_path = chunk_config.get("strategy")
+                        #         chunk_params = chunk_config.get("params", {})
+                        #         chunk_class = module_loader(chunk_module_path)
+                        #         if chunk_class and embedder_instance:
+                        #             try:
+                        #                 chunking_strategy = chunk_class(embedder=embedder_instance, **chunk_params)
+                        #             except Exception as e:
+                        #                 chunking_strategy = None
                         
                         # Create appropriate knowledge base based on file type
                         knowledge_base = None
                         if file_ext in ['.pdf']:
-                            knowledge_base = PDFKnowledgeBase(path=str(temp_path), vector_db=vector_db, chunking_strategy=chunking_strategy)
+                            knowledge_base = PDFKnowledgeBase(path=str(temp_path), vector_db=vector_db)
                         elif file_ext in ['.docx', '.doc']:
-                            knowledge_base = DocxKnowledgeBase(path=str(temp_path), vector_db=vector_db, chunking_strategy=chunking_strategy)
+                            knowledge_base = DocxKnowledgeBase(path=str(temp_path), vector_db=vector_db)
                         elif file_ext in ['.txt', '.py', '.js', '.json', '.csv']:
-                            knowledge_base = TextKnowledgeBase(path=str(temp_path), vector_db=vector_db, chunking_strategy=chunking_strategy)
+                            knowledge_base = TextKnowledgeBase(path=str(temp_path), vector_db=vector_db)
                         else:
                             # Use combined knowledge base for unknown types
-                            pdf_kb = PDFKnowledgeBase(path=str(temp_path), vector_db=vector_db, chunking_strategy=chunking_strategy)
-                            text_kb = TextKnowledgeBase(path=str(temp_path), vector_db=vector_db, chunking_strategy=chunking_strategy)
-                            docx_kb = DocxKnowledgeBase(path=str(temp_path), vector_db=vector_db, chunking_strategy=chunking_strategy)
+                            pdf_kb = PDFKnowledgeBase(path=str(temp_path), vector_db=vector_db)
+                            text_kb = TextKnowledgeBase(path=str(temp_path), vector_db=vector_db)
+                            docx_kb = DocxKnowledgeBase(path=str(temp_path), vector_db=vector_db)
                             knowledge_base = CombinedKnowledgeBase(sources=[pdf_kb, text_kb, docx_kb], vector_db=vector_db)
                         
                         if knowledge_base:
