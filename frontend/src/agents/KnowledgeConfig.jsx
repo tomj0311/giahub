@@ -76,10 +76,13 @@ const api = {
     if (!r.ok) throw new Error('Delete failed')
     return r.json()
   },
-  async uploadFiles(collection, files, token) {
+  async uploadFiles(collection, files, token, payload = null) {
     const fd = new FormData()
     fd.append('collection', collection)
     for (const f of files) fd.append('files', f)
+    if (payload) {
+      fd.append('payload', JSON.stringify(payload))
+    }
     const r = await apiCall(`/api/knowledge/upload?collection=${encodeURIComponent(collection)}`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -385,7 +388,7 @@ export default function KnowledgeConfig({ user }) {
       const res = await api.saveCollection(payload, token)
       
       if (pendingFiles.length > 0) {
-        await api.uploadFiles(form.name, pendingFiles, token)
+        await api.uploadFiles(form.name, pendingFiles, token, payload)
         setPendingFiles([])
       }
       

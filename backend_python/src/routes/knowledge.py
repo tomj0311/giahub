@@ -5,11 +5,11 @@ Features:
 - List available chunking components via filesystem discovery
 - Introspect a chunking module to get constructor parameters
 - CRUD knowledge collection configurations stored in MongoDB collection 'knowledgeConfig'
-- Upload files to MinIO at uploads/{tenant_id}/{user_id}/{collection}/
 """
 
 from typing import List
-from fastapi import APIRouter, Depends, UploadFile, File, Query, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, Query, HTTPException, Form
+import json
 
 from ..utils.auth import verify_token_middleware
 from ..services.knowledge_service import KnowledgeService
@@ -79,11 +79,11 @@ async def get_collection(collection: str, user: dict = Depends(verify_token_midd
 @router.post("/collection/save")
 async def save_collection(payload: dict, user: dict = Depends(verify_token_middleware)):
     """Create or update a knowledge collection configuration in MongoDB and trigger indexing."""
-    logger.info(f"[KNOWLEDGE] Saving collection: {payload.get('name', 'Unnamed')}")
+    logger.info(f"[KNOWLEDGE] Saving collection: {payload.get('collection', 'Unnamed')}")
     logger.debug(f"[KNOWLEDGE] Collection payload: {payload}")
     try:
         result = await KnowledgeService.save_collection(payload, user)
-        logger.info(f"[KNOWLEDGE] Successfully saved collection: {payload.get('name', 'Unnamed')}")
+        logger.info(f"[KNOWLEDGE] Successfully saved collection: {payload.get('collection', 'Unnamed')}")
         return result
     except Exception as e:
         import traceback
@@ -120,10 +120,23 @@ async def delete_file_from_collection(
 async def upload_knowledge_files(
     collection: str = Query(..., description="Knowledge collection name"),
     files: List[UploadFile] = File(...),
+    # Optional full collection payload JSON string in multipart form
+    payload: str | None = Form(default=None),
     user: dict = Depends(verify_token_middleware)
 ):
-    """Upload files to MinIO under uploads/tenantId/userId/collection/ and index them."""
-    return await KnowledgeService.upload_knowledge_files(collection, files, user)
+    """Upload files to MinIO under uploads/tenantId/userId/collection/ and index them.
+    Accepts an optional 'payload' form field containing the full collection payload as JSON.
+    """
+    payload_dict = None
+    if payload:
+        try:
+            payload_dict = json.loads(payload)
+        except Exception:
+            # Don't fail upload for bad payload, log and continue
+            logger.warning("[KNOWLEDGE] Ignoring invalid payload JSON in upload request")
+            payload_dict = None
+
+    return await KnowledgeService.upload_knowledge_files(files, user, payload_dict)
 
 
 @router.get("/diag")

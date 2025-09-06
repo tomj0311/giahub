@@ -124,7 +124,7 @@ async def download_file(
     
     try:
         # Use tenant-isolated path: uploads/tenant_id/user_id/uploads/filename
-        file_path = f"uploads/{tenant_id}/{user_id}/uploads/{filename}"
+        file_path = f"uploads/{user_id}/{collection_name}/{filename}"
         content = await FileService.get_file_content(file_path)
 
         def iterfile():

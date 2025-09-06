@@ -83,14 +83,14 @@ class FileService:
     ) -> Dict[str, Any]:
         """Upload file to MinIO storage"""
         logger.info(
-            f"[FILE] Uploading file '{file.filename}' for tenant: {tenant_id}, collection: {collection}"
+            f"[FILE] Uploading file '{file.filename}' for user: {user_id}"
         )
 
         try:
             cls.validate_file(file)
 
             # Create file path: uploads/{tenant_id}/{user_id}/{collection}/
-            file_path = f"uploads/{tenant_id}/{user_id}/{collection}/{file.filename}"
+            file_path = f"uploads/{user_id}/{file.filename}"
 
             # Check if file already exists
             file_exists = await cls.check_file_exists(file_path)
@@ -201,7 +201,7 @@ class FileService:
         """List files in a specific collection"""
         try:
             # Create collection path
-            collection_path = f"uploads/{tenant_id}/{user_id}/{collection}/"
+            collection_path = f"uploads/{user_id}/"
 
             # List files from MinIO (placeholder)
             files = await cls._list_files_in_minio(collection_path)
@@ -323,7 +323,7 @@ class FileService:
         
         try:
             # Create collection path
-            collection_path = f"uploads/{tenant_id}/{user_id}/{collection}/"
+            collection_path = f"uploads/{user_id}"
             
             # List all files in the collection
             files = await cls._list_files_in_minio(collection_path)
