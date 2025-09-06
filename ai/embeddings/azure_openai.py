@@ -16,7 +16,7 @@ class AzureOpenAI(AzureOpenAIEmbedder):
     def __init__(
         self,
         # Core parameters
-        model: str = "text-embedding-ada-002",
+        model: str = "text-embedding-3-small",
         api_key: str = None,
         
         # Azure-specific parameters

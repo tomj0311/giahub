@@ -378,9 +378,15 @@ export default function KnowledgeConfig({ user }) {
           params: form.embedder_strategy_params || {},
           chunk: {
             strategy: form.chunk_strategy || '',
-            params: form.chunk_strategy_params || {},
-            ...(form.chunk_size !== null && { chunk_size: form.chunk_size }),
-            ...(form.chunk_overlap !== null && { chunk_overlap: form.chunk_overlap })
+            params: {
+              ...(form.chunk_strategy_params || {}),
+              ...(form.chunk_strategy && form.embedder_strategy_params?.api_key && {
+                api_key: form.embedder_strategy_params.api_key
+              }),
+              ...(form.chunk_strategy && form.embedder_strategy_params?.model && {
+                model: form.embedder_strategy_params.model
+              })
+            }
           }
         } : undefined
       }
@@ -928,29 +934,7 @@ export default function KnowledgeConfig({ user }) {
                       </Box>
                     )}
 
-                    <Box>
-                      <Typography variant="subtitle2" sx={{ mb: 1 }}>Basic Configuration (Optional)</Typography>
-                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-                        <TextField 
-                          size="small" 
-                          label="Chunk Size (Optional)" 
-                          type="number"
-                          value={form.chunk_size || ''}
-                          onChange={(e) => setForm(f => ({ ...f, chunk_size: e.target.value ? parseInt(e.target.value) : null }))}
-                          placeholder={`Default: ${defaults.chunk_size || 5000}`}
-                          sx={{ width: 160 }} 
-                        />
-                        <TextField 
-                          size="small" 
-                          label="Chunk Overlap (Optional)" 
-                          type="number"
-                          value={form.chunk_overlap || ''}
-                          onChange={(e) => setForm(f => ({ ...f, chunk_overlap: e.target.value ? parseInt(e.target.value) : null }))}
-                          placeholder={`Default: ${defaults.chunk_overlap || 0}`}
-                          sx={{ width: 170 }} 
-                        />
-                      </Box>
-                    </Box>
+
                   </>
                 ) : (
                   <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
