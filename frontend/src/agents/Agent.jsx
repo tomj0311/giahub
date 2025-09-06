@@ -44,10 +44,11 @@ export default function Agent({ user }) {
   const [saving, setSaving] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
 
-  const [models, setModels] = useState([])
-  const [tools, setTools] = useState([])
+  // Store full objects (id + name) then map IDs in the form
+  const [models, setModels] = useState([]) // [{id,name}]
+  const [tools, setTools] = useState([])   // [{id,name}]
   const [categories, setCategories] = useState([])
-  const [knowledgeCollections, setKnowledgeCollections] = useState([])
+  const [knowledgeCollections, setKnowledgeCollections] = useState([]) // [{id,name}]
   const [existingAgents, setExistingAgents] = useState([])
 
   const [form, setForm] = useState({
@@ -56,13 +57,19 @@ export default function Agent({ user }) {
     category: '',
     description: '',
     instructions: '',
-    model: { name: '' },
-    tools: {},
-    collection: '',
+    // IDs instead of names
+    model_id: '',
+    tools: {},          // keys are tool IDs
+    knowledge_collection_id: '', // single knowledge collection ID
     memory: { history: { enabled: false, num: 3 } },
   })
 
-  const toolList = Object.keys(form.tools || {})
+  const toolList = Object.keys(form.tools || {}) // IDs
+
+  // ID -> Name maps for display
+  const modelNameById = useMemo(() => Object.fromEntries(models.map(m => [m.id, m.name])), [models])
+  const toolNameById = useMemo(() => Object.fromEntries(tools.map(t => [t.id, t.name])), [tools])
+  const collectionNameById = useMemo(() => Object.fromEntries(knowledgeCollections.map(c => [c.id, c.name])), [knowledgeCollections])
 
   const resetForm = () => {
     setForm({
@@ -71,9 +78,9 @@ export default function Agent({ user }) {
       category: '',
       description: '',
       instructions: '',
-      model: { name: '' },
+      model_id: '',
       tools: {},
-      collection: '',
+      knowledge_collection_id: '',
       memory: { history: { enabled: false, num: 3 } },
     })
   }
@@ -95,10 +102,10 @@ export default function Agent({ user }) {
       const collectionsJson = await collectionsRes.json().catch(() => ({}))
       const agentsJson = await agentsRes.json().catch(() => ({}))
 
-      setModels((modelsJson.configurations || []).map(c => c.name).sort())
-      setTools((toolsJson.configurations || []).map(c => c.name).sort())
+  setModels((modelsJson.configurations || []).map(c => ({ id: c.id, name: c.name })).sort((a,b)=>a.name.localeCompare(b.name)))
+  setTools((toolsJson.configurations || []).map(c => ({ id: c.id, name: c.name })).sort((a,b)=>a.name.localeCompare(b.name)))
       setCategories((catsJson.categories || []).sort())
-      setKnowledgeCollections((collectionsJson.collections || []).sort())
+  setKnowledgeCollections((collectionsJson.collections || []).map(c => ({ id: c.id, name: c.name })).sort((a,b)=>a.name.localeCompare(b.name)))
       setExistingAgents(agentsJson.agents || [])
     } catch (e) {
       console.error(e)
@@ -118,22 +125,33 @@ export default function Agent({ user }) {
       category: agent.category || '',
       description: agent.description || '',
       instructions: agent.instructions || '',
-      model: agent.model || { name: '' },
-      tools: agent.tools || {},
-      collection: agent.collection || '',
+      model_id: agent.model?.id || '',
+      tools: agent.tools || {}, // assume already keyed by ID
+      knowledge_collection_id: agent.collection || agent.knowledge_collection_id || '',
       memory: agent.memory || { history: { enabled: false, num: 3 } },
     })
   }
 
   const handleSave = async () => {
     if (!form.name) { showError('Name is required'); return }
-    if (!form.model?.name) { showError('Select a model configuration'); return }
+    if (!form.model_id) { showError('Select a model configuration'); return }
     setSaving(true)
     try {
+      const payload = {
+        id: form.id,
+        name: form.name,
+        category: form.category,
+        description: form.description,
+        instructions: form.instructions,
+        model: form.model_id ? { id: form.model_id } : null,
+        tools: form.tools,
+        collection: form.knowledge_collection_id || '',
+        memory: form.memory,
+      }
       const resp = await apiCall(`/api/agents`, {
         method: 'POST',
         headers: authHeaders,
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       })
       const data = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(data.detail || `Save failed (${resp.status})`)
@@ -246,7 +264,7 @@ export default function Agent({ user }) {
                   </TableRow>
                 ) : (
                   existingAgents.map((a) => {
-                    const toolNames = Object.keys(a.tools || {})
+                    const toolIds = Object.keys(a.tools || {})
                     const mem = a.memory?.history?.enabled
                       ? `History (${a.memory?.history?.num ?? 3})`
                       : 'Off'
@@ -259,22 +277,22 @@ export default function Agent({ user }) {
                           )}
                         </TableCell>
                         <TableCell>{a.category || '-'}</TableCell>
-                        <TableCell>{a.model?.name || '-'}</TableCell>
+                        <TableCell>{a.model?.id ? (modelNameById[a.model.id] || a.model.id) : '-'}</TableCell>
                         <TableCell>
                           <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                            {toolNames.length === 0 ? (
+                            {toolIds.length === 0 ? (
                               <Chip size="small" label="None" />
                             ) : (
-                              toolNames.slice(0, 3).map(t => (
-                                <Chip key={t} size="small" label={t} variant="outlined" />
+                              toolIds.slice(0, 3).map(tid => (
+                                <Chip key={tid} size="small" label={toolNameById[tid] || tid} variant="outlined" />
                               ))
                             )}
-                            {toolNames.length > 3 && (
-                              <Chip size="small" label={`+${toolNames.length - 3}`} />
+                            {toolIds.length > 3 && (
+                              <Chip size="small" label={`+${toolIds.length - 3}`} />
                             )}
                           </Box>
                         </TableCell>
-                        <TableCell>{a.collection || '-'}</TableCell>
+                        <TableCell>{(a.collection && (collectionNameById[a.collection] || a.collection)) || '-'}</TableCell>
                         <TableCell>
                           <Chip size="small" label={mem} color={a.memory?.history?.enabled ? 'primary' : 'default'} />
                         </TableCell>
@@ -338,29 +356,32 @@ export default function Agent({ user }) {
               <Stack spacing={2}>
                 <Autocomplete
                   options={models}
-                  value={form.model?.name || ''}
-                  onChange={(_, v) => setForm(f => ({ ...f, model: v ? { name: v } : { name: '' } }))}
+                  getOptionLabel={(o) => o?.name || ''}
+                  value={models.find(m => m.id === form.model_id) || null}
+                  onChange={(_, v) => setForm(f => ({ ...f, model_id: v?.id || '' }))}
                   renderInput={(p) => <TextField {...p} label="Model Configuration" size="small" />}
                 />
 
                 <Autocomplete
                   multiple
                   options={tools}
-                  value={toolList}
+                  getOptionLabel={(o) => o?.name || ''}
+                  value={tools.filter(t => toolList.includes(t.id))}
                   onChange={(_, v) => {
                     const next = {}
-                    v.forEach(t => { next[t] = form.tools?.[t] || {} })
+                    v.forEach(t => { next[t.id] = form.tools?.[t.id] || {} })
                     setForm(f => ({ ...f, tools: next }))
                   }}
-                  renderTags={(value, getTagProps) => value.map((opt, i) => <Chip {...getTagProps({ index: i })} key={opt} size="small" label={opt} />)}
+                  renderTags={(value, getTagProps) => value.map((opt, i) => <Chip {...getTagProps({ index: i })} key={opt.id} size="small" label={opt.name} />)}
                   renderInput={(p) => <TextField {...p} label="Tools" size="small" />}
                 />
 
                 <Autocomplete
                   options={knowledgeCollections}
-                  value={form.knowledge || []}
-                  onChange={(_, v) => setForm(f => ({ ...f, knowledge: v }))}
-                  renderInput={(p) => <TextField {...p} label="Knowledge Collections" size="small" />}
+                  getOptionLabel={(o) => o?.name || ''}
+                  value={knowledgeCollections.find(c => c.id === form.knowledge_collection_id) || null}
+                  onChange={(_, v) => setForm(f => ({ ...f, knowledge_collection_id: v?.id || '' }))}
+                  renderInput={(p) => <TextField {...p} label="Knowledge Collection" size="small" />}
                 />
 
                 <Paper variant="outlined" sx={{ p: 2 }}>
