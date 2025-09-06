@@ -609,27 +609,26 @@ export default function KnowledgeConfig({ user }) {
               value={form.name}
               loading={loadingConfigs}
               loadingText="Loading collections…"
+              disabled={isEdit} // prevent renaming while editing to keep id-based operations simple
               onChange={(_, v) => {
+                // If selecting an existing collection load it; otherwise treat as rename/new without clearing edit state
                 if (v && existingConfigs.some(c => c.name === v)) {
                   loadExistingConfig(v)
                 } else {
-                  setForm(f => ({ ...f, id: null, name: v || '' }))
-                  setIsEditMode(false)
-                  setIsEdit(false)
+                  setForm(f => ({ ...f, name: v || '' }))
+                  // Keep isEdit/isEditMode so a rename updates rather than creating duplicate
                 }
               }}
               onInputChange={(_, v) => {
+                if (isEdit) return; // block name changes during edit mode
                 setForm(f => ({ ...f, name: v }))
                 if (existingConfigs.some(c => c.name === v)) {
                   loadExistingConfig(v)
-                } else {
-                  setForm(f => ({ ...f, id: null }))
-                  setIsEditMode(false)
-                  setIsEdit(false)
                 }
+                // Else free text rename; keep current id & edit flags
               }}
               renderInput={(params) => (
-                <TextField {...params} label="Collection Name" placeholder="Enter or select a collection…" size="small" required />
+                <TextField {...params} label="Collection Name" placeholder="Enter or select a collection…" size="small" required helperText={isEdit ? 'Name locked while editing existing collection' : ''} />
               )}
             />
 

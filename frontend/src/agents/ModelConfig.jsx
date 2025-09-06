@@ -443,21 +443,20 @@ export default function ModelConfig({ user }) {
                             loading={loadingConfigs}
                             loadingText="Loading configurations…"
                             onChange={(_, v) => {
+                                // If selecting an existing config, load it; otherwise treat as rename/new without clearing id if editing
                                 if (v && existingConfigs.some(c => c.name === v)) {
                                     loadExistingConfig(v);
                                 } else {
-                                    setForm(f => ({ ...f, id: null, name: v || '' }));
-                                    setIsEditMode(false);
+                                    setForm(f => ({ ...f, name: v || '' }));
+                                    // Do NOT reset id/isEditMode here to allow renaming existing configs
                                 }
                             }}
                             onInputChange={(_, v) => {
                                 setForm(f => ({ ...f, name: v }));
                                 if (existingConfigs.some(c => c.name === v)) {
                                     loadExistingConfig(v);
-                                } else {
-                                    setForm(f => ({ ...f, id: null }));
-                                    setIsEditMode(false);
                                 }
+                                // Else: free text / rename; keep current id & edit mode
                             }}
                             renderInput={(params) =>
                                 <TextField

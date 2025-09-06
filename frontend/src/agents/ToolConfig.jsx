@@ -349,21 +349,19 @@ export default function ToolConfig({ user }) {
                             loading={loadingConfigs}
                             loadingText="Loading configurations…"
                             onChange={(_, v) => {
+                                // Preserve current id/edit mode to allow true rename instead of creating a duplicate
                                 if (v && existingConfigs.some(c => c.name === v)) {
                                     loadExistingConfig(v);
                                 } else {
-                                    setForm(f => ({ ...f, id: null, name: v || '' }));
-                                    setIsEditMode(false);
+                                    setForm(f => ({ ...f, name: v || '' }));
                                 }
                             }}
                             onInputChange={(_, v) => {
                                 setForm(f => ({ ...f, name: v }));
                                 if (existingConfigs.some(c => c.name === v)) {
                                     loadExistingConfig(v);
-                                } else {
-                                    setForm(f => ({ ...f, id: null }));
-                                    setIsEditMode(false);
                                 }
+                                // Else: free text rename; keep id & edit mode
                             }}
                             renderInput={(params) =>
                                 <TextField
