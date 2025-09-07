@@ -13,7 +13,7 @@ from fastapi import HTTPException, status, UploadFile
 
 from ..utils.log import logger
 from ..utils.mongo_storage import MongoStorageService
-from src.utils.component_discovery import discover_components, get_detailed_class_info
+from ..utils.component_discovery import discover_components, get_detailed_class_info
 from .file_service import FileService
 from .vector_service import VectorService
 
@@ -162,6 +162,29 @@ class KnowledgeService:
             logger.error(f"[KNOWLEDGE] Failed to get config {collection_name}: {e}")
             raise HTTPException(status_code=500, detail="Failed to retrieve knowledge configuration")
     
+    @classmethod
+    async def get_collection_by_id(cls, collection_id: str, user: dict) -> Dict[str, Any]:
+        """Get collection configuration by ID - returns raw record"""
+        from bson import ObjectId
+        tenant_id = await cls.validate_tenant_access(user)
+        
+        try:
+            doc = await MongoStorageService.find_one("knowledgeConfig", {
+                "_id": ObjectId(collection_id),
+                "tenantId": tenant_id
+            }, tenant_id=tenant_id)
+            
+            if not doc:
+                raise HTTPException(status_code=404, detail="Knowledge collection not found")
+            
+            return doc
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[KNOWLEDGE] Failed to get collection {collection_id}: {e}")
+            raise HTTPException(status_code=500, detail="Failed to retrieve knowledge collection")
+
     @classmethod
     async def create_knowledge_config(cls, config_data: Dict[str, Any], user: dict) -> Dict[str, str]:
         """Create new knowledge configuration"""

@@ -14,23 +14,20 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
 from ..utils.auth import verify_token_middleware
-from ..utils.agent_runtime import AgentRunManager, RunCallbacks
 from ..utils.log import logger
 from ..utils.mongo_storage import MongoStorageService
 from ..services.agent_service import AgentService
+from ..services.agent_runtime_service import AgentRuntimeService
 
 router = APIRouter(prefix="/api/agent-runtime", tags=["agent-runtime"]) 
 
-# Global agent manager instance
-agent_manager = AgentRunManager(agents_dir="")  # Not using filesystem
-
 
 async def stream_agent_response(
-    agent_name: str, 
-    prompt: str, 
-    session_prefix: str = None,
-    user_id: str = None,
-    tenant_id: str = None
+    agent_name: str,
+    prompt: str,
+    session_prefix: str | None = None,
+    user_id: str | None = None,
+    tenant_id: str | None = None
 ) -> AsyncGenerator[str, None]:
     """Stream agent response using Server-Sent Events format."""
     
@@ -39,117 +36,41 @@ async def stream_agent_response(
     logger.info(f"[AGENT_RUNTIME] Starting agent response stream with correlation ID: {correlation_id}")
     logger.debug(f"[AGENT_RUNTIME] Request parameters - agent: {agent_name}, session: {session_prefix}, user: {user_id}, tenant: {tenant_id}")
     
-    # Load agent configuration from database
     try:
-        logger.info(f"[AGENT_RUNTIME] Loading agent configuration for: {agent_name}")
-        agent_doc = await AgentService.get_agent_by_name(agent_name, {"tenantId": tenant_id})
+        # Create user object for service calls
+        user = {"id": user_id, "userId": user_id, "tenantId": tenant_id}
         
-        if not agent_doc:
-            logger.error(f"[AGENT_RUNTIME] Agent '{agent_name}' not found for tenant: {tenant_id}")
-            yield f"data: {json.dumps({'error': f'Agent {agent_name} not found'})}\n\n"
-            return
+        # Send start event
+        yield f"data: {json.dumps({'type': 'agent_run_started', 'correlation_id': correlation_id, 'payload': {'file': agent_name}})}\n\n"
+        
+        # Execute agent using the runtime service
+        async for response in AgentRuntimeService.execute_agent(
+            agent_name=agent_name,
+            prompt=prompt,
+            user=user,
+            session_prefix=session_prefix
+        ):
+            # Add correlation ID to response
+            response['correlation_id'] = correlation_id
             
-        # Get agent configuration
-        agent_config = agent_doc.get('config', {})
-        
-        # Add session collection if provided
-        if session_prefix:
-            agent_config['session_collection'] = session_prefix
-        
-        # Build the agent
-        agent = agent_manager.build_agent_from_config(agent_config, user_id)
-        
-        # Create event queue for streaming
-        event_queue = asyncio.Queue()
-        stream_complete = asyncio.Event()
-        
-        def send_event(event_type: str, payload: Any, corr_id: str = None):
-            """Send event to the stream queue."""
-            try:
-                event_data = {
-                    'type': event_type,
-                    'payload': payload,
-                    'correlation_id': corr_id
-                }
-                asyncio.create_task(event_queue.put(event_data))
-            except Exception as e:
-                logger.error(f"[AGENT_RUNTIME] Error sending event: {e}")
-        
-        def send_error(event_type: str, corr_id: str, status_code: int, details: Dict[str, Any]):
-            """Send error event to the stream queue."""
-            logger.error(f"[AGENT_RUNTIME] Agent error - {event_type}: {details}")
-            error_data = {
-                'type': 'error',
-                'error': event_type,
-                'correlation_id': corr_id,
-                'status_code': status_code,
-                'details': details
-            }
-            asyncio.create_task(event_queue.put(error_data))
-            asyncio.create_task(event_queue.put(None))  # Signal completion
-        
-        # Create callbacks
-        callbacks = RunCallbacks(send=send_event, send_error=send_error)
-        
-        # Start agent run in background
-        def run_complete_callback():
-            asyncio.create_task(event_queue.put(None))  # Signal completion
-        
-        # Override the callbacks to signal completion
-        original_send = callbacks.send
-        def enhanced_send(event_type: str, payload: Any, corr_id: str = None):
-            original_send(event_type, payload, corr_id)
-            if event_type in ['agent_run_complete', 'agent_run_cancelled']:
-                run_complete_callback()
-        
-        callbacks.send = enhanced_send
-        
-        # Start the agent run
-        try:
-            yield f"data: {json.dumps({'type': 'agent_run_started', 'correlation_id': correlation_id, 'payload': {'file': agent_name}})}\n\n"
-            
-            agent_manager.start_run(
-                correlation_id=correlation_id,
-                agent=agent,
-                prompt=prompt,
-                callbacks=callbacks
-            )
-            
-            # Stream events as they come
-            while True:
-                try:
-                    # Wait for next event with timeout
-                    event = await asyncio.wait_for(event_queue.get(), timeout=30.0)
-                    
-                    if event is None:  # Completion signal
-                        break
-                        
-                    # Send event as SSE
-                    yield f"data: {json.dumps(event)}\n\n"
-                    
-                except asyncio.TimeoutError:
-                    # Send keepalive
-                    yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
-                    continue
-                    
-        except Exception as e:
-            logger.error(f"Error in agent run: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+            # Send event as SSE
+            yield f"data: {json.dumps(response)}\n\n"
             
     except Exception as e:
-        logger.error(f"Error loading agent {agent_name}: {e}")
-        yield f"data: {json.dumps({'error': f'Failed to load agent: {str(e)}'})}\n\n"
+        logger.error(f"[AGENT_RUNTIME] Error in agent response stream: {e}")
+        yield f"data: {json.dumps({'type': 'error', 'error': str(e), 'correlation_id': correlation_id})}\n\n"
 
 
 @router.post("/run")
 async def run_agent(body: Dict[str, Any], user: dict = Depends(verify_token_middleware)):
     """Stream agent responses using Server-Sent Events.
 
-    body: { agent_name, prompt, session_prefix? }
+    body: { agent_name, prompt, session_prefix? | session_collection? }
     """
     agent_name = (body.get("agent_name") or body.get("file") or "").strip()
     prompt = (body.get("prompt") or "").strip()
-    session_prefix = body.get("session_prefix")
+    # Accept either key from frontend (older code uses session_collection)
+    session_prefix = body.get("session_prefix") or body.get("session_collection")
     
     if not agent_name:
         raise HTTPException(status_code=400, detail="agent_name is required")
@@ -174,7 +95,8 @@ async def run_agent(body: Dict[str, Any], user: dict = Depends(verify_token_midd
             user_id=user_id,
             tenant_id=tenant_id
         ),
-        media_type="text/plain",
+    # SSE media type so browsers treat stream correctly
+    media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
@@ -201,9 +123,26 @@ async def list_conversations(user: dict = Depends(verify_token_middleware)):
     )
     items: List[Dict[str, Any]] = []
     for d in docs:
+        # Generate title from first user message, truncated to ~25 words
+        title = d.get("title")
+        if not title:
+            messages = d.get("messages", [])
+            # Find first user message
+            first_user_msg = next((msg for msg in messages if msg.get("role") == "user"), None)
+            if first_user_msg:
+                content = first_user_msg.get("content", "")
+                # Truncate to first 25 words
+                words = content.split()
+                if len(words) > 25:
+                    title = " ".join(words[:25]) + "..."
+                else:
+                    title = content
+            else:
+                title = "Conversation"
+        
         items.append({
             "conversation_id": d.get("conversation_id"),
-            "title": d.get("title") or (d.get("messages") or [{}])[-1].get("content", "Conversation"),
+            "title": title,
             "agent_name": d.get("agent_name"),
             "updated_at": int((d.get("updated_at") or datetime.utcnow()).timestamp() * 1000),
         })
@@ -228,12 +167,15 @@ async def get_conversation(conversation_id: str, user: dict = Depends(verify_tok
     if not doc:
         raise HTTPException(status_code=404, detail="Conversation not found")
     # sanitize
+    # Provide both keys for maximum compatibility with different frontends
+    session_val = doc.get("session_prefix") or doc.get("session_collection")
     return {
         "conversation_id": doc.get("conversation_id"),
         "agent_name": doc.get("agent_name"),
         "messages": doc.get("messages", []),
         "uploaded_files": doc.get("uploaded_files", []),
-        "session_prefix": doc.get("session_prefix"),
+        "session_prefix": session_val,
+        "session_collection": session_val,
         "updated_at": int((doc.get("updated_at") or datetime.utcnow()).timestamp() * 1000),
         "title": doc.get("title"),
     }
@@ -245,7 +187,8 @@ async def save_conversation(body: Dict[str, Any], user: dict = Depends(verify_to
     conversation_id = body.get("conversation_id") or str(uuid.uuid4())
     messages = body.get("messages", [])
     uploaded_files = body.get("uploaded_files", [])
-    session_prefix = body.get("session_prefix", "")
+    # Accept either key and persist under both for now
+    session_prefix = body.get("session_prefix") or body.get("session_collection") or ""
     agent_name = body.get("agent_name", "")
     
     # CRITICAL: tenant_id is required - no fallbacks allowed
@@ -265,6 +208,9 @@ async def save_conversation(body: Dict[str, Any], user: dict = Depends(verify_to
         "userId": user_id,
         "conversation_id": conversation_id,
         "updated_at": datetime.utcnow(),
+        # Store both field names for transitional compatibility
+        "session_prefix": session_prefix,
+        "session_collection": session_prefix,
     })
     
     existing = await MongoStorageService.find_one(

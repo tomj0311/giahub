@@ -68,7 +68,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="GIA Platform API",
-    description="AI-powered platform API with authentication, role management, and agent capabilities",
+    description="AI-powered platform API with authentication, role management, and agentic capabilities",
     version="1.0.0",
     docs_url=None,  # Disable docs to avoid Pydantic schema generation error
     redoc_url=None,  # Disable redoc
@@ -106,7 +106,8 @@ app.include_router(model_config_router, prefix="/api/model-config")
 app.include_router(tool_config_router, prefix="/api/tool-config")
 app.include_router(knowledge_router, prefix="/api/knowledge")
 app.include_router(agents_router, prefix="/api/agents")
-# app.include_router(agent_runtime_router)  # Temporarily disabled
+# Re-enable Agent Runtime routes (previously disabled) so frontend playground works
+app.include_router(agent_runtime_router)
 app.include_router(payments_router, prefix="/api/payments")
 app.include_router(uploads_router)
 

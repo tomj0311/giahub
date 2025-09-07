@@ -31,6 +31,7 @@ import MenuIcon from '@mui/icons-material/Menu'
 import HistoryIcon from '@mui/icons-material/History'
 import DeleteIcon from '@mui/icons-material/Delete'
 import SendIcon from '@mui/icons-material/Send'
+import CancelIcon from '@mui/icons-material/Cancel'
 import { agentService } from '../services/agentService'
 import { agentRuntimeService } from '../services/agentRuntimeService'
 
@@ -49,6 +50,7 @@ export default function AgentPlayground({ user }) {
   const [prompt, setPrompt] = useState('')
   const [messages, setMessages] = useState([])
   const [running, setRunning] = useState(false)
+  const [abortController, setAbortController] = useState(null)
 
   // File uploads (optional knowledge)
   const [stagedFiles, setStagedFiles] = useState([])
@@ -148,9 +150,31 @@ export default function AgentPlayground({ user }) {
     }
   }
 
+  const cancelChat = () => {
+    if (abortController) {
+      abortController.abort()
+      setAbortController(null)
+      setRunning(false)
+      
+      // Remove the streaming message and add a cancellation message
+      setMessages(prev => {
+        const filtered = prev.filter(msg => !msg.streaming)
+        return [...filtered, { 
+          role: 'system', 
+          content: 'Chat cancelled by user.', 
+          ts: Date.now() 
+        }]
+      })
+    }
+  }
+
   const runAgent = async () => {
     if (!selected || !prompt.trim()) return
     setRunning(true)
+    
+    // Create abort controller for this request
+    const controller = new AbortController()
+    setAbortController(controller)
     
     // upload first if needed
     if (stagedFiles.length) {
@@ -158,64 +182,124 @@ export default function AgentPlayground({ user }) {
     }
     
     const userMsg = { role: 'user', content: prompt, ts: Date.now() }
-    setMessages(prev => [...prev, userMsg])
+    const newMessages = [...messages, userMsg]
+    setMessages(newMessages)
+    
+    // Save user message immediately
+    const convId = currentConversationId || `conv_${Date.now()}`
+    try {
+      await agentRuntimeService.saveConversation({
+        conversation_id: convId,
+        agent_name: selected,
+        messages: newMessages,
+        uploaded_files: uploadedFiles,
+        session_collection: sessionCollection,
+        title: generateTitle(newMessages)
+      }, token)
+      if (!currentConversationId) setCurrentConversationId(convId)
+    } catch (e) {
+      console.error('Failed to save user message:', e)
+    }
     
     // Add placeholder message for agent response
     const agentMsgId = Date.now()
-    setMessages(prev => [...prev, { role: 'agent', content: '', ts: agentMsgId, streaming: true }])
+    const agentPlaceholder = { role: 'agent', content: '', ts: agentMsgId, streaming: true }
+    const messagesWithPlaceholder = [...newMessages, agentPlaceholder]
+    setMessages(messagesWithPlaceholder)
     
     setPrompt('')
     
     try {
+      let finalMessages = messagesWithPlaceholder
       await agentRuntimeService.runStream(
-        { 
-          agent_name: selected, 
-          prompt: userMsg.content, 
-          session_collection: sessionCollection 
-        }, 
+        {
+          agent_name: selected,
+          prompt: userMsg.content,
+          // Send both keys for backward compatibility during transition
+          session_prefix: sessionCollection,
+          session_collection: sessionCollection
+        },
         token,
         (event) => {
           if (event.type === 'agent_chunk' && event.payload?.content) {
             // Update the streaming message with new content
-            setMessages(prev => prev.map(msg => 
-              msg.ts === agentMsgId && msg.streaming 
-                ? { ...msg, content: msg.content + event.payload.content }
-                : msg
-            ))
+            setMessages(prev => {
+              const updated = prev.map(msg => 
+                msg.ts === agentMsgId && msg.streaming 
+                  ? { ...msg, content: msg.content + event.payload.content }
+                  : msg
+              )
+              finalMessages = updated
+              return updated
+            })
           } else if (event.type === 'agent_run_complete') {
-            // Mark streaming as complete
-            setMessages(prev => prev.map(msg => 
-              msg.ts === agentMsgId 
-                ? { ...msg, streaming: false }
-                : msg
-            ))
+            // Mark streaming as complete and save final conversation
+            setMessages(prev => {
+              const updated = prev.map(msg => 
+                msg.ts === agentMsgId 
+                  ? { ...msg, streaming: false }
+                  : msg
+              )
+              finalMessages = updated
+              
+              // Save the complete conversation with the final agent response
+              agentRuntimeService.saveConversation({
+                conversation_id: convId,
+                agent_name: selected,
+                messages: updated,
+                uploaded_files: uploadedFiles,
+                session_collection: sessionCollection,
+                title: generateTitle(updated)
+              }, token).catch(e => console.error('Failed to save final conversation:', e))
+              
+              return updated
+            })
           } else if (event.type === 'error' || event.error) {
-            setMessages(prev => [...prev, { 
+            const errorMsg = { 
               role: 'system', 
               content: `Error: ${event.error || event.details?.message || 'Unknown error'}`, 
               ts: Date.now() 
-            }])
+            }
+            setMessages(prev => {
+              const updated = [...prev, errorMsg]
+              finalMessages = updated
+              
+              // Save conversation with error message
+              agentRuntimeService.saveConversation({
+                conversation_id: convId,
+                agent_name: selected,
+                messages: updated,
+                uploaded_files: uploadedFiles,
+                session_collection: sessionCollection,
+                title: generateTitle(updated)
+              }, token).catch(e => console.error('Failed to save conversation with error:', e))
+              
+              return updated
+            })
           }
-        }
+        },
+        controller.signal
       )
     } catch (e) {
-      setMessages(prev => [...prev, { role: 'system', content: `Error: ${e.message || e}`, ts: Date.now() }])
-      // Remove the placeholder message on error
-      setMessages(prev => prev.filter(msg => msg.ts !== agentMsgId))
-    } finally {
-      setRunning(false)
-      // autosave snapshot
-      try {
-        const convId = currentConversationId || `conv_${Date.now()}`
-        await agentRuntimeService.saveConversation({
+      const errorMsg = { role: 'system', content: `Error: ${e.message || e}`, ts: Date.now() }
+      setMessages(prev => {
+        const updated = prev.filter(msg => msg.ts !== agentMsgId).concat([errorMsg])
+        
+        // Save conversation with error
+        agentRuntimeService.saveConversation({
           conversation_id: convId,
           agent_name: selected,
-          messages,
+          messages: updated,
           uploaded_files: uploadedFiles,
-          session_collection: sessionCollection
-        }, token)
-        if (!currentConversationId) setCurrentConversationId(convId)
-      } catch {}
+          session_collection: sessionCollection,
+          title: generateTitle(updated)
+        }, token).catch(e => console.error('Failed to save conversation with error:', e))
+        
+        return updated
+      })
+    } finally {
+      setRunning(false)
+      setAbortController(null)
     }
   }
 
@@ -238,7 +322,7 @@ export default function AgentPlayground({ user }) {
       setSelected(conv.agent_name)
       setMessages(conv.messages || [])
       setUploadedFiles(conv.uploaded_files || [])
-      setSessionCollection(conv.session_collection || genUuidHex())
+      setSessionCollection(conv.session_prefix || conv.session_collection || genUuidHex())
       setCurrentConversationId(conv.conversation_id)
       setHistoryOpen(false)
     } catch (e) {
@@ -257,7 +341,19 @@ export default function AgentPlayground({ user }) {
     setUploadedFiles([])
     setStagedFiles([])
     setCurrentConversationId(null)
-    setSessionPrefix(genUuidHex())
+    setSessionCollection(genUuidHex())
+  }
+
+  // Generate conversation title from first user message
+  const generateTitle = (messages) => {
+    const firstUserMsg = messages.find(msg => msg.role === 'user')
+    if (!firstUserMsg || !firstUserMsg.content) return null
+    
+    const words = firstUserMsg.content.trim().split(/\s+/)
+    if (words.length > 25) {
+      return words.slice(0, 25).join(' ') + '...'
+    }
+    return firstUserMsg.content.trim()
   }
 
   const renderGroupedList = () => {
@@ -360,11 +456,17 @@ export default function AgentPlayground({ user }) {
               maxRows={4}
               disabled={!selected || running}
               size="small"
-              sx={{ '& .MuiInputBase-root': { pr: 8, fontSize: '14px', alignItems: 'flex-start' } }}
+              sx={{ '& .MuiInputBase-root': { pr: running ? 14 : 8, fontSize: '14px', alignItems: 'flex-start' } }}
             />
-            <IconButton onClick={runAgent} disabled={!selected || running || !prompt.trim() || uploading} size="small" sx={{ position: 'absolute', top: '50%', right: 6, transform: 'translateY(-50%)' }}>
-              {running || uploading ? <CircularProgress size={18} /> : <SendIcon fontSize="small" />}
-            </IconButton>
+            {running ? (
+              <IconButton onClick={cancelChat} size="small" color="error" sx={{ position: 'absolute', top: '50%', right: 6, transform: 'translateY(-50%)' }}>
+                <CancelIcon fontSize="small" />
+              </IconButton>
+            ) : (
+              <IconButton onClick={runAgent} disabled={!selected || !prompt.trim() || uploading} size="small" sx={{ position: 'absolute', top: '50%', right: 6, transform: 'translateY(-50%)' }}>
+                {uploading ? <CircularProgress size={18} /> : <SendIcon fontSize="small" />}
+              </IconButton>
+            )}
           </Box>
 
           {/* Controls moved to bottom */}

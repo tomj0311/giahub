@@ -119,6 +119,29 @@ class ToolConfigService:
         return config
 
     @classmethod
+    async def get_tool_config_by_id(cls, config_id: str, user: dict) -> dict:
+        """Get tool configuration by ID - returns raw record"""
+        from bson import ObjectId
+        tenant_id = await cls.validate_tenant_access(user)
+        
+        try:
+            doc = await MongoStorageService.find_one("toolConfig", {
+                "_id": ObjectId(config_id),
+                "tenantId": tenant_id
+            }, tenant_id=tenant_id)
+            
+            if not doc:
+                raise HTTPException(status_code=404, detail="Tool configuration not found")
+            
+            return doc
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[TOOL] Failed to get tool config {config_id}: {e}")
+            raise HTTPException(status_code=500, detail="Failed to retrieve tool configuration")
+
+    @classmethod
     async def update_tool_config(cls, config_id: str, updates: dict, user: dict) -> dict:
         """Update a tool configuration by ID"""
         from bson import ObjectId

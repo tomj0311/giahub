@@ -102,6 +102,27 @@ class ModelConfigService:
             raise HTTPException(status_code=500, detail="Failed to retrieve model configuration")
     
     @classmethod
+    async def get_model_config_by_id(cls, config_id: str, user: dict) -> Dict[str, Any]:
+        # Return raw document (no flattening/normalization) per user request.
+        from bson import ObjectId
+        tenant_id = await cls.validate_tenant_access(user)
+        logger.debug(f"[MODEL] get_model_config_by_id (raw) - tenant_id: {tenant_id}, config_id: {config_id}")
+        try:
+            doc = await MongoStorageService.find_one(
+                "modelConfig",
+                {"_id": ObjectId(config_id), "tenantId": tenant_id},
+                tenant_id=tenant_id
+            )
+            if not doc:
+                raise HTTPException(status_code=404, detail="Model configuration not found")
+            return doc  # raw document (may contain ObjectId, caller must handle serialization)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[MODEL] Failed to get model config {config_id}: {e}")
+            raise HTTPException(status_code=500, detail="Failed to retrieve model configuration")
+
+    @classmethod
     async def create_model_config(cls, config_data: Dict[str, Any], user: dict) -> Dict[str, str]:
         """Create new model configuration"""
         tenant_id = await cls.validate_tenant_access(user)
@@ -216,43 +237,6 @@ class ModelConfigService:
     
     # ID-based methods (preferred)
     @classmethod
-    async def get_model_config_by_id(cls, config_id: str, user: dict) -> Dict[str, Any]:
-        """Get specific model configuration by ID"""
-        from bson import ObjectId
-        tenant_id = await cls.validate_tenant_access(user)
-        
-        try:
-            doc = await MongoStorageService.find_one("modelConfig", {
-                "_id": ObjectId(config_id),
-                "tenantId": tenant_id
-            })
-            
-            if not doc:
-                raise HTTPException(status_code=404, detail="Model configuration not found")
-            
-            config = {
-                "id": str(doc["_id"]),
-                "name": doc.get("name"),
-                "provider": doc.get("provider"),
-                "model": doc.get("model"),
-                "category": doc.get("category", ""),
-                "description": doc.get("description", ""),
-                "parameters": doc.get("parameters", {}),
-                "api_key_configured": bool(doc.get("api_key")),
-                "created_at": doc.get("created_at"),
-                "updated_at": doc.get("updated_at"),
-                "is_active": doc.get("is_active", True)
-            }
-            
-            return config
-            
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"[MODEL] Failed to get model config {config_id}: {e}")
-            raise HTTPException(status_code=500, detail="Failed to retrieve model configuration")
-    
-    @classmethod
     async def update_model_config_by_id(cls, config_id: str, config_data: Dict[str, Any], user: dict) -> Dict[str, str]:
         """Update existing model configuration by ID"""
         from bson import ObjectId
@@ -302,10 +286,11 @@ class ModelConfigService:
         
         try:
             # First get the config to check if it exists and get its name
-            doc = await MongoStorageService.find_one("modelConfig", {
-                "_id": ObjectId(config_id),
-                "tenantId": tenant_id
-            })
+            doc = await MongoStorageService.find_one(
+                "modelConfig",
+                {"_id": ObjectId(config_id), "tenantId": tenant_id},
+                tenant_id=tenant_id  # ensure tenant enforcement
+            )
             
             if not doc:
                 raise HTTPException(status_code=404, detail="Model configuration not found")

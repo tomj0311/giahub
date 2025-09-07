@@ -1,6 +1,7 @@
 # Services package
 
 from .agent_service import AgentService
+from .agent_runtime_service import AgentRuntimeService
 from .auth_service import AuthService
 from .user_service import UserService
 from .knowledge_service import KnowledgeService
@@ -13,6 +14,7 @@ from .menu_service import MenuService
 
 __all__ = [
     "AgentService",
+    "AgentRuntimeService",
     "AuthService", 
     "UserService",
     "KnowledgeService",
