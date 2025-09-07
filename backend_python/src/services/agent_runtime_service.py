@@ -31,8 +31,17 @@ def module_loader(module_path: str):
     return None
 
 class AgentRuntimeService:
+    # Simple cache to store agents by session_id
+    _agents = {}
+    
     @staticmethod
     async def build_agent_from_config(agent_config: Dict[str, Any], user: Dict[str, Any]) -> Any:
+        # Check if we already have this agent for this session
+        session_id = agent_config.get("session_collection")
+        if session_id and session_id in AgentRuntimeService._agents:
+            logger.info(f"Reusing existing agent for session: {session_id}")
+            return AgentRuntimeService._agents[session_id]
+            
         try:
             from ai.agent.agent import Agent
             from .model_config_service import ModelConfigService
@@ -109,10 +118,18 @@ class AgentRuntimeService:
                 "num_history_responses": history_config.get("num", 3) if history_config.get("enabled", False) else None,
             }
             
+            # Use session_id instead of session_collection
             if agent_config.get("session_collection"):
-                kwargs["session_collection"] = agent_config["session_collection"]
+                kwargs["session_id"] = agent_config["session_collection"]
                 
-            return Agent(**kwargs)
+            agent = Agent(**kwargs)
+            
+            # Cache the agent if we have a session_id
+            if session_id:
+                AgentRuntimeService._agents[session_id] = agent
+                logger.info(f"Created and cached new agent for session: {session_id}")
+                
+            return agent
         except Exception as e:
             logger.error(f"Failed to build agent: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

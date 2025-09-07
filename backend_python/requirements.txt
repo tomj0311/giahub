@@ -16,7 +16,6 @@ authlib==1.2.1
 itsdangerous==2.1.2
 jinja2==3.1.2
 aiosmtplib==3.0.1
-websockets==12.0
 email-validator==2.1.0
 # NOTE: passlib 1.7.4 expects bcrypt to expose __about__.__version__,
 # which was removed in bcrypt 4.1.x. Pin to 4.0.1 to avoid noisy tracebacks.

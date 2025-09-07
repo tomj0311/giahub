@@ -1,6 +1,18 @@
 import { apiCall } from '../config/api'
 
 export const agentRuntimeService = {
+
+  async runAgentStream(body, token, abortSignal = null) {
+    const res = await apiCall(`/api/agent-runtime/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+      body: JSON.stringify(body),
+      signal: abortSignal
+    })
+    
+    return res // Return the Response object for manual stream handling
+  },
+
   async runStream(body, token, onEvent, abortSignal = null) {
     const res = await apiCall(`/api/agent-runtime/run`, {
       method: 'POST',

@@ -35,7 +35,7 @@ import CancelIcon from '@mui/icons-material/Cancel'
 import { agentService } from '../services/agentService'
 import { agentRuntimeService } from '../services/agentRuntimeService'
 
-// Lightweight, HTTP-only Agent Playground (no websockets)
+// Agent Playground using HTTP Server-Sent Events for streaming
 export default function AgentPlayground({ user }) {
   const theme = useTheme()
   const isSmall = useMediaQuery(theme.breakpoints.down('md'))
@@ -152,6 +152,7 @@ export default function AgentPlayground({ user }) {
 
   const cancelChat = () => {
     if (abortController) {
+      // HTTP cancellation
       abortController.abort()
       setAbortController(null)
       setRunning(false)
@@ -171,10 +172,6 @@ export default function AgentPlayground({ user }) {
   const runAgent = async () => {
     if (!selected || !prompt.trim()) return
     setRunning(true)
-    
-    // Create abort controller for this request
-    const controller = new AbortController()
-    setAbortController(controller)
     
     // upload first if needed
     if (stagedFiles.length) {
@@ -211,7 +208,12 @@ export default function AgentPlayground({ user }) {
     
     try {
       let finalMessages = messagesWithPlaceholder
-      await agentRuntimeService.runStream(
+      
+      // Use HTTP SSE for streaming
+      const httpController = new AbortController()
+      setAbortController(httpController)
+      
+      const response = await agentRuntimeService.runAgentStream(
         {
           agent_name: selected,
           prompt: userMsg.content,
@@ -220,66 +222,104 @@ export default function AgentPlayground({ user }) {
           session_collection: sessionCollection
         },
         token,
-        (event) => {
-          if (event.type === 'agent_chunk' && event.payload?.content) {
-            // Update the streaming message with new content
-            setMessages(prev => {
-              const updated = prev.map(msg => 
-                msg.ts === agentMsgId && msg.streaming 
-                  ? { ...msg, content: msg.content + event.payload.content }
-                  : msg
-              )
-              finalMessages = updated
-              return updated
-            })
-          } else if (event.type === 'agent_run_complete') {
-            // Mark streaming as complete and save final conversation
-            setMessages(prev => {
-              const updated = prev.map(msg => 
-                msg.ts === agentMsgId 
-                  ? { ...msg, streaming: false }
-                  : msg
-              )
-              finalMessages = updated
-              
-              // Save the complete conversation with the final agent response
-              agentRuntimeService.saveConversation({
-                conversation_id: convId,
-                agent_name: selected,
-                messages: updated,
-                uploaded_files: uploadedFiles,
-                session_collection: sessionCollection,
-                title: generateTitle(updated)
-              }, token).catch(e => console.error('Failed to save final conversation:', e))
-              
-              return updated
-            })
-          } else if (event.type === 'error' || event.error) {
-            const errorMsg = { 
-              role: 'system', 
-              content: `Error: ${event.error || event.details?.message || 'Unknown error'}`, 
-              ts: Date.now() 
-            }
-            setMessages(prev => {
-              const updated = [...prev, errorMsg]
-              finalMessages = updated
-              
-              // Save conversation with error message
-              agentRuntimeService.saveConversation({
-                conversation_id: convId,
-                agent_name: selected,
-                messages: updated,
-                uploaded_files: uploadedFiles,
-                session_collection: sessionCollection,
-                title: generateTitle(updated)
-              }, token).catch(e => console.error('Failed to save conversation with error:', e))
-              
-              return updated
-            })
-          }
-        },
-        controller.signal
+        httpController.signal
       )
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
+      const reader = response.body?.getReader()
+      if (!reader) {
+        throw new Error('No response body available')
+      }
+      
+      const decoder = new TextDecoder()
+      let buffer = ''
+      
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          
+          if (done) break
+          
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || '' // Keep incomplete line in buffer
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const event = JSON.parse(line.slice(6))
+                
+                if (event.type === 'agent_chunk' && event.payload?.content) {
+                  // Update the streaming message with new content
+                  setMessages(prev => {
+                    const updated = prev.map(msg => 
+                      msg.ts === agentMsgId && msg.streaming 
+                        ? { ...msg, content: msg.content + event.payload.content }
+                        : msg
+                    )
+                    finalMessages = updated
+                    return updated
+                  })
+                } else if (event.type === 'agent_run_complete') {
+                  // Mark streaming as complete and save final conversation
+                  setMessages(prev => {
+                    const updated = prev.map(msg => 
+                      msg.ts === agentMsgId 
+                        ? { ...msg, streaming: false }
+                        : msg
+                    )
+                    finalMessages = updated
+                    
+                    // Save the complete conversation with the final agent response
+                    agentRuntimeService.saveConversation({
+                      conversation_id: convId,
+                      agent_name: selected,
+                      messages: updated,
+                      uploaded_files: uploadedFiles,
+                      session_collection: sessionCollection,
+                      title: generateTitle(updated)
+                    }, token).catch(e => console.error('Failed to save final conversation:', e))
+                    
+                    return updated
+                  })
+                } else if (event.type === 'error' || event.error) {
+                  const errorMsg = { 
+                    role: 'system', 
+                    content: `Error: ${event.error || event.details?.message || 'Unknown error'}`, 
+                    ts: Date.now() 
+                  }
+                  setMessages(prev => {
+                    const updated = [...prev, errorMsg]
+                    finalMessages = updated
+                    
+                    // Save conversation with error message
+                    agentRuntimeService.saveConversation({
+                      conversation_id: convId,
+                      agent_name: selected,
+                      messages: updated,
+                      uploaded_files: uploadedFiles,
+                      session_collection: sessionCollection,
+                      title: generateTitle(updated)
+                    }, token).catch(e => console.error('Failed to save conversation with error:', e))
+                    
+                    return updated
+                  })
+                }
+              } catch (parseError) {
+                console.warn('Failed to parse SSE event:', line, parseError)
+              }
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock()
+        setAbortController(null)
+        setRunning(false)
+      }
+      
     } catch (e) {
       const errorMsg = { role: 'system', content: `Error: ${e.message || e}`, ts: Date.now() }
       setMessages(prev => {
