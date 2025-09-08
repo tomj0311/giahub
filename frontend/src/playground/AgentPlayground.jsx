@@ -22,7 +22,8 @@ import {
   DialogActions,
   Tooltip,
   useMediaQuery,
-  Autocomplete
+  Autocomplete,
+  Pagination
 } from '@mui/material'
 import { useTheme, alpha } from '@mui/material/styles'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
@@ -67,6 +68,25 @@ export default function AgentPlayground({ user }) {
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [conversations, setConversations] = useState([])
   const [currentConversationId, setCurrentConversationId] = useState(null)
+  
+  // Conversation history pagination
+  const [historyPagination, setHistoryPagination] = useState({
+    page: 1,
+    page_size: 5,
+    total: 0,
+    total_pages: 0,
+    has_next: false,
+    has_prev: false
+  })
+
+  // Debug state changes
+  useEffect(() => {
+    console.log('🔄 conversations state changed:', conversations.length, conversations)
+  }, [conversations])
+
+  useEffect(() => {
+    console.log('🔄 historyPagination state changed:', historyPagination)
+  }, [historyPagination])
 
   // Agent selector dialog
   const [selectorOpen, setSelectorOpen] = useState(false)
@@ -87,6 +107,13 @@ export default function AgentPlayground({ user }) {
   const bottomRef = useRef(null)
   const [autoScroll, setAutoScroll] = useState(true)
   const [atBottom, setAtBottom] = useState(true)
+
+  // Debug component mount
+  useEffect(() => {
+    console.log('🏗️ AgentPlayground component mounted')
+    console.log('🏗️ Initial token:', token ? 'Present' : 'Missing')
+    console.log('🏗️ Initial user:', user)
+  }, [])
 
   useEffect(() => {
     const loadAgents = async () => {
@@ -112,10 +139,11 @@ export default function AgentPlayground({ user }) {
     loadAgents()
   }, [token])
 
-  // Check for conversation ID in URL parameters and load it
+  // Check for conversation ID in URL parameters and load it, or show history
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search)
     const conversationId = searchParams.get('conversation')
+    const showHistory = searchParams.get('showHistory')
     
     if (conversationId && token) {
       console.log('Loading conversation from URL:', conversationId)
@@ -135,6 +163,10 @@ export default function AgentPlayground({ user }) {
       }
       
       loadConversationFromUrl()
+    } else if (showHistory === 'true' && token) {
+      // Auto-open history dialog if requested
+      console.log('Auto-opening history dialog from URL')
+      setTimeout(() => openHistory(), 500) // Small delay to ensure component is ready
     }
   }, [location.search, token])
 
@@ -371,15 +403,104 @@ export default function AgentPlayground({ user }) {
     }
   }
 
-  const openHistory = async () => {
+  const openHistory = async (page = 1) => {
+    console.log('🚀 openHistory CALLED with page:', page)
+    console.log('🚀 Current state - historyOpen:', historyOpen, 'loadingHistory:', loadingHistory)
+    
     setHistoryOpen(true)
     setLoadingHistory(true)
     try {
-      const list = await agentRuntimeService.listConversations(token)
-      setConversations(list)
+      // Use the provided page parameter directly
+      const currentPage = page
+      const pageSize = 5  // Fixed page size to match backend
+      
+      console.log(`🔍 Requesting conversations: page=${currentPage}, size=${pageSize}`)
+      console.log(`🎫 Using token: ${token ? 'Present' : 'Missing'}`)
+      console.log(`🎫 Token value: ${token ? token.substring(0, 20) + '...' : 'NULL'}`)
+      
+      if (!token) {
+        throw new Error('No authentication token available')
+      }
+      
+      const result = await agentRuntimeService.listConversations(token, { 
+        page: currentPage, 
+        page_size: pageSize 
+      })
+      
+      console.log('📥 Raw API response:', result)
+      console.log('📊 Response type:', typeof result, Array.isArray(result) ? 'Array' : 'Object')
+      
+      // Check if result has pagination structure
+      if (result && result.conversations && result.pagination) {
+        console.log('✅ Using paginated response format - conversations:', result.conversations.length)
+        console.log('✅ Setting conversations state:', result.conversations)
+        console.log('✅ Setting pagination state:', result.pagination)
+        console.log('✅ Conversations before setState:', conversations.length)
+        setConversations(result.conversations)
+        setHistoryPagination(result.pagination)
+        console.log('✅ State update calls completed')
+        
+        // Verify state was actually set (note: this might show old state due to async nature)
+        setTimeout(() => {
+          console.log('✅ Conversations after setState (delayed check):', conversations.length)
+        }, 100)
+      } else if (Array.isArray(result)) {
+        console.log('⚠️ Using legacy array format - length:', result.length)
+        console.log('⚠️ Array result:', result)
+        setConversations(result)
+        setHistoryPagination({
+          page: 1,
+          page_size: 5,
+          total: result.length,
+          total_pages: 1,
+          has_next: false,
+          has_prev: false
+        })
+      } else if (result && Array.isArray(result.conversations)) {
+        console.log('⚠️ Using conversations array without pagination - length:', result.conversations.length)
+        console.log('⚠️ Conversations array:', result.conversations)
+        setConversations(result.conversations)
+        setHistoryPagination({
+          page: 1,
+          page_size: 5,
+          total: result.conversations.length,
+          total_pages: 1,
+          has_next: false,
+          has_prev: false
+        })
+      } else {
+        console.log('❌ No conversations found or unexpected format')
+        console.log('❌ Result structure:', JSON.stringify(result, null, 2))
+        console.log('❌ Result type:', typeof result)
+        console.log('❌ Is result null?', result === null)
+        console.log('❌ Is result undefined?', result === undefined)
+        setConversations([])
+        setHistoryPagination({
+          page: 1,
+          page_size: 5,
+          total: 0,
+          total_pages: 0,
+          has_next: false,
+          has_prev: false
+        })
+      }
     } catch (e) {
-      console.error('history list failed', e)
+      console.error('💥 History list API failed:', e)
+      console.error('💥 Error details:', e.message, e.stack)
+      console.error('💥 Error name:', e.name)
+      console.error('💥 Full error object:', e)
+      setConversations([])
+      setHistoryPagination({
+        page: 1,
+        page_size: 5,
+        total: 0,
+        total_pages: 0,
+        has_next: false,
+        has_prev: false
+      })
     } finally {
+      console.log('🏁 openHistory finally block - setting loadingHistory to false')
+      console.log('🏁 Current conversations length:', conversations.length)
       setLoadingHistory(false)
     }
   }
@@ -580,7 +701,10 @@ export default function AgentPlayground({ user }) {
             
             <Box sx={{ flex: 1 }} />
             
-            <IconButton size="small" onClick={openHistory} title="History"><HistoryIcon fontSize="small" /></IconButton>
+            <IconButton size="small" onClick={() => {
+              console.log('🔘 History button clicked!')
+              openHistory()
+            }} title="History"><HistoryIcon fontSize="small" /></IconButton>
             <Button size="small" onClick={clearChat} color="error">Clear</Button>
           </Box>
         </Box>
@@ -631,25 +755,63 @@ export default function AgentPlayground({ user }) {
 
       {/* History dialog */}
       <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle>Conversation History</DialogTitle>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            Conversation History
+            {historyPagination.total > 0 && (
+              <Typography variant="caption" color="text.secondary">
+                {historyPagination.total} total conversations
+              </Typography>
+            )}
+          </Box>
+        </DialogTitle>
         <DialogContent dividers>
           {loadingHistory ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
           ) : conversations.length === 0 ? (
             <Typography variant="body2" sx={{ textAlign: 'center', py: 4, opacity: 0.7 }}>No conversation history found</Typography>
           ) : (
-            <List>
-              {conversations.map((c) => (
-                <Box key={c.conversation_id} sx={{ display: 'flex', alignItems: 'center', gap: 1, border: 1, borderColor: 'divider', borderRadius: 1, p: 1, mb: 1, cursor: 'pointer' }} onClick={() => loadConversation(c.conversation_id)}>
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{c.title || c.conversation_id}</Typography>
-                    <Typography variant="body2" color="text.secondary">Agent: {c.agent_name}</Typography>
-                    <Typography variant="caption" color="text.secondary">{new Date((c.updated_at || Date.now())).toLocaleString()}</Typography>
+            <>
+              <List>
+                {conversations.map((c) => (
+                  <Box key={c.conversation_id || c.id || Math.random()} sx={{ display: 'flex', alignItems: 'center', gap: 1, border: 1, borderColor: 'divider', borderRadius: 1, p: 1, mb: 1, cursor: 'pointer' }} onClick={() => loadConversation(c.conversation_id || c.id)}>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{c.title || c.conversation_id || c.id || 'Untitled Conversation'}</Typography>
+                      <Typography variant="body2" color="text.secondary">Agent: {c.agent_name || 'Unknown'}</Typography>
+                      <Typography variant="caption" color="text.secondary">{new Date((c.updated_at || Date.now())).toLocaleString()}</Typography>
+                    </Box>
+                    <IconButton size="small" color="error" onClick={(e) => deleteConversation(c.conversation_id || c.id, e)}><DeleteIcon fontSize="small" /></IconButton>
                   </Box>
-                  <IconButton size="small" color="error" onClick={(e) => deleteConversation(c.conversation_id, e)}><DeleteIcon fontSize="small" /></IconButton>
+                ))}
+              </List>
+              
+              {/* Pagination Controls */}
+              {historyPagination.total_pages > 1 && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, py: 2 }}>
+                  <Pagination
+                    count={historyPagination.total_pages}
+                    page={historyPagination.page}
+                    onChange={(event, page) => {
+                      setHistoryPagination(prev => ({ ...prev, page }))
+                      openHistory(page)
+                    }}
+                    color="primary"
+                    size="small"
+                    showFirstButton
+                    showLastButton
+                  />
                 </Box>
-              ))}
-            </List>
+              )}
+              
+              {/* Debug Info */}
+              {process.env.NODE_ENV === 'development' && (
+                <Box sx={{ mt: 2, p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
+                  <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                    Debug: {conversations.length} conversations, Page {historyPagination.page}/{historyPagination.total_pages}, Total: {historyPagination.total}
+                  </Typography>
+                </Box>
+              )}
+            </>
           )}
         </DialogContent>
         <DialogActions>

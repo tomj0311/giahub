@@ -28,7 +28,9 @@ import {
   MoreVertical as MoreVertIcon,
   Clock,
   Settings,
-  Play
+  Play,
+  ArrowLeft,
+  ArrowRight
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { apiCall } from '../config/api'
@@ -204,6 +206,16 @@ export default function Home({ user }) {
   const [recentConversations, setRecentConversations] = useState([])
   const [taskProgress, setTaskProgress] = useState([])
   const [showAll, setShowAll] = useState(false)
+  
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    page: 1,
+    page_size: 8,
+    total: 0,
+    total_pages: 0,
+    has_next: false,
+    has_prev: false
+  })
 
   const INITIAL_DISPLAY_COUNT = 8
 
@@ -212,13 +224,19 @@ export default function Home({ user }) {
     navigate(`/dashboard/agent-playground?conversation=${conversation.id}`)
   }
 
+  // Handler for viewing all conversations - navigate to agent playground and show history
+  const handleViewAllConversations = () => {
+    navigate(`/dashboard/agent-playground?showHistory=true`)
+  }
+
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         setLoading(true)
         
-        // Fetch agents - EXACT ModelConfig pattern
-        const agentsResponse = await apiCall('/api/agents', {
+        // Fetch agents with pagination - use API's new pagination endpoint
+        const agentsUrl = `/api/agents?page=${pagination.page}&page_size=${pagination.page_size}`
+        const agentsResponse = await apiCall(agentsUrl, {
           headers: {
             ...(user?.token ? { 'Authorization': `Bearer ${user?.token}` } : {})
           }
@@ -230,18 +248,23 @@ export default function Home({ user }) {
           const agentsData = await agentsResponse.json()
           console.log('📄 AGENTS DATA:', agentsData)
           const agentsList = agentsData.agents || []
+          const paginationData = agentsData.pagination || {}
+          
           console.log('📋 AGENTS LIST:', agentsList)
+          console.log('📊 PAGINATION:', paginationData)
+          
           setAgents(agentsList)
-          setDisplayedAgents(agentsList.slice(0, INITIAL_DISPLAY_COUNT))
+          setDisplayedAgents(agentsList)
+          setPagination(paginationData)
         } else {
           console.log('❌ AGENTS API FAILED:', agentsResponse.status)
           const errorData = await agentsResponse.json().catch(() => ({}))
           console.log('💥 ERROR DATA:', errorData)
         }
 
-        // Fetch recent conversations - Use agent runtime endpoint
+        // Fetch recent conversations - Use agent runtime endpoint with pagination
         try {
-          const conversationsResponse = await apiCall('/api/agent-runtime/conversations', {
+          const conversationsResponse = await apiCall('/api/agent-runtime/conversations?page=1&page_size=5', {
             headers: {
               ...(user?.token ? { 'Authorization': `Bearer ${user?.token}` } : {})
             }
@@ -249,8 +272,16 @@ export default function Home({ user }) {
           
           if (conversationsResponse.ok) {
             const conversationsData = await conversationsResponse.json()
-            // Get the most recent 5 conversations and format them for display
-            const allConversations = conversationsData.conversations || []
+            // Handle both paginated and legacy response formats
+            let allConversations = []
+            if (conversationsData.conversations) {
+              // Paginated response
+              allConversations = conversationsData.conversations
+            } else if (Array.isArray(conversationsData)) {
+              // Legacy format
+              allConversations = conversationsData
+            }
+            
             const recentConvs = allConversations
               .sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0))
               .slice(0, 5)
@@ -289,11 +320,18 @@ export default function Home({ user }) {
     }
 
     fetchDashboardData()
-  }, [user?.token])
+  }, [user?.token, pagination.page, pagination.page_size])
 
   const handleShowMore = () => {
-    setShowAll(true)
-    setDisplayedAgents(agents)
+    if (pagination.has_next) {
+      setPagination(prev => ({ ...prev, page: prev.page + 1 }))
+    }
+  }
+
+  const handleShowLess = () => {
+    if (pagination.has_prev) {
+      setPagination(prev => ({ ...prev, page: prev.page - 1 }))
+    }
   }
 
   const handleEditAgent = (agent) => {
@@ -381,14 +419,29 @@ export default function Home({ user }) {
               ))}
             </Grid>
             
-            {!showAll && agents.length > INITIAL_DISPLAY_COUNT && (
-              <Box sx={{ textAlign: 'center', mt: 3 }}>
+            {/* Pagination Controls */}
+            {pagination.total_pages > 1 && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 2, mt: 3 }}>
                 <Button
                   variant="outlined"
-                  color="primary"
-                  onClick={handleShowMore}
+                  disabled={!pagination.has_prev}
+                  onClick={handleShowLess}
+                  startIcon={<ArrowLeft size={16} />}
                 >
-                  Show More ({agents.length - INITIAL_DISPLAY_COUNT} more agents)
+                  Previous
+                </Button>
+                
+                <Typography variant="body2" color="text.secondary">
+                  Page {pagination.page} of {pagination.total_pages} ({pagination.total} total agents)
+                </Typography>
+                
+                <Button
+                  variant="outlined"
+                  disabled={!pagination.has_next}
+                  onClick={handleShowMore}
+                  endIcon={<ArrowRight size={16} />}
+                >
+                  Next
                 </Button>
               </Box>
             )}
@@ -430,7 +483,7 @@ export default function Home({ user }) {
               </List>
             </CardContent>
             <CardActions sx={{ justifyContent: 'center' }}>
-              <Button size="small" color="primary">
+              <Button size="small" color="primary" onClick={handleViewAllConversations}>
                 View All Conversations
               </Button>
             </CardActions>

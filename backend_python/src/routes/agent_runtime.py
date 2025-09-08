@@ -9,8 +9,8 @@ import asyncio
 import json
 import uuid
 from datetime import datetime
-from typing import List, Dict, Any, AsyncGenerator
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List, Dict, Any, AsyncGenerator, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import StreamingResponse
 
 from ..utils.auth import verify_token_middleware
@@ -104,49 +104,195 @@ async def run_agent(body: Dict[str, Any], user: dict = Depends(verify_token_midd
     )
 
 
+@router.get("/debug/conversations")
+async def debug_conversations(user: dict = Depends(verify_token_middleware)):
+    """Debug endpoint to check conversations and user info."""
+    tenant_id = user.get("tenantId")
+    user_id = user.get("id") or user.get("userId")
+    
+    logger.info(f"[DEBUG] User object: {user}")
+    logger.info(f"[DEBUG] Tenant ID: {tenant_id}")
+    logger.info(f"[DEBUG] User ID: {user_id}")
+    
+    try:
+        # Check total conversations without tenant filtering
+        from ..utils.mongo_storage import MongoStorageService
+        collections = MongoStorageService._get_collections()
+        conversations_collection = collections.get("conversations")
+        
+        if conversations_collection is not None:
+            total_all = await conversations_collection.count_documents({})
+            all_docs = await conversations_collection.find({}).limit(5).to_list(5)
+            
+            if tenant_id:
+                total_tenant = await conversations_collection.count_documents({"tenantId": tenant_id})
+                tenant_docs = await conversations_collection.find({"tenantId": tenant_id}).limit(5).to_list(5)
+            else:
+                total_tenant = 0
+                tenant_docs = []
+            
+            logger.info(f"[DEBUG] Total conversations: {total_all}")
+            logger.info(f"[DEBUG] Tenant conversations: {total_tenant}")
+            logger.info(f"[DEBUG] Sample all docs: {[{k: v for k, v in doc.items() if k != '_id'} for doc in all_docs[:2]]}")
+            logger.info(f"[DEBUG] Sample tenant docs: {[{k: v for k, v in doc.items() if k != '_id'} for doc in tenant_docs[:2]]}")
+            
+            return {
+                "user": user,
+                "tenant_id": tenant_id,
+                "total_conversations": total_all,
+                "tenant_conversations": total_tenant,
+                "sample_all": [str(doc.get("conversation_id", "NO_ID")) for doc in all_docs],
+                "sample_tenant": [str(doc.get("conversation_id", "NO_ID")) for doc in tenant_docs]
+            }
+        else:
+            return {"error": "Conversations collection not found"}
+            
+    except Exception as e:
+        logger.error(f"[DEBUG] Debug query failed: {e}")
+        return {"error": str(e)}
+
+
 @router.get("/conversations")
-async def list_conversations(user: dict = Depends(verify_token_middleware)):
+async def list_conversations(
+    user: dict = Depends(verify_token_middleware),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    page_size: int = Query(10, ge=1, le=100, description="Items per page"),
+    sort_by: str = Query("updated_at", description="Sort field"),
+    sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order")
+):
+    """List conversations for current tenant with pagination and sorting."""
     # CRITICAL: tenant_id is required - no fallbacks allowed
     tenant_id = user.get("tenantId")
+    logger.info(f"[AGENT_RUNTIME] List conversations request - user: {user.get('id', 'NO_ID')}, tenant: {tenant_id}")
+    
     if not tenant_id:
+        logger.error(f"[AGENT_RUNTIME] CRITICAL: No tenant ID found in user object: {user}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User tenant information missing. Please re-login."
         )
     
-    docs = await MongoStorageService.find_many(
-        "conversations", 
-        filter_dict={}, 
-        tenant_id=tenant_id, 
-        sort_field="updated_at",
-        sort_order=-1
-    )
-    items: List[Dict[str, Any]] = []
-    for d in docs:
-        # Generate title from first user message, truncated to ~25 words
-        title = d.get("title")
-        if not title:
-            messages = d.get("messages", [])
-            # Find first user message
-            first_user_msg = next((msg for msg in messages if msg.get("role") == "user"), None)
-            if first_user_msg:
-                content = first_user_msg.get("content", "")
-                # Truncate to first 25 words
-                words = content.split()
-                if len(words) > 25:
-                    title = " ".join(words[:25]) + "..."
-                else:
-                    title = content
+    logger.info(f"[AGENT_RUNTIME] Listing conversations for tenant - page: {page}, size: {page_size}")
+    
+    try:
+        # DEBUG: Check total conversations in database (without tenant filter)
+        try:
+            from ..utils.mongo_storage import MongoStorageService
+            collections = MongoStorageService._get_collections()
+            conversations_collection = collections.get("conversations")
+            if conversations_collection is not None:
+                total_all_conversations = await conversations_collection.count_documents({})
+                total_tenant_conversations = await conversations_collection.count_documents({"tenantId": tenant_id})
+                logger.info(f"[AGENT_RUNTIME] DEBUG: Total conversations in DB: {total_all_conversations}, for tenant {tenant_id}: {total_tenant_conversations}")
             else:
-                title = "Conversation"
+                logger.warning(f"[AGENT_RUNTIME] DEBUG: Conversations collection not found")
+        except Exception as debug_e:
+            logger.error(f"[AGENT_RUNTIME] DEBUG query failed: {debug_e}")
         
-        items.append({
-            "conversation_id": d.get("conversation_id"),
-            "title": title,
-            "agent_name": d.get("agent_name"),
-            "updated_at": int((d.get("updated_at") or datetime.utcnow()).timestamp() * 1000),
-        })
-    return {"conversations": items}
+        # Calculate pagination
+        skip = (page - 1) * page_size
+        
+        # Get total count first for debugging
+        total_count = await MongoStorageService.count_documents("conversations", {}, tenant_id=tenant_id)
+        logger.info(f"[AGENT_RUNTIME] Total conversations count: {total_count} for tenant: {tenant_id}")
+        
+        if total_count == 0:
+            logger.warning(f"[AGENT_RUNTIME] WARNING: No conversations found for tenant {tenant_id}. Check tenant ID or data.")
+        
+        # Calculate pagination info
+        total_pages = (total_count + page_size - 1) // page_size  # Ceiling division
+        has_next = page < total_pages
+        has_prev = page > 1
+        
+        # Determine sort order
+        sort_direction = -1 if sort_order == "desc" else 1
+        
+        logger.info(f"[AGENT_RUNTIME] Pagination: page={page}, size={page_size}, skip={skip}, total={total_count}, pages={total_pages}")
+        
+        # Get paginated results
+        docs = await MongoStorageService.find_many(
+            "conversations", 
+            filter_dict={}, 
+            tenant_id=tenant_id, 
+            sort_field=sort_by,
+            sort_order=sort_direction,
+            skip=skip,
+            limit=page_size
+        )
+        
+        logger.info(f"[AGENT_RUNTIME] Retrieved {len(docs)} conversations from database")
+        
+        if len(docs) == 0 and total_count > 0:
+            logger.error(f"[AGENT_RUNTIME] CRITICAL: Found {total_count} conversations but query returned 0. Pagination or filtering issue!")
+        
+        items: List[Dict[str, Any]] = []
+        for d in docs:
+            logger.debug(f"[AGENT_RUNTIME] Processing conversation: {d.get('conversation_id', 'NO_ID')}")
+            
+            # Generate title from first user message, truncated to ~25 words
+            title = d.get("title")
+            if not title:
+                messages = d.get("messages", [])
+                # Find first user message
+                first_user_msg = next((msg for msg in messages if msg.get("role") == "user"), None)
+                if first_user_msg:
+                    content = first_user_msg.get("content", "")
+                    # Truncate to first 25 words
+                    words = content.split()
+                    if len(words) > 25:
+                        title = " ".join(words[:25]) + "..."
+                    else:
+                        title = content
+                else:
+                    title = "Conversation"
+            
+            # Handle updated_at timestamp conversion safely
+            updated_at = d.get("updated_at")
+            if updated_at:
+                try:
+                    if hasattr(updated_at, 'timestamp'):
+                        # It's a datetime object
+                        timestamp = int(updated_at.timestamp() * 1000)
+                    else:
+                        # It might already be a timestamp
+                        timestamp = int(updated_at)
+                except:
+                    timestamp = int(datetime.utcnow().timestamp() * 1000)
+            else:
+                timestamp = int(datetime.utcnow().timestamp() * 1000)
+            
+            items.append({
+                "conversation_id": d.get("conversation_id"),
+                "title": title,
+                "agent_name": d.get("agent_name"),
+                "updated_at": timestamp,
+            })
+        
+        result = {
+            "conversations": items,
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total": total_count,
+                "total_pages": total_pages,
+                "has_next": has_next,
+                "has_prev": has_prev
+            }
+        }
+
+        logger.info(f"[AGENT_RUNTIME] Final result: {len(items)} conversations returned, total: {total_count}, page: {page}/{total_pages}")
+        logger.info(f"[AGENT_RUNTIME] Response structure: conversations={len(result['conversations'])}, pagination_keys={list(result['pagination'].keys())}")
+        
+        # Log first conversation for debugging
+        if items:
+            first_conv = items[0]
+            logger.info(f"[AGENT_RUNTIME] Sample conversation: id={first_conv.get('conversation_id')}, title='{first_conv.get('title', '')[:50]}...', agent={first_conv.get('agent_name')}")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"[AGENT_RUNTIME] Error listing conversations: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve conversations")
 
 
 @router.get("/conversations/{conversation_id}")

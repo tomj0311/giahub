@@ -92,7 +92,7 @@ class MongoStorageService:
     @classmethod
     async def find_many(cls, collection_name: str, filter_dict: Dict[str, Any] = None, 
                        tenant_id: Optional[str] = None, projection: Optional[Dict[str, Any]] = None,
-                       sort_field: Optional[str] = None, sort_order: int = 1, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+                       sort_field: Optional[str] = None, sort_order: int = 1, limit: Optional[int] = None, skip: Optional[int] = None) -> List[Dict[str, Any]]:
         """Find multiple documents"""
         try:
             collections = cls._get_collections()
@@ -108,10 +108,15 @@ class MongoStorageService:
             
             if sort_field:
                 cursor = cursor.sort(sort_field, sort_order)
+            if skip:
+                cursor = cursor.skip(skip)
             if limit:
                 cursor = cursor.limit(limit)
             
-            results = await cursor.to_list(None)
+            # CRITICAL FIX: Don't pass None to to_list() - it ignores limit!
+            # Use length_or_none=None only when no limit is set
+            max_results = limit if limit else None
+            results = await cursor.to_list(length=max_results)
             logger.debug(f"Found {len(results)} documents in {collection_name}")
             
             return results

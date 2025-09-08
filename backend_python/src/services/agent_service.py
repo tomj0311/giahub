@@ -28,6 +28,146 @@ class AgentService:
         return tenant_id
     
     @classmethod
+    async def list_agents_paginated(
+        cls, 
+        user: dict, 
+        page: int = 1, 
+        page_size: int = 8,
+        category: Optional[str] = None,
+        search: Optional[str] = None,
+        sort_by: str = "created_at",
+        sort_order: str = "desc"
+    ) -> Dict[str, Any]:
+        """List agents with pagination, filtering, and sorting"""
+        tenant_id = await cls.validate_tenant_access(user)
+        logger.info(f"[AGENTS] Listing agents with pagination for tenant: {tenant_id}")
+        
+        try:
+            # Build filter query
+            filter_query = {}
+            
+            if category:
+                filter_query["category"] = category
+            
+            if search:
+                filter_query["$or"] = [
+                    {"name": {"$regex": search, "$options": "i"}},
+                    {"description": {"$regex": search, "$options": "i"}}
+                ]
+            
+            # Calculate pagination
+            skip = (page - 1) * page_size
+            
+            # Get total count
+            total_count = await MongoStorageService.count_documents("agents", filter_query, tenant_id=tenant_id)
+            
+            # Calculate pagination info
+            total_pages = (total_count + page_size - 1) // page_size  # Ceiling division
+            has_next = page < total_pages
+            has_prev = page > 1
+            
+            # Determine sort order
+            sort_direction = -1 if sort_order == "desc" else 1
+            
+            # Get paginated results
+            docs = await MongoStorageService.find_many(
+                "agents", 
+                filter_query,
+                tenant_id=tenant_id,
+                sort_field=sort_by,
+                sort_order=sort_direction,
+                skip=skip,
+                limit=page_size
+            )
+            
+            logger.debug(f"[AGENTS] Found {len(docs)} agents for tenant: {tenant_id}")
+            
+            items: List[Dict[str, Any]] = []
+            for d in docs:
+                # Get model config if model ID is present
+                model_data = d.get("model")
+                if model_data and isinstance(model_data, dict) and model_data.get("id"):
+                    try:
+                        from bson import ObjectId
+                        model_config = await MongoStorageService.find_one("modelConfig", {"_id": ObjectId(model_data["id"])}, tenant_id=tenant_id)
+                        if model_config:
+                            # Convert ObjectId to string
+                            if "_id" in model_config:
+                                model_config["id"] = str(model_config.pop("_id"))
+                            model_data = model_config
+                    except Exception as e:
+                        logger.warning(f"[AGENTS] Failed to populate model config {model_data.get('id')}: {e}")
+                
+                # Get tool configs if tool IDs are present
+                tools_data = d.get("tools", {})
+                populated_tools = {}
+                for tool_name, tool_config in tools_data.items():
+                    if isinstance(tool_config, dict) and tool_config.get("id"):
+                        try:
+                            from bson import ObjectId
+                            tool_ref = await MongoStorageService.find_one("toolConfig", {"_id": ObjectId(tool_config["id"])}, tenant_id=tenant_id)
+                            if tool_ref:
+                                # Convert ObjectId to string
+                                if "_id" in tool_ref:
+                                    tool_ref["id"] = str(tool_ref.pop("_id"))
+                                populated_tools[tool_name] = tool_ref
+                            else:
+                                populated_tools[tool_name] = tool_config
+                        except Exception as e:
+                            logger.warning(f"[AGENTS] Failed to populate tool config {tool_config.get('id')}: {e}")
+                            populated_tools[tool_name] = tool_config
+                    else:
+                        populated_tools[tool_name] = tool_config
+                
+                # Get knowledge config if collection ID is present
+                collection_data = d.get("collection", "")
+                if collection_data:
+                    try:
+                        from bson import ObjectId
+                        if ObjectId.is_valid(collection_data):
+                            knowledge_config = await MongoStorageService.find_one("knowledgeConfig", {"_id": ObjectId(collection_data)}, tenant_id=tenant_id)
+                            if knowledge_config:
+                                # Convert ObjectId to string
+                                if "_id" in knowledge_config:
+                                    knowledge_config["id"] = str(knowledge_config.pop("_id"))
+                                collection_data = knowledge_config
+                    except Exception as e:
+                        logger.warning(f"[AGENTS] Failed to populate knowledge config {collection_data}: {e}")
+                
+                item = {
+                    "id": str(d.get("_id")),
+                    "name": d.get("name"),
+                    "category": d.get("category", ""),
+                    "description": d.get("description", ""),
+                    "instructions": d.get("instructions", ""),
+                    "model": model_data,
+                    "tools": populated_tools,
+                    "collection": collection_data,
+                    "memory": d.get("memory", {}),
+                    "created_at": d.get("created_at"),
+                    "updated_at": d.get("updated_at"),
+                }
+                items.append(item)
+            
+            result = {
+                "agents": items,
+                "pagination": {
+                    "page": page,
+                    "page_size": page_size,
+                    "total": total_count,
+                    "total_pages": total_pages,
+                    "has_next": has_next,
+                    "has_prev": has_prev
+                }
+            }
+            
+            logger.info(f"[AGENTS] Successfully retrieved {len(items)} agents for tenant: {tenant_id}")
+            return result
+        except Exception as e:
+            logger.error(f"[AGENTS] Failed to list agents for tenant {tenant_id}: {e}")
+            raise HTTPException(status_code=500, detail="Failed to retrieve agents")
+
+    @classmethod
     async def list_agents(cls, user: dict) -> List[Dict[str, Any]]:
         """List agents for current tenant with populated references"""
         tenant_id = await cls.validate_tenant_access(user)

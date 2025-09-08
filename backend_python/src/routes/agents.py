@@ -10,8 +10,8 @@ Schema (agents collection):
 - memory: { history: { enabled: bool, num: int } }
 """
 
-from typing import List, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException
+from typing import List, Dict, Any, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..utils.auth import verify_token_middleware
 from ..services.agent_service import AgentService
@@ -21,13 +21,29 @@ router = APIRouter(tags=["agents"])
 
 
 @router.get("")
-async def list_agents(user: dict = Depends(verify_token_middleware)):
-    """List agents for current tenant."""
-    logger.info("[AGENTS] Listing agents for tenant")
+async def list_agents(
+    user: dict = Depends(verify_token_middleware),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    page_size: int = Query(8, ge=1, le=100, description="Items per page"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    search: Optional[str] = Query(None, description="Search in name and description"),
+    sort_by: str = Query("created_at", description="Sort field"),
+    sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order")
+):
+    """List agents for current tenant with pagination, filtering, and sorting."""
+    logger.info(f"[AGENTS] Listing agents for tenant - page: {page}, size: {page_size}")
     try:
-        agents = await AgentService.list_agents(user)
-        logger.debug(f"[AGENTS] Retrieved {len(agents)} agents")
-        return {"agents": agents}
+        result = await AgentService.list_agents_paginated(
+            user=user,
+            page=page,
+            page_size=page_size,
+            category=category,
+            search=search,
+            sort_by=sort_by,
+            sort_order=sort_order
+        )
+        logger.debug(f"[AGENTS] Retrieved {len(result['agents'])} agents, total: {result['pagination']['total']}")
+        return result
     except Exception as e:
         logger.error(f"[AGENTS] Error listing agents: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
