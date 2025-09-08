@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
   Box,
   Paper,
@@ -139,10 +140,11 @@ export default function AgentPlayground({ user }) {
     loadAgents()
   }, [token])
 
-  // Check for conversation ID in URL parameters and load it, or show history
+  // Check for conversation ID, agent name, or show history in URL parameters
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search)
     const conversationId = searchParams.get('conversation')
+    const agentName = searchParams.get('agent')
     const showHistory = searchParams.get('showHistory')
     
     if (conversationId && token) {
@@ -163,6 +165,10 @@ export default function AgentPlayground({ user }) {
       }
       
       loadConversationFromUrl()
+    } else if (agentName && token) {
+      // Auto-select agent from URL parameter
+      console.log('Auto-selecting agent from URL:', agentName)
+      setSelected(agentName)
     } else if (showHistory === 'true' && token) {
       // Auto-open history dialog if requested
       console.log('Auto-opening history dialog from URL')
@@ -606,8 +612,32 @@ export default function AgentPlayground({ user }) {
                   '& p': { my: 0.6 },
                   '& pre': { p: 1, bgcolor: 'action.hover', borderRadius: 1, overflowX: 'auto', fontSize: 13, lineHeight: 1.4 },
                   '& code': { fontFamily: 'monospace', bgcolor: 'action.hover', px: 0.5, borderRadius: 0.5 },
+                  '& table': { 
+                    borderCollapse: 'collapse', 
+                    width: '100%', 
+                    mt: 1, 
+                    mb: 1,
+                    border: '1px solid',
+                    borderColor: 'divider'
+                  },
+                  '& th': { 
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    p: 1, 
+                    bgcolor: 'action.hover', 
+                    fontWeight: 600,
+                    textAlign: 'left'
+                  },
+                  '& td': { 
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    p: 1
+                  },
+                  '& tr:nth-of-type(even)': {
+                    bgcolor: 'action.selected'
+                  }
                 }}>
-                  <ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {m.content && m.content.length ? m.content : '...'}
                   </ReactMarkdown>
                 </Box>
@@ -800,15 +830,6 @@ export default function AgentPlayground({ user }) {
                     showFirstButton
                     showLastButton
                   />
-                </Box>
-              )}
-              
-              {/* Debug Info */}
-              {process.env.NODE_ENV === 'development' && (
-                <Box sx={{ mt: 2, p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
-                  <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                    Debug: {conversations.length} conversations, Page {historyPagination.page}/{historyPagination.total_pages}, Total: {historyPagination.total}
-                  </Typography>
                 </Box>
               )}
             </>
