@@ -69,7 +69,7 @@ export default function AgentPlayground({ user }) {
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [conversations, setConversations] = useState([])
   const [currentConversationId, setCurrentConversationId] = useState(null)
-  
+
   // Conversation history pagination
   const [historyPagination, setHistoryPagination] = useState({
     page: 1,
@@ -101,7 +101,7 @@ export default function AgentPlayground({ user }) {
         opts.push({ label, value: name, category: cat })
       })
     })
-    return opts.sort((a,b) => a.label.localeCompare(b.label))
+    return opts.sort((a, b) => a.label.localeCompare(b.label))
   }, [grouped])
 
   const scrollRef = useRef(null)
@@ -146,10 +146,10 @@ export default function AgentPlayground({ user }) {
     const conversationId = searchParams.get('conversation')
     const agentName = searchParams.get('agent')
     const showHistory = searchParams.get('showHistory')
-    
+
     if (conversationId && token) {
       console.log('Loading conversation from URL:', conversationId)
-      
+
       const loadConversationFromUrl = async () => {
         try {
           const conv = await agentRuntimeService.getConversation(conversationId, token)
@@ -163,7 +163,7 @@ export default function AgentPlayground({ user }) {
           console.error('Failed to load conversation from URL:', e)
         }
       }
-      
+
       loadConversationFromUrl()
     } else if (agentName && token) {
       // Auto-select agent from URL parameter
@@ -222,14 +222,14 @@ export default function AgentPlayground({ user }) {
       abortController.abort()
       setAbortController(null)
       setRunning(false)
-      
+
       // Remove the streaming message and add a cancellation message
       setMessages(prev => {
         const filtered = prev.filter(msg => !msg.streaming)
-        return [...filtered, { 
-          role: 'system', 
-          content: 'Chat cancelled by user.', 
-          ts: Date.now() 
+        return [...filtered, {
+          role: 'system',
+          content: 'Chat cancelled by user.',
+          ts: Date.now()
         }]
       })
     }
@@ -238,16 +238,16 @@ export default function AgentPlayground({ user }) {
   const runAgent = async () => {
     if (!selected || !prompt.trim()) return
     setRunning(true)
-    
+
     // upload first if needed
     if (stagedFiles.length) {
       await uploadStagedFiles()
     }
-    
+
     const userMsg = { role: 'user', content: prompt, ts: Date.now() }
     const newMessages = [...messages, userMsg]
     setMessages(newMessages)
-    
+
     // Save user message immediately
     const convId = currentConversationId || `conv_${Date.now()}`
     try {
@@ -263,22 +263,22 @@ export default function AgentPlayground({ user }) {
     } catch (e) {
       console.error('Failed to save user message:', e)
     }
-    
+
     // Add placeholder message for agent response
     const agentMsgId = Date.now()
     const agentPlaceholder = { role: 'agent', content: '', ts: agentMsgId, streaming: true }
     const messagesWithPlaceholder = [...newMessages, agentPlaceholder]
     setMessages(messagesWithPlaceholder)
-    
+
     setPrompt('')
-    
+
     try {
       let finalMessages = messagesWithPlaceholder
-      
+
       // Use HTTP SSE for streaming
       const httpController = new AbortController()
       setAbortController(httpController)
-      
+
       const response = await agentRuntimeService.runAgentStream(
         {
           agent_name: selected,
@@ -290,39 +290,39 @@ export default function AgentPlayground({ user }) {
         token,
         httpController.signal
       )
-      
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
-      
+
       const reader = response.body?.getReader()
       if (!reader) {
         throw new Error('No response body available')
       }
-      
+
       const decoder = new TextDecoder()
       let buffer = ''
-      
+
       try {
         while (true) {
           const { done, value } = await reader.read()
-          
+
           if (done) break
-          
+
           buffer += decoder.decode(value, { stream: true })
           const lines = buffer.split('\n')
           buffer = lines.pop() || '' // Keep incomplete line in buffer
-          
+
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               try {
                 const event = JSON.parse(line.slice(6))
-                
+
                 if (event.type === 'agent_chunk' && event.payload?.content) {
                   // Update the streaming message with new content
                   setMessages(prev => {
-                    const updated = prev.map(msg => 
-                      msg.ts === agentMsgId && msg.streaming 
+                    const updated = prev.map(msg =>
+                      msg.ts === agentMsgId && msg.streaming
                         ? { ...msg, content: msg.content + event.payload.content }
                         : msg
                     )
@@ -332,13 +332,13 @@ export default function AgentPlayground({ user }) {
                 } else if (event.type === 'agent_run_complete') {
                   // Mark streaming as complete and save final conversation
                   setMessages(prev => {
-                    const updated = prev.map(msg => 
-                      msg.ts === agentMsgId 
+                    const updated = prev.map(msg =>
+                      msg.ts === agentMsgId
                         ? { ...msg, streaming: false }
                         : msg
                     )
                     finalMessages = updated
-                    
+
                     // Save the complete conversation with the final agent response
                     agentRuntimeService.saveConversation({
                       conversation_id: convId,
@@ -348,19 +348,19 @@ export default function AgentPlayground({ user }) {
                       session_collection: sessionCollection,
                       title: generateTitle(updated)
                     }, token).catch(e => console.error('Failed to save final conversation:', e))
-                    
+
                     return updated
                   })
                 } else if (event.type === 'error' || event.error) {
-                  const errorMsg = { 
-                    role: 'system', 
-                    content: `Error: ${event.error || event.details?.message || 'Unknown error'}`, 
-                    ts: Date.now() 
+                  const errorMsg = {
+                    role: 'system',
+                    content: `Error: ${event.error || event.details?.message || 'Unknown error'}`,
+                    ts: Date.now()
                   }
                   setMessages(prev => {
                     const updated = [...prev, errorMsg]
                     finalMessages = updated
-                    
+
                     // Save conversation with error message
                     agentRuntimeService.saveConversation({
                       conversation_id: convId,
@@ -370,7 +370,7 @@ export default function AgentPlayground({ user }) {
                       session_collection: sessionCollection,
                       title: generateTitle(updated)
                     }, token).catch(e => console.error('Failed to save conversation with error:', e))
-                    
+
                     return updated
                   })
                 }
@@ -385,12 +385,12 @@ export default function AgentPlayground({ user }) {
         setAbortController(null)
         setRunning(false)
       }
-      
+
     } catch (e) {
       const errorMsg = { role: 'system', content: `Error: ${e.message || e}`, ts: Date.now() }
       setMessages(prev => {
         const updated = prev.filter(msg => msg.ts !== agentMsgId).concat([errorMsg])
-        
+
         // Save conversation with error
         agentRuntimeService.saveConversation({
           conversation_id: convId,
@@ -400,7 +400,7 @@ export default function AgentPlayground({ user }) {
           session_collection: sessionCollection,
           title: generateTitle(updated)
         }, token).catch(e => console.error('Failed to save conversation with error:', e))
-        
+
         return updated
       })
     } finally {
@@ -412,30 +412,30 @@ export default function AgentPlayground({ user }) {
   const openHistory = async (page = 1) => {
     console.log('🚀 openHistory CALLED with page:', page)
     console.log('🚀 Current state - historyOpen:', historyOpen, 'loadingHistory:', loadingHistory)
-    
+
     setHistoryOpen(true)
     setLoadingHistory(true)
     try {
       // Use the provided page parameter directly
       const currentPage = page
       const pageSize = 5  // Fixed page size to match backend
-      
+
       console.log(`🔍 Requesting conversations: page=${currentPage}, size=${pageSize}`)
       console.log(`🎫 Using token: ${token ? 'Present' : 'Missing'}`)
       console.log(`🎫 Token value: ${token ? token.substring(0, 20) + '...' : 'NULL'}`)
-      
+
       if (!token) {
         throw new Error('No authentication token available')
       }
-      
-      const result = await agentRuntimeService.listConversations(token, { 
-        page: currentPage, 
-        page_size: pageSize 
+
+      const result = await agentRuntimeService.listConversations(token, {
+        page: currentPage,
+        page_size: pageSize
       })
-      
+
       console.log('📥 Raw API response:', result)
       console.log('📊 Response type:', typeof result, Array.isArray(result) ? 'Array' : 'Object')
-      
+
       // Check if result has pagination structure
       if (result && result.conversations && result.pagination) {
         console.log('✅ Using paginated response format - conversations:', result.conversations.length)
@@ -445,7 +445,7 @@ export default function AgentPlayground({ user }) {
         setConversations(result.conversations)
         setHistoryPagination(result.pagination)
         console.log('✅ State update calls completed')
-        
+
         // Verify state was actually set (note: this might show old state due to async nature)
         setTimeout(() => {
           console.log('✅ Conversations after setState (delayed check):', conversations.length)
@@ -527,7 +527,7 @@ export default function AgentPlayground({ user }) {
 
   const deleteConversation = async (id, e) => {
     if (e) e.stopPropagation()
-    try { await agentRuntimeService.deleteConversation(id, token) } catch {}
+    try { await agentRuntimeService.deleteConversation(id, token) } catch { }
     setConversations(prev => prev.filter(c => c.conversation_id !== id))
   }
 
@@ -543,7 +543,7 @@ export default function AgentPlayground({ user }) {
   const generateTitle = (messages) => {
     const firstUserMsg = messages.find(msg => msg.role === 'user')
     if (!firstUserMsg || !firstUserMsg.content) return null
-    
+
     const words = firstUserMsg.content.trim().split(/\s+/)
     if (words.length > 25) {
       return words.slice(0, 25).join(' ') + '...'
@@ -552,7 +552,7 @@ export default function AgentPlayground({ user }) {
   }
 
   const renderGroupedList = () => {
-    const cats = Object.keys(grouped).sort((a,b) => a.localeCompare(b))
+    const cats = Object.keys(grouped).sort((a, b) => a.localeCompare(b))
     if (!cats.length && !loading) return <Typography variant="body2" sx={{ p: 1 }}>No agents found.</Typography>
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}><CircularProgress size={20} /></Box>
     return cats.map((cat, idx) => {
@@ -566,13 +566,13 @@ export default function AgentPlayground({ user }) {
           <AccordionDetails sx={{ p: 0 }}>
             <List dense sx={{ py: 0 }}>
               {items.map((name) => (
-                <ListItemButton 
-                  key={name} 
-                  selected={name === selected} 
+                <ListItemButton
+                  key={name}
+                  selected={name === selected}
                   onClick={() => {
                     setSelected(name)
                     setSelectorOpen(false)
-                  }} 
+                  }}
                   sx={{ pl: 2 }}
                 >
                   <ListItemText primary={name} primaryTypographyProps={{ sx: { pl: 1 } }} />
@@ -612,23 +612,23 @@ export default function AgentPlayground({ user }) {
                   '& p': { my: 0.6 },
                   '& pre': { p: 1, bgcolor: 'action.hover', borderRadius: 1, overflowX: 'auto', fontSize: 13, lineHeight: 1.4 },
                   '& code': { fontFamily: 'monospace', bgcolor: 'action.hover', px: 0.5, borderRadius: 0.5 },
-                  '& table': { 
-                    borderCollapse: 'collapse', 
-                    width: '100%', 
-                    mt: 1, 
+                  '& table': {
+                    borderCollapse: 'collapse',
+                    width: '100%',
+                    mt: 1,
                     mb: 1,
                     border: '1px solid',
                     borderColor: 'divider'
                   },
-                  '& th': { 
+                  '& th': {
                     border: '1px solid',
                     borderColor: 'divider',
-                    p: 1, 
-                    bgcolor: 'action.hover', 
+                    p: 1,
+                    bgcolor: 'action.hover',
                     fontWeight: 600,
                     textAlign: 'left'
                   },
-                  '& td': { 
+                  '& td': {
                     border: '1px solid',
                     borderColor: 'divider',
                     p: 1
@@ -697,7 +697,7 @@ export default function AgentPlayground({ user }) {
               onClick={() => setSelectorOpen(true)}
               disabled={running}
               startIcon={<MenuIcon />}
-              sx={{ 
+              sx={{
                 textTransform: 'none',
                 fontSize: '12px',
                 minWidth: 'auto',
@@ -706,7 +706,7 @@ export default function AgentPlayground({ user }) {
             >
               {selected ? selected.replace(/\.json$/, '').slice(0, 15) + (selected.replace(/\.json$/, '').length > 15 ? '...' : '') : 'Agent'}
             </Button>
-            
+
             {/* Attach File Icon */}
             <input
               id="file-upload-input"
@@ -728,9 +728,9 @@ export default function AgentPlayground({ user }) {
             {uploadedFiles.map((name, idx) => (
               <Chip key={`up-${name}-${idx}`} size="small" color="success" variant="filled" label={name.length > 15 ? name.slice(0, 12) + '...' : name} sx={{ height: 20, fontSize: '10px' }} />
             ))}
-            
+
             <Box sx={{ flex: 1 }} />
-            
+
             <IconButton size="small" onClick={() => {
               console.log('🔘 History button clicked!')
               openHistory()
@@ -741,10 +741,10 @@ export default function AgentPlayground({ user }) {
       </Paper>
 
       {/* Agent selection dialog */}
-      <Dialog 
-        open={selectorOpen} 
-        onClose={() => setSelectorOpen(false)} 
-        fullWidth 
+      <Dialog
+        open={selectorOpen}
+        onClose={() => setSelectorOpen(false)}
+        fullWidth
         maxWidth="sm"
         PaperProps={{
           sx: (theme) => ({
@@ -763,18 +763,18 @@ export default function AgentPlayground({ user }) {
             size="small"
             options={searchOptions}
             value={searchOptions.find(opt => opt.value === selected) || null}
-            onChange={(_, v)=> { 
-              if (v && v.value) { 
-                setSelected(v.value); 
-                setSelectorOpen(false); 
-              } 
+            onChange={(_, v) => {
+              if (v && v.value) {
+                setSelected(v.value);
+                setSelectorOpen(false);
+              }
             }}
-            getOptionLabel={(o)=> o?.label || ''}
-            renderInput={(params)=><TextField {...params} label="Search agents" placeholder="Type to search" />}
-            isOptionEqualToValue={(o,v)=> (o?.value||'')===(v?.value||'')}
-            sx={{ mb:1 }}
+            getOptionLabel={(o) => o?.label || ''}
+            renderInput={(params) => <TextField {...params} label="Search agents" placeholder="Type to search" />}
+            isOptionEqualToValue={(o, v) => (o?.value || '') === (v?.value || '')}
+            sx={{ mb: 1 }}
           />
-          <Box sx={{ maxHeight: 360, overflow:'auto', pr:0.5 }}>
+          <Box sx={{ maxHeight: 360, overflow: 'auto', pr: 0.5 }}>
             {renderGroupedList()}
           </Box>
         </DialogContent>
@@ -814,7 +814,7 @@ export default function AgentPlayground({ user }) {
                   </Box>
                 ))}
               </List>
-              
+
               {/* Pagination Controls */}
               {historyPagination.total_pages > 1 && (
                 <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, py: 2 }}>
@@ -851,7 +851,7 @@ export function genUuidHex() {
       window.crypto.getRandomValues(bytes)
       return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
     }
-  } catch {}
-  const u = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID().replace(/-/g, '') : (Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2)).slice(0,32)
+  } catch { }
+  const u = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID().replace(/-/g, '') : (Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2)).slice(0, 32)
   return u.toLowerCase()
 }

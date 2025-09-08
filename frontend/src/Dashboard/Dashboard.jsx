@@ -180,8 +180,8 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 							}
 						}}
 					>
-						<ListItemIcon sx={{ 
-							minWidth: drawerOpen || isMobile ? 28 : 0, 
+						<ListItemIcon sx={{
+							minWidth: drawerOpen || isMobile ? 28 : 0,
 							color: 'text.secondary',
 							display: 'flex',
 							justifyContent: 'center'
@@ -196,7 +196,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 								letterSpacing: 0.2,
 								color: isSectionSelected ? 'text.primary' : 'text.secondary'
 							}}
-							sx={{ 
+							sx={{
 								opacity: drawerOpen || isMobile ? 1 : 0,
 								transition: 'opacity 200ms ease',
 								whiteSpace: 'nowrap'
@@ -299,8 +299,8 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 							}
 						}}
 					>
-						<ListItemIcon sx={{ 
-							minWidth: drawerOpen || isMobile ? 28 : 0, 
+						<ListItemIcon sx={{
+							minWidth: drawerOpen || isMobile ? 28 : 0,
 							color: 'text.secondary',
 							display: 'flex',
 							justifyContent: 'center'
@@ -315,7 +315,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 								letterSpacing: 0.2,
 								color: selected ? 'text.primary' : 'text.secondary'
 							}}
-							sx={{ 
+							sx={{
 								opacity: drawerOpen || isMobile ? 1 : 0,
 								transition: 'opacity 200ms ease',
 								whiteSpace: 'nowrap'

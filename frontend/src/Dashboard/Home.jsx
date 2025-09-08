@@ -57,10 +57,10 @@ function AgentCard({ agent, onEdit, onChat }) {
     <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
       <CardContent sx={{ flexGrow: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-          <Avatar 
-            sx={{ 
+          <Avatar
+            sx={{
               bgcolor: `${getStatusColor(agent.category)}.main`,
-              width: 40, 
+              width: 40,
               height: 40,
               fontSize: '0.875rem'
             }}
@@ -106,9 +106,9 @@ function AgentCard({ agent, onEdit, onChat }) {
       </CardContent>
 
       <CardActions sx={{ pt: 0, justifyContent: 'center' }}>
-        <Button 
-          size="small" 
-          color="primary" 
+        <Button
+          size="small"
+          color="primary"
           startIcon={<MessageSquare size={16} />}
           onClick={() => onChat(agent)}
           fullWidth
@@ -206,7 +206,7 @@ export default function Home({ user }) {
   const [recentConversations, setRecentConversations] = useState([])
   const [taskProgress, setTaskProgress] = useState([])
   const [showAll, setShowAll] = useState(false)
-  
+
   // Pagination state
   const [pagination, setPagination] = useState({
     page: 1,
@@ -233,7 +233,7 @@ export default function Home({ user }) {
     const fetchDashboardData = async () => {
       try {
         setLoading(true)
-        
+
         // Fetch agents with pagination - use API's new pagination endpoint
         const agentsUrl = `/api/agents?page=${pagination.page}&page_size=${pagination.page_size}`
         const agentsResponse = await apiCall(agentsUrl, {
@@ -243,16 +243,16 @@ export default function Home({ user }) {
         })
 
         console.log('🔍 AGENTS API RESPONSE:', agentsResponse.status, agentsResponse.ok)
-        
+
         if (agentsResponse.ok) {
           const agentsData = await agentsResponse.json()
           console.log('📄 AGENTS DATA:', agentsData)
           const agentsList = agentsData.agents || []
           const paginationData = agentsData.pagination || {}
-          
+
           console.log('📋 AGENTS LIST:', agentsList)
           console.log('📊 PAGINATION:', paginationData)
-          
+
           setAgents(agentsList)
           setDisplayedAgents(agentsList)
           setPagination(paginationData)
@@ -269,7 +269,7 @@ export default function Home({ user }) {
               ...(user?.token ? { 'Authorization': `Bearer ${user?.token}` } : {})
             }
           })
-          
+
           if (conversationsResponse.ok) {
             const conversationsData = await conversationsResponse.json()
             // Handle both paginated and legacy response formats
@@ -281,7 +281,7 @@ export default function Home({ user }) {
               // Legacy format
               allConversations = conversationsData
             }
-            
+
             const recentConvs = allConversations
               .sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0))
               .slice(0, 5)
@@ -386,7 +386,7 @@ export default function Home({ user }) {
         <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
           Your AI Agents
         </Typography>
-        
+
         {displayedAgents.length === 0 ? (
           <Paper sx={{ p: 4, textAlign: 'center' }}>
             <Bot size={48} color={theme.palette.text.secondary} style={{ marginBottom: 16 }} />
@@ -418,7 +418,7 @@ export default function Home({ user }) {
                 </Grid>
               ))}
             </Grid>
-            
+
             {/* Pagination Controls */}
             {pagination.total_pages > 1 && (
               <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 2, mt: 3 }}>
@@ -430,11 +430,11 @@ export default function Home({ user }) {
                 >
                   Previous
                 </Button>
-                
+
                 <Typography variant="body2" color="text.secondary">
                   Page {pagination.page} of {pagination.total_pages} ({pagination.total} total agents)
                 </Typography>
-                
+
                 <Button
                   variant="outlined"
                   disabled={!pagination.has_next}
@@ -465,8 +465,8 @@ export default function Home({ user }) {
                 {recentConversations.length > 0 ? (
                   recentConversations.map((conversation, index) => (
                     <React.Fragment key={conversation.id}>
-                      <ConversationItem 
-                        conversation={conversation} 
+                      <ConversationItem
+                        conversation={conversation}
                         onClick={handleConversationClick}
                       />
                       {index < recentConversations.length - 1 && <Divider />}

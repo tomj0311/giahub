@@ -85,7 +85,7 @@ export default function Agent({ user }) {
     try {
       // Use the same backend list service as Home.jsx
       const agentsResponse = await apiCall('/api/agents', { headers: authHeaders })
-      
+
       if (agentsResponse.ok) {
         const agentsData = await agentsResponse.json()
         const agentsList = agentsData.agents || []
@@ -102,7 +102,7 @@ export default function Agent({ user }) {
           if (agent.model?.id && agent.model?.name) {
             uniqueModels.set(agent.model.id, agent.model.name)
           }
-          
+
           // Extract tool info
           if (agent.tools) {
             Object.entries(agent.tools).forEach(([toolId, toolConfig]) => {
@@ -111,12 +111,12 @@ export default function Agent({ user }) {
               }
             })
           }
-          
+
           // Extract categories
           if (agent.category) {
             uniqueCategories.add(agent.category)
           }
-          
+
           // Extract knowledge collections
           if (agent.collection && agent.collection_name) {
             uniqueCollections.set(agent.collection, agent.collection_name)
@@ -124,10 +124,10 @@ export default function Agent({ user }) {
         })
 
         // Set the extracted data
-        setModels(Array.from(uniqueModels.entries()).map(([id, name]) => ({ id, name })).sort((a,b) => a.name.localeCompare(b.name)))
-        setTools(Array.from(uniqueTools.entries()).map(([id, name]) => ({ id, name })).sort((a,b) => a.name.localeCompare(b.name)))
+        setModels(Array.from(uniqueModels.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)))
+        setTools(Array.from(uniqueTools.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)))
         setCategories(Array.from(uniqueCategories).sort())
-        setKnowledgeCollections(Array.from(uniqueCollections.entries()).map(([id, name]) => ({ id, name })).sort((a,b) => a.name.localeCompare(b.name)))
+        setKnowledgeCollections(Array.from(uniqueCollections.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)))
       } else {
         console.error('Failed to fetch agents:', agentsResponse.status)
         showError('Failed to load agents')
@@ -181,8 +181,8 @@ export default function Agent({ user }) {
       const data = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(data.detail || `Save failed (${resp.status})`)
       showSuccess(`Agent ${data.name} saved`)
-  await fetchAll()
-  setDialogOpen(false)
+      await fetchAll()
+      setDialogOpen(false)
     } catch (e) {
       showError(e.message || 'Failed to save')
     } finally {
@@ -192,14 +192,14 @@ export default function Agent({ user }) {
 
   const handleDelete = async () => {
     if (!form.id || !form.name) return
-    
+
     const confirmed = await showDeleteConfirmation({
       itemName: form.name,
       itemType: 'agent',
     })
-    
+
     if (!confirmed) return
-    
+
     setSaving(true)
     try {
       const resp = await apiCall(`/api/agents/id/${form.id}`, {
@@ -418,7 +418,7 @@ export default function Agent({ user }) {
                     <Button
                       size="small"
                       variant={form.memory?.history?.enabled ? 'contained' : 'outlined'}
-                      onClick={() => setForm(f => ({ ...f, memory: { ...(f.memory||{}), history: { enabled: !f.memory?.history?.enabled, num: f.memory?.history?.num ?? 3 } } }))}
+                      onClick={() => setForm(f => ({ ...f, memory: { ...(f.memory || {}), history: { enabled: !f.memory?.history?.enabled, num: f.memory?.history?.num ?? 3 } } }))}
                     >
                       History {form.memory?.history?.enabled ? 'On' : 'Off'}
                     </Button>
@@ -428,7 +428,7 @@ export default function Agent({ user }) {
                         size="small"
                         label="Num"
                         value={form.memory?.history?.num ?? 3}
-                        onChange={e => setForm(f => ({ ...f, memory: { ...(f.memory||{}), history: { enabled: true, num: Number(e.target.value || 0) } } }))}
+                        onChange={e => setForm(f => ({ ...f, memory: { ...(f.memory || {}), history: { enabled: true, num: Number(e.target.value || 0) } } }))}
                         sx={{ width: 120 }}
                       />
                     )}
