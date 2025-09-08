@@ -143,7 +143,7 @@ export default function App() {
         <Route path="/agent-playground" element={<Navigate to="/dashboard/agent-playground" replace />} />
         <Route path="/dashboard/*" element={auth.token ? <Dashboard user={{ name: auth.name, token: auth.token }} onLogout={auth.logout} themeKey={themeKey} setThemeKey={setThemeKey} /> : <Navigate to="/login" replace />} />
         <Route path="/agents/*" element={auth.token ? <Dashboard user={{ name: auth.name, token: auth.token }} onLogout={auth.logout} themeKey={themeKey} setThemeKey={setThemeKey} /> : <Navigate to="/login" replace />} />
-        <Route path="/workflows/*" element={auth.token ? <Dashboard user={{ name: auth.name, token: auth.token }} onLogout={auth.logout} themeKey={themeKey} setThemeKey={setThemeKey} /> : <Navigate to="/login" replace />} />
+        <Route path="/workflows/*" element={<Navigate to="/dashboard/manage" replace />} />
 
         {/* Default redirects */}
         <Route path="/" element={<Navigate to={auth.token ? "/dashboard" : "/login"} replace />} />
