@@ -592,7 +592,7 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="model-config" element={<ModelConfig user={user} />} />
 				<Route path="tool-config" element={<ToolConfig user={user} />} />
 				<Route path="knowledge-config" element={<KnowledgeConfig user={user} />} />
-				<Route path="agent-playground" element={<AgentPlayground user={user} />} />
+				<Route path="agent-playground" element={<BPMN initialTheme="auto" style={{ width: '100%', minHeight: '70vh', borderRadius: 8, overflow: 'hidden' }} />} />
 				<Route path="manage" element={<BPMN initialTheme="auto" style={{ width: '100%', minHeight: '70vh', borderRadius: 8, overflow: 'hidden' }} />} />
 			</Route>
 		</Routes>
