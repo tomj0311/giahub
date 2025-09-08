@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import {
   Box,
@@ -39,6 +40,7 @@ import { agentRuntimeService } from '../services/agentRuntimeService'
 export default function AgentPlayground({ user }) {
   const theme = useTheme()
   const isSmall = useMediaQuery(theme.breakpoints.down('md'))
+  const location = useLocation()
   const token = user?.token || localStorage.getItem('token') || ''
 
   // Agent list
@@ -109,6 +111,32 @@ export default function AgentPlayground({ user }) {
     }
     loadAgents()
   }, [token])
+
+  // Check for conversation ID in URL parameters and load it
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search)
+    const conversationId = searchParams.get('conversation')
+    
+    if (conversationId && token) {
+      console.log('Loading conversation from URL:', conversationId)
+      
+      const loadConversationFromUrl = async () => {
+        try {
+          const conv = await agentRuntimeService.getConversation(conversationId, token)
+          setSelected(conv.agent_name)
+          setMessages(conv.messages || [])
+          setUploadedFiles(conv.uploaded_files || [])
+          setSessionCollection(conv.session_prefix || conv.session_collection || genUuidHex())
+          setCurrentConversationId(conv.conversation_id)
+          console.log('Successfully loaded conversation:', conv.conversation_id)
+        } catch (e) {
+          console.error('Failed to load conversation from URL:', e)
+        }
+      }
+      
+      loadConversationFromUrl()
+    }
+  }, [location.search, token])
 
   // Scroll control
   useEffect(() => {

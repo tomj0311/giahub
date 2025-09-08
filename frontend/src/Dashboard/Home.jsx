@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { apiCall } from '../config/api'
+import { agentRuntimeService } from '../services/agentRuntimeService'
 
 function AgentCard({ agent, onEdit, onChat }) {
   const theme = useTheme()
@@ -118,9 +119,18 @@ function AgentCard({ agent, onEdit, onChat }) {
   )
 }
 
-function ConversationItem({ conversation }) {
+function ConversationItem({ conversation, onClick }) {
   return (
-    <ListItem>
+    <ListItem
+      button
+      onClick={() => onClick(conversation)}
+      sx={{
+        cursor: 'pointer',
+        '&:hover': {
+          backgroundColor: 'action.hover'
+        }
+      }}
+    >
       <ListItemAvatar>
         <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32, fontSize: '0.875rem' }}>
           {conversation.avatar}
@@ -196,6 +206,11 @@ export default function Home({ user }) {
   const [showAll, setShowAll] = useState(false)
 
   const INITIAL_DISPLAY_COUNT = 8
+
+  // Handler for when a conversation is clicked - navigate to AgentPlayground with conversation ID
+  const handleConversationClick = (conversation) => {
+    navigate(`/dashboard/agent-playground?conversation=${conversation.id}`)
+  }
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -397,7 +412,10 @@ export default function Home({ user }) {
                 {recentConversations.length > 0 ? (
                   recentConversations.map((conversation, index) => (
                     <React.Fragment key={conversation.id}>
-                      <ConversationItem conversation={conversation} />
+                      <ConversationItem 
+                        conversation={conversation} 
+                        onClick={handleConversationClick}
+                      />
                       {index < recentConversations.length - 1 && <Divider />}
                     </React.Fragment>
                   ))

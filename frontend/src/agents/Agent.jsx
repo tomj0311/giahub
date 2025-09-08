@@ -66,11 +66,6 @@ export default function Agent({ user }) {
 
   const toolList = Object.keys(form.tools || {}) // IDs
 
-  // ID -> Name maps for display
-  const modelNameById = useMemo(() => Object.fromEntries(models.map(m => [m.id, m.name])), [models])
-  const toolNameById = useMemo(() => Object.fromEntries(tools.map(t => [t.id, t.name])), [tools])
-  const collectionNameById = useMemo(() => Object.fromEntries(knowledgeCollections.map(c => [c.id, c.name])), [knowledgeCollections])
-
   const resetForm = () => {
     setForm({
       id: null,
@@ -88,25 +83,55 @@ export default function Agent({ user }) {
   async function fetchAll() {
     setLoading(true)
     try {
-      const [modelsRes, toolsRes, modelCatsRes, collectionsRes, agentsRes] = await Promise.all([
-        apiCall(`/api/model-config/configs`, { headers: authHeaders }),
-        apiCall(`/api/tool-config/configs`, { headers: authHeaders }),
-        apiCall(`/api/model-config/categories`, { headers: authHeaders }),
-        apiCall(`/api/knowledge/collections`, { headers: authHeaders }),
-        apiCall(`/api/agents`, { headers: authHeaders }),
-      ])
+      // Use the same backend list service as Home.jsx
+      const agentsResponse = await apiCall('/api/agents', { headers: authHeaders })
+      
+      if (agentsResponse.ok) {
+        const agentsData = await agentsResponse.json()
+        const agentsList = agentsData.agents || []
+        setExistingAgents(agentsList)
 
-      const modelsJson = await modelsRes.json().catch(() => ({}))
-      const toolsJson = await toolsRes.json().catch(() => ({}))
-      const catsJson = await modelCatsRes.json().catch(() => ({}))
-      const collectionsJson = await collectionsRes.json().catch(() => ({}))
-      const agentsJson = await agentsRes.json().catch(() => ({}))
+        // Extract unique values from existing agents for dropdown options
+        const uniqueModels = new Map()
+        const uniqueTools = new Map()
+        const uniqueCategories = new Set()
+        const uniqueCollections = new Map()
 
-  setModels((modelsJson.configurations || []).map(c => ({ id: c.id, name: c.name })).sort((a,b)=>a.name.localeCompare(b.name)))
-  setTools((toolsJson.configurations || []).map(c => ({ id: c.id, name: c.name })).sort((a,b)=>a.name.localeCompare(b.name)))
-      setCategories((catsJson.categories || []).sort())
-  setKnowledgeCollections((collectionsJson.collections || []).map(c => ({ id: c.id, name: c.name })).sort((a,b)=>a.name.localeCompare(b.name)))
-      setExistingAgents(agentsJson.agents || [])
+        agentsList.forEach(agent => {
+          // Extract model info
+          if (agent.model?.id && agent.model?.name) {
+            uniqueModels.set(agent.model.id, agent.model.name)
+          }
+          
+          // Extract tool info
+          if (agent.tools) {
+            Object.entries(agent.tools).forEach(([toolId, toolConfig]) => {
+              if (toolConfig.name) {
+                uniqueTools.set(toolId, toolConfig.name)
+              }
+            })
+          }
+          
+          // Extract categories
+          if (agent.category) {
+            uniqueCategories.add(agent.category)
+          }
+          
+          // Extract knowledge collections
+          if (agent.collection && agent.collection_name) {
+            uniqueCollections.set(agent.collection, agent.collection_name)
+          }
+        })
+
+        // Set the extracted data
+        setModels(Array.from(uniqueModels.entries()).map(([id, name]) => ({ id, name })).sort((a,b) => a.name.localeCompare(b.name)))
+        setTools(Array.from(uniqueTools.entries()).map(([id, name]) => ({ id, name })).sort((a,b) => a.name.localeCompare(b.name)))
+        setCategories(Array.from(uniqueCategories).sort())
+        setKnowledgeCollections(Array.from(uniqueCollections.entries()).map(([id, name]) => ({ id, name })).sort((a,b) => a.name.localeCompare(b.name)))
+      } else {
+        console.error('Failed to fetch agents:', agentsResponse.status)
+        showError('Failed to load agents')
+      }
     } catch (e) {
       console.error(e)
       showError('Failed to load data')
@@ -277,22 +302,25 @@ export default function Agent({ user }) {
                           )}
                         </TableCell>
                         <TableCell>{a.category || '-'}</TableCell>
-                        <TableCell>{a.model?.id ? (modelNameById[a.model.id] || a.model.id) : '-'}</TableCell>
+                        <TableCell>{a.model?.name || a.model?.id || '-'}</TableCell>
                         <TableCell>
                           <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                             {toolIds.length === 0 ? (
                               <Chip size="small" label="None" />
                             ) : (
-                              toolIds.slice(0, 3).map(tid => (
-                                <Chip key={tid} size="small" label={toolNameById[tid] || tid} variant="outlined" />
-                              ))
+                              toolIds.slice(0, 3).map(tid => {
+                                const toolName = a.tools[tid]?.name || tid
+                                return (
+                                  <Chip key={tid} size="small" label={toolName} variant="outlined" />
+                                )
+                              })
                             )}
                             {toolIds.length > 3 && (
                               <Chip size="small" label={`+${toolIds.length - 3}`} />
                             )}
                           </Box>
                         </TableCell>
-                        <TableCell>{(a.collection && (collectionNameById[a.collection] || a.collection)) || '-'}</TableCell>
+                        <TableCell>{a.collection_name || a.collection || '-'}</TableCell>
                         <TableCell>
                           <Chip size="small" label={mem} color={a.memory?.history?.enabled ? 'primary' : 'default'} />
                         </TableCell>
