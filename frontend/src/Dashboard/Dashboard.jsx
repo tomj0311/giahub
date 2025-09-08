@@ -17,7 +17,8 @@ import {
 	Avatar,
 	Menu,
 	MenuItem,
-	Chip
+	Chip,
+	Tooltip
 } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
 import { getThemeKeyForMode } from '../theme'
@@ -165,15 +166,26 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 							my: 0.25,
 							mx: 1,
 							borderRadius: 1.5,
+							width: 'auto',
+							minWidth: 'fit-content',
+							justifyContent: drawerOpen || isMobile ? 'flex-start' : 'center',
 							'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
-							'&:hover .MuiListItemText-primary': { color: theme.palette.text.primary },
+							'&:hover': {
+								backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
+								'& .MuiListItemText-primary': { color: theme.palette.text.primary }
+							},
 							'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
 							'&.Mui-selected': {
 								backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
 							}
 						}}
 					>
-						<ListItemIcon sx={{ minWidth: 28, color: 'text.secondary' }}>
+						<ListItemIcon sx={{ 
+							minWidth: drawerOpen || isMobile ? 28 : 0, 
+							color: 'text.secondary',
+							display: 'flex',
+							justifyContent: 'center'
+						}}>
 							<Icon size={18} strokeWidth={1.8} />
 						</ListItemIcon>
 						<ListItemText
@@ -184,7 +196,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 								letterSpacing: 0.2,
 								color: isSectionSelected ? 'text.primary' : 'text.secondary'
 							}}
-							sx={{ opacity: drawerOpen || isMobile ? 1 : 0 }}
+							sx={{ 
+								opacity: drawerOpen || isMobile ? 1 : 0,
+								transition: 'opacity 200ms ease',
+								whiteSpace: 'nowrap'
+							}}
 						/>
 						{(drawerOpen || isMobile) && (
 							<ExpandIcon size={16} color={theme.palette.text.secondary} />
@@ -210,7 +226,10 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 									ml: 3,
 									borderRadius: 1.5,
 									'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
-									'&:hover .MuiListItemText-primary': { color: theme.palette.text.primary },
+									'&:hover': {
+										backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+										'& .MuiListItemText-primary': { color: theme.palette.text.primary }
+									},
 									'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
 									'&.Mui-selected': {
 										backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'
@@ -259,8 +278,14 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 							my: 0.25,
 							mx: 1,
 							borderRadius: 1.5,
+							width: 'auto',
+							minWidth: 'fit-content',
+							justifyContent: drawerOpen || isMobile ? 'flex-start' : 'center',
 							'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
-							'&:hover .MuiListItemText-primary': { color: theme.palette.text.primary },
+							'&:hover': {
+								backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
+								'& .MuiListItemText-primary': { color: theme.palette.text.primary }
+							},
 							'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
 							'&.Mui-selected': {
 								backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
@@ -274,7 +299,12 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 							}
 						}}
 					>
-						<ListItemIcon sx={{ minWidth: 28, color: 'text.secondary' }}>
+						<ListItemIcon sx={{ 
+							minWidth: drawerOpen || isMobile ? 28 : 0, 
+							color: 'text.secondary',
+							display: 'flex',
+							justifyContent: 'center'
+						}}>
 							<Icon size={18} strokeWidth={1.8} />
 						</ListItemIcon>
 						<ListItemText
@@ -285,7 +315,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 								letterSpacing: 0.2,
 								color: selected ? 'text.primary' : 'text.secondary'
 							}}
-							sx={{ opacity: drawerOpen || isMobile ? 1 : 0 }}
+							sx={{ 
+								opacity: drawerOpen || isMobile ? 1 : 0,
+								transition: 'opacity 200ms ease',
+								whiteSpace: 'nowrap'
+							}}
 						/>
 						{isExpandableWithLink && (drawerOpen || isMobile) && (
 							<ExpandIcon size={16} color={theme.palette.text.secondary} />
@@ -311,7 +345,10 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 									ml: 3,
 									borderRadius: 1.5,
 									'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
-									'&:hover .MuiListItemText-primary': { color: theme.palette.text.primary },
+									'&:hover': {
+										backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+										'& .MuiListItemText-primary': { color: theme.palette.text.primary }
+									},
 									'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
 									'&.Mui-selected': {
 										backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'

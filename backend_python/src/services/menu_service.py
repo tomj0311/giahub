@@ -70,42 +70,40 @@ class MenuService:
             
             logger.info("[MENU] Seeding default menu items...")
             
-            # Default menu structure based on the Dashboard.jsx
+            # Default menu structure - reorganized hierarchy
             default_menu = [
                 {
                     "label": "Home",
                     "to": "/dashboard/home",
-                    "icon": "HomeIcon",
+                    "icon": "Star",
                     "order": 1,
                     "isActive": True,
                     "expandable": False
                 },
                 {
-                    "label": "Analytics",
-                    "to": "/analytics",
-                    "icon": "BarChart3",
+                    "label": "Agents",
+                    "icon": "Gamepad2",
                     "order": 2,
                     "isActive": True,
-                    "expandable": False
+                    "expandable": True
                 },
                 {
-                    "label": "Store",
-                    "icon": "Store",
+                    "label": "Configuration",
+                    "icon": "Palette",
                     "order": 3,
                     "isActive": True,
                     "expandable": True
                 },
                 {
-                    "label": "Playground",
-                    "to": "/dashboard/agent-playground",
-                    "icon": "PlayCircle",
+                    "label": "Workflows",
+                    "icon": "TreePine",
                     "order": 4,
                     "isActive": True,
-                    "expandable": False
+                    "expandable": True
                 },
                 {
                     "label": "Settings",
-                    "icon": "Settings",
+                    "icon": "Globe",
                     "order": 100,
                     "isActive": True,
                     "expandable": True
@@ -121,45 +119,91 @@ class MenuService:
             item_ids = {item['label']: inserted_ids[i] for i, item in enumerate(default_menu)}
             logger.debug(f"[MENU] Inserted {len(default_menu)} parent menu items")
             
-            # Store submenu items
-            store_parent_id = item_ids['Store']
+            # Get parent IDs for submenu items
+            agents_parent_id = item_ids['Agents']
+            configuration_parent_id = item_ids['Configuration']
+            workflows_parent_id = item_ids['Workflows']
             settings_parent_id = item_ids['Settings']
             
-            # Store submenu items
-            store_children = [
+            # Agents submenu items
+            agents_children = [
                 {
-                    "label": "Agent Store",
-                    "to": "/agents/agent-config",
-                    "icon": "Bot",
-                    "parentId": store_parent_id,
+                    "label": "Playground",
+                    "to": "/dashboard/agent-playground",
+                    "icon": "Rocket",
+                    "parentId": agents_parent_id,
                     "order": 1,
                     "isActive": True,
                     "expandable": False
                 },
                 {
+                    "label": "Analytics",
+                    "to": "/analytics",
+                    "icon": "Microscope",
+                    "parentId": agents_parent_id,
+                    "order": 2,
+                    "isActive": True,
+                    "expandable": False
+                }
+            ]
+            
+            # Configuration submenu items
+            configuration_children = [
+                {
                     "label": "Models",
                     "to": "/agents/model-config",
-                    "icon": "Settings",
-                    "parentId": store_parent_id,
-                    "order": 2,
+                    "icon": "Diamond",
+                    "parentId": configuration_parent_id,
+                    "order": 1,
                     "isActive": True,
                     "expandable": False
                 },
                 {
                     "label": "Tools",
                     "to": "/agents/tool-config",
-                    "icon": "Wrench",
-                    "parentId": store_parent_id,
+                    "icon": "Scissors",
+                    "parentId": configuration_parent_id,
+                    "order": 2,
+                    "isActive": True,
+                    "expandable": False
+                },
+                {
+                    "label": "Databases",
+                    "to": "/configuration/databases",
+                    "icon": "Archive",
+                    "parentId": configuration_parent_id,
                     "order": 3,
                     "isActive": True,
                     "expandable": False
                 },
                 {
-                    "label": "Knowledge",
-                    "to": "/agents/knowledge-config",
-                    "icon": "BookOpen",
-                    "parentId": store_parent_id,
+                    "label": "Custom Connectors",
+                    "to": "/configuration/custom-connectors",
+                    "icon": "Magnet",
+                    "parentId": configuration_parent_id,
                     "order": 4,
+                    "isActive": True,
+                    "expandable": False
+                }
+            ]
+            
+            # Workflows submenu items
+            workflows_children = [
+                {
+                    "label": "Manage",
+                    "to": "/workflows/manage",
+                    "icon": "Paperclip",
+                    "parentId": workflows_parent_id,
+                    "order": 1,
+                    "isActive": True,
+                    "expandable": False
+                },
+                {
+                    "label": "Monitor",
+                    "to": "/workflows/monitor",
+                    "icon": "Binoculars",
+                    "parentId": workflows_parent_id,
+                    "order": 2,
                     "isActive": True,
                     "expandable": False
                 }
@@ -170,7 +214,7 @@ class MenuService:
                 {
                     "label": "Users",
                     "to": "/dashboard/users",
-                    "icon": "PeopleIcon",
+                    "icon": "Crown",
                     "parentId": settings_parent_id,
                     "order": 1,
                     "isActive": True,
@@ -179,7 +223,7 @@ class MenuService:
                 {
                     "label": "Role Management",
                     "to": "/dashboard/role-management",
-                    "icon": "SecurityIcon",
+                    "icon": "Key",
                     "parentId": settings_parent_id,
                     "order": 2,
                     "isActive": True,
@@ -188,20 +232,29 @@ class MenuService:
                 {
                     "label": "User Invitation",
                     "to": "/dashboard/user-invitation",
-                    "icon": "PersonAddIcon",
+                    "icon": "Bell",
                     "parentId": settings_parent_id,
                     "order": 3,
+                    "isActive": True,
+                    "expandable": False
+                },
+                {
+                    "label": "Tenants",
+                    "to": "/settings/tenants",
+                    "icon": "Castle",
+                    "parentId": settings_parent_id,
+                    "order": 4,
                     "isActive": True,
                     "expandable": False
                 }
             ]
             
             # Insert child items
-            for item in store_children + settings_children:
+            for item in agents_children + configuration_children + workflows_children + settings_children:
                 await MongoStorageService.insert_one("menuItems", item)
-            logger.debug(f"[MENU] Inserted {len(store_children + settings_children)} child menu items")
+            logger.debug(f"[MENU] Inserted {len(agents_children + configuration_children + workflows_children + settings_children)} child menu items")
             
-            total_items = len(default_menu) + len(store_children) + len(settings_children)
+            total_items = len(default_menu) + len(agents_children) + len(configuration_children) + len(workflows_children) + len(settings_children)
             logger.info(f"[MENU] Successfully seeded {total_items} menu items")
         except Exception as e:
             logger.error(f"[MENU] Failed to seed menu items: {e}")

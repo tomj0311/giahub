@@ -14,6 +14,7 @@ import SignupPage from './pages/SignupPage'
 import VerifyPage from './pages/VerifyPage'
 import AuthCallback from './pages/AuthCallback'
 import Dashboard from './Dashboard/Dashboard'
+import PageUnderConstruction from './components/PageUnderConstruction'
 import { buildTheme, getThemeKeyForMode } from './theme'
 import { apiCall } from './config/api'
 
@@ -145,7 +146,7 @@ export default function App() {
 
         {/* Default redirects */}
         <Route path="/" element={<Navigate to={auth.token ? "/dashboard" : "/login"} replace />} />
-        <Route path="*" element={<Navigate to={auth.token ? "/dashboard" : "/login"} replace />} />
+        <Route path="*" element={<PageUnderConstruction />} />
       </Routes>
     </AppShell>
   )

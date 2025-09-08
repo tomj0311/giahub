@@ -114,6 +114,7 @@ class AgentRuntimeService:
                 "model": model,
                 "tools": tools,
                 "knowledge": knowledge,
+                "markdown" : True,
                 "add_history_to_messages": history_config.get("enabled", False),
                 "num_history_responses": history_config.get("num", 3) if history_config.get("enabled", False) else None,
             }
