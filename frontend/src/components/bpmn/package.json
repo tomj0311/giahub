@@ -1,0 +1,41 @@
+{
+  "name": "reusable-bpmn-editor",
+  "version": "1.0.0",
+  "description": "A self-contained, reusable BPMN editor component",
+  "main": "BPMN.jsx",
+  "keywords": [
+    "bpmn",
+    "editor",
+    "react",
+    "reactflow",
+    "workflow",
+    "process-modeling"
+  ],
+  "dependencies": {
+    "react": "^18.0.0",
+    "reactflow": "^11.0.0",
+    "lucide-react": "^0.263.0"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0",
+    "react-dom": ">=16.8.0"
+  },
+  "author": "RFL-BPMN Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/rfl-bpmn"
+  },
+  "files": [
+    "BPMN.jsx",
+    "BPMN.css",
+    "BPMNEditor.jsx",
+    "BPMNEditor.css",
+    "nodes/",
+    "constants/",
+    "utils/",
+    "hooks/",
+    "security/",
+    "README.md"
+  ]
+}

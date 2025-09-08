@@ -1,0 +1,238 @@
+.bpmn-editor {
+  height: 100vh;
+  display: flex;
+  flex-direction: row;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.editor-content {
+  flex: 1;
+  margin-left: 100px; /* Make room for the wider left sidebar */
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: var(--bg-primary);
+  position: relative;
+}
+
+.reactflow-wrapper {
+  flex: 1;
+  height: 100%;
+  outline: none; /* Remove focus outline */
+  background-color: var(--bg-primary);
+}
+
+/* React Flow Dark Theme Overrides */
+.react-flow__node {
+  border: none;
+  border-radius: 3px;
+  background: var(--node-bg);
+  font-size: 12px;
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.react-flow__node.selected {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(var(--accent-color-rgb), 0.2);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color) 20%, transparent);
+}
+
+.react-flow__node[data-type="participant"] {
+  background: transparent;
+  border: none;
+  z-index: -1;
+}
+
+.react-flow__handle {
+  width: 8px;
+  height: 8px;
+  background: var(--handle-bg);
+  border: 1px solid var(--handle-border);
+  transition: all 0.2s ease;
+  opacity: 0;
+}
+
+.react-flow__handle.connectable {
+  cursor: crosshair;
+}
+
+.react-flow__handle.connectable:hover {
+  background: var(--accent-color);
+}
+
+/* Show handles on node hover */
+.react-flow__node:hover .react-flow__handle {
+  opacity: 1;
+  width: 12px;
+  height: 12px;
+  background: var(--accent-color);
+  border: 2px solid var(--bg-primary);
+  box-shadow: 0 0 0 1px var(--accent-color), 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* React Flow Controls Dark Theme */
+.react-flow__controls {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px var(--shadow);
+}
+
+.react-flow__controls-button {
+  background: var(--bg-secondary);
+  border: none;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  transition: background-color 0.3s ease;
+}
+
+.react-flow__controls-button:hover {
+  background: var(--hover-bg);
+}
+
+.react-flow__controls-button:last-child {
+  border-bottom: none;
+}
+
+/* React Flow MiniMap Dark Theme */
+.react-flow__minimap {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.react-flow__minimap-mask {
+  fill: var(--accent-color);
+  fill-opacity: 0.2;
+}
+
+.react-flow__minimap-node {
+  fill: var(--node-bg);
+  stroke: var(--border-color);
+}
+
+/* React Flow Background Dark Theme */
+.react-flow__background {
+  background-color: var(--bg-primary);
+}
+
+.react-flow__background-pattern-dots {
+  fill: var(--border-color-light);
+}
+
+.react-flow__background-pattern-lines {
+  stroke: var(--border-color-light);
+}
+
+/* React Flow Edge Dark Theme */
+.react-flow__edge-path {
+  stroke: var(--text-secondary);
+  stroke-width: 2;
+  transition: all 0.2s ease;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--accent-color) !important;
+  stroke-width: 4;
+}
+
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: var(--accent-hover) !important;
+  stroke-width: 3;
+}
+
+/* React Flow Arrow Markers */
+.react-flow__arrowhead {
+  fill: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.react-flow__edge.selected .react-flow__arrowhead {
+  fill: var(--accent-color) !important;
+}
+
+.react-flow__edge:hover .react-flow__arrowhead {
+  fill: var(--accent-hover) !important;
+}
+
+/* Message Flow Edge Styles - OVERRIDE GENERAL RULES */
+.react-flow__edge[data-type="messageFlow"] .react-flow__edge-path,
+.react-flow__edge.message-flow .react-flow__edge-path {
+  stroke: var(--message-flow-color) !important;
+  stroke-dasharray: 5,5;
+  stroke-width: 1.5;
+}
+
+.react-flow__edge[data-type="messageFlow"]:hover .react-flow__edge-path,
+.react-flow__edge.message-flow:hover .react-flow__edge-path {
+  stroke: var(--accent-hover) !important;
+  stroke-width: 1.5;
+}
+
+.react-flow__edge[data-type="messageFlow"].selected .react-flow__edge-path,
+.react-flow__edge.message-flow.selected .react-flow__edge-path {
+  stroke: var(--accent-hover) !important;
+  stroke-width: 1.5;
+}
+
+.react-flow__edge[data-type="messageFlow"].selected:hover .react-flow__edge-path,
+.react-flow__edge.message-flow.selected:hover .react-flow__edge-path {
+  stroke: var(--accent-hover) !important;
+  stroke-width: 1.5;
+}
+
+.react-flow__edge[data-type="messageFlow"] .react-flow__arrowhead,
+.react-flow__edge.message-flow .react-flow__arrowhead {
+  fill: var(--message-flow-color) !important;
+}
+
+.react-flow__edge[data-type="messageFlow"]:hover .react-flow__arrowhead,
+.react-flow__edge.message-flow:hover .react-flow__arrowhead {
+  fill: var(--accent-hover) !important;
+}
+
+.react-flow__edge[data-type="messageFlow"].selected .react-flow__arrowhead,
+.react-flow__edge.message-flow.selected .react-flow__arrowhead {
+  fill: var(--accent-hover) !important;
+}
+
+.react-flow__edge[data-type="messageFlow"].selected:hover .react-flow__arrowhead,
+.react-flow__edge.message-flow.selected:hover .react-flow__arrowhead {
+  fill: var(--accent-hover) !important;
+}
+
+.react-flow__edge-text {
+  fill: var(--text-primary);
+  background: var(--bg-primary);
+  transition: all 0.2s ease;
+}
+
+.react-flow__edge.selected .react-flow__edge-text {
+  fill: var(--accent-color);
+  font-weight: 600;
+}
+
+.react-flow__edge-textbg {
+  fill: var(--bg-primary);
+}
+
+.react-flow__edge.selected .react-flow__edge-textbg {
+  fill: var(--bg-primary);
+  stroke: var(--accent-color);
+  stroke-width: 1;
+  stroke-opacity: 0.3;
+}
+
+/* Selection Box */
+.react-flow__selection {
+  background: rgba(var(--accent-color-rgb), 0.1);
+  background: color-mix(in srgb, var(--accent-color) 10%, transparent);
+  border: 1px solid var(--accent-color);
+}
+
+/* Enhanced selection feedback for edges */
+.react-flow__edge.selected {
+  z-index: 100;
+}

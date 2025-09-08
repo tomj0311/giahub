@@ -1,0 +1,584 @@
+.toolbar {
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  padding: 10px 8px;
+  width: 100px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Theme Toggle Styles */
+.theme-toggle-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.theme-toggle-button {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  transition: all 0.3s ease;
+  color: var(--text-primary);
+}
+
+.theme-toggle-button:hover {
+  background: var(--hover-bg);
+  border-color: var(--accent-color);
+  transform: scale(1.05);
+}
+
+.theme-icon {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-icon svg {
+  width: 100%;
+  height: 100%;
+  transition: transform 0.3s ease;
+}
+
+.theme-toggle-button:hover .theme-icon svg {
+  transform: rotate(15deg);
+}
+
+.toolbar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toolbar-section h3 {
+  display: none; /* Hidden since we're using tooltips now */
+}
+
+.toolbar-items {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  justify-items: center;
+}
+
+.toolbar-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  cursor: grab;
+  user-select: none;
+  transition: all 0.2s;
+  width: 36px;
+  height: 36px;
+  position: relative;
+}
+
+.toolbar-item:hover {
+  border: none;
+  box-shadow: none;
+  background: rgba(var(--accent-color-rgb), 0.1);
+}
+
+.toolbar-item:active {
+  cursor: grabbing;
+}
+
+.toolbar-item span {
+  display: none; /* Hidden since we're using tooltips now */
+}
+
+@keyframes fadeIn {
+  to {
+    opacity: 1;
+  }
+}
+
+/* BPMN Element Icons - All icons sized to fit within 24x24px */
+.start-event-icon {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--success-color);
+  border-radius: 50%;
+  background: var(--success-bg-light);
+  background: color-mix(in srgb, var(--success-color) 20%, var(--bg-primary));
+}
+
+.end-event-icon {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--danger-color);
+  border-radius: 50%;
+  background: var(--danger-bg-light);
+  background: color-mix(in srgb, var(--danger-color) 20%, var(--bg-primary));
+}
+
+.intermediate-event-icon {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--warning-color);
+  border-radius: 50%;
+  background: var(--warning-bg-light);
+  background: color-mix(in srgb, var(--warning-color) 20%, var(--bg-primary));
+  position: relative;
+}
+
+.intermediate-event-icon::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--warning-color);
+  border-radius: 50%;
+}
+
+.task-icon {
+  width: 24px;
+  height: 18px;
+  border: 1px solid var(--accent-color);
+  border-radius: 3px;
+  background: var(--accent-bg-light);
+  background: color-mix(in srgb, var(--accent-color) 20%, var(--bg-primary));
+  position: relative;
+}
+
+.task-icon::before {
+  content: '📝';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+}
+
+.service-task-icon {
+  width: 24px;
+  height: 18px;
+  border: 1px solid var(--accent-color);
+  border-radius: 3px;
+  background: var(--accent-bg-light);
+  background: color-mix(in srgb, var(--accent-color) 20%, var(--bg-primary));
+  position: relative;
+}
+
+.service-task-icon::before {
+  content: '⚙️';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+}
+
+.user-task-icon {
+  width: 24px;
+  height: 18px;
+  border: 1px solid var(--accent-color);
+  border-radius: 3px;
+  background: var(--accent-bg-light);
+  background: color-mix(in srgb, var(--accent-color) 20%, var(--bg-primary));
+  position: relative;
+}
+
+.user-task-icon::before {
+  content: '👤';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+}
+
+.script-task-icon {
+  width: 24px;
+  height: 18px;
+  border: 1px solid var(--accent-color);
+  border-radius: 3px;
+  background: var(--accent-bg-light);
+  background: color-mix(in srgb, var(--accent-color) 20%, var(--bg-primary));
+  position: relative;
+}
+
+.script-task-icon::before {
+  content: '📜';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+}
+
+.business-rule-task-icon {
+  width: 24px;
+  height: 18px;
+  border: 1px solid var(--accent-color);
+  border-radius: 3px;
+  background: var(--accent-bg-light);
+  background: color-mix(in srgb, var(--accent-color) 20%, var(--bg-primary));
+  position: relative;
+}
+
+.business-rule-task-icon::before {
+  content: '📋';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+}
+
+.send-task-icon {
+  width: 24px;
+  height: 18px;
+  border: 1px solid var(--accent-color);
+  border-radius: 3px;
+  background: var(--accent-bg-light);
+  background: color-mix(in srgb, var(--accent-color) 20%, var(--bg-primary));
+  position: relative;
+}
+
+.send-task-icon::before {
+  content: '📤';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+}
+
+.receive-task-icon {
+  width: 24px;
+  height: 18px;
+  border: 1px solid var(--accent-color);
+  border-radius: 3px;
+  background: var(--accent-bg-light);
+  background: color-mix(in srgb, var(--accent-color) 20%, var(--bg-primary));
+  position: relative;
+}
+
+.receive-task-icon::before {
+  content: '📥';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+}
+
+.manual-task-icon {
+  width: 24px;
+  height: 18px;
+  border: 1px solid var(--accent-color);
+  border-radius: 3px;
+  background: var(--accent-bg-light);
+  background: color-mix(in srgb, var(--accent-color) 20%, var(--bg-primary));
+  position: relative;
+}
+
+.manual-task-icon::before {
+  content: '✋';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+}
+
+.gateway-icon {
+  width: 20px;
+  height: 20px;
+  background: var(--warning-bg-light);
+  background: color-mix(in srgb, var(--warning-color) 20%, var(--bg-primary));
+  border: 1px solid var(--warning-color);
+  transform: rotate(45deg);
+  position: relative;
+}
+
+.gateway-icon::before {
+  content: '×';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-45deg);
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--warning-color);
+}
+
+.parallel-gateway-icon {
+  width: 20px;
+  height: 20px;
+  background: var(--warning-bg-light);
+  background: color-mix(in srgb, var(--warning-color) 20%, var(--bg-primary));
+  border: 1px solid var(--warning-color);
+  transform: rotate(45deg);
+  position: relative;
+}
+
+.parallel-gateway-icon::before {
+  content: '+';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-45deg);
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--warning-color);
+}
+
+.inclusive-gateway-icon {
+  width: 20px;
+  height: 20px;
+  background: var(--warning-bg-light);
+  background: color-mix(in srgb, var(--warning-color) 20%, var(--bg-primary));
+  border: 1px solid var(--warning-color);
+  transform: rotate(45deg);
+  position: relative;
+}
+
+.inclusive-gateway-icon::before {
+  content: '○';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-45deg);
+  font-size: 10px;
+  color: var(--warning-color);
+}
+
+.subprocess-icon {
+  width: 24px;
+  height: 18px;
+  border: 2px solid #673ab7;
+  border-radius: 4px;
+  background: #1e1135;
+  background: color-mix(in srgb, #673ab7 20%, var(--bg-primary));
+  position: relative;
+}
+
+.subprocess-icon::before {
+  content: '⊞';
+  position: absolute;
+  bottom: 1px;
+  right: 2px;
+  font-size: 8px;
+  color: #673ab7;
+}
+
+.call-activity-icon {
+  width: 24px;
+  height: 18px;
+  border: 2px solid #795548;
+  border-radius: 4px;
+  background: #1a1109;
+  background: color-mix(in srgb, #795548 20%, var(--bg-primary));
+  position: relative;
+}
+
+.call-activity-icon::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  right: 2px;
+  bottom: 2px;
+  border: 1px solid #795548;
+  border-radius: 2px;
+}
+
+.data-object-icon {
+  width: 18px;
+  height: 24px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 2px;
+  position: relative;
+}
+
+.data-object-icon::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-left: 4px solid var(--bg-secondary);
+  border-top: 4px solid var(--border-color);
+  border-bottom: 4px solid transparent;
+}
+
+.data-store-icon {
+  width: 24px;
+  height: 24px;
+  position: relative;
+}
+
+.data-store-icon::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 24px;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--text-secondary);
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+}
+
+.data-store-icon::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 0;
+  width: 24px;
+  height: 18px;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--text-secondary);
+  border-right: 1px solid var(--text-secondary);
+  border-bottom: 1px solid var(--text-secondary);
+  border-radius: 0 0 50% 50% / 0 0 30% 30%;
+}
+
+.group-icon {
+  width: 24px;
+  height: 18px;
+  border: 2px dashed var(--border-color);
+  border-radius: 4px;
+  background: rgba(var(--border-color-rgb, 222, 226, 230), 0.3);
+  background: color-mix(in srgb, var(--bg-secondary) 30%, transparent);
+}
+
+.text-annotation-icon {
+  width: 24px;
+  height: 16px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.text-annotation-icon::before {
+  content: '[';
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--text-secondary);
+  margin-right: 2px;
+}
+
+.text-annotation-icon::after {
+  content: '';
+  flex: 1;
+  height: 12px;
+  background: var(--warning-bg-light);
+  background: color-mix(in srgb, var(--warning-color) 20%, var(--bg-primary));
+  border: 1px solid var(--warning-color);
+  border-radius: 2px;
+  border-left: none;
+}
+
+.participant-icon {
+  width: 24px;
+  height: 18px;
+  border: 2px solid var(--accent-color);
+  background: var(--accent-bg-light);
+  background: color-mix(in srgb, var(--accent-color) 20%, var(--bg-primary));
+  position: relative;
+}
+
+.participant-icon::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  background: var(--accent-color);
+  border-right: 1px solid var(--accent-hover);
+}
+
+.lane-icon {
+  width: 24px;
+  height: 16px;
+  border: 1px solid var(--text-secondary);
+  background: var(--bg-secondary);
+  position: relative;
+}
+
+.lane-icon::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--text-secondary);
+  border-right: 1px solid var(--text-primary);
+}
+
+/* Property Panel Toggle Styles */
+.property-panel-toggle-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.property-panel-toggle-button {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  transition: all 0.3s ease;
+  color: var(--text-primary);
+}
+
+.property-panel-toggle-button:hover {
+  background: var(--hover-bg);
+  border-color: var(--accent-color);
+  transform: scale(1.05);
+}
+
+.property-panel-toggle-button.active {
+  background: var(--accent-color);
+  color: var(--text-on-accent, white);
+  border-color: var(--accent-hover);
+}
+
+.properties-icon {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.properties-icon svg {
+  width: 100%;
+  height: 100%;
+}
