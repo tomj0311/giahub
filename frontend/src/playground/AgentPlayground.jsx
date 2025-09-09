@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import BPMN from '../components/bpmn/BPMN'
 import {
   Box,
   Paper,
@@ -37,6 +38,25 @@ import SendIcon from '@mui/icons-material/Send'
 import CancelIcon from '@mui/icons-material/Cancel'
 import { agentService } from '../services/agentService'
 import { agentRuntimeService } from '../services/agentRuntimeService'
+
+// Simple function to detect and extract BPMN content
+const detectBPMN = (content) => {
+  if (!content) return { hasBPMN: false, bpmnXML: null, contentWithoutBPMN: content }
+  
+  // Look for BPMN 2.0 XML patterns - more flexible regex
+  const bpmnRegex = /<bpmn:definitions[\s\S]*?<\/bpmn:definitions>/i
+  const match = content.match(bpmnRegex)
+  
+  if (match) {
+    return {
+      hasBPMN: true,
+      bpmnXML: match[0],
+      contentWithoutBPMN: content.replace(match[0], '').trim()
+    }
+  }
+  
+  return { hasBPMN: false, bpmnXML: null, contentWithoutBPMN: content }
+}
 
 // Agent Playground using HTTP Server-Sent Events for streaming
 export default function AgentPlayground({ user }) {
@@ -637,9 +657,35 @@ export default function AgentPlayground({ user }) {
                     bgcolor: 'action.selected'
                   }
                 }}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {m.content && m.content.length ? m.content : '...'}
-                  </ReactMarkdown>
+                  {(() => {
+                    const bpmnData = detectBPMN(m.content)
+                    
+                    return (
+                      <>
+                        {bpmnData.contentWithoutBPMN && (
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {bpmnData.contentWithoutBPMN}
+                          </ReactMarkdown>
+                        )}
+                        {bpmnData.hasBPMN && (
+                          <Box sx={{ mt: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+                            <BPMN 
+                              readOnly={true}
+                              showToolbox={false}
+                              showPropertyPanel={false}
+                              initialBPMN={bpmnData.bpmnXML}
+                              style={{ height: '400px', width: '100%' }}
+                            />
+                          </Box>
+                        )}
+                        {!bpmnData.contentWithoutBPMN && !bpmnData.hasBPMN && (
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {m.content && m.content.length ? m.content : '...'}
+                          </ReactMarkdown>
+                        )}
+                      </>
+                    )
+                  })()}
                 </Box>
               )}
             </Box>

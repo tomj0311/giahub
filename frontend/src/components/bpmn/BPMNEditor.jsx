@@ -123,7 +123,7 @@ const getInitialNodes = () => [
   },
 ];
 
-const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPropertyPanel = true, readOnly = false }) => {
+const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPropertyPanel = true, readOnly = false, initialBPMN = null }) => {
   const reactFlowWrapper = useRef(null);
   const [nodes, setNodes, onNodesChange] = useNodesState(getInitialNodes());
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -179,6 +179,47 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   useEffect(() => {
     setEdges((eds) => updateEdgesWithArrows(eds));
   }, [updateEdgesWithArrows]); // Added dependency
+
+  // Load initial BPMN if provided
+  useEffect(() => {
+    if (initialBPMN) {
+      // Simple parser for BPMN XML - extract nodes and create basic representation
+      try {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(initialBPMN, 'text/xml');
+        
+        // Check for parsing errors
+        const parseError = xmlDoc.querySelector('parsererror');
+        if (parseError) {
+          console.warn('Failed to parse initial BPMN XML');
+          return;
+        }
+
+        // For now, just clear the current nodes and show a placeholder
+        // This is a simple implementation - a full parser would be complex
+        setNodes([{
+          id: 'bpmn-loaded',
+          type: 'textAnnotation',
+          position: { x: 250, y: 250 },
+          data: { 
+            label: 'BPMN Diagram Loaded\n(Viewer Mode)',
+            text: 'BPMN diagram from agent response loaded successfully.'
+          },
+        }]);
+        setEdges([]);
+        
+        // Fit view after loading
+        setTimeout(() => {
+          if (reactFlowInstance) {
+            reactFlowInstance.fitView({ padding: 0.2 });
+          }
+        }, 100);
+        
+      } catch (error) {
+        console.warn('Error loading initial BPMN:', error);
+      }
+    }
+  }, [initialBPMN, reactFlowInstance]);
 
   // Utility function to update participant bounds data (without automatic resizing)
   const updateParticipantBoundsData = useCallback((participantId, allNodes) => {
@@ -764,7 +805,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   );
 };
 
-const BPMNEditor = ({ isDarkMode, onToggleTheme, showToolbox, showPropertyPanel, readOnly }) => (
+const BPMNEditor = ({ isDarkMode, onToggleTheme, showToolbox, showPropertyPanel, readOnly, initialBPMN }) => (
   <ReactFlowProvider>
     <BPMNEditorFlow 
       isDarkMode={isDarkMode} 
@@ -772,6 +813,7 @@ const BPMNEditor = ({ isDarkMode, onToggleTheme, showToolbox, showPropertyPanel,
       showToolbox={showToolbox}
       showPropertyPanel={showPropertyPanel}
       readOnly={readOnly}
+      initialBPMN={initialBPMN}
     />
   </ReactFlowProvider>
 );

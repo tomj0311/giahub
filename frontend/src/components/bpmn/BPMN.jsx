@@ -16,6 +16,7 @@ import './BPMN.css';
  * - showToolbox: boolean (default: true) - Controls toolbox visibility
  * - showPropertyPanel: boolean (default: true) - Controls property panel visibility
  * - readOnly: boolean (default: false) - When true, acts as BPMNViewer
+ * - initialBPMN: string - Initial BPMN XML to load
  */
 function BPMN({ 
   initialTheme = 'auto', 
@@ -25,6 +26,7 @@ function BPMN({
   showToolbox = true,
   showPropertyPanel = true,
   readOnly = false,
+  initialBPMN = null,
   ...props 
 }) {
   // Initialize theme synchronously to prevent flash
@@ -98,6 +100,7 @@ function BPMN({
         showToolbox={showToolbox}
         showPropertyPanel={showPropertyPanel}
         readOnly={readOnly}
+        initialBPMN={initialBPMN}
       />
     </div>
   );
