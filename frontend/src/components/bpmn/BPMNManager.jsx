@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './BPMNManager.css';
 
-const BPMNManager = ({ nodes, edges, onImportBPMN }) => {
+const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
   const [showXML, setShowXML] = useState(false);
   const [bpmnXML, setBpmnXML] = useState('');
   const [showPasteArea, setShowPasteArea] = useState(false);
@@ -1484,27 +1484,29 @@ const BPMNManager = ({ nodes, edges, onImportBPMN }) => {
         style={{ display: 'none' }}
       />
 
-      <div className="exporter-controls">
-        <button onClick={handleGenerateXML} className="btn-primary">
-          Generate XML
-        </button>
-        <button onClick={downloadBPMN} className="btn-secondary">
-          Download .bpmn
-        </button>
-        <button onClick={triggerFileUpload} className="btn-secondary">
-          Import .bpmn
-        </button>
-        <button onClick={togglePasteArea} className="btn-secondary">
-          Paste XML
-        </button>
-        {bpmnXML && (
-          <button onClick={copyToClipboard} className="btn-secondary">
-            Copy XML
+      {!readOnly && (
+        <div className="exporter-controls">
+          <button onClick={handleGenerateXML} className="btn-primary">
+            Generate XML
           </button>
-        )}
-      </div>
+          <button onClick={downloadBPMN} className="btn-secondary">
+            Download .bpmn
+          </button>
+          <button onClick={triggerFileUpload} className="btn-secondary">
+            Import .bpmn
+          </button>
+          <button onClick={togglePasteArea} className="btn-secondary">
+            Paste XML
+          </button>
+          {bpmnXML && (
+            <button onClick={copyToClipboard} className="btn-secondary">
+              Copy XML
+            </button>
+          )}
+        </div>
+      )}
 
-      {showPasteArea && (
+      {showPasteArea && !readOnly && (
         <>
           <div className="overlay" onClick={togglePasteArea}></div>
           <div className="paste-area">

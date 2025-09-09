@@ -16,6 +16,28 @@
   position: relative;
 }
 
+/* Read-only mode adjustments */
+.bpmn-readonly-viewer .bpmn-editor {
+  flex-direction: column;
+}
+
+.bpmn-readonly-viewer .editor-content {
+  margin-left: 0; /* Remove left margin when no toolbar */
+}
+
+.bpmn-readonly-viewer .toolbar {
+  display: none !important; /* Force hide toolbar in readonly mode */
+}
+
+/* Additional readonly mode styles */
+.bpmn-editor.readonly-mode .editor-content {
+  margin-left: 0; /* Remove left margin in readonly mode */
+}
+
+.bpmn-editor.readonly-mode .toolbar {
+  display: none !important; /* Ensure toolbar is hidden */
+}
+
 .reactflow-wrapper {
   flex: 1;
   height: 100%;
@@ -235,4 +257,37 @@
 /* Enhanced selection feedback for edges */
 .react-flow__edge.selected {
   z-index: 100;
+}
+
+/* Ensure readonly mode has clean appearance */
+.bpmn-readonly-viewer .react-flow__controls,
+.bpmn-readonly-viewer .react-flow__minimap,
+.bpmn-readonly-viewer .react-flow__panel,
+.bpmn-editor.readonly-mode .react-flow__controls,
+.bpmn-editor.readonly-mode .react-flow__minimap,
+.bpmn-editor.readonly-mode .react-flow__panel {
+  display: none !important;
+}
+
+/* Hide node selection indicators in readonly mode */
+.bpmn-readonly-viewer .react-flow__node.selected,
+.bpmn-editor.readonly-mode .react-flow__node.selected {
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Disable pointer events on nodes and edges in readonly mode for cleaner viewing */
+.bpmn-readonly-viewer .react-flow__node,
+.bpmn-readonly-viewer .react-flow__edge,
+.bpmn-editor.readonly-mode .react-flow__node,
+.bpmn-editor.readonly-mode .react-flow__edge {
+  pointer-events: none;
+}
+
+/* Hide BPMN manager controls in readonly mode */
+.bpmn-readonly-viewer .exporter-controls,
+.bpmn-editor.readonly-mode .exporter-controls,
+.bpmn-readonly-viewer .paste-area,
+.bpmn-editor.readonly-mode .paste-area {
+  display: none !important;
 }

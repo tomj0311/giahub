@@ -265,18 +265,37 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
           let nodeType = 'task';
           let nodeData = { label: name || id };
 
-          // Map BPMN elements to node types
-          if (tagName.includes('startevent')) {
-            nodeType = 'startEvent';
-          } else if (tagName.includes('endevent')) {
-            nodeType = 'endEvent';
-          } else if (tagName.includes('task')) {
-            nodeType = 'task';
-          } else if (tagName.includes('gateway')) {
-            nodeType = 'exclusiveGateway';
-          } else if (tagName.includes('intermediateevent')) {
-            nodeType = 'intermediateEvent';
-          }
+          // Use the existing bpmnTypeMap in reverse to map XML element types to React Flow node types
+          const xmlToBpmnTypeMap = {
+            'startevent': 'startEvent',
+            'endevent': 'endEvent',
+            'intermediateevent': 'intermediateEvent',
+            'intermediatecatchevent': 'intermediateCatchEvent',
+            'intermediatethrowevent': 'intermediateThrowEvent',
+            'boundaryevent': 'boundaryEvent',
+            'task': 'task',
+            'servicetask': 'serviceTask',
+            'usertask': 'userTask',
+            'scripttask': 'scriptTask',
+            'businessruletask': 'businessRuleTask',
+            'sendtask': 'sendTask',
+            'receivetask': 'receiveTask',
+            'manualtask': 'manualTask',
+            'subprocess': 'subProcess',
+            'callactivity': 'callActivity',
+            'exclusivegateway': 'exclusiveGateway',
+            'inclusivegateway': 'inclusiveGateway',
+            'parallelgateway': 'parallelGateway',
+            'eventbasedgateway': 'eventBasedGateway',
+            'complexgateway': 'complexGateway',
+            'gateway': 'gateway'
+          };
+
+          // Map BPMN XML element type to React Flow node type
+          nodeType = xmlToBpmnTypeMap[tagName] || 'task';
+
+          // Add taskType to node data for proper icon rendering
+          nodeData.taskType = nodeType;
 
           const node = {
             id: id,
@@ -894,8 +913,8 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   }, [participants, setNodes, setParticipants]);
 
   return (
-    <div className="bpmn-editor">
-      {showToolbox && (
+    <div className={`bpmn-editor ${readOnly ? 'readonly-mode' : ''}`}>
+      {showToolbox && !readOnly && (
         <Toolbar 
           isDarkMode={isDarkMode} 
           onToggleTheme={onToggleTheme}
@@ -940,11 +959,11 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
               transition: 'margin-right 0.3s ease, max-width 0.3s ease'
             }}
           >
-            <Controls />
-            <MiniMap />
+            {!readOnly && <Controls />}
+            {!readOnly && <MiniMap />}
           </ReactFlow>
         </div>
-        <BPMNExporter nodes={nodes} edges={edges} onImportBPMN={handleImportBPMN} />
+        <BPMNExporter nodes={nodes} edges={edges} onImportBPMN={handleImportBPMN} readOnly={readOnly} />
         {showPropertyPanel && (
           <PropertyPanel
             selectedNode={selectedNode}

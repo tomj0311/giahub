@@ -699,19 +699,26 @@ export default function AgentPlayground({ user }) {
                             }}>
                               BPMN Diagram Visualization
                             </Typography>
-                            <BPMN 
-                              readOnly={true}
-                              showToolbox={false}
-                              showPropertyPanel={false}
-                              initialBPMN={bpmnData.bpmnXML}
-                              style={{ height: '500px', width: '100%' }}
-                              onError={(error) => {
-                                console.error('🔥 BPMN Component Error:', error)
-                              }}
-                              onLoad={() => {
-                                console.log('✅ BPMN Component Loaded Successfully')
-                              }}
-                            />
+                            <Box sx={{ position: 'relative', height: '500px', width: '100%' }}>
+                              <BPMN 
+                                readOnly={true}
+                                showToolbox={false}
+                                showPropertyPanel={false}
+                                initialBPMN={bpmnData.bpmnXML}
+                                style={{ 
+                                  height: '100%', 
+                                  width: '100%',
+                                  '--toolbar-display': 'none' // CSS custom property to force hide toolbar
+                                }}
+                                className="bpmn-readonly-viewer"
+                                onError={(error) => {
+                                  console.error('🔥 BPMN Component Error:', error)
+                                }}
+                                onLoad={() => {
+                                  console.log('✅ BPMN Component Loaded Successfully')
+                                }}
+                              />
+                            </Box>
                           </Box>
                         )}
                         
