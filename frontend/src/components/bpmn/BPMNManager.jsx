@@ -1125,6 +1125,7 @@ const BPMNManager = ({ nodes, edges, onImportBPMN }) => {
             // Create node data with lane information and preserve original metadata
             const nodeData = {
               label: name,
+              taskType: elementType, // Add taskType to preserve the original BPMN element type
               processId: processId,
               participantId: participant?.id,
               laneId: containingLane?.id,
