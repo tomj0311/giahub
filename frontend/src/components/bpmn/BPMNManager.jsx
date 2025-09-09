@@ -684,9 +684,9 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
             }
           }
 
-          // Get node dimensions for center calculation
-          const getNodeCenter = (node, x, y) => {
-            let width = 100, height = 60;
+          // Get node dimensions and calculate connection points like bpmn-js
+          const getNodeConnectionPoint = (node, x, y, isSource, targetNode) => {
+            let width = 100, height = 80;
             switch (node.type) {
               case 'startEvent':
               case 'endEvent':
@@ -712,16 +712,24 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
               case 'dataObjectReference':
                 width = 36; height = 50; break;
               default:
-                width = 100; height = 60;
+                width = 100; height = 80;
             }
-            return { x: x + width / 2, y: y + height / 2 };
+            
+            // Calculate connection points like bpmn-js does
+            if (isSource) {
+              // For source nodes, connect from the right edge
+              return { x: x + width, y: y + height / 2 };
+            } else {
+              // For target nodes, connect to the left edge  
+              return { x: x, y: y + height / 2 };
+            }
           };
 
-          const sourceCenter = getNodeCenter(sourceNode, sourceX, sourceY);
-          const targetCenter = getNodeCenter(targetNode, targetX, targetY);
+          const sourcePoint = getNodeConnectionPoint(sourceNode, sourceX, sourceY, true, targetNode);
+          const targetPoint = getNodeConnectionPoint(targetNode, targetX, targetY, false, sourceNode);
 
-          xml += `<bpmndi:BPMNEdge id="${edgeShapeId}" bpmnElement="${edge.id}"><di:waypoint x="${Math.round(sourceCenter.x)}" y="${Math.round(sourceCenter.y)}" /><di:waypoint x="${Math.round(targetCenter.x)}" y="${Math.round(targetCenter.y)}" />`;
-          computedMid = { x: (sourceCenter.x + targetCenter.x) / 2, y: (sourceCenter.y + targetCenter.y) / 2 };
+          xml += `<bpmndi:BPMNEdge id="${edgeShapeId}" bpmnElement="${edge.id}"><di:waypoint x="${Math.round(sourcePoint.x)}" y="${Math.round(sourcePoint.y)}" /><di:waypoint x="${Math.round(targetPoint.x)}" y="${Math.round(targetPoint.y)}" />`;
+          computedMid = { x: (sourcePoint.x + targetPoint.x) / 2, y: (sourcePoint.y + targetPoint.y) / 2 };
         }
 
         // Add label if present; prefer original label bounds
