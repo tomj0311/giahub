@@ -41,20 +41,34 @@ import { agentRuntimeService } from '../services/agentRuntimeService'
 
 // Simple function to detect and extract BPMN content
 const detectBPMN = (content) => {
+  console.log('🔍 BPMN Detection - Input content length:', content?.length || 0)
+  console.log('🔍 BPMN Detection - Content preview:', content?.substring(0, 200) + '...')
+  
   if (!content) return { hasBPMN: false, bpmnXML: null, contentWithoutBPMN: content }
   
-  // Look for BPMN 2.0 XML patterns - more flexible regex
-  const bpmnRegex = /<bpmn:definitions[\s\S]*?<\/bpmn:definitions>/i
-  const match = content.match(bpmnRegex)
+  // Look for BPMN 2.0 XML patterns - support both namespaced and non-namespaced definitions
+  const bpmnRegexes = [
+    /<bpmn:definitions[\s\S]*?<\/bpmn:definitions>/i,  // With bpmn: namespace
+    /<definitions[\s\S]*?<\/definitions>/i              // Without namespace
+  ]
   
-  if (match) {
-    return {
-      hasBPMN: true,
-      bpmnXML: match[0],
-      contentWithoutBPMN: content.replace(match[0], '').trim()
+  for (const regex of bpmnRegexes) {
+    console.log('🔍 BPMN Detection - Testing regex:', regex.toString())
+    const match = content.match(regex)
+    if (match) {
+      console.log('✅ BPMN Match found! Length:', match[0].length)
+      console.log('✅ BPMN XML preview:', match[0].substring(0, 500) + '...')
+      
+      // Keep the original content intact, just mark that BPMN was found
+      return {
+        hasBPMN: true,
+        bpmnXML: match[0],
+        contentWithoutBPMN: content // Keep original content with XML visible
+      }
     }
   }
   
+  console.log('❌ No BPMN pattern found')
   return { hasBPMN: false, bpmnXML: null, contentWithoutBPMN: content }
 }
 
@@ -659,25 +673,49 @@ export default function AgentPlayground({ user }) {
                 }}>
                   {(() => {
                     const bpmnData = detectBPMN(m.content)
+                    console.log('🎨 Rendering message - BPMN detected:', bpmnData.hasBPMN)
+                    console.log('🎨 Content length:', m.content?.length || 0)
                     
                     return (
                       <>
+                        {/* Always show the original content including XML */}
                         {bpmnData.contentWithoutBPMN && (
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>
                             {bpmnData.contentWithoutBPMN}
                           </ReactMarkdown>
                         )}
+                        
+                        {/* Additionally show BPMN diagram if detected */}
                         {bpmnData.hasBPMN && (
                           <Box sx={{ mt: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+                            <Typography variant="caption" sx={{ 
+                              display: 'block', 
+                              bgcolor: 'action.hover', 
+                              px: 1, 
+                              py: 0.5, 
+                              borderBottom: '1px solid', 
+                              borderColor: 'divider',
+                              fontWeight: 600 
+                            }}>
+                              BPMN Diagram Visualization
+                            </Typography>
                             <BPMN 
                               readOnly={true}
                               showToolbox={false}
                               showPropertyPanel={false}
                               initialBPMN={bpmnData.bpmnXML}
-                              style={{ height: '400px', width: '100%' }}
+                              style={{ height: '500px', width: '100%' }}
+                              onError={(error) => {
+                                console.error('🔥 BPMN Component Error:', error)
+                              }}
+                              onLoad={() => {
+                                console.log('✅ BPMN Component Loaded Successfully')
+                              }}
                             />
                           </Box>
                         )}
+                        
+                        {/* Fallback if no content */}
                         {!bpmnData.contentWithoutBPMN && !bpmnData.hasBPMN && (
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>
                             {m.content && m.content.length ? m.content : '...'}

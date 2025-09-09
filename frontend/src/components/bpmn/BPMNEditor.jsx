@@ -180,46 +180,203 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
     setEdges((eds) => updateEdgesWithArrows(eds));
   }, [updateEdgesWithArrows]); // Added dependency
 
+  // Import function from BPMNManager for parsing
+  const parseBPMNXML = useCallback((xmlString) => {
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+
+      // Check for parsing errors
+      const parseError = xmlDoc.querySelector('parsererror');
+      if (parseError) {
+        throw new Error('Invalid XML format: ' + parseError.textContent);
+      }
+
+      const nodes = [];
+      const edges = [];
+      let nodeCounter = 1;
+
+      // Get diagram information for positioning
+      const shapes = xmlDoc.querySelectorAll('bpmndi\\:BPMNShape, BPMNShape');
+      const shapeMap = {};
+
+      shapes.forEach(shape => {
+        const bpmnElement = shape.getAttribute('bpmnElement');
+        const bounds = shape.querySelector('dc\\:Bounds, Bounds');
+        if (bounds) {
+          shapeMap[bpmnElement] = {
+            x: parseFloat(bounds.getAttribute('x')) || 0,
+            y: parseFloat(bounds.getAttribute('y')) || 0,
+            width: parseFloat(bounds.getAttribute('width')) || 100,
+            height: parseFloat(bounds.getAttribute('height')) || 60
+          };
+        }
+      });
+
+      // Parse process elements - only include visual elements, not flows
+      const process = xmlDoc.querySelector('process');
+      if (process) {
+        // Define which elements should be converted to visual nodes
+        const visualElementSelectors = [
+          'startEvent',
+          'endEvent', 
+          'task',
+          'serviceTask',
+          'userTask',
+          'scriptTask',
+          'businessRuleTask',
+          'sendTask',
+          'receiveTask',
+          'manualTask',
+          'callActivity',
+          'subProcess',
+          'exclusiveGateway',
+          'inclusiveGateway', 
+          'parallelGateway',
+          'eventBasedGateway',
+          'complexGateway',
+          'gateway',
+          'intermediateEvent',
+          'intermediateCatchEvent',
+          'intermediateThrowEvent',
+          'boundaryEvent'
+        ];
+
+        // Only select visual elements, exclude sequenceFlow and other non-visual elements
+        const visualElements = [];
+        visualElementSelectors.forEach(selector => {
+          const elements = process.querySelectorAll(selector);
+          elements.forEach(el => visualElements.push(el));
+        });
+
+        console.log('📋 Found visual elements:', visualElements.map(el => el.tagName));
+
+        visualElements.forEach(element => {
+          const id = element.getAttribute('id');
+          const name = element.getAttribute('name') || '';
+          const tagName = element.tagName.toLowerCase();
+
+          // Skip if no ID
+          if (!id) return;
+
+          // Get position from diagram info or use default
+          const position = shapeMap[id] || { x: 200 + (nodeCounter * 150), y: 200 };
+
+          let nodeType = 'task';
+          let nodeData = { label: name || id };
+
+          // Map BPMN elements to node types
+          if (tagName.includes('startevent')) {
+            nodeType = 'startEvent';
+          } else if (tagName.includes('endevent')) {
+            nodeType = 'endEvent';
+          } else if (tagName.includes('task')) {
+            nodeType = 'task';
+          } else if (tagName.includes('gateway')) {
+            nodeType = 'exclusiveGateway';
+          } else if (tagName.includes('intermediateevent')) {
+            nodeType = 'intermediateEvent';
+          }
+
+          const node = {
+            id: id,
+            type: nodeType,
+            position: { x: position.x, y: position.y },
+            data: nodeData
+          };
+
+          console.log('➕ Adding node:', { id, type: nodeType, label: nodeData.label });
+          nodes.push(node);
+          nodeCounter++;
+        });
+
+        // Parse sequence flows
+        const flows = xmlDoc.querySelectorAll('sequenceFlow');
+        console.log('🔗 Found sequence flows:', flows.length);
+        
+        flows.forEach(flow => {
+          const id = flow.getAttribute('id');
+          const sourceRef = flow.getAttribute('sourceRef');
+          const targetRef = flow.getAttribute('targetRef');
+          const name = flow.getAttribute('name') || '';
+
+          if (sourceRef && targetRef) {
+            console.log('➕ Adding edge:', { id, source: sourceRef, target: targetRef });
+            edges.push({
+              id: id,
+              source: sourceRef,
+              target: targetRef,
+              label: name,
+              type: 'smoothstep',
+              markerEnd: { type: MarkerType.ArrowClosed }
+            });
+          }
+        });
+      }
+
+      return { nodes, edges };
+    } catch (error) {
+      console.error('Error parsing BPMN XML:', error);
+      throw error;
+    }
+  }, []);
+
   // Load initial BPMN if provided
   useEffect(() => {
-    if (initialBPMN) {
-      // Simple parser for BPMN XML - extract nodes and create basic representation
+    if (initialBPMN && reactFlowInstance) {
+      console.log('🔄 Loading initial BPMN, length:', initialBPMN?.length)
+      console.log('🔄 BPMN preview:', initialBPMN?.substring(0, 200) + '...')
+      
       try {
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(initialBPMN, 'text/xml');
+        console.log('🔄 Attempting to parse BPMN XML...')
+        const result = parseBPMNXML(initialBPMN);
         
-        // Check for parsing errors
-        const parseError = xmlDoc.querySelector('parsererror');
-        if (parseError) {
-          console.warn('Failed to parse initial BPMN XML');
-          return;
+        if (result && result.nodes && result.nodes.length > 0) {
+          console.log('✅ Successfully parsed BPMN - nodes:', result.nodes.length, 'edges:', result.edges.length)
+          console.log('📋 Parsed nodes:', result.nodes.map(n => ({ id: n.id, type: n.type, label: n.data?.label })))
+          
+          setNodes(result.nodes);
+          setEdges(result.edges);
+          
+          // Fit view after loading
+          setTimeout(() => {
+            if (reactFlowInstance) {
+              reactFlowInstance.fitView({ padding: 0.2 });
+            }
+          }, 100);
+        } else {
+          console.warn('⚠️ Parsing returned no nodes')
+          
+          // Show fallback message
+          setNodes([{
+            id: 'bpmn-empty',
+            type: 'textAnnotation',
+            position: { x: 250, y: 150 },
+            data: { 
+              label: 'Empty BPMN Process',
+              text: 'BPMN XML was parsed but contains no displayable elements'
+            },
+          }]);
+          setEdges([]);
         }
-
-        // For now, just clear the current nodes and show a placeholder
-        // This is a simple implementation - a full parser would be complex
+        
+      } catch (error) {
+        console.error('🔥 Error loading initial BPMN:', error);
+        
+        // Show error in diagram
         setNodes([{
-          id: 'bpmn-loaded',
+          id: 'bpmn-error',
           type: 'textAnnotation',
-          position: { x: 250, y: 250 },
+          position: { x: 250, y: 150 },
           data: { 
-            label: 'BPMN Diagram Loaded\n(Viewer Mode)',
-            text: 'BPMN diagram from agent response loaded successfully.'
+            label: 'BPMN Parse Error',
+            text: 'Error parsing BPMN XML:\n' + error.message
           },
         }]);
         setEdges([]);
-        
-        // Fit view after loading
-        setTimeout(() => {
-          if (reactFlowInstance) {
-            reactFlowInstance.fitView({ padding: 0.2 });
-          }
-        }, 100);
-        
-      } catch (error) {
-        console.warn('Error loading initial BPMN:', error);
       }
     }
-  }, [initialBPMN, reactFlowInstance]);
+  }, [initialBPMN, reactFlowInstance, parseBPMNXML]);
 
   // Utility function to update participant bounds data (without automatic resizing)
   const updateParticipantBoundsData = useCallback((participantId, allNodes) => {
