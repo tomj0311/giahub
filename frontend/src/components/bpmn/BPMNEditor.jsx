@@ -65,23 +65,67 @@ const nodeTypes = {
   lane: LaneNode,
 };
 
-const initialNodes = [
+const initialEdges = [];
+
+let id = 1;
+
+// Generate BPMN 2.0 compliant IDs: elementType_6digitHex
+const generateBpmnId = (elementType) => {
+  const hex = Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0').toUpperCase();
+  
+  // Map React Flow types to BPMN 2.0 element types
+  const bpmnTypeMap = {
+    startEvent: 'StartEvent',
+    endEvent: 'EndEvent',
+    intermediateEvent: 'IntermediateEvent',
+    intermediateCatchEvent: 'IntermediateCatchEvent',
+    intermediateThrowEvent: 'IntermediateThrowEvent',
+    boundaryEvent: 'BoundaryEvent',
+    task: 'Task',
+    serviceTask: 'ServiceTask',
+    userTask: 'UserTask',
+    scriptTask: 'ScriptTask',
+    businessRuleTask: 'BusinessRuleTask',
+    sendTask: 'SendTask',
+    receiveTask: 'ReceiveTask',
+    manualTask: 'ManualTask',
+    subProcess: 'SubProcess',
+    callActivity: 'CallActivity',
+    exclusiveGateway: 'ExclusiveGateway',
+    inclusiveGateway: 'InclusiveGateway',
+    parallelGateway: 'ParallelGateway',
+    eventBasedGateway: 'EventBasedGateway',
+    complexGateway: 'ComplexGateway',
+    gateway: 'Gateway',
+    dataObject: 'DataObject',
+    dataObjectReference: 'DataObjectReference',
+    dataStore: 'DataStore',
+    dataStoreReference: 'DataStoreReference',
+    group: 'Group',
+    textAnnotation: 'TextAnnotation',
+    participant: 'Participant',
+    lane: 'Lane'
+  };
+  
+  const bpmnType = bpmnTypeMap[elementType] || 'Element';
+  return `${bpmnType}_${hex}`;
+};
+
+const getId = (elementType = 'element') => generateBpmnId(elementType);
+
+// Generate the initial start node with proper ID
+const getInitialNodes = () => [
   {
-    id: '1',
+    id: getId('startEvent'),
     type: 'startEvent',
     position: { x: 250, y: 250 },
     data: { label: 'Start' },
   },
 ];
 
-const initialEdges = [];
-
-let id = 1;
-const getId = () => `dndnode_${id++}`;
-
 const BPMNEditorFlow = ({ isDarkMode, onToggleTheme }) => {
   const reactFlowWrapper = useRef(null);
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [nodes, setNodes, onNodesChange] = useNodesState(getInitialNodes());
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
   const [participants, setParticipants] = useState([]);
@@ -367,7 +411,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme }) => {
       };
 
       const newNode = {
-        id: getId(),
+        id: getId(type),
         type,
         position,
         data: { 
