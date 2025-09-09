@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import BPMN from '../components/bpmn/BPMN'
@@ -36,6 +36,7 @@ import HistoryIcon from '@mui/icons-material/History'
 import DeleteIcon from '@mui/icons-material/Delete'
 import SendIcon from '@mui/icons-material/Send'
 import CancelIcon from '@mui/icons-material/Cancel'
+import EditIcon from '@mui/icons-material/Edit'
 import { agentService } from '../services/agentService'
 import { agentRuntimeService } from '../services/agentRuntimeService'
 
@@ -77,6 +78,7 @@ export default function AgentPlayground({ user }) {
   const theme = useTheme()
   const isSmall = useMediaQuery(theme.breakpoints.down('md'))
   const location = useLocation()
+  const navigate = useNavigate()
   const token = user?.token || localStorage.getItem('token') || ''
 
   // Agent list
@@ -585,6 +587,17 @@ export default function AgentPlayground({ user }) {
     return firstUserMsg.content.trim()
   }
 
+  // Handle edit BPMN button click
+  const handleEditBPMN = (bpmnXML) => {
+    // Navigate to dashboard/bpmn with the XML data
+    navigate('/dashboard/bpmn', {
+      state: {
+        initialBPMN: bpmnXML,
+        editMode: true
+      }
+    })
+  }
+
   const renderGroupedList = () => {
     const cats = Object.keys(grouped).sort((a, b) => a.localeCompare(b))
     if (!cats.length && !loading) return <Typography variant="body2" sx={{ p: 1 }}>No agents found.</Typography>
@@ -688,17 +701,35 @@ export default function AgentPlayground({ user }) {
                         {/* Additionally show BPMN diagram if detected */}
                         {bpmnData.hasBPMN && (
                           <Box sx={{ mt: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-                            <Typography variant="caption" sx={{ 
-                              display: 'block', 
+                            <Box sx={{ 
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              alignItems: 'center',
                               bgcolor: 'action.hover', 
                               px: 1, 
                               py: 0.5, 
                               borderBottom: '1px solid', 
-                              borderColor: 'divider',
-                              fontWeight: 600 
+                              borderColor: 'divider'
                             }}>
-                              BPMN Diagram Visualization
-                            </Typography>
+                              <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                                BPMN Diagram Visualization
+                              </Typography>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<EditIcon />}
+                                onClick={() => handleEditBPMN(bpmnData.bpmnXML)}
+                                sx={{ 
+                                  minWidth: 'auto',
+                                  fontSize: '11px',
+                                  textTransform: 'none',
+                                  py: 0.25,
+                                  px: 1
+                                }}
+                              >
+                                Edit
+                              </Button>
+                            </Box>
                             <Box sx={{ position: 'relative', height: '500px', width: '100%' }}>
                               <BPMN 
                                 readOnly={true}

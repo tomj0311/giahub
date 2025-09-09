@@ -645,6 +645,24 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 	)
 }
 
+// BPMN Editor wrapper component to handle navigation state
+const BPMNEditorWrapper = () => {
+	const location = useLocation()
+	const initialBPMN = location.state?.initialBPMN || null
+	const editMode = location.state?.editMode || false
+
+	return (
+		<BPMN 
+			initialTheme="auto" 
+			style={{ width: '100%', minHeight: '70vh', borderRadius: 8, overflow: 'hidden' }}
+			initialBPMN={initialBPMN}
+			showToolbox={editMode}
+			showPropertyPanel={editMode}
+			readOnly={!editMode}
+		/>
+	)
+}
+
 export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 	return (
 		<Routes>
@@ -662,7 +680,7 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="analytics" element={<div>Analytics - Coming Soon</div>} />
 				<Route path="databases" element={<div>Databases - Coming Soon</div>} />
 				<Route path="custom-connectors" element={<div>Custom Connectors - Coming Soon</div>} />
-				<Route path="bpmn" element={<BPMN initialTheme="auto" style={{ width: '100%', minHeight: '70vh', borderRadius: 8, overflow: 'hidden' }} />} />
+				<Route path="bpmn" element={<BPMNEditorWrapper />} />
 				<Route path="monitor" element={<div>Monitor - Coming Soon</div>} />
 				<Route path="manage" element={<BPMN initialTheme="auto" style={{ width: '100%', minHeight: '70vh', borderRadius: 8, overflow: 'hidden' }} />} />
 				<Route path="tenants" element={<div>Tenants - Coming Soon</div>} />
