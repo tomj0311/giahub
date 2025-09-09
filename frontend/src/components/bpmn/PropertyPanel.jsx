@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './PropertyPanel.css';
 
-const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate, isOpen, onToggle }) => {
+const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate, isOpen, onToggle, readOnly }) => {
   const [activeSection, setActiveSection] = useState('general');
   const [nodeData, setNodeData] = useState({
     name: '',
@@ -104,7 +104,7 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
     if (selectedEdge) {
       return 'Sequence Flow';
     }
-    return 'No Element Selected';
+    return '';
   };
 
   return (
@@ -116,7 +116,7 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
         </button>
       </div>
 
-      {(selectedNode || selectedEdge) ? (
+      {(selectedNode || selectedEdge) && (
         <div className="property-panel-content">
           <div className="element-type">
             <span className="element-type-label">{getElementType()}</span>
@@ -143,6 +143,7 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
                     value={nodeData.name}
                     onChange={(e) => handleInputChange('name', e.target.value)}
                     placeholder="Enter element name"
+                    disabled={readOnly}
                   />
                 </div>
                 <div className="form-group">
@@ -164,6 +165,7 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
                     value={nodeData.versionTag}
                     onChange={(e) => handleInputChange('versionTag', e.target.value)}
                     placeholder="Enter version tag"
+                    disabled={readOnly}
                   />
                 </div>
               </div>
@@ -191,15 +193,12 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
                     onChange={(e) => handleInputChange('documentation', e.target.value)}
                     placeholder="Enter element documentation"
                     rows={6}
+                    disabled={readOnly}
                   />
                 </div>
               </div>
             )}
           </div>
-        </div>
-      ) : (
-        <div className="no-selection">
-          <p>Select an element to view its properties</p>
         </div>
       )}
     </div>

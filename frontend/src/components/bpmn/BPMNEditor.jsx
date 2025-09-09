@@ -517,43 +517,42 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
     setSelectedNode(selectedNode || null);
     setSelectedEdge(selectedEdge || null);
     
-    // Auto-open property panel when something is selected, but only if user hasn't manually closed it
-    if ((selectedNode || selectedEdge) && !isPropertyPanelOpen && !userManuallyClosed) {
+    // Auto-open property panel when something is selected
+    if (selectedNode || selectedEdge) {
       setIsPropertyPanelOpen(true);
-    }
-    
-    // Reset the manual close flag when nothing is selected
-    if (!selectedNode && !selectedEdge) {
+      setUserManuallyClosed(false);
+    } else {
+      // Auto-close property panel when nothing is selected
+      setIsPropertyPanelOpen(false);
       setUserManuallyClosed(false);
     }
-  }, [isPropertyPanelOpen, userManuallyClosed]);
+  }, []);
 
   // Node click handler
   const onNodeClick = useCallback((event, node) => {
     setSelectedNode(node);
     setSelectedEdge(null);
-    // Always open property panel when user explicitly clicks a node
-    if (!isPropertyPanelOpen) {
-      setIsPropertyPanelOpen(true);
-      setUserManuallyClosed(false); // Reset manual close flag since user is interacting
-    }
-  }, [isPropertyPanelOpen]);
+    // Always open property panel when user clicks a node
+    setIsPropertyPanelOpen(true);
+    setUserManuallyClosed(false);
+  }, []);
 
   // Edge click handler
   const onEdgeClick = useCallback((event, edge) => {
     setSelectedEdge(edge);
     setSelectedNode(null);
-    // Always open property panel when user explicitly clicks an edge
-    if (!isPropertyPanelOpen) {
-      setIsPropertyPanelOpen(true);
-      setUserManuallyClosed(false); // Reset manual close flag since user is interacting
-    }
-  }, [isPropertyPanelOpen]);
+    // Always open property panel when user clicks an edge
+    setIsPropertyPanelOpen(true);
+    setUserManuallyClosed(false);
+  }, []);
 
-  // Pane click handler (deselect all)
+  // Pane click handler (deselect all and close property panel)
   const onPaneClick = useCallback(() => {
     setSelectedNode(null);
     setSelectedEdge(null);
+    // Close property panel when clicking on empty space
+    setIsPropertyPanelOpen(false);
+    setUserManuallyClosed(false);
   }, []);
 
   // Custom property panel toggle handler
