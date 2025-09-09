@@ -51,7 +51,6 @@ const AgentPlayground = lazy(() => import('../playground/AgentPlayground'))
 const BPMN = lazy(() => import('../components/bpmn/BPMN'))
 import RouteTransition from '../components/RouteTransition'
 import RouteLoader from '../components/RouteLoader'
-import { menuService } from '../services/menuService'
 import { getIconComponent } from '../utils/iconMap'
 
 const DRAWER_WIDTH = 240
@@ -64,53 +63,82 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 	const [drawerOpen, setDrawerOpen] = useState(true) // desktop mini variant
 	const [mobileOpen, setMobileOpen] = useState(false)
 	const [anchorEl, setAnchorEl] = useState(null)
-	const [menuItems, setMenuItems] = useState([])
 	const [expandedSections, setExpandedSections] = useState({})
 	const location = useLocation()
 
-	// Load menu items from API
-	useEffect(() => {
-		const loadMenuItems = async () => {
-			try {
-				const items = await menuService.getMenuItems(user.token)
-				console.log('Loaded menu items:', items)
-				setMenuItems(items)
-
-				// Set initial expanded state based on current route
-				const initialExpanded = {}
-				items.forEach(item => {
-					if (item.expandable && item.children) {
-						// Auto-expand if current route matches any child
-						const shouldExpand = item.children.some(child =>
-							location.pathname === child.to || location.pathname.startsWith(child.to)
-						)
-						initialExpanded[item.label] = shouldExpand
-					}
-				})
-				setExpandedSections(initialExpanded)
-			} catch (error) {
-				console.error('Failed to load menu items:', error)
-			}
-		}
-
-		loadMenuItems()
-	}, [user.token])
-
-	// Auto-expand sections when navigating to their pages
-	useEffect(() => {
-		const newExpanded = { ...expandedSections }
-		menuItems.forEach(item => {
-			if (item.expandable && item.children) {
-				const shouldExpand = item.children.some(child =>
-					location.pathname === child.to || location.pathname.startsWith(child.to)
-				)
-				if (shouldExpand && !newExpanded[item.label]) {
-					newExpanded[item.label] = true
+	// Hardcoded menu items based on screenshot
+	const menuItems = [
+		{
+			label: 'Home',
+			to: '/dashboard/home',
+			icon: 'Home',
+			order: 10
+		},
+		{
+			label: 'Agents',
+			icon: 'Bot',
+			expandable: true,
+			order: 20,
+			children: [
+				{
+					label: 'Playground',
+					to: '/dashboard/agent-playground',
+					icon: 'Play'
+				},
+				{
+					label: 'Analytics',
+					to: '/dashboard/analytics',
+					icon: 'BarChart'
 				}
-			}
-		})
-		setExpandedSections(newExpanded)
-	}, [location.pathname, menuItems])
+			]
+		},
+		{
+			label: 'Configuration',
+			icon: 'Settings',
+			expandable: true,
+			order: 30,
+			children: [
+				{
+					label: 'Models',
+					to: '/dashboard/model-config',
+					icon: 'Brain'
+				},
+				{
+					label: 'Tools',
+					to: '/dashboard/tool-config',
+					icon: 'Wrench'
+				},
+				{
+					label: 'Databases',
+					to: '/dashboard/databases',
+					icon: 'Database'
+				},
+				{
+					label: 'Custom Connectors',
+					to: '/dashboard/custom-connectors',
+					icon: 'Plug'
+				}
+			]
+		},
+		{
+			label: 'Workflows',
+			icon: 'Workflow',
+			expandable: true,
+			order: 40,
+			children: [
+				{
+					label: 'BPMN',
+					to: '/dashboard/bpmn',
+					icon: 'GitBranch'
+				},
+				{
+					label: 'Monitor',
+					to: '/dashboard/monitor',
+					icon: 'Monitor'
+				}
+			]
+		}
+	]
 
 	const handleProfileMenuOpen = (event) => {
 		setAnchorEl(event.currentTarget)
@@ -583,7 +611,7 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 	return (
 		<Routes>
 			<Route path="/" element={<DashboardLayout user={user} onLogout={onLogout} themeKey={themeKey} setThemeKey={setThemeKey} />}>
-				<Route index element={<Navigate to="/dashboard/home" replace />} />
+				<Route index element={<Navigate to="home" replace />} />
 				<Route path="home" element={<Home user={user} />} />
 				<Route path="users" element={<Users user={user} />} />
 				<Route path="role-management" element={<RoleManagement user={user} />} />
@@ -592,7 +620,12 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="model-config" element={<ModelConfig user={user} />} />
 				<Route path="tool-config" element={<ToolConfig user={user} />} />
 				<Route path="knowledge-config" element={<KnowledgeConfig user={user} />} />
-				<Route path="agent-playground" element={<BPMN initialTheme="auto" style={{ width: '100%', minHeight: '70vh', borderRadius: 8, overflow: 'hidden' }} />} />
+				<Route path="agent-playground" element={<AgentPlayground user={user} />} />
+				<Route path="analytics" element={<div>Analytics - Coming Soon</div>} />
+				<Route path="databases" element={<div>Databases - Coming Soon</div>} />
+				<Route path="custom-connectors" element={<div>Custom Connectors - Coming Soon</div>} />
+				<Route path="bpmn" element={<BPMN initialTheme="auto" style={{ width: '100%', minHeight: '70vh', borderRadius: 8, overflow: 'hidden' }} />} />
+				<Route path="monitor" element={<div>Monitor - Coming Soon</div>} />
 				<Route path="manage" element={<BPMN initialTheme="auto" style={{ width: '100%', minHeight: '70vh', borderRadius: 8, overflow: 'hidden' }} />} />
 			</Route>
 		</Routes>

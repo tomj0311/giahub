@@ -14,7 +14,6 @@ import SignupPage from './pages/SignupPage'
 import VerifyPage from './pages/VerifyPage'
 import AuthCallback from './pages/AuthCallback'
 import Dashboard from './Dashboard/Dashboard'
-import PageUnderConstruction from './components/PageUnderConstruction'
 import { buildTheme, getThemeKeyForMode } from './theme'
 import { apiCall } from './config/api'
 
@@ -139,15 +138,11 @@ export default function App() {
         <Route path="/verify" element={<VerifyPage />} />
         <Route path="/auth/callback" element={<AuthCallback onLogin={auth.login} />} />
 
-        {/* Protected routes */}
-        <Route path="/agent-playground" element={<Navigate to="/dashboard/agent-playground" replace />} />
+        {/* Dashboard - handles all authenticated routes */}
         <Route path="/dashboard/*" element={auth.token ? <Dashboard user={{ name: auth.name, token: auth.token }} onLogout={auth.logout} themeKey={themeKey} setThemeKey={setThemeKey} /> : <Navigate to="/login" replace />} />
-        <Route path="/agents/*" element={auth.token ? <Dashboard user={{ name: auth.name, token: auth.token }} onLogout={auth.logout} themeKey={themeKey} setThemeKey={setThemeKey} /> : <Navigate to="/login" replace />} />
-        <Route path="/workflows/*" element={<Navigate to="/dashboard/manage" replace />} />
 
-        {/* Default redirects */}
+        {/* Simple redirects */}
         <Route path="/" element={<Navigate to={auth.token ? "/dashboard" : "/login"} replace />} />
-        <Route path="*" element={<PageUnderConstruction />} />
       </Routes>
     </AppShell>
   )

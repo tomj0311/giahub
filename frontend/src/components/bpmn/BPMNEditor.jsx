@@ -29,7 +29,6 @@ import GroupNode from './nodes/GroupNode';
 import TextAnnotationNode from './nodes/TextAnnotationNode';
 import ParticipantNode from './nodes/ParticipantNode';
 import LaneNode from './nodes/LaneNode';
-import ParticipationPanel from './ParticipationPanel';
 import PropertyPanel from './PropertyPanel';
 import './BPMNEditor.css';
 
@@ -702,12 +701,6 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme }) => {
           </ReactFlow>
         </div>
         <BPMNExporter nodes={nodes} edges={edges} onImportBPMN={handleImportBPMN} />
-        <ParticipationPanel 
-          onAddParticipant={handleAddParticipant}
-          onAddLane={handleAddLane}
-          participants={participants}
-          onPanelToggle={setIsPanelOpen}
-        />
         <PropertyPanel
           selectedNode={selectedNode}
           selectedEdge={selectedEdge}
