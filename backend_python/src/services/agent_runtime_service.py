@@ -70,21 +70,20 @@ class AgentRuntimeService:
             tools = []
             tools_config = agent_config.get("tools", {})
             if tools_config:
-                for tool_ref in tools_config.values():
+                for tool_id in tools_config.keys():
                     try:
-                        # Handle both string ID and dict with 'id' key
-                        tool_id = tool_ref if isinstance(tool_ref, str) else tool_ref.get("id")
                         if tool_id:
                             tool_config = await ToolConfigService.get_tool_config_by_id(tool_id, user)
-                        tool_strategy = tool_config.get("tool", {}).get("strategy")
-                        tool_params = tool_config.get("tool", {}).get("params", {})
-                        if tool_strategy:
-                            tool_class = module_loader(tool_strategy)
-                            if tool_class:
-                                tool_instance = tool_class(**tool_params)
-                                tools.append(tool_instance)
+                            if tool_config:
+                                tool_strategy = tool_config.get("tool", {}).get("strategy")
+                                tool_params = tool_config.get("tool", {}).get("params", {})
+                                if tool_strategy:
+                                    tool_class = module_loader(tool_strategy)
+                                    if tool_class:
+                                        tool_instance = tool_class(**tool_params)
+                                        tools.append(tool_instance)
                     except Exception as e:
-                        logger.warning(f"Failed to load tool {tool_ref}: {e}")
+                        logger.warning(f"Failed to load tool {tool_id}: {e}")
             
             # Load knowledge collection
             knowledge = None
@@ -116,7 +115,7 @@ class AgentRuntimeService:
                 "knowledge": knowledge,
                 "markdown" : True,
                 "add_history_to_messages": history_config.get("enabled", False),
-                "num_history_responses": history_config.get("num", 3) if history_config.get("enabled", False) else None,
+                "num_history_responses": history_config.get("num", 3),
             }
             
             # Use session_id instead of session_collection

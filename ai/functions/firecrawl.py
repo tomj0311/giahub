@@ -5,7 +5,7 @@ from ai.tools import Toolkit
 from ai.utils.log import logger
 
 try:  # Newer API objects
-    from firecrawl import FirecrawlApp, AsyncFirecrawlApp, ScrapeOptions  # type: ignore
+    from firecrawl import FirecrawlApp, AsyncFirecrawlApp, V1ScrapeOptions as ScrapeOptions  # type: ignore
 except ImportError:  # pragma: no cover
     raise ImportError(
         "`firecrawl-py` not installed. Install with: pip install firecrawl-py"

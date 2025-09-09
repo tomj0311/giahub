@@ -47,6 +47,22 @@ async def list_categories(user: dict = Depends(verify_token_middleware)):
         raise HTTPException(status_code=500, detail=error_msg)
 
 
+@router.get("/configs")
+async def list_knowledge_configs(user: dict = Depends(verify_token_middleware)):
+    """List knowledge configurations for current tenant."""
+    logger.info("[KNOWLEDGE] Listing knowledge configurations")
+    try:
+        result = await KnowledgeService.list_knowledge_configs(user)
+        logger.debug(f"[KNOWLEDGE] Retrieved {len(result)} configurations")
+        return {"configurations": result}
+    except Exception as e:
+        import traceback
+        error_msg = str(e) if str(e) else repr(e)
+        logger.error(f"[KNOWLEDGE] Error listing configurations: {error_msg}")
+        logger.error(f"[KNOWLEDGE] Configurations error traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=error_msg)
+
+
 @router.get("/collections")
 async def list_collections(user: dict = Depends(verify_token_middleware)):
     """List knowledge collections for current tenant."""

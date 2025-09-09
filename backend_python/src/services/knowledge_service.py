@@ -95,16 +95,15 @@ class KnowledgeService:
     async def list_knowledge_configs(cls, user: dict) -> List[Dict[str, Any]]:
         """List knowledge configurations for current tenant"""
         tenant_id = await cls.validate_tenant_access(user)
-        user_id = user.get("id") or user.get("userId")
         
-        logger.info(f"[KNOWLEDGE] Listing configs for tenant: {tenant_id}, user: {user_id}")
+        logger.info(f"[KNOWLEDGE] Listing configs for tenant: {tenant_id}")
         
         try:
             docs = await MongoStorageService.find_many(
                 "knowledgeConfig",
-                {"userId": user_id},
+                {},
                 tenant_id=tenant_id,
-                sort_field="name",
+                sort_field="collection",
                 sort_order=1
             )
             
@@ -112,7 +111,8 @@ class KnowledgeService:
             for doc in docs:
                 config = {
                     "id": str(doc["_id"]),
-                    "name": doc.get("name"),
+                    "name": doc.get("collection") or doc.get("name"),  # Use collection as name
+                    "collection": doc.get("collection"),
                     "description": doc.get("description", ""),
                     "chunker": doc.get("chunker", {}),
                     "created_at": doc.get("created_at"),

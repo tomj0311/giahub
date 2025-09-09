@@ -109,6 +109,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 					icon: 'Wrench'
 				},
 				{
+					label: 'Knowledge',
+					to: '/dashboard/knowledge-config',
+					icon: 'BookOpen'
+				},
+				{
 					label: 'Databases',
 					to: '/dashboard/databases',
 					icon: 'Database'

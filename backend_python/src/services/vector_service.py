@@ -112,8 +112,10 @@ class VectorService:
     async def delete_collection(cls, user_id: str, collection: str) -> bool:
         """Delete a vector database collection"""
         try:
-            vector_collection_name = cls._get_vector_collection_name(user_id, collection)
-            vector_db = await cls.get_vector_db_client(user_id, collection)
+            # Create payload dictionary for _get_vector_collection_name
+            payload = {"collection": collection}
+            vector_collection_name = cls._get_vector_collection_name(user_id, payload)
+            vector_db = await cls.get_vector_db_client(user_id, payload)
             
             # Delete the collection
             vector_db.delete()
@@ -129,7 +131,9 @@ class VectorService:
     async def collection_exists(cls, user_id: str, collection: str) -> bool:
         """Check if a vector collection exists"""
         try:
-            vector_db = await cls.get_vector_db_client(user_id, collection)
+            # Create payload dictionary for get_vector_db_client
+            payload = {"collection": collection}
+            vector_db = await cls.get_vector_db_client(user_id, payload)
             return vector_db.exists()
         except Exception as e:
             logger.error(f"[VECTOR] Failed to check collection existence for {collection}: {e}")
@@ -235,7 +239,9 @@ class VectorService:
     async def search(cls, user_id: str, collection: str, query: str, limit: int = 5) -> List[Dict[str, Any]]:
         """Search for documents in the vector database"""
         try:
-            vector_db = await cls.get_vector_db_client(user_id, collection)
+            # Create payload dictionary for get_vector_db_client
+            payload = {"collection": collection}
+            vector_db = await cls.get_vector_db_client(user_id, payload)
             
             # Perform search
             results = vector_db.search(query, limit=limit)
@@ -250,7 +256,8 @@ class VectorService:
                     "score": getattr(doc, 'score', None)
                 })
             
-            vector_collection_name = cls._get_vector_collection_name(user_id, collection)
+            # Use the same payload format for consistency
+            vector_collection_name = cls._get_vector_collection_name(user_id, payload)
             logger.info(f"[VECTOR] Found {len(search_results)} results for query in collection {vector_collection_name}")
             return search_results
             
@@ -265,7 +272,9 @@ class VectorService:
     async def delete_document(cls, user_id: str, collection: str, file_path: str) -> bool:
         """Delete a specific document from the vector database"""
         try:
-            vector_db = await cls.get_vector_db_client(user_id, collection)
+            # Create payload dictionary for get_vector_db_client
+            payload = {"collection": collection}
+            vector_db = await cls.get_vector_db_client(user_id, payload)
             
             # Delete document by file_path (used as document ID)
             # Note: This depends on the vector DB implementation supporting document deletion
@@ -285,8 +294,10 @@ class VectorService:
     async def get_collection_stats(cls, user_id: str, collection: str) -> Dict[str, Any]:
         """Get statistics about a vector collection"""
         try:
-            vector_db = await cls.get_vector_db_client(user_id, collection)
-            vector_collection_name = cls._get_vector_collection_name(user_id, collection)
+            # Create payload dictionary for consistency
+            payload = {"collection": collection}
+            vector_db = await cls.get_vector_db_client(user_id, payload)
+            vector_collection_name = cls._get_vector_collection_name(user_id, payload)
             
             # Get collection info
             # Note: This depends on the vector DB implementation

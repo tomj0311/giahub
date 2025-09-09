@@ -57,10 +57,10 @@ export default function Agent({ user }) {
     category: '',
     description: '',
     instructions: '',
-    // IDs instead of names
-    model_id: '',
-    tools: {},          // keys are tool IDs
-    knowledge_collection_id: '', // single knowledge collection ID
+    // Store only IDs for all references
+    model_id: '',                    // single model ID
+    tools: {},                       // keys are tool IDs
+    knowledge_collection_id: '',     // single knowledge collection ID
     memory: { history: { enabled: false, num: 3 } },
   })
 
@@ -83,54 +83,62 @@ export default function Agent({ user }) {
   async function fetchAll() {
     setLoading(true)
     try {
-      // Use the same backend list service as Home.jsx
-      const agentsResponse = await apiCall('/api/agents', { headers: authHeaders })
+      // Fetch all required data in parallel
+      const [agentsResponse, modelsResponse, toolsResponse, knowledgeResponse] = await Promise.all([
+        apiCall('/api/agents', { headers: authHeaders }),
+        apiCall('/api/model-config/configs', { headers: authHeaders }),
+        apiCall('/api/tool-config/configs', { headers: authHeaders }),
+        apiCall('/api/knowledge/configs', { headers: authHeaders })
+      ])
 
+      // Handle agents
       if (agentsResponse.ok) {
         const agentsData = await agentsResponse.json()
         const agentsList = agentsData.agents || []
         setExistingAgents(agentsList)
 
-        // Extract unique values from existing agents for dropdown options
-        const uniqueModels = new Map()
-        const uniqueTools = new Map()
+        // Extract unique categories from existing agents
         const uniqueCategories = new Set()
-        const uniqueCollections = new Map()
-
         agentsList.forEach(agent => {
-          // Extract model info
-          if (agent.model?.id && agent.model?.name) {
-            uniqueModels.set(agent.model.id, agent.model.name)
-          }
-
-          // Extract tool info
-          if (agent.tools) {
-            Object.entries(agent.tools).forEach(([toolId, toolConfig]) => {
-              if (toolConfig.name) {
-                uniqueTools.set(toolId, toolConfig.name)
-              }
-            })
-          }
-
-          // Extract categories
           if (agent.category) {
             uniqueCategories.add(agent.category)
           }
-
-          // Extract knowledge collections
-          if (agent.collection && agent.collection_name) {
-            uniqueCollections.set(agent.collection, agent.collection_name)
-          }
         })
-
-        // Set the extracted data
-        setModels(Array.from(uniqueModels.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)))
-        setTools(Array.from(uniqueTools.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)))
         setCategories(Array.from(uniqueCategories).sort())
-        setKnowledgeCollections(Array.from(uniqueCollections.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)))
       } else {
         console.error('Failed to fetch agents:', agentsResponse.status)
         showError('Failed to load agents')
+      }
+
+      // Handle models
+      if (modelsResponse.ok) {
+        const modelsData = await modelsResponse.json()
+        const modelsList = modelsData.configurations || []
+        setModels(modelsList.map(m => ({ id: m.id, name: m.name })).sort((a, b) => a.name.localeCompare(b.name)))
+      } else {
+        console.error('Failed to fetch models:', modelsResponse.status)
+        showError('Failed to load models')
+      }
+
+      // Handle tools
+      if (toolsResponse.ok) {
+        const toolsData = await toolsResponse.json()
+        const toolsList = toolsData.configurations || []
+        setTools(toolsList.map(t => ({ id: t.id, name: t.name })).sort((a, b) => a.name.localeCompare(b.name)))
+      } else {
+        console.error('Failed to fetch tools:', toolsResponse.status)
+        showError('Failed to load tools')
+      }
+
+      // Handle knowledge collections
+      if (knowledgeResponse.ok) {
+        const knowledgeData = await knowledgeResponse.json()
+        const configsList = knowledgeData.configurations || []
+        // Use knowledge config objects with proper IDs
+        setKnowledgeCollections(configsList.map(c => ({ id: c.id, name: c.collection || c.name })).sort((a, b) => a.name.localeCompare(b.name)))
+      } else {
+        console.error('Failed to fetch knowledge collections:', knowledgeResponse.status)
+        showError('Failed to load knowledge collections')
       }
     } catch (e) {
       console.error(e)
@@ -152,7 +160,7 @@ export default function Agent({ user }) {
       instructions: agent.instructions || '',
       model_id: agent.model?.id || '',
       tools: agent.tools || {}, // assume already keyed by ID
-      knowledge_collection_id: agent.collection || agent.knowledge_collection_id || '',
+      knowledge_collection_id: agent.collection?.id || agent.knowledge_collection_id || agent.collection || '',
       memory: agent.memory || { history: { enabled: false, num: 3 } },
     })
   }
@@ -170,7 +178,7 @@ export default function Agent({ user }) {
         instructions: form.instructions,
         model: form.model_id ? { id: form.model_id } : null,
         tools: form.tools,
-        collection: form.knowledge_collection_id || '',
+        collection: form.knowledge_collection_id ? { id: form.knowledge_collection_id } : null,
         memory: form.memory,
       }
       const resp = await apiCall(`/api/agents`, {
@@ -320,7 +328,7 @@ export default function Agent({ user }) {
                             )}
                           </Box>
                         </TableCell>
-                        <TableCell>{a.collection_name || a.collection || '-'}</TableCell>
+                        <TableCell>{a.collection?.id || a.knowledge_collection_id || a.collection || '-'}</TableCell>
                         <TableCell>
                           <Chip size="small" label={mem} color={a.memory?.history?.enabled ? 'primary' : 'default'} />
                         </TableCell>
