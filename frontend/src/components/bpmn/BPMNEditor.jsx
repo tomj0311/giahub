@@ -123,7 +123,7 @@ const getInitialNodes = () => [
   },
 ];
 
-const BPMNEditorFlow = ({ isDarkMode, onToggleTheme }) => {
+const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPropertyPanel = true, readOnly = false }) => {
   const reactFlowWrapper = useRef(null);
   const [nodes, setNodes, onNodesChange] = useNodesState(getInitialNodes());
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -698,31 +698,34 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme }) => {
 
   return (
     <div className="bpmn-editor">
-      <Toolbar 
-        isDarkMode={isDarkMode} 
-        onToggleTheme={onToggleTheme}
-        isPropertyPanelOpen={isPropertyPanelOpen}
-        onTogglePropertyPanel={handlePropertyPanelToggle}
-      />
+      {showToolbox && (
+        <Toolbar 
+          isDarkMode={isDarkMode} 
+          onToggleTheme={onToggleTheme}
+          isPropertyPanelOpen={isPropertyPanelOpen}
+          onTogglePropertyPanel={handlePropertyPanelToggle}
+          readOnly={readOnly}
+        />
+      )}
       <div className="editor-content">
         <div className="reactflow-wrapper" ref={reactFlowWrapper} tabIndex={0}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
-            onNodesChange={onNodesChangeWithBoundsUpdate}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
+            onNodesChange={readOnly ? undefined : onNodesChangeWithBoundsUpdate}
+            onEdgesChange={readOnly ? undefined : onEdgesChange}
+            onConnect={readOnly ? undefined : onConnect}
             onInit={setReactFlowInstance}
-            onDrop={onDrop}
-            onDragOver={onDragOver}
-            onNodeDoubleClick={onNodeDoubleClick}
+            onDrop={readOnly ? undefined : onDrop}
+            onDragOver={readOnly ? undefined : onDragOver}
+            onNodeDoubleClick={readOnly ? undefined : onNodeDoubleClick}
             onNodeClick={onNodeClick}
             onEdgeClick={onEdgeClick}
             onPaneClick={onPaneClick}
             onSelectionChange={onSelectionChange}
             nodeTypes={nodeTypes}
-            nodesDraggable={true}
-            nodesConnectable={true}
+            nodesDraggable={!readOnly}
+            nodesConnectable={!readOnly}
             elementsSelectable={true}
             elevateNodesOnSelect={false}
             nodeOrigin={[0, 0]}
@@ -735,8 +738,8 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme }) => {
               style: { strokeWidth: 2 }
             }}
             style={{ 
-              marginRight: (isPanelOpen ? '25vw' : '0') + (isPropertyPanelOpen ? '320px' : '0'), 
-              maxWidth: `calc(100vw - ${isPanelOpen ? '25vw' : '0'} - ${isPropertyPanelOpen ? '320px' : '0'})`,
+              marginRight: (isPanelOpen ? '25vw' : '0') + (isPropertyPanelOpen && showPropertyPanel ? '320px' : '0'), 
+              maxWidth: `calc(100vw - ${isPanelOpen ? '25vw' : '0'} - ${isPropertyPanelOpen && showPropertyPanel ? '320px' : '0'})`,
               transition: 'margin-right 0.3s ease, max-width 0.3s ease'
             }}
           >
@@ -745,22 +748,31 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme }) => {
           </ReactFlow>
         </div>
         <BPMNExporter nodes={nodes} edges={edges} onImportBPMN={handleImportBPMN} />
-        <PropertyPanel
-          selectedNode={selectedNode}
-          selectedEdge={selectedEdge}
-          onNodeUpdate={handleNodeUpdate}
-          onEdgeUpdate={handleEdgeUpdate}
-          isOpen={isPropertyPanelOpen}
-          onToggle={handlePropertyPanelToggle}
-        />
+        {showPropertyPanel && (
+          <PropertyPanel
+            selectedNode={selectedNode}
+            selectedEdge={selectedEdge}
+            onNodeUpdate={handleNodeUpdate}
+            onEdgeUpdate={handleEdgeUpdate}
+            isOpen={isPropertyPanelOpen}
+            onToggle={handlePropertyPanelToggle}
+            readOnly={readOnly}
+          />
+        )}
       </div>
     </div>
   );
 };
 
-const BPMNEditor = ({ isDarkMode, onToggleTheme }) => (
+const BPMNEditor = ({ isDarkMode, onToggleTheme, showToolbox, showPropertyPanel, readOnly }) => (
   <ReactFlowProvider>
-    <BPMNEditorFlow isDarkMode={isDarkMode} onToggleTheme={onToggleTheme} />
+    <BPMNEditorFlow 
+      isDarkMode={isDarkMode} 
+      onToggleTheme={onToggleTheme}
+      showToolbox={showToolbox}
+      showPropertyPanel={showPropertyPanel}
+      readOnly={readOnly}
+    />
   </ReactFlowProvider>
 );
 

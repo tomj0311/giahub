@@ -13,12 +13,18 @@ import './BPMN.css';
  * - onThemeChange: callback function when theme changes
  * - className: additional CSS classes
  * - style: inline styles
+ * - showToolbox: boolean (default: true) - Controls toolbox visibility
+ * - showPropertyPanel: boolean (default: true) - Controls property panel visibility
+ * - readOnly: boolean (default: false) - When true, acts as BPMNViewer
  */
 function BPMN({ 
   initialTheme = 'auto', 
   onThemeChange, 
   className = '', 
   style = {},
+  showToolbox = true,
+  showPropertyPanel = true,
+  readOnly = false,
   ...props 
 }) {
   // Initialize theme synchronously to prevent flash
@@ -86,7 +92,13 @@ function BPMN({
       data-theme={isDarkMode ? 'dark' : 'light'}
       {...props}
     >
-      <BPMNEditor isDarkMode={isDarkMode} onToggleTheme={toggleTheme} />
+      <BPMNEditor 
+        isDarkMode={isDarkMode} 
+        onToggleTheme={toggleTheme}
+        showToolbox={showToolbox}
+        showPropertyPanel={showPropertyPanel}
+        readOnly={readOnly}
+      />
     </div>
   );
 }

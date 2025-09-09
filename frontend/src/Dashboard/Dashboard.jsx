@@ -137,6 +137,40 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 					icon: 'Monitor'
 				}
 			]
+		},
+		{
+			label: 'Settings',
+			icon: 'Settings',
+			expandable: true,
+			order: 100,
+			children: [
+				{
+					label: 'Users',
+					to: '/dashboard/users',
+					icon: 'Users'
+				},
+				{
+					label: 'Role Management',
+					to: '/dashboard/role-management',
+					icon: 'Shield'
+				},
+				{
+					label: 'User Invitation',
+					to: '/dashboard/user-invitation',
+					icon: 'UserPlus'
+				},
+				{
+					label: 'Tenants',
+					to: '/dashboard/tenants',
+					icon: 'Building'
+				}
+			]
+		},
+		{
+			label: 'Help & Support',
+			to: '/dashboard/help',
+			icon: 'HelpCircle',
+			order: 110
 		}
 	]
 
@@ -190,10 +224,10 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 						selected={Boolean(isSectionSelected)}
 						sx={{
 							minHeight: 36,
-							px: 1,
+							px: 0.5,
 							py: 0.25,
 							my: 0.25,
-							mx: 1,
+							mx: 0.5,
 							borderRadius: 1.5,
 							width: 'auto',
 							minWidth: 'fit-content',
@@ -210,10 +244,12 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 						}}
 					>
 						<ListItemIcon sx={{
-							minWidth: drawerOpen || isMobile ? 28 : 0,
+							minWidth: 0,
+							width: 20,
 							color: 'text.secondary',
 							display: 'flex',
-							justifyContent: 'center'
+							justifyContent: 'flex-start',
+							ml: drawerOpen || isMobile ? 1 : 0.5
 						}}>
 							<Icon size={18} strokeWidth={1.8} />
 						</ListItemIcon>
@@ -248,11 +284,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 								selected={selected}
 								sx={{
 									minHeight: 32,
-									px: 1,
+									px: 0.5,
 									py: 0.25,
 									my: 0.1,
-									mx: 1,
-									ml: 3,
+									mx: 0.5,
+									ml: 2.5,
 									borderRadius: 1.5,
 									'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
 									'&:hover': {
@@ -302,10 +338,10 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 						selected={selected}
 						sx={{
 							minHeight: 36,
-							px: 1,
+							px: 0.5,
 							py: 0.25,
 							my: 0.25,
-							mx: 1,
+							mx: 0.5,
 							borderRadius: 1.5,
 							width: 'auto',
 							minWidth: 'fit-content',
@@ -329,10 +365,12 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 						}}
 					>
 						<ListItemIcon sx={{
-							minWidth: drawerOpen || isMobile ? 28 : 0,
+							minWidth: 0,
+							width: 20,
 							color: 'text.secondary',
 							display: 'flex',
-							justifyContent: 'center'
+							justifyContent: 'flex-start',
+							ml: drawerOpen || isMobile ? 1 : 0.5
 						}}>
 							<Icon size={18} strokeWidth={1.8} />
 						</ListItemIcon>
@@ -367,11 +405,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 								selected={childSelected}
 								sx={{
 									minHeight: 32,
-									px: 1,
+									px: 0.5,
 									py: 0.25,
 									my: 0.1,
-									mx: 1,
-									ml: 3,
+									mx: 0.5,
+									ml: 2.5,
 									borderRadius: 1.5,
 									'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
 									'&:hover': {
@@ -627,6 +665,8 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="bpmn" element={<BPMN initialTheme="auto" style={{ width: '100%', minHeight: '70vh', borderRadius: 8, overflow: 'hidden' }} />} />
 				<Route path="monitor" element={<div>Monitor - Coming Soon</div>} />
 				<Route path="manage" element={<BPMN initialTheme="auto" style={{ width: '100%', minHeight: '70vh', borderRadius: 8, overflow: 'hidden' }} />} />
+				<Route path="tenants" element={<div>Tenants - Coming Soon</div>} />
+				<Route path="help" element={<div>Help & Support - Coming Soon</div>} />
 			</Route>
 		</Routes>
 	)
