@@ -437,36 +437,47 @@ export function buildTheme(key) {
             }
           },
           containedPrimary: {
-            // Using the login button gradient from CSS
-            background: 'linear-gradient(180deg, #ffffff 0%, #fdfdfd 50%, #f5f5f5 100%)',
-            color: '#09090A', // Dark text from CSS - ensures high contrast on white background
-            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.15)', // From CSS
+            // Using Aurora theme gradient instead of white background
+            background: `linear-gradient(135deg, ${theme.palette.gradient?.appBarStart || '#ff9d42'} 0%, ${theme.palette.gradient?.appBarMiddle || '#ff4fd8'} 50%, ${theme.palette.gradient?.appBarEnd || '#5d00ff'} 100%)`,
+            color: '#ffffff', // White text on gradient background
+            boxShadow: '0 4px 12px rgba(255, 77, 216, 0.3)', // Gradient-themed shadow
+            border: 'none',
             // Remove responsive padding - use fixed sizes from root
             '&:hover': {
-              opacity: 0.9, // From CSS hover effect
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
-              color: '#000000' // Ensure even darker text on hover for maximum contrast
+              background: `linear-gradient(135deg, ${theme.palette.gradient?.appBarStart || '#ff9d42'} 0%, ${theme.palette.gradient?.appBarMiddle || '#ff4fd8'} 40%, ${theme.palette.gradient?.appBarEnd || '#5d00ff'} 90%)`,
+              boxShadow: '0 6px 16px rgba(255, 77, 216, 0.4)',
+              color: '#ffffff',
+              transform: 'translateY(-1px)'
             },
             '&:active': {
-              filter: 'brightness(0.9)',
-              color: '#000000' // Maintain dark text on active state
+              transform: 'translateY(0)',
+              boxShadow: '0 2px 8px rgba(255, 77, 216, 0.3)'
             },
             '&:disabled': {
-              background: 'linear-gradient(180deg, #f5f5f5 0%, #e0e0e0 50%, #d5d5d5 100%)',
-              color: '#666666' // Darker disabled text for better visibility
+              background: 'rgba(255, 255, 255, 0.1)',
+              color: 'rgba(255, 255, 255, 0.5)',
+              boxShadow: 'none'
             }
           },
           containedSecondary: {
-            // Ensure secondary contained buttons also have proper contrast
-            background: 'linear-gradient(180deg, #e3f2fd 0%, #bbdefb 50%, #90caf9 100%)',
-            color: '#0d47a1', // Dark blue text for contrast on light blue background
+            // Gradient secondary button for Aurora theme
+            background: `linear-gradient(135deg, ${theme.palette.gradient?.textStart || '#ef7b75'} 0%, ${theme.palette.gradient?.textSecond || '#f25c99'} 50%, ${theme.palette.gradient?.textThird || '#f63fba'} 100%)`,
+            color: '#ffffff',
+            boxShadow: '0 4px 12px rgba(239, 123, 117, 0.3)',
             '&:hover': {
-              background: 'linear-gradient(180deg, #bbdefb 0%, #90caf9 50%, #64b5f6 100%)',
-              color: '#0d47a1'
+              background: `linear-gradient(135deg, ${theme.palette.gradient?.textStart || '#ef7b75'} 0%, ${theme.palette.gradient?.textSecond || '#f25c99'} 40%, ${theme.palette.gradient?.textThird || '#f63fba'} 90%)`,
+              boxShadow: '0 6px 16px rgba(239, 123, 117, 0.4)',
+              color: '#ffffff',
+              transform: 'translateY(-1px)'
+            },
+            '&:active': {
+              transform: 'translateY(0)',
+              boxShadow: '0 2px 8px rgba(239, 123, 117, 0.3)'
             },
             '&:disabled': {
-              background: '#f5f5f5',
-              color: '#666666'
+              background: 'rgba(255, 255, 255, 0.1)',
+              color: 'rgba(255, 255, 255, 0.5)',
+              boxShadow: 'none'
             }
           },
           outlinedPrimary: {

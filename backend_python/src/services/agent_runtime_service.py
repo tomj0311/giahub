@@ -2,6 +2,7 @@ import asyncio
 import ast
 import importlib
 import json
+import os
 from typing import Dict, Any, Optional, AsyncGenerator
 from fastapi import HTTPException, status
 from ..utils.log import logger
@@ -29,6 +30,65 @@ def module_loader(module_path: str):
     except Exception as e:
         logger.error(f"module_loader failed for {module_path}: {e}")
     return None
+
+def _create_multi_collection_retriever(collection_names: list = None, session_collection: str = None):
+    """Create a custom retriever that searches across multiple collections"""
+    def multi_collection_retriever(agent, query: str, num_documents: int = None, **kwargs):
+        """Custom retriever that searches across multiple existing collections"""
+        from typing import List, Dict, Any
+        
+        # List of collections to search
+        collections_to_search = []
+        
+        # Add all collection names from the list
+        if collection_names:
+            collections_to_search.extend(collection_names)
+        
+        # Add session collection if provided
+        if session_collection:
+            collections_to_search.append(session_collection)
+        
+        if not collections_to_search:
+            return None
+        
+        all_results = []
+        
+        for collection in collections_to_search:
+            try:
+                # Create vector DB connection for this collection
+                from ai.vectordb.qdrant import Qdrant
+                
+                # Get Qdrant configuration from environment variables
+                qdrant_host = os.getenv('QDRANT_HOST', 'localhost')
+                qdrant_port = int(os.getenv('QDRANT_PORT', 8805))
+                    
+                vector_db = Qdrant(
+                    collection=collection,
+                    host=qdrant_host,
+                    port=qdrant_port,
+                )
+                
+                # Check if collection exists
+                if vector_db.exists():
+                    # Search this collection
+                    results = vector_db.search(query=query, limit=num_documents or 5)
+                    # Convert to dict format and add collection info
+                    for doc in results:
+                        doc_dict = doc.to_dict()
+                        doc_dict['source_collection'] = collection  # Track which collection
+                        all_results.append(doc_dict)
+                        
+            except Exception as e:
+                logger.error(f'retriever.collection_search_error: collection={collection}, error={str(e)}')
+                continue
+        
+        # Sort by relevance score and limit results
+        if num_documents:
+            all_results = all_results[:num_documents]
+        
+        return all_results if all_results else None
+    
+    return multi_collection_retriever
 
 class AgentRuntimeService:
     # Simple cache to store agents by session_id
@@ -85,23 +145,45 @@ class AgentRuntimeService:
                     except Exception as e:
                         logger.warning(f"Failed to load tool {tool_id}: {e}")
             
-            # Load knowledge collection
-            knowledge = None
+            # Load knowledge collection names and create custom retriever
+            collection_names = []
+            session_collection = agent_config.get("session_collection")
+            
+            # Handle collections object with multiple collection IDs
+            collections_config = agent_config.get("collections", {})
+            if collections_config:
+                for collection_id in collections_config.keys():
+                    try:
+                        if collection_id:
+                            knowledge_config = await KnowledgeService.get_collection_by_id(collection_id, user)
+                            if knowledge_config:
+                                # Extract collection name from knowledge config
+                                knowledge_params = knowledge_config.get("knowledge", {}).get("params", {})
+                                collection_name = knowledge_params.get("collection") or collection_id
+                                collection_names.append(collection_name)
+                    except Exception as e:
+                        logger.warning(f"Failed to load knowledge collection {collection_id}: {e}")
+            
+            # Fallback to single collection field for backward compatibility
             collection_ref = agent_config.get("collection")
-            if collection_ref:
+            if collection_ref and not collection_names:
                 try:
                     # Handle both string ID and dict with 'id' key
                     collection_id = collection_ref if isinstance(collection_ref, str) else collection_ref.get("id")
                     if collection_id:
                         knowledge_config = await KnowledgeService.get_collection_by_id(collection_id, user)
-                        knowledge_strategy = knowledge_config.get("knowledge", {}).get("strategy")
-                        knowledge_params = knowledge_config.get("knowledge", {}).get("params", {})
-                        if knowledge_strategy:
-                            knowledge_class = module_loader(knowledge_strategy)
-                            if knowledge_class:
-                                knowledge = knowledge_class(**knowledge_params)
+                        if knowledge_config:
+                            # Extract collection name from knowledge config
+                            knowledge_params = knowledge_config.get("knowledge", {}).get("params", {})
+                            collection_name = knowledge_params.get("collection") or collection_id
+                            collection_names.append(collection_name)
                 except Exception as e:
                     logger.warning(f"Failed to load knowledge collection {collection_ref}: {e}")
+            
+            # Create custom retriever
+            custom_retriever = None
+            if collection_names or session_collection:
+                custom_retriever = _create_multi_collection_retriever(collection_names, session_collection)
             
             memory_config = agent_config.get("memory", {})
             history_config = memory_config.get("history", {})
@@ -112,8 +194,12 @@ class AgentRuntimeService:
                 "instructions": agent_config.get("instructions", ""),
                 "model": model,
                 "tools": tools,
-                "knowledge": knowledge,
-                "markdown" : True,
+                "retriever": custom_retriever,  # Use custom retriever instead of knowledge_base
+                "search_knowledge": True,
+                "add_context": True,
+                "add_references": True,
+                "resolve_context": True,
+                "markdown": True,
                 "add_history_to_messages": history_config.get("enabled", False),
                 "num_history_responses": history_config.get("num", 3),
             }
