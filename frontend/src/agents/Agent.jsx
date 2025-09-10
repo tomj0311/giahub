@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Box,
   Button,
@@ -25,7 +26,7 @@ import {
   IconButton,
   TablePagination
 } from '@mui/material'
-import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react'
+import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon, Play as PlayIcon } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { useConfirmation } from '../contexts/ConfirmationContext'
 
@@ -33,6 +34,7 @@ import { apiCall } from '../config/api'
 
 export default function Agent({ user }) {
   const token = user?.token
+  const navigate = useNavigate()
   const { showSuccess, showError } = useSnackbar()
   const { showDeleteConfirmation } = useConfirmation()
 
@@ -285,6 +287,10 @@ export default function Agent({ user }) {
     setDialogOpen(true)
   }
 
+  const navigateToPlayground = (agentName) => {
+    navigate(`/dashboard/agent-playground?agent=${encodeURIComponent(agentName)}`)
+  }
+
   return (
     <Box>
       {(loading || saving) && (
@@ -364,7 +370,12 @@ export default function Agent({ user }) {
                       ? `History (${a.memory?.history?.num ?? 3})`
                       : 'Off'
                     return (
-                      <TableRow key={a.id || a.name} hover>
+                      <TableRow 
+                        key={a.id || a.name} 
+                        hover 
+                        sx={{ cursor: 'pointer' }}
+                        onClick={() => navigateToPlayground(a.name)}
+                      >
                         <TableCell>
                           <Typography variant="body2" fontWeight="medium">{a.name}</Typography>
                           {a.description && (
@@ -411,7 +422,25 @@ export default function Agent({ user }) {
                           <Chip size="small" label={mem} color={a.memory?.history?.enabled ? 'primary' : 'default'} />
                         </TableCell>
                         <TableCell align="right">
-                          <IconButton size="small" color="primary" onClick={() => openEdit(a)}>
+                          <IconButton 
+                            size="small" 
+                            color="success" 
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              navigateToPlayground(a.name)
+                            }}
+                            title="Open in Playground"
+                          >
+                            <PlayIcon size={16} />
+                          </IconButton>
+                          <IconButton 
+                            size="small" 
+                            color="primary" 
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openEdit(a)
+                            }}
+                          >
                             <EditIcon size={16} />
                           </IconButton>
                         </TableCell>
