@@ -476,20 +476,34 @@ export default function Agent({ user }) {
                   options={existingAgents.map(a => a.name)}
                   value={form.name}
                   onChange={(_, v) => {
-                    setForm(f => ({ ...f, name: v || '' }))
+                    // If selecting from dropdown, load immediately; otherwise just update name
                     if (v && existingAgents.some(a => a.name === v)) {
                       const agent = existingAgents.find(a => a.name === v)
                       if (agent) loadAgent(agent)
+                    } else {
+                      setForm(f => ({ ...f, name: v || '' }))
                     }
                   }}
                   onInputChange={(_, v) => {
+                    // Only update the form name while typing, don't load agent
                     setForm(f => ({ ...f, name: v || '' }))
-                    if (existingAgents.some(a => a.name === v)) {
-                      const agent = existingAgents.find(a => a.name === v)
-                      if (agent) loadAgent(agent)
-                    }
                   }}
-                  renderInput={(p) => <TextField {...p} label="Agent Name" size="small" required />}
+                  renderInput={(p) => 
+                    <TextField 
+                      {...p} 
+                      label="Agent Name" 
+                      size="small" 
+                      required 
+                      onBlur={(e) => {
+                        // Load existing agent only when user stops typing (on blur)
+                        const inputValue = e.target.value;
+                        if (inputValue && existingAgents.some(a => a.name === inputValue)) {
+                          const agent = existingAgents.find(a => a.name === inputValue)
+                          if (agent) loadAgent(agent)
+                        }
+                      }}
+                    />
+                  }
                 />
 
                 <Autocomplete

@@ -393,7 +393,7 @@ export default function ToolConfig({ user }) {
                             loading={loadingConfigs}
                             loadingText="Loading configurations…"
                             onChange={(_, v) => {
-                                // Preserve current id/edit mode to allow true rename instead of creating a duplicate
+                                // If selecting from dropdown, load immediately; otherwise just update name
                                 if (v && existingConfigs.some(c => c.name === v)) {
                                     loadExistingConfig(v);
                                 } else {
@@ -401,11 +401,8 @@ export default function ToolConfig({ user }) {
                                 }
                             }}
                             onInputChange={(_, v) => {
+                                // Only update the form name while typing, don't load config
                                 setForm(f => ({ ...f, name: v }));
-                                if (existingConfigs.some(c => c.name === v)) {
-                                    loadExistingConfig(v);
-                                }
-                                // Else: free text rename; keep id & edit mode
                             }}
                             renderInput={(params) =>
                                 <TextField
@@ -414,6 +411,13 @@ export default function ToolConfig({ user }) {
                                     placeholder="Enter a short descriptive name"
                                     size="small"
                                     required
+                                    onBlur={(e) => {
+                                        // Load existing config only when user stops typing (on blur)
+                                        const inputValue = e.target.value;
+                                        if (inputValue && existingConfigs.some(c => c.name === inputValue)) {
+                                            loadExistingConfig(inputValue);
+                                        }
+                                    }}
                                 />
                             }
                         />

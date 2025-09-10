@@ -487,20 +487,16 @@ export default function ModelConfig({ user }) {
                             loading={loadingConfigs}
                             loadingText="Loading configurations…"
                             onChange={(_, v) => {
-                                // If selecting an existing config, load it; otherwise treat as rename/new without clearing id if editing
+                                // If selecting from dropdown, load immediately; otherwise just update name
                                 if (v && existingConfigs.some(c => c.name === v)) {
                                     loadExistingConfig(v);
                                 } else {
                                     setForm(f => ({ ...f, name: v || '' }));
-                                    // Do NOT reset id/isEditMode here to allow renaming existing configs
                                 }
                             }}
                             onInputChange={(_, v) => {
+                                // Only update the form name while typing, don't load config
                                 setForm(f => ({ ...f, name: v }));
-                                if (existingConfigs.some(c => c.name === v)) {
-                                    loadExistingConfig(v);
-                                }
-                                // Else: free text / rename; keep current id & edit mode
                             }}
                             renderInput={(params) =>
                                 <TextField
@@ -509,6 +505,13 @@ export default function ModelConfig({ user }) {
                                     placeholder="Enter a short descriptive name"
                                     size="small"
                                     required
+                                    onBlur={(e) => {
+                                        // Load existing config only when user stops typing (on blur)
+                                        const inputValue = e.target.value;
+                                        if (inputValue && existingConfigs.some(c => c.name === inputValue)) {
+                                            loadExistingConfig(inputValue);
+                                        }
+                                    }}
                                 />
                             }
                         />

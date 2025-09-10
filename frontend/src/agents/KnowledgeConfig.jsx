@@ -674,7 +674,7 @@ export default function KnowledgeConfig({ user }) {
               loadingText="Loading collections…"
               disabled={isEdit} // prevent renaming while editing to keep id-based operations simple
               onChange={(_, v) => {
-                // If selecting an existing collection load it; otherwise treat as rename/new without clearing edit state
+                // If selecting from dropdown, load immediately; otherwise just update name
                 if (v && existingConfigs.some(c => c.name === v)) {
                   loadExistingConfig(v)
                 } else {
@@ -684,14 +684,26 @@ export default function KnowledgeConfig({ user }) {
               }}
               onInputChange={(_, v) => {
                 if (isEdit) return; // block name changes during edit mode
+                // Only update the form name while typing, don't load config
                 setForm(f => ({ ...f, name: v }))
-                if (existingConfigs.some(c => c.name === v)) {
-                  loadExistingConfig(v)
-                }
-                // Else free text rename; keep current id & edit flags
               }}
               renderInput={(params) => (
-                <TextField {...params} label="Collection Name" placeholder="Enter or select a collection…" size="small" required helperText={isEdit ? 'Name locked while editing existing collection' : ''} />
+                <TextField 
+                  {...params} 
+                  label="Collection Name" 
+                  placeholder="Enter or select a collection…" 
+                  size="small" 
+                  required 
+                  helperText={isEdit ? 'Name locked while editing existing collection' : ''}
+                  onBlur={(e) => {
+                    if (isEdit) return; // block loading during edit mode
+                    // Load existing config only when user stops typing (on blur)
+                    const inputValue = e.target.value;
+                    if (inputValue && existingConfigs.some(c => c.name === inputValue)) {
+                      loadExistingConfig(inputValue);
+                    }
+                  }}
+                />
               )}
             />
 
