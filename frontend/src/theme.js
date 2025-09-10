@@ -19,7 +19,7 @@ const themeDefinitions = {
       info: { main: '#0288d1' },
       success: { main: '#00796b' },
       background: {
-        default: '#ffffff',
+        default: '#f8f9fa',
         paper: '#ffffff'
       },
       text: {
@@ -30,7 +30,7 @@ const themeDefinitions = {
     // Darker blue primary-based animated gradient for AppBar
     appBarGradient: 'linear-gradient(120deg,#0a2e5c 0%,#0d47a1 35%,#1565c0 65%,#1976d2 100%)',
     // For light theme ocean the background must be pure white
-    backgroundGradient: '#ffffff'
+    backgroundGradient: '#f8f9fa'
   },
   aurora: {
     name: 'Aurora',

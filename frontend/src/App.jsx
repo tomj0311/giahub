@@ -96,7 +96,8 @@ export default function App() {
     } catch { }
     // Keep document background in sync to avoid flashes when toggling
     const dark = themeKey === 'aurora'
-    const bg = dark ? '#000000' : '#ffffff'
+    const theme = buildTheme(themeKey)
+    const bg = theme.custom.backgroundGradient
     const tc = dark ? 'dark' : 'light'
     try {
       document.documentElement.style.backgroundColor = bg

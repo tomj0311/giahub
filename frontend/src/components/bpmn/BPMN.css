@@ -72,7 +72,7 @@
   transition: background-color 0.2s ease, color 0.2s ease;
   overflow: hidden;
   position: relative;
-  border-radius: 8px;
+  /* Remove border-radius to prevent conflicts with Material-UI Card */
 }
 
 .bpmn-light-theme {

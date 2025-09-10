@@ -18,7 +18,9 @@ import {
 	Menu,
 	MenuItem,
 	Chip,
-	Tooltip
+	Tooltip,
+	Card,
+	CardContent
 } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
 import { getThemeKeyForMode } from '../theme'
@@ -650,25 +652,51 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 	)
 }
 
-// BPMN Editor wrapper component to handle navigation state
-const BPMNEditorWrapper = () => {
-	const location = useLocation()
-	const initialBPMN = location.state?.initialBPMN || null
-	const editMode = location.state?.editMode || false
-
-	return (
-		<BPMN 
-			initialTheme="auto" 
-			style={{ width: '100%', minHeight: '70vh', borderRadius: 8, overflow: 'hidden' }}
-			initialBPMN={initialBPMN}
-			showToolbox={editMode}
-			showPropertyPanel={editMode}
-			readOnly={!editMode}
-		/>
-	)
-}
-
 export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
+	// BPMN Editor wrapper component to handle navigation state
+	const BPMNEditorWrapper = () => {
+		const location = useLocation()
+		const initialBPMN = location.state?.initialBPMN || null
+		// Default to edit mode (true) unless explicitly set to false
+		// This ensures /dashboard/bpmn opens in edit mode by default
+		const editMode = location.state?.editMode !== false
+
+		// Convert themeKey to BPMN theme format
+		const getBPMNTheme = () => {
+			if (themeKey === 'aurora') return 'dark'
+			if (themeKey === 'ocean') return 'light'
+			return 'auto' // fallback
+		}
+
+		return (
+			<Box>
+				<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+					<Box>
+						<Typography variant="h4" gutterBottom>
+							BPMN Editor
+						</Typography>
+						<Typography variant="body1" color="text.secondary">
+							Design and visualize business processes with our BPMN 2.0 editor.
+						</Typography>
+					</Box>
+				</Box>
+
+				<Card sx={{ overflow: 'hidden', boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}>
+					<CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+						<BPMN
+							initialTheme={getBPMNTheme()}
+							style={{ width: '100%', minHeight: '70vh', display: 'block' }}
+							initialBPMN={initialBPMN}
+							showToolbox={editMode}
+							showPropertyPanel={editMode}
+							readOnly={!editMode}
+							key={themeKey} // Force re-render when theme changes
+						/>
+					</CardContent>
+				</Card>
+			</Box>
+		)
+	}
 	return (
 		<Routes>
 			<Route path="/" element={<DashboardLayout user={user} onLogout={onLogout} themeKey={themeKey} setThemeKey={setThemeKey} />}>
@@ -687,7 +715,7 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="custom-connectors" element={<div>Custom Connectors - Coming Soon</div>} />
 				<Route path="bpmn" element={<BPMNEditorWrapper />} />
 				<Route path="monitor" element={<div>Monitor - Coming Soon</div>} />
-				<Route path="manage" element={<BPMN initialTheme="auto" style={{ width: '100%', minHeight: '70vh', borderRadius: 8, overflow: 'hidden' }} />} />
+				<Route path="manage" element={<BPMN initialTheme={themeKey === 'aurora' ? 'dark' : themeKey === 'ocean' ? 'light' : 'auto'} key={themeKey} style={{ width: '100%', minHeight: '70vh', borderRadius: 8, overflow: 'hidden' }} />} />
 				<Route path="tenants" element={<div>Tenants - Coming Soon</div>} />
 				<Route path="help" element={<div>Help & Support - Coming Soon</div>} />
 			</Route>
