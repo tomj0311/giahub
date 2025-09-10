@@ -91,6 +91,7 @@ export default function AgentPlayground({ user }) {
   const [messages, setMessages] = useState([])
   const [running, setRunning] = useState(false)
   const [abortController, setAbortController] = useState(null)
+  const [lastUserMessage, setLastUserMessage] = useState('')
 
   // File uploads (optional knowledge)
   const [stagedFiles, setStagedFiles] = useState([])
@@ -195,6 +196,11 @@ export default function AgentPlayground({ user }) {
           setUploadedFiles(conv.uploaded_files || [])
           setSessionCollection(conv.session_prefix || conv.session_collection || genUuidHex())
           setCurrentConversationId(conv.conversation_id)
+          
+          // Set last user message from conversation history
+          const lastUserMsg = (conv.messages || []).filter(msg => msg.role === 'user').pop()
+          setLastUserMessage(lastUserMsg ? lastUserMsg.content : '')
+          
           console.log('Successfully loaded conversation:', conv.conversation_id)
         } catch (e) {
           console.error('Failed to load conversation from URL:', e)
@@ -284,6 +290,9 @@ export default function AgentPlayground({ user }) {
     const userMsg = { role: 'user', content: prompt, ts: Date.now() }
     const newMessages = [...messages, userMsg]
     setMessages(newMessages)
+    
+    // Store the last user message for up arrow recall
+    setLastUserMessage(prompt)
 
     // Save user message immediately
     const convId = currentConversationId || `conv_${Date.now()}`
@@ -566,6 +575,10 @@ export default function AgentPlayground({ user }) {
       setSessionCollection(conv.session_prefix || conv.session_collection || genUuidHex())
       setCurrentConversationId(conv.conversation_id)
       setHistoryOpen(false)
+      
+      // Set last user message from conversation history
+      const lastUserMsg = (conv.messages || []).filter(msg => msg.role === 'user').pop()
+      setLastUserMessage(lastUserMsg ? lastUserMsg.content : '')
     } catch (e) {
       console.error('load conversation failed', e)
     }
@@ -583,6 +596,7 @@ export default function AgentPlayground({ user }) {
     setStagedFiles([])
     setCurrentConversationId(null)
     setSessionCollection(genUuidHex())
+    setLastUserMessage('') // Clear last user message when clearing chat
   }
 
   // Generate conversation title from first user message
@@ -800,7 +814,16 @@ export default function AgentPlayground({ user }) {
               placeholder={!selected ? 'Select an agent first' : (stagedFiles.length ? `Type your message... (${stagedFiles.length} file(s) ready)` : 'Type your message...')}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runAgent() } }}
+              onKeyDown={(e) => { 
+                if (e.key === 'Enter' && !e.shiftKey) { 
+                  e.preventDefault(); 
+                  runAgent() 
+                } else if (e.key === 'ArrowUp' && prompt === '' && lastUserMessage) {
+                  // Load last user message when up arrow is pressed and input is empty
+                  e.preventDefault();
+                  setPrompt(lastUserMessage);
+                }
+              }}
               fullWidth
               multiline
               minRows={1}
