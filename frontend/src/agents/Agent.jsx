@@ -424,17 +424,6 @@ export default function Agent({ user }) {
                         <TableCell align="right">
                           <IconButton 
                             size="small" 
-                            color="success" 
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              navigateToPlayground(a.name)
-                            }}
-                            title="Open in Playground"
-                          >
-                            <PlayIcon size={16} />
-                          </IconButton>
-                          <IconButton 
-                            size="small" 
                             color="primary" 
                             onClick={(e) => {
                               e.stopPropagation()
