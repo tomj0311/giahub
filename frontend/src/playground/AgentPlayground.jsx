@@ -103,6 +103,7 @@ export default function AgentPlayground({ user }) {
   // History dialog
   const [historyOpen, setHistoryOpen] = useState(false)
   const [loadingHistory, setLoadingHistory] = useState(false)
+  const [loadingPagination, setLoadingPagination] = useState(false)
   const [conversations, setConversations] = useState([])
   const [currentConversationId, setCurrentConversationId] = useState(null)
 
@@ -449,8 +450,16 @@ export default function AgentPlayground({ user }) {
     console.log('🚀 openHistory CALLED with page:', page)
     console.log('🚀 Current state - historyOpen:', historyOpen, 'loadingHistory:', loadingHistory)
 
-    setHistoryOpen(true)
-    setLoadingHistory(true)
+    // Only show full loading on initial open, not on pagination
+    const isInitialLoad = !historyOpen
+    
+    if (isInitialLoad) {
+      setHistoryOpen(true)
+      setLoadingHistory(true)
+    } else {
+      setLoadingPagination(true)
+    }
+    
     try {
       // Use the provided page parameter directly
       const currentPage = page
@@ -541,9 +550,10 @@ export default function AgentPlayground({ user }) {
         has_prev: false
       })
     } finally {
-      console.log('🏁 openHistory finally block - setting loadingHistory to false')
+      console.log('🏁 openHistory finally block - setting loading states to false')
       console.log('🏁 Current conversations length:', conversations.length)
       setLoadingHistory(false)
+      setLoadingPagination(false)
     }
   }
 
@@ -924,9 +934,9 @@ export default function AgentPlayground({ user }) {
             <Typography variant="body2" sx={{ textAlign: 'center', py: 4, opacity: 0.7 }}>No conversation history found</Typography>
           ) : (
             <>
-              <List>
+              <List sx={{ position: 'relative' }}>
                 {conversations.map((c) => (
-                  <Box key={c.conversation_id || c.id || Math.random()} sx={{ display: 'flex', alignItems: 'center', gap: 1, border: 1, borderColor: 'divider', borderRadius: 1, p: 1, mb: 1, cursor: 'pointer' }} onClick={() => loadConversation(c.conversation_id || c.id)}>
+                  <Box key={c.conversation_id || c.id || Math.random()} sx={{ display: 'flex', alignItems: 'center', gap: 1, border: 1, borderColor: 'divider', borderRadius: 1, p: 1, mb: 1, cursor: 'pointer', opacity: loadingPagination ? 0.6 : 1, transition: 'opacity 0.2s ease' }} onClick={() => loadConversation(c.conversation_id || c.id)}>
                     <Box sx={{ flex: 1 }}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{c.title || c.conversation_id || c.id || 'Untitled Conversation'}</Typography>
                       <Typography variant="body2" color="text.secondary">Agent: {c.agent_name || 'Unknown'}</Typography>
@@ -939,7 +949,18 @@ export default function AgentPlayground({ user }) {
 
               {/* Pagination Controls */}
               {historyPagination.total_pages > 1 && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, py: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, py: 2, position: 'relative' }}>
+                  {loadingPagination && (
+                    <Box sx={{ 
+                      position: 'absolute', 
+                      top: '50%', 
+                      left: '50%', 
+                      transform: 'translate(-50%, -50%)',
+                      zIndex: 1
+                    }}>
+                      <CircularProgress size={20} />
+                    </Box>
+                  )}
                   <Pagination
                     count={historyPagination.total_pages}
                     page={historyPagination.page}
@@ -951,6 +972,8 @@ export default function AgentPlayground({ user }) {
                     size="small"
                     showFirstButton
                     showLastButton
+                    disabled={loadingPagination}
+                    sx={{ opacity: loadingPagination ? 0.3 : 1, transition: 'opacity 0.2s ease' }}
                   />
                 </Box>
               )}
