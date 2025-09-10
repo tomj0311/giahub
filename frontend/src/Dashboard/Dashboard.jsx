@@ -102,17 +102,17 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			children: [
 				{
 					label: 'Models',
-					to: '/dashboard/model-config',
+					to: '/dashboard/models',
 					icon: 'Brain'
 				},
 				{
 					label: 'Tools',
-					to: '/dashboard/tool-config',
+					to: '/dashboard/tools',
 					icon: 'Wrench'
 				},
 				{
 					label: 'Knowledge',
-					to: '/dashboard/knowledge-config',
+					to: '/dashboard/knowledge',
 					icon: 'BookOpen'
 				},
 				{
@@ -705,10 +705,10 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="users" element={<Users user={user} />} />
 				<Route path="role-management" element={<RoleManagement user={user} />} />
 				<Route path="user-invitation" element={<UserInvitation user={user} />} />
-				<Route path="agent-config" element={<Agent user={user} />} />
-				<Route path="model-config" element={<ModelConfig user={user} />} />
-				<Route path="tool-config" element={<ToolConfig user={user} />} />
-				<Route path="knowledge-config" element={<KnowledgeConfig user={user} />} />
+				<Route path="agents" element={<Agent user={user} />} />
+				<Route path="models" element={<ModelConfig user={user} />} />
+				<Route path="tools" element={<ToolConfig user={user} />} />
+				<Route path="knowledge" element={<KnowledgeConfig user={user} />} />
 				<Route path="agent-playground" element={<AgentPlayground user={user} />} />
 				<Route path="analytics" element={<div>Analytics - Coming Soon</div>} />
 				<Route path="databases" element={<div>Databases - Coming Soon</div>} />

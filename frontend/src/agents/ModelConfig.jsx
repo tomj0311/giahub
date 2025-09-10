@@ -69,7 +69,7 @@ export default function ModelConfig({ user }) {
     const discoverComponents = async () => {
         try {
             setLoadingDiscovery(true);
-            const response = await apiCall(`/api/model-config/components?folder=ai.models`, {
+            const response = await apiCall(`/api/models/components?folder=ai.models`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
 
@@ -95,7 +95,7 @@ export default function ModelConfig({ user }) {
         try {
             setPendingIntros(p => ({ ...p, [modulePath]: true }));
 
-            const response = await apiCall(`/api/model-config/introspect`, {
+            const response = await apiCall(`/api/models/introspect`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -122,7 +122,7 @@ export default function ModelConfig({ user }) {
         console.log('🏷️ LOADING CATEGORIES...');
         try {
             setLoadingCategories(true);
-            const response = await apiCall(`/api/model-config/categories`, {
+            const response = await apiCall(`/api/models/categories`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
             console.log('📡 Load categories response:', response.status, response.ok);
@@ -153,7 +153,7 @@ export default function ModelConfig({ user }) {
                 sort_order: 'asc'
             });
             
-            const resp = await apiCall(`/api/model-config/configs?${queryParams}`, {
+            const resp = await apiCall(`/api/models/configs?${queryParams}`, {
                 headers: {
                     ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 }
@@ -275,14 +275,14 @@ export default function ModelConfig({ user }) {
             let resp;
             if (isEditMode && form.id) {
                 console.log('📝 UPDATE mode - ID:', form.id);
-                resp = await apiCall(`/api/model-config/configs/${form.id}`, {
+                resp = await apiCall(`/api/models/configs/${form.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
                     body: JSON.stringify(configToSave)
                 });
             } else {
                 console.log('✨ CREATE mode');
-                resp = await apiCall(`/api/model-config/configs`, {
+                resp = await apiCall(`/api/models/configs`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
                     body: JSON.stringify(configToSave)
@@ -357,7 +357,7 @@ export default function ModelConfig({ user }) {
         
         try {
             setSaveState({ loading: true });
-            const resp = await apiCall(`/api/model-config/configs/${id}`, {
+            const resp = await apiCall(`/api/models/configs/${id}`, {
                 method: 'DELETE',
                 headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
             });

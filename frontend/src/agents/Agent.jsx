@@ -102,8 +102,8 @@ export default function Agent({ user }) {
       // Fetch all required data in parallel
       const [agentsResponse, modelsResponse, toolsResponse, knowledgeResponse] = await Promise.all([
         apiCall(`/api/agents?${agentsQueryParams}`, { headers: authHeaders }),
-        apiCall('/api/model-config/configs', { headers: authHeaders }),
-        apiCall('/api/tool-config/configs', { headers: authHeaders }),
+        apiCall('/api/models/configs', { headers: authHeaders }),
+        apiCall('/api/tools/configs', { headers: authHeaders }),
         apiCall('/api/knowledge/configs', { headers: authHeaders })
       ])
 

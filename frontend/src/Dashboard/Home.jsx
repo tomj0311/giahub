@@ -335,7 +335,7 @@ export default function Home({ user }) {
   }
 
   const handleEditAgent = (agent) => {
-    navigate('/dashboard/agent-config')
+    navigate('/dashboard/agents')
   }
 
   const handleChatWithAgent = (agent) => {
@@ -343,7 +343,7 @@ export default function Home({ user }) {
   }
 
   const handleCreateAgent = () => {
-    navigate('/dashboard/agent-config')
+    navigate('/dashboard/agents')
   }
 
   if (loading) {

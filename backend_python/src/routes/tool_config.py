@@ -14,7 +14,7 @@ from src.utils.component_discovery import discover_components, get_detailed_clas
 from ..utils.log import logger
 from ..services.tool_config_service import ToolConfigService
 
-router = APIRouter(tags=["tool-config"]) 
+router = APIRouter(tags=["tools"]) 
 
 
 @router.post("/configs", status_code=status.HTTP_201_CREATED)

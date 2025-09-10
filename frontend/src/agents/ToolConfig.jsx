@@ -64,7 +64,7 @@ export default function ToolConfig({ user }) {
     const discoverComponents = async () => {
         try {
             setLoadingDiscovery(true);
-            const response = await apiCall(`/api/tool-config/components?folder=ai.functions`, {
+            const response = await apiCall(`/api/tools/components?folder=ai.functions`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
             if (response.ok) {
@@ -86,7 +86,7 @@ export default function ToolConfig({ user }) {
         if (!modulePath || introspectCache[modulePath] || pendingIntros[modulePath]) return;
         try {
             setPendingIntros(p => ({ ...p, [modulePath]: true }));
-            const response = await apiCall(`/api/tool-config/introspect`, {
+            const response = await apiCall(`/api/tools/introspect`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -111,7 +111,7 @@ export default function ToolConfig({ user }) {
     const loadCategories = async () => {
         try {
             setLoadingCategories(true);
-            const response = await apiCall(`/api/tool-config/categories`, {
+            const response = await apiCall(`/api/tools/categories`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
             if (response.ok) {
@@ -134,7 +134,7 @@ export default function ToolConfig({ user }) {
                 sort_order: 'asc'
             });
             
-            const resp = await apiCall(`/api/tool-config/configs?${queryParams}`, {
+            const resp = await apiCall(`/api/tools/configs?${queryParams}`, {
                 headers: {
                     ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 }
@@ -223,13 +223,13 @@ export default function ToolConfig({ user }) {
         try {
             let resp;
             if (isEditMode && form.id) {
-                resp = await apiCall(`/api/tool-config/configs/${form.id}`, {
+                resp = await apiCall(`/api/tools/configs/${form.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
                     body: JSON.stringify(configToSave)
                 });
             } else {
-                resp = await apiCall(`/api/tool-config/configs`, {
+                resp = await apiCall(`/api/tools/configs`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
                     body: JSON.stringify(configToSave)
@@ -267,7 +267,7 @@ export default function ToolConfig({ user }) {
         
         try {
             setSaveState({ loading: true });
-            const resp = await apiCall(`/api/tool-config/configs/${id}`, {
+            const resp = await apiCall(`/api/tools/configs/${id}`, {
                 method: 'DELETE',
                 headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
             });

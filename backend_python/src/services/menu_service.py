@@ -151,7 +151,7 @@ class MenuService:
             configuration_children = [
                 {
                     "label": "Models",
-                    "to": "/agents/model-config",
+                    "to": "/agents/models",
                     "icon": "Diamond",
                     "parentId": configuration_parent_id,
                     "order": 1,
@@ -160,7 +160,7 @@ class MenuService:
                 },
                 {
                     "label": "Tools",
-                    "to": "/agents/tool-config",
+                    "to": "/agents/tools",
                     "icon": "Scissors",
                     "parentId": configuration_parent_id,
                     "order": 2,
