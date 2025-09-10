@@ -22,7 +22,8 @@ import {
     TableHead,
     TableRow,
     Paper,
-    IconButton
+    IconButton,
+    TablePagination
 } from '@mui/material';
 import { apiCall } from '../config/api';
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react';
@@ -41,6 +42,12 @@ export default function ToolConfig({ user }) {
     const [pendingIntros, setPendingIntros] = useState({});
     const [existingConfigs, setExistingConfigs] = useState([]);
     const [loadingConfigs, setLoadingConfigs] = useState(true);
+    const [pagination, setPagination] = useState({
+        page: 0, // MUI uses 0-based pagination
+        rowsPerPage: 8,
+        total: 0,
+        totalPages: 0
+    });
     const [isEditMode, setIsEditMode] = useState(false);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [form, setForm] = useState({
@@ -118,9 +125,16 @@ export default function ToolConfig({ user }) {
         }
     };
 
-    const loadExistingConfigs = async () => {
+    const loadExistingConfigs = async (page = 1, pageSize = 8) => {
         try {
-            const resp = await apiCall(`/api/tool-config/configs`, {
+            const queryParams = new URLSearchParams({
+                page: page.toString(),
+                page_size: pageSize.toString(),
+                sort_by: 'name',
+                sort_order: 'asc'
+            });
+            
+            const resp = await apiCall(`/api/tool-config/configs?${queryParams}`, {
                 headers: {
                     ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 }
@@ -128,12 +142,29 @@ export default function ToolConfig({ user }) {
             if (resp.ok) {
                 const data = await resp.json();
                 setExistingConfigs(data.configurations || []);
+                if (data.pagination) {
+                    setPagination({
+                        page: data.pagination.page - 1, // Convert to 0-based for MUI
+                        rowsPerPage: data.pagination.page_size,
+                        total: data.pagination.total,
+                        totalPages: data.pagination.total_pages
+                    });
+                }
             }
         } catch (e) {
             console.error('Failed to load existing configurations:', e);
         } finally {
             setLoadingConfigs(false);
         }
+    };
+
+    const handlePageChange = (event, newPage) => {
+        loadExistingConfigs(newPage + 1, pagination.rowsPerPage); // Convert to 1-based for API
+    };
+
+    const handleRowsPerPageChange = (event) => {
+        const newRowsPerPage = parseInt(event.target.value, 10);
+        loadExistingConfigs(1, newRowsPerPage); // Reset to first page
     };
 
     useEffect(() => {
@@ -292,7 +323,9 @@ export default function ToolConfig({ user }) {
             <Card>
                 <CardContent>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                        <Typography variant="h6">All Tool Configs ({existingConfigs.length})</Typography>
+                        <Typography variant="h6">
+                            Tool Configs ({pagination.total} total, showing {existingConfigs.length} on page {pagination.page + 1})
+                        </Typography>
                     </Box>
                     <TableContainer component={Paper} variant="outlined">
                         <Table>
@@ -330,6 +363,17 @@ export default function ToolConfig({ user }) {
                             </TableBody>
                         </Table>
                     </TableContainer>
+                    <TablePagination
+                        component="div"
+                        count={pagination.total}
+                        page={pagination.page}
+                        onPageChange={handlePageChange}
+                        rowsPerPage={pagination.rowsPerPage}
+                        onRowsPerPageChange={handleRowsPerPageChange}
+                        rowsPerPageOptions={[5, 8, 10, 15, 25]}
+                        showFirstButton
+                        showLastButton
+                    />
                 </CardContent>
             </Card>
 

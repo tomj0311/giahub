@@ -22,7 +22,8 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  IconButton
+  IconButton,
+  TablePagination
 } from '@mui/material'
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
@@ -43,6 +44,12 @@ export default function Agent({ user }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [pagination, setPagination] = useState({
+    page: 0, // MUI uses 0-based pagination
+    rowsPerPage: 8,
+    total: 0,
+    totalPages: 0
+  })
 
   // Store full objects (id + name) then map IDs in the form
   const [models, setModels] = useState([]) // [{id,name}]
@@ -60,11 +67,12 @@ export default function Agent({ user }) {
     // Store only IDs for all references
     model_id: '',                    // single model ID
     tools: {},                       // keys are tool IDs
-    knowledge_collection_id: '',     // single knowledge collection ID
+    knowledge_collections: {},       // keys are knowledge collection IDs
     memory: { history: { enabled: false, num: 3 } },
   })
 
   const toolList = Object.keys(form.tools || {}) // IDs
+  const knowledgeList = Object.keys(form.knowledge_collections || {}) // IDs
 
   const resetForm = () => {
     setForm({
@@ -75,27 +83,45 @@ export default function Agent({ user }) {
       instructions: '',
       model_id: '',
       tools: {},
-      knowledge_collection_id: '',
+      knowledge_collections: {},
       memory: { history: { enabled: false, num: 3 } },
     })
   }
 
-  async function fetchAll() {
+  async function fetchAll(page = 1, pageSize = 8) {
     setLoading(true)
     try {
+      // Build query parameters for agents with pagination
+      const agentsQueryParams = new URLSearchParams({
+        page: page.toString(),
+        page_size: pageSize.toString(),
+        sort_by: 'created_at',
+        sort_order: 'desc'
+      });
+
       // Fetch all required data in parallel
       const [agentsResponse, modelsResponse, toolsResponse, knowledgeResponse] = await Promise.all([
-        apiCall('/api/agents', { headers: authHeaders }),
+        apiCall(`/api/agents?${agentsQueryParams}`, { headers: authHeaders }),
         apiCall('/api/model-config/configs', { headers: authHeaders }),
         apiCall('/api/tool-config/configs', { headers: authHeaders }),
         apiCall('/api/knowledge/configs', { headers: authHeaders })
       ])
 
-      // Handle agents
+      // Handle agents with pagination
       if (agentsResponse.ok) {
         const agentsData = await agentsResponse.json()
         const agentsList = agentsData.agents || []
         setExistingAgents(agentsList)
+
+        // Set pagination data
+        if (agentsData.pagination) {
+          setPagination({
+            page: agentsData.pagination.page - 1, // Convert to 0-based for MUI
+            rowsPerPage: agentsData.pagination.page_size,
+            total: agentsData.pagination.total,
+            totalPages: agentsData.pagination.total_pages
+          });
+        }
 
         // Extract unique categories from existing agents
         const uniqueCategories = new Set()
@@ -148,10 +174,32 @@ export default function Agent({ user }) {
     }
   }
 
+  const handlePageChange = (event, newPage) => {
+    fetchAll(newPage + 1, pagination.rowsPerPage); // Convert to 1-based for API
+  };
+
+  const handleRowsPerPageChange = (event) => {
+    const newRowsPerPage = parseInt(event.target.value, 10);
+    fetchAll(1, newRowsPerPage); // Reset to first page
+  };
+
   useEffect(() => { fetchAll() }, [])
 
   const loadAgent = (agent) => {
     if (!agent) return
+    
+    // Handle backward compatibility for knowledge collections
+    let knowledgeCollections = agent.knowledge_collections || agent.collections || {}
+    
+    // If using old single collection format, convert to new multiple format
+    if (!Object.keys(knowledgeCollections).length && agent.collection) {
+      if (typeof agent.collection === 'object' && agent.collection.id) {
+        knowledgeCollections = { [agent.collection.id]: {} }
+      } else if (typeof agent.collection === 'string' && agent.collection) {
+        knowledgeCollections = { [agent.collection]: {} }
+      }
+    }
+    
     setForm({
       id: agent.id || null,
       name: agent.name || '',
@@ -160,7 +208,7 @@ export default function Agent({ user }) {
       instructions: agent.instructions || '',
       model_id: agent.model?.id || '',
       tools: agent.tools || {}, // assume already keyed by ID
-      knowledge_collection_id: agent.collection?.id || agent.knowledge_collection_id || agent.collection || '',
+      knowledge_collections: knowledgeCollections,
       memory: agent.memory || { history: { enabled: false, num: 3 } },
     })
   }
@@ -178,7 +226,7 @@ export default function Agent({ user }) {
         instructions: form.instructions,
         model: form.model_id ? { id: form.model_id } : null,
         tools: form.tools,
-        collection: form.knowledge_collection_id ? { id: form.knowledge_collection_id } : null,
+        collections: form.knowledge_collections,
         memory: form.memory,
       }
       const resp = await apiCall(`/api/agents`, {
@@ -189,7 +237,7 @@ export default function Agent({ user }) {
       const data = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(data.detail || `Save failed (${resp.status})`)
       showSuccess(`Agent ${data.name} saved`)
-      await fetchAll()
+      await fetchAll(pagination.page + 1, pagination.rowsPerPage) // Refresh current page
       setDialogOpen(false)
     } catch (e) {
       showError(e.message || 'Failed to save')
@@ -218,7 +266,7 @@ export default function Agent({ user }) {
       if (!resp.ok) throw new Error(data.detail || `Delete failed (${resp.status})`)
       showSuccess(`Agent ${form.name} deleted`)
       setForm(f => ({ ...f, id: null, name: '' }))
-      await fetchAll()
+      await fetchAll(pagination.page + 1, pagination.rowsPerPage) // Refresh current page
       setDialogOpen(false)
     } catch (e) {
       showError(e.message || 'Failed to delete')
@@ -262,7 +310,9 @@ export default function Agent({ user }) {
       <Card>
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">All Agents ({existingAgents.length})</Typography>
+            <Typography variant="h6">
+              All Agents ({pagination.total} total, showing {existingAgents.length} on page {pagination.page + 1})
+            </Typography>
           </Box>
 
           <TableContainer component={Paper} variant="outlined">
@@ -298,6 +348,18 @@ export default function Agent({ user }) {
                 ) : (
                   existingAgents.map((a) => {
                     const toolIds = Object.keys(a.tools || {})
+                    
+                    // Handle backward compatibility for knowledge collections display
+                    let knowledgeCollectionsObj = a.knowledge_collections || a.collections || {}
+                    if (!Object.keys(knowledgeCollectionsObj).length && a.collection) {
+                      if (typeof a.collection === 'object' && a.collection.id) {
+                        knowledgeCollectionsObj = { [a.collection.id]: a.collection }
+                      } else if (typeof a.collection === 'string' && a.collection) {
+                        knowledgeCollectionsObj = { [a.collection]: { name: a.collection } }
+                      }
+                    }
+                    const knowledgeIds = Object.keys(knowledgeCollectionsObj)
+                    
                     const mem = a.memory?.history?.enabled
                       ? `History (${a.memory?.history?.num ?? 3})`
                       : 'Off'
@@ -328,7 +390,23 @@ export default function Agent({ user }) {
                             )}
                           </Box>
                         </TableCell>
-                        <TableCell>{a.collection?.id || a.knowledge_collection_id || a.collection || '-'}</TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                            {knowledgeIds.length === 0 ? (
+                              <Chip size="small" label="None" />
+                            ) : (
+                              knowledgeIds.slice(0, 3).map(kid => {
+                                const knowledgeName = knowledgeCollectionsObj[kid]?.name || kid
+                                return (
+                                  <Chip key={kid} size="small" label={knowledgeName} variant="outlined" />
+                                )
+                              })
+                            )}
+                            {knowledgeIds.length > 3 && (
+                              <Chip size="small" label={`+${knowledgeIds.length - 3}`} />
+                            )}
+                          </Box>
+                        </TableCell>
                         <TableCell>
                           <Chip size="small" label={mem} color={a.memory?.history?.enabled ? 'primary' : 'default'} />
                         </TableCell>
@@ -344,6 +422,17 @@ export default function Agent({ user }) {
               </TableBody>
             </Table>
           </TableContainer>
+          <TablePagination
+            component="div"
+            count={pagination.total}
+            page={pagination.page}
+            onPageChange={handlePageChange}
+            rowsPerPage={pagination.rowsPerPage}
+            onRowsPerPageChange={handleRowsPerPageChange}
+            rowsPerPageOptions={[5, 8, 10, 15, 25]}
+            showFirstButton
+            showLastButton
+          />
         </CardContent>
       </Card>
 
@@ -413,11 +502,17 @@ export default function Agent({ user }) {
                 />
 
                 <Autocomplete
+                  multiple
                   options={knowledgeCollections}
                   getOptionLabel={(o) => o?.name || ''}
-                  value={knowledgeCollections.find(c => c.id === form.knowledge_collection_id) || null}
-                  onChange={(_, v) => setForm(f => ({ ...f, knowledge_collection_id: v?.id || '' }))}
-                  renderInput={(p) => <TextField {...p} label="Knowledge Collection" size="small" />}
+                  value={knowledgeCollections.filter(c => knowledgeList.includes(c.id))}
+                  onChange={(_, v) => {
+                    const next = {}
+                    v.forEach(c => { next[c.id] = form.knowledge_collections?.[c.id] || {} })
+                    setForm(f => ({ ...f, knowledge_collections: next }))
+                  }}
+                  renderTags={(value, getTagProps) => value.map((opt, i) => <Chip {...getTagProps({ index: i })} key={opt.id} size="small" label={opt.name} />)}
+                  renderInput={(p) => <TextField {...p} label="Knowledge Collections" size="small" />}
                 />
 
                 <Paper variant="outlined" sx={{ p: 2 }}>

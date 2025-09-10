@@ -64,12 +64,28 @@ async def list_knowledge_configs(user: dict = Depends(verify_token_middleware)):
 
 
 @router.get("/collections")
-async def list_collections(user: dict = Depends(verify_token_middleware)):
-    """List knowledge collections for current tenant."""
-    logger.info("[KNOWLEDGE] Listing knowledge collections")
+async def list_collections(
+    user: dict = Depends(verify_token_middleware),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    page_size: int = Query(8, ge=1, le=100, description="Items per page"),
+    category: str = Query(None, description="Filter by category"),
+    search: str = Query(None, description="Search in collection names"),
+    sort_by: str = Query("name", description="Sort field"),
+    sort_order: str = Query("asc", regex="^(asc|desc)$", description="Sort order")
+):
+    """List knowledge collections for current tenant with pagination."""
+    logger.info(f"[KNOWLEDGE] Listing knowledge collections - page: {page}, size: {page_size}")
     try:
-        result = await KnowledgeService.list_collections(user)
-        logger.debug(f"[KNOWLEDGE] Retrieved {len(result) if result else 0} collections")
+        result = await KnowledgeService.list_collections_paginated(
+            user=user,
+            page=page,
+            page_size=page_size,
+            category=category,
+            search=search,
+            sort_by=sort_by,
+            sort_order=sort_order
+        )
+        logger.debug(f"[KNOWLEDGE] Retrieved {len(result.get('collections', [])) if result else 0} collections")
         return result
     except Exception as e:
         import traceback

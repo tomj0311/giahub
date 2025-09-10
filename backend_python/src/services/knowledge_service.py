@@ -503,6 +503,110 @@ class KnowledgeService:
             import traceback
             logger.error(f"[KNOWLEDGE] Collections traceback: {traceback.format_exc()}")
             raise
+
+    @classmethod
+    async def list_collections_paginated(
+        cls, 
+        user: dict, 
+        page: int = 1, 
+        page_size: int = 8,
+        category: Optional[str] = None,
+        search: Optional[str] = None,
+        sort_by: str = "collection",
+        sort_order: str = "asc"
+    ) -> Dict[str, Any]:
+        """List knowledge collections with pagination, filtering, and sorting"""
+        tenant_id = await cls.validate_tenant_access(user)
+        logger.info(f"[KNOWLEDGE] Listing collections with pagination for tenant: {tenant_id}")
+        
+        try:
+            # Build filter query
+            filter_query = {}
+            
+            if category:
+                filter_query["category"] = category
+            
+            if search:
+                filter_query["$or"] = [
+                    {"collection": {"$regex": search, "$options": "i"}},
+                    {"description": {"$regex": search, "$options": "i"}}
+                ]
+            
+            # Calculate pagination
+            skip = (page - 1) * page_size
+            
+            # Get total count
+            total_count = await MongoStorageService.count_documents("knowledgeConfig", filter_query, tenant_id=tenant_id)
+            
+            # Calculate pagination info
+            total_pages = (total_count + page_size - 1) // page_size  # Ceiling division
+            has_next = page < total_pages
+            has_prev = page > 1
+            
+            # Determine sort order
+            sort_direction = -1 if sort_order == "desc" else 1
+            
+            # Get paginated results
+            docs = await MongoStorageService.find_many(
+                "knowledgeConfig", 
+                filter_query,
+                tenant_id=tenant_id,
+                sort_field=sort_by,
+                sort_order=sort_direction,
+                skip=skip,
+                limit=page_size
+            )
+            
+            logger.debug(f"[KNOWLEDGE] Found {len(docs)} collections for tenant: {tenant_id}")
+            
+            collections = []
+            for doc in docs:
+                # Get files count from MinIO for each collection
+                files_count = 0
+                try:
+                    collection_files = await FileService.list_files(doc.get("collection", ""), tenant_id)
+                    files_count = len(collection_files)
+                except Exception as e:
+                    logger.warning(f"[KNOWLEDGE] Could not get files count for collection {doc.get('collection')}: {e}")
+                
+                # Extract chunk configuration - prefer from embedder.chunk, fallback to root chunk
+                chunkConfig = doc.get("embedder", {}).get("chunk", {}) if doc.get("embedder") else doc.get("chunk", {})
+                
+                collection_data = {
+                    "id": doc.get("collection", ""),
+                    "name": doc.get("collection", ""),
+                    "category": doc.get("category", ""),
+                    "chunk_strategy": chunkConfig.get("strategy", ""),
+                    "chunk_strategy_params": chunkConfig.get("params", {}),
+                    "chunk_size": chunkConfig.get("chunk_size"),
+                    "chunk_overlap": chunkConfig.get("chunk_overlap"),
+                    "embedder_strategy": doc.get("embedder", {}).get("strategy", ""),
+                    "embedder_strategy_params": doc.get("embedder", {}).get("params", {}),
+                    "files_count": files_count,
+                    "created_at": doc.get("created_at"),
+                    "updated_at": doc.get("updated_at")
+                }
+                collections.append(collection_data)
+            
+            # Build response with pagination metadata
+            result = {
+                "collections": collections,
+                "pagination": {
+                    "page": page,
+                    "page_size": page_size,
+                    "total": total_count,
+                    "total_pages": total_pages,
+                    "has_next": has_next,
+                    "has_prev": has_prev
+                }
+            }
+            
+            logger.info(f"[KNOWLEDGE] Returning {len(collections)} collections, page {page}/{total_pages}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"[KNOWLEDGE] Failed to list collections with pagination: {e}")
+            raise HTTPException(status_code=500, detail="Failed to retrieve knowledge collections")
     
     @classmethod
     async def get_collection(cls, collection_name: str, user: dict) -> Dict[str, Any]:

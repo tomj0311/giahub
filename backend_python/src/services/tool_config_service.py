@@ -97,6 +97,88 @@ class ToolConfigService:
         return configs
 
     @classmethod
+    async def get_tool_configs_paginated(
+        cls, 
+        user: dict, 
+        page: int = 1, 
+        page_size: int = 8,
+        category: Optional[str] = None,
+        search: Optional[str] = None,
+        sort_by: str = "name",
+        sort_order: str = "asc"
+    ) -> Dict[str, Any]:
+        """Get tool configurations with pagination, filtering, and sorting"""
+        tenant_id = await cls.validate_tenant_access(user)
+        logger.info(f"[TOOL] Listing tool configs with pagination for tenant: {tenant_id}")
+        
+        try:
+            # Build filter query
+            filter_query = {}
+            
+            if category:
+                filter_query["category"] = category
+            
+            if search:
+                filter_query["$or"] = [
+                    {"name": {"$regex": search, "$options": "i"}},
+                    {"description": {"$regex": search, "$options": "i"}}
+                ]
+            
+            # Calculate pagination
+            skip = (page - 1) * page_size
+            
+            # Get total count
+            total_count = await MongoStorageService.count_documents("toolConfig", filter_query, tenant_id=tenant_id)
+            
+            # Calculate pagination info
+            total_pages = (total_count + page_size - 1) // page_size  # Ceiling division
+            has_next = page < total_pages
+            has_prev = page > 1
+            
+            # Determine sort order
+            sort_direction = -1 if sort_order == "desc" else 1
+            
+            # Get paginated results
+            docs = await MongoStorageService.find_many(
+                "toolConfig", 
+                filter_query,
+                tenant_id=tenant_id,
+                sort_field=sort_by,
+                sort_order=sort_direction,
+                skip=skip,
+                limit=page_size
+            )
+            
+            logger.debug(f"[TOOL] Found {len(docs)} tool configs for tenant: {tenant_id}")
+            
+            configs = []
+            for config in docs:
+                # Convert ObjectId to string for the id field
+                config_dict = dict(config)
+                config_dict["id"] = str(config_dict.pop("_id"))
+                configs.append(config_dict)
+            
+            # Build response with pagination metadata
+            result = {
+                "configurations": configs,
+                "pagination": {
+                    "page": page,
+                    "page_size": page_size,
+                    "total": total_count,
+                    "total_pages": total_pages,
+                    "has_next": has_next,
+                    "has_prev": has_prev
+                }
+            }
+            
+            logger.info(f"[TOOL] Returning {len(configs)} configs, page {page}/{total_pages}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"[TOOL] Failed to list tool configs with pagination: {e}")
+            raise HTTPException(status_code=500, detail="Failed to retrieve tool configurations")
+
+    @classmethod
     async def get_tool_config_by_name(cls, name: str, user: dict) -> dict:
         """Get a specific tool configuration by name"""
         tenant_id = await cls.validate_tenant_access(user)

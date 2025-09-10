@@ -42,10 +42,27 @@ async def get_available_providers():
 
 
 @router.get("/configs")
-async def list_model_configs(user: dict = Depends(verify_token_middleware)):
-    """List model configurations for current tenant"""
-    configs = await ModelConfigService.list_model_configs(user)
-    return {"configurations": configs}
+async def list_model_configs(
+    user: dict = Depends(verify_token_middleware),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    page_size: int = Query(8, ge=1, le=100, description="Items per page"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    search: Optional[str] = Query(None, description="Search in name and description"),
+    sort_by: str = Query("name", description="Sort field"),
+    sort_order: str = Query("asc", regex="^(asc|desc)$", description="Sort order")
+):
+    """List model configurations for current tenant with pagination"""
+    logger.info(f"[MODEL_CONFIG] Listing configs - page: {page}, size: {page_size}")
+    result = await ModelConfigService.list_model_configs_paginated(
+        user=user,
+        page=page,
+        page_size=page_size,
+        category=category,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order
+    )
+    return result
 
 
 @router.get("/configs/{config_id}")

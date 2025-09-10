@@ -64,6 +64,98 @@ class ModelConfigService:
         except Exception as e:
             logger.error(f"[MODEL] Failed to list model configs: {e}")
             raise HTTPException(status_code=500, detail="Failed to retrieve model configurations")
+
+    @classmethod
+    async def list_model_configs_paginated(
+        cls, 
+        user: dict, 
+        page: int = 1, 
+        page_size: int = 8,
+        category: Optional[str] = None,
+        search: Optional[str] = None,
+        sort_by: str = "name",
+        sort_order: str = "asc"
+    ) -> Dict[str, Any]:
+        """List model configurations with pagination, filtering, and sorting"""
+        tenant_id = await cls.validate_tenant_access(user)
+        logger.info(f"[MODEL] Listing model configs with pagination for tenant: {tenant_id}")
+        
+        try:
+            # Build filter query
+            filter_query = {}
+            
+            if category:
+                filter_query["category"] = category
+            
+            if search:
+                filter_query["$or"] = [
+                    {"name": {"$regex": search, "$options": "i"}},
+                    {"description": {"$regex": search, "$options": "i"}}
+                ]
+            
+            # Calculate pagination
+            skip = (page - 1) * page_size
+            
+            # Get total count
+            total_count = await MongoStorageService.count_documents("modelConfig", filter_query, tenant_id=tenant_id)
+            
+            # Calculate pagination info
+            total_pages = (total_count + page_size - 1) // page_size  # Ceiling division
+            has_next = page < total_pages
+            has_prev = page > 1
+            
+            # Determine sort order
+            sort_direction = -1 if sort_order == "desc" else 1
+            
+            # Get paginated results
+            docs = await MongoStorageService.find_many(
+                "modelConfig", 
+                filter_query,
+                tenant_id=tenant_id,
+                sort_field=sort_by,
+                sort_order=sort_direction,
+                skip=skip,
+                limit=page_size
+            )
+            
+            logger.debug(f"[MODEL] Found {len(docs)} model configs for tenant: {tenant_id}")
+            
+            configs = []
+            for doc in docs:
+                config = {
+                    "id": str(doc["_id"]),
+                    "name": doc.get("name"),
+                    "provider": doc.get("provider"),
+                    "model": doc.get("model"),
+                    "category": doc.get("category", ""),
+                    "description": doc.get("description", ""),
+                    "parameters": doc.get("parameters", {}),
+                    "api_key_configured": bool(doc.get("api_key")),
+                    "created_at": doc.get("created_at"),
+                    "updated_at": doc.get("updated_at"),
+                    "is_active": doc.get("is_active", True)
+                }
+                configs.append(config)
+            
+            # Build response with pagination metadata
+            result = {
+                "configurations": configs,
+                "pagination": {
+                    "page": page,
+                    "page_size": page_size,
+                    "total": total_count,
+                    "total_pages": total_pages,
+                    "has_next": has_next,
+                    "has_prev": has_prev
+                }
+            }
+            
+            logger.info(f"[MODEL] Returning {len(configs)} configs, page {page}/{total_pages}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"[MODEL] Failed to list model configs with pagination: {e}")
+            raise HTTPException(status_code=500, detail="Failed to retrieve model configurations")
     
     @classmethod
     async def get_model_config(cls, config_name: str, user: dict) -> Dict[str, Any]:

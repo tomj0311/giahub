@@ -101,50 +101,27 @@ class AgentService:
                 # Get tool configs if tool IDs are present
                 tools_data = d.get("tools", {})
                 populated_tools = {}
-                for tool_id, tool_config in tools_data.items():
-                    try:
-                        from bson import ObjectId
-                        # tool_id is the actual ID, look it up in toolConfig collection
-                        tool_ref = await MongoStorageService.find_one("toolConfig", {"_id": ObjectId(tool_id)}, tenant_id=tenant_id)
-                        if tool_ref:
-                            # Convert ObjectId to string and add name
-                            if "_id" in tool_ref:
-                                tool_ref["id"] = str(tool_ref.pop("_id"))
-                            # Merge any existing config with the fetched tool data
-                            populated_tools[tool_id] = {**tool_ref, **tool_config}
-                        else:
-                            # If tool not found, keep original config with ID
-                            populated_tools[tool_id] = {"id": tool_id, **tool_config}
-                    except Exception as e:
-                        logger.warning(f"[AGENTS] Failed to populate tool config {tool_id}: {e}")
-                        populated_tools[tool_id] = {"id": tool_id, **tool_config}
+                for tool_name, tool_config in tools_data.items():
+                    if isinstance(tool_config, dict) and tool_config.get("id"):
+                        try:
+                            from bson import ObjectId
+                            tool_ref = await MongoStorageService.find_one("toolConfig", {"_id": ObjectId(tool_config["id"])}, tenant_id=tenant_id)
+                            if tool_ref:
+                                # Convert ObjectId to string
+                                if "_id" in tool_ref:
+                                    tool_ref["id"] = str(tool_ref.pop("_id"))
+                                populated_tools[tool_name] = tool_ref
+                            else:
+                                populated_tools[tool_name] = tool_config
+                        except Exception as e:
+                            logger.warning(f"[AGENTS] Failed to populate tool config {tool_config.get('id')}: {e}")
+                            populated_tools[tool_name] = tool_config
+                    else:
+                        populated_tools[tool_name] = tool_config
                 
-                # Get knowledge collections if collection IDs are present
-                collections_data = d.get("collections", {})
-                populated_collections = {}
-                for collection_id, collection_config in collections_data.items():
-                    try:
-                        from bson import ObjectId
-                        # collection_id is the actual ID, look it up in knowledgeConfig collection
-                        knowledge_ref = await MongoStorageService.find_one("knowledgeConfig", {"_id": ObjectId(collection_id)}, tenant_id=tenant_id)
-                        if knowledge_ref:
-                            # Convert ObjectId to string and add name
-                            if not knowledge_ref.get("name") and knowledge_ref.get("collection"):
-                                knowledge_ref["name"] = knowledge_ref["collection"]
-                            if "_id" in knowledge_ref:
-                                knowledge_ref["id"] = str(knowledge_ref.pop("_id"))
-                            # Merge any existing config with the fetched knowledge data
-                            populated_collections[collection_id] = {**knowledge_ref, **collection_config}
-                        else:
-                            # If knowledge collection not found, keep original config with ID
-                            populated_collections[collection_id] = {"id": collection_id, **collection_config}
-                    except Exception as e:
-                        logger.warning(f"[AGENTS] Failed to populate knowledge config {collection_id}: {e}")
-                        populated_collections[collection_id] = {"id": collection_id, **collection_config}
-                
-                # Handle backward compatibility for old single collection field
+                # Get knowledge config if collection ID is present
                 collection_data = d.get("collection", "")
-                if collection_data and not populated_collections:
+                if collection_data:
                     try:
                         from bson import ObjectId
                         if ObjectId.is_valid(collection_data):
@@ -165,8 +142,7 @@ class AgentService:
                     "instructions": d.get("instructions", ""),
                     "model": model_data,
                     "tools": populated_tools,
-                    "collections": populated_collections,
-                    "collection": collection_data,  # Keep for backward compatibility
+                    "collection": collection_data,
                     "memory": d.get("memory", {}),
                     "created_at": d.get("created_at"),
                     "updated_at": d.get("updated_at"),
@@ -220,50 +196,27 @@ class AgentService:
                 # Get tool configs if tool IDs are present
                 tools_data = d.get("tools", {})
                 populated_tools = {}
-                for tool_id, tool_config in tools_data.items():
-                    try:
-                        from bson import ObjectId
-                        # tool_id is the actual ID, look it up in toolConfig collection
-                        tool_ref = await MongoStorageService.find_one("toolConfig", {"_id": ObjectId(tool_id)}, tenant_id=tenant_id)
-                        if tool_ref:
-                            # Convert ObjectId to string and add name
-                            if "_id" in tool_ref:
-                                tool_ref["id"] = str(tool_ref.pop("_id"))
-                            # Merge any existing config with the fetched tool data
-                            populated_tools[tool_id] = {**tool_ref, **tool_config}
-                        else:
-                            # If tool not found, keep original config with ID
-                            populated_tools[tool_id] = {"id": tool_id, **tool_config}
-                    except Exception as e:
-                        logger.warning(f"[AGENTS] Failed to populate tool config {tool_id}: {e}")
-                        populated_tools[tool_id] = {"id": tool_id, **tool_config}
+                for tool_name, tool_config in tools_data.items():
+                    if isinstance(tool_config, dict) and tool_config.get("id"):
+                        try:
+                            from bson import ObjectId
+                            tool_ref = await MongoStorageService.find_one("toolConfig", {"_id": ObjectId(tool_config["id"])}, tenant_id=tenant_id)
+                            if tool_ref:
+                                # Convert ObjectId to string
+                                if "_id" in tool_ref:
+                                    tool_ref["id"] = str(tool_ref.pop("_id"))
+                                populated_tools[tool_name] = tool_ref
+                            else:
+                                populated_tools[tool_name] = tool_config
+                        except Exception as e:
+                            logger.warning(f"[AGENTS] Failed to populate tool config {tool_config.get('id')}: {e}")
+                            populated_tools[tool_name] = tool_config
+                    else:
+                        populated_tools[tool_name] = tool_config
                 
-                # Get knowledge collections if collection IDs are present
-                collections_data = d.get("collections", {})
-                populated_collections = {}
-                for collection_id, collection_config in collections_data.items():
-                    try:
-                        from bson import ObjectId
-                        # collection_id is the actual ID, look it up in knowledgeConfig collection
-                        knowledge_ref = await MongoStorageService.find_one("knowledgeConfig", {"_id": ObjectId(collection_id)}, tenant_id=tenant_id)
-                        if knowledge_ref:
-                            # Convert ObjectId to string and add name
-                            if not knowledge_ref.get("name") and knowledge_ref.get("collection"):
-                                knowledge_ref["name"] = knowledge_ref["collection"]
-                            if "_id" in knowledge_ref:
-                                knowledge_ref["id"] = str(knowledge_ref.pop("_id"))
-                            # Merge any existing config with the fetched knowledge data
-                            populated_collections[collection_id] = {**knowledge_ref, **collection_config}
-                        else:
-                            # If knowledge collection not found, keep original config with ID
-                            populated_collections[collection_id] = {"id": collection_id, **collection_config}
-                    except Exception as e:
-                        logger.warning(f"[AGENTS] Failed to populate knowledge config {collection_id}: {e}")
-                        populated_collections[collection_id] = {"id": collection_id, **collection_config}
-                
-                # Handle backward compatibility for old single collection field
+                # Get knowledge config if collection ID is present
                 collection_data = d.get("collection", "")
-                if collection_data and not populated_collections:
+                if collection_data:
                     try:
                         from bson import ObjectId
                         if ObjectId.is_valid(collection_data):
@@ -284,8 +237,7 @@ class AgentService:
                     "instructions": d.get("instructions", ""),
                     "model": model_data,
                     "tools": populated_tools,
-                    "collections": populated_collections,
-                    "collection": collection_data,  # Keep for backward compatibility
+                    "collection": collection_data,
                     "memory": d.get("memory", {}),
                     "created_at": d.get("created_at"),
                     "updated_at": d.get("updated_at"),

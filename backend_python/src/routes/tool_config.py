@@ -4,7 +4,7 @@ Handles tool configurations stored in MongoDB with categories
 All operations are tenant-isolated
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Query
 from typing import Optional
 from datetime import datetime
 
@@ -38,13 +38,27 @@ async def create_tool_config(
 
 @router.get("/configs")
 async def get_tool_configs(
-    category: Optional[str] = None,
-    user: dict = Depends(verify_token_middleware)
+    user: dict = Depends(verify_token_middleware),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    page_size: int = Query(8, ge=1, le=100, description="Items per page"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    search: Optional[str] = Query(None, description="Search in name and description"),
+    sort_by: str = Query("name", description="Sort field"),
+    sort_order: str = Query("asc", regex="^(asc|desc)$", description="Sort order")
 ):
-    """List tool configurations in user's tenant"""
+    """List tool configurations in user's tenant with pagination"""
+    logger.info(f"[TOOL_CONFIG] Listing configs - page: {page}, size: {page_size}")
     try:
-        configs = await ToolConfigService.get_tool_configs(user, category)
-        return {"configurations": configs}
+        result = await ToolConfigService.get_tool_configs_paginated(
+            user=user,
+            page=page,
+            page_size=page_size,
+            category=category,
+            search=search,
+            sort_by=sort_by,
+            sort_order=sort_order
+        )
+        return result
     except HTTPException:
         raise
     except Exception as e:

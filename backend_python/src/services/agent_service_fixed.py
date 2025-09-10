@@ -129,8 +129,6 @@ class AgentService:
                         knowledge_ref = await MongoStorageService.find_one("knowledgeConfig", {"_id": ObjectId(collection_id)}, tenant_id=tenant_id)
                         if knowledge_ref:
                             # Convert ObjectId to string and add name
-                            if not knowledge_ref.get("name") and knowledge_ref.get("collection"):
-                                knowledge_ref["name"] = knowledge_ref["collection"]
                             if "_id" in knowledge_ref:
                                 knowledge_ref["id"] = str(knowledge_ref.pop("_id"))
                             # Merge any existing config with the fetched knowledge data
@@ -248,8 +246,6 @@ class AgentService:
                         knowledge_ref = await MongoStorageService.find_one("knowledgeConfig", {"_id": ObjectId(collection_id)}, tenant_id=tenant_id)
                         if knowledge_ref:
                             # Convert ObjectId to string and add name
-                            if not knowledge_ref.get("name") and knowledge_ref.get("collection"):
-                                knowledge_ref["name"] = knowledge_ref["collection"]
                             if "_id" in knowledge_ref:
                                 knowledge_ref["id"] = str(knowledge_ref.pop("_id"))
                             # Merge any existing config with the fetched knowledge data

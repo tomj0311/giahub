@@ -31,7 +31,8 @@ import {
   TableRow,
   Paper,
   IconButton,
-  Stack
+  Stack,
+  TablePagination
 } from '@mui/material'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react'
@@ -137,6 +138,12 @@ export default function KnowledgeConfig({ user }) {
   const [collections, setCollections] = useState([])
   const [existingConfigs, setExistingConfigs] = useState([]) // Full collection configurations like ToolConfig
   const [loadingConfigs, setLoadingConfigs] = useState(true)
+  const [pagination, setPagination] = useState({
+    page: 0, // MUI uses 0-based pagination
+    rowsPerPage: 8,
+    total: 0,
+    totalPages: 0
+  })
   const [categories, setCategories] = useState([])
   const [loadingCategories, setLoadingCategories] = useState(false)
   const [components, setComponents] = useState({ chunking: [], embedders: [] })
@@ -176,58 +183,92 @@ export default function KnowledgeConfig({ user }) {
     }
   }
 
-  const loadExistingConfigs = async () => {
+  const loadExistingConfigs = async (page = 1, pageSize = 8) => {
     try {
       setLoadingConfigs(true)
-      const collectionsResponse = await api.getCollections(token)
-      const collectionNames = collectionsResponse.collections || []
-      setCollections(collectionNames)
+      const queryParams = new URLSearchParams({
+        page: page.toString(),
+        page_size: pageSize.toString(),
+        sort_by: 'collection',
+        sort_order: 'asc'
+      });
       
-      // Load full data for each collection like ToolConfig loads configurations
-      const collectionsWithData = []
-      for (const name of collectionNames) {
-        try {
-          const data = await api.getCollection(name, token)
-          
-          // Extract chunk configuration - prefer from embedder.chunk, fallback to root chunk
-          const chunkConfig = data.embedder?.chunk || data.chunk || {}
-          
-          collectionsWithData.push({
-            id: name, // Use collection name as id like ToolConfig
-            name: data.collection || name,
-            category: data.category || '',
-            chunk_strategy: chunkConfig.strategy || '',
-            chunk_strategy_params: chunkConfig.params || {},
-            chunk_size: chunkConfig.chunk_size || null,
-            chunk_overlap: chunkConfig.chunk_overlap || null,
-            embedder_strategy: data.embedder?.strategy || '',
-            embedder_strategy_params: data.embedder?.params || {},
-            files: data.files || [] // Include files from the collection
-          })
-        } catch (error) {
-          console.error(`[KnowledgeConfig] Failed to load collection ${name}:`, error)
-          // Add basic entry if collection data can't be loaded
-          collectionsWithData.push({
-            id: name,
-            name: name,
-            category: '',
-            chunk_strategy: '',
-            chunk_strategy_params: {},
-            chunk_size: null,
-            chunk_overlap: null,
-            embedder_strategy: '',
-            embedder_strategy_params: {},
-            files: [] // Empty files array for failed loads
-          })
+      const collectionsResponse = await apiCall(`/api/knowledge/collections?${queryParams}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      
+      if (collectionsResponse.ok) {
+        const data = await collectionsResponse.json();
+        const collections = data.collections || [];
+        
+        // Set pagination data
+        if (data.pagination) {
+          setPagination({
+            page: data.pagination.page - 1, // Convert to 0-based for MUI
+            rowsPerPage: data.pagination.page_size,
+            total: data.pagination.total,
+            totalPages: data.pagination.total_pages
+          });
         }
+        
+        // Load full data for each collection like ToolConfig loads configurations
+        const collectionsWithData = []
+        for (const collection of collections) {
+          try {
+            // For paginated results, collections already have the needed structure
+            // from the backend's list_collections_paginated method
+            collectionsWithData.push({
+              id: collection.id || collection.name,
+              name: collection.name,
+              category: collection.category || '',
+              chunk_strategy: collection.chunk_strategy || '',
+              chunk_strategy_params: collection.chunk_strategy_params || {},
+              chunk_size: collection.chunk_size || null,
+              chunk_overlap: collection.chunk_overlap || null,
+              embedder_strategy: collection.embedder_strategy || '',
+              embedder_strategy_params: collection.embedder_strategy_params || {},
+              files_count: collection.files_count || 0,
+              files: [] // Will be loaded when editing
+            })
+          } catch (error) {
+            console.error(`[KnowledgeConfig] Failed to process collection ${collection.name}:`, error)
+            // Add basic entry if collection data can't be processed
+            collectionsWithData.push({
+              id: collection.name,
+              name: collection.name,
+              category: '',
+              chunk_strategy: '',
+              chunk_strategy_params: {},
+              chunk_size: null,
+              chunk_overlap: null,
+              embedder_strategy: '',
+              embedder_strategy_params: {},
+              files_count: 0,
+              files: []
+            })
+          }
+        }
+        setExistingConfigs(collectionsWithData)
+      } else {
+        console.error('[KnowledgeConfig] Failed to load collections - bad response')
       }
-      setExistingConfigs(collectionsWithData)
     } catch (error) {
       console.error('[KnowledgeConfig] Failed to load collections:', error)
     } finally {
       setLoadingConfigs(false)
     }
   }
+
+  const handlePageChange = (event, newPage) => {
+    const actualPage = newPage + 1; // Convert from 0-based to 1-based
+    loadExistingConfigs(actualPage, pagination.rowsPerPage);
+  };
+
+  const handleRowsPerPageChange = (event) => {
+    const newPageSize = parseInt(event.target.value, 10);
+    setPagination(prev => ({ ...prev, page: 0, rowsPerPage: newPageSize })); // Reset to first page
+    loadExistingConfigs(1, newPageSize);
+  };
 
   useEffect(() => {
     // Load data like ToolConfig does
@@ -318,9 +359,16 @@ export default function KnowledgeConfig({ user }) {
       setIsEditMode(true)
       setIsEdit(true)
       
-      // Set existing files from config data
-      console.log('[KnowledgeConfig] Setting existing files to:', config.files)
-      setExistingFiles(config.files || [])
+      // Load files from the collection API when editing
+      try {
+        const collectionData = await api.getCollection(configName, token);
+        const files = collectionData.files || [];
+        console.log('[KnowledgeConfig] Setting existing files to:', files)
+        setExistingFiles(files)
+      } catch (error) {
+        console.error('[KnowledgeConfig] Failed to load collection files:', error)
+        setExistingFiles([])
+      }
       setFilesToDelete([])
     } else {
       setForm({ 
@@ -554,7 +602,9 @@ export default function KnowledgeConfig({ user }) {
       <Card>
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">All Collections ({existingConfigs.length})</Typography>
+            <Typography variant="h6">
+              All Collections ({pagination.total} total, showing {existingConfigs.length})
+            </Typography>
           </Box>
           <TableContainer component={Paper} variant="outlined">
             <Table>
@@ -564,13 +614,14 @@ export default function KnowledgeConfig({ user }) {
                   <TableCell>Category</TableCell>
                   <TableCell>Embedder Strategy</TableCell>
                   <TableCell>Chunk Strategy</TableCell>
+                  <TableCell>Files</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {existingConfigs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                       <Typography color="text.secondary">No collections found</Typography>
                     </TableCell>
                   </TableRow>
@@ -581,6 +632,7 @@ export default function KnowledgeConfig({ user }) {
                       <TableCell>{cfg.category || '-'}</TableCell>
                       <TableCell>{cfg.embedder_strategy || '-'}</TableCell>
                       <TableCell>{cfg.chunk_strategy || '-'}</TableCell>
+                      <TableCell>{cfg.files_count || 0}</TableCell>
                       <TableCell align="right">
                         <IconButton size="small" color="primary" onClick={() => openEdit(cfg.name)}>
                           <EditIcon size={16} />
@@ -592,6 +644,17 @@ export default function KnowledgeConfig({ user }) {
               </TableBody>
             </Table>
           </TableContainer>
+          <TablePagination
+            component="div"
+            count={pagination.total}
+            page={pagination.page}
+            onPageChange={handlePageChange}
+            rowsPerPage={pagination.rowsPerPage}
+            onRowsPerPageChange={handleRowsPerPageChange}
+            rowsPerPageOptions={[8, 16, 24, 50]}
+            showFirstButton
+            showLastButton
+          />
         </CardContent>
       </Card>
 
