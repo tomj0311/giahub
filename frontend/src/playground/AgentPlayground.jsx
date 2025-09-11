@@ -219,19 +219,40 @@ export default function AgentPlayground({ user }) {
     }
   }, [location.search, token])
 
-  // Scroll control
+  // Scroll control - now uses window scroll instead of chat area scroll
   useEffect(() => {
     if (!autoScroll) return
-    const el = scrollRef.current
-    if (el) el.scrollTop = el.scrollHeight
+    // Scroll to bottom of page
+    window.scrollTo({
+      top: document.documentElement.scrollHeight,
+      behavior: 'smooth'
+    })
   }, [messages, autoScroll])
 
   const handleScroll = (e) => {
-    const el = e.currentTarget
-    const distanceFromBottom = el.scrollHeight - el.clientHeight - el.scrollTop
-    const atB = distanceFromBottom < 20
+    // Handle window scroll instead of chat area scroll
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop
+    const windowHeight = window.innerHeight
+    const documentHeight = document.documentElement.scrollHeight
+    const distanceFromBottom = documentHeight - windowHeight - scrollTop
+    const atB = distanceFromBottom < 100
     setAtBottom(atB)
+    
+    // Disable auto-scroll when user manually scrolls up
+    if (!atB && autoScroll) {
+      setAutoScroll(false)
+    }
+    // Re-enable auto-scroll when user scrolls back to bottom
+    else if (atB && !autoScroll) {
+      setAutoScroll(true)
+    }
   }
+
+  // Add window scroll listener
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [autoScroll]) // Re-add listener when autoScroll changes
 
   // File selection
   const handleFilesSelected = (filesList) => {
@@ -657,13 +678,19 @@ export default function AgentPlayground({ user }) {
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 900, mx: 'auto', height: { xs: 'calc(100dvh - 120px)', md: 'calc(100vh - 120px)' } }}>
-      <Paper variant="section" elevation={0} square sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 2, background: 'transparent', boxShadow: 'none', border: 'none' }}>
+    <Box sx={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      maxWidth: 900, 
+      mx: 'auto', 
+      minHeight: { xs: 'calc(100dvh - 120px)', md: 'calc(100vh - 120px)' },
+      paddingBottom: '180px' // Increased space for fixed input + margin
+    }}>
+      <Paper variant="section" elevation={0} square sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, background: 'transparent', boxShadow: 'none', border: 'none' }}>
         {/* Messages area */}
         <Box
           ref={scrollRef}
-          onScroll={handleScroll}
-          sx={{ flex: 1, minHeight: 0, p: isSmall ? 1 : 2, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}
+          sx={{ p: isSmall ? 1 : 2, overflow: 'visible', display: 'flex', flexDirection: 'column', gap: 1, mb: 4 }}
         >
           {messages.map((m, idx) => (
             <Box key={idx} sx={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
@@ -793,7 +820,13 @@ export default function AgentPlayground({ user }) {
           {!autoScroll && !atBottom && messages.length > 0 && (
             <Box sx={{ position: 'sticky', bottom: 4, alignSelf: 'center' }}>
               <Tooltip title="Jump to latest" arrow placement="top" disableInteractive>
-                <IconButton size="small" onClick={() => { const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight; setAutoScroll(true) }}
+                <IconButton size="small" onClick={() => { 
+                  window.scrollTo({
+                    top: document.documentElement.scrollHeight,
+                    behavior: 'smooth'
+                  });
+                  setAutoScroll(true);
+                }}
                   sx={(t) => ({
                     bgcolor: t.palette.mode === 'dark' ? alpha(t.palette.common.white, 0.04) : alpha(t.palette.common.black, 0.04),
                     border: `1px solid ${alpha(t.palette.primary.main, 0.25)}`,
@@ -808,7 +841,21 @@ export default function AgentPlayground({ user }) {
         </Box>
 
         {/* Input row */}
-        <Box sx={{ position: 'relative', width: '100%', maxWidth: 650, alignSelf: 'center', backgroundColor: 'background.paper', borderRadius: 1.5, border: 1, borderColor: 'divider', p: 1.5, mb: 3 }}>
+        <Box sx={{ 
+          position: 'fixed', 
+          bottom: 20,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '100%', 
+          maxWidth: 650, 
+          backgroundColor: 'background.paper', 
+          borderRadius: 1.5, 
+          border: 1, 
+          borderColor: 'divider', 
+          p: 1.5,
+          zIndex: 1000,
+          boxShadow: 3
+        }}>
           <Box sx={{ position: 'relative' }}>
             <TextField
               placeholder={!selected ? 'Select an agent first' : (stagedFiles.length ? `Type your message... (${stagedFiles.length} file(s) ready)` : 'Type your message...')}
