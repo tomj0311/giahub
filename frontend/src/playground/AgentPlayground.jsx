@@ -78,6 +78,7 @@ const detectBPMN = (content) => {
 export default function AgentPlayground({ user }) {
   const theme = useTheme()
   const isSmall = useMediaQuery(theme.breakpoints.down('md'))
+  const mainContainerRef = useRef(null)
   const location = useLocation()
   const navigate = useNavigate()
   const token = user?.token || localStorage.getItem('token') || ''
@@ -700,7 +701,7 @@ export default function AgentPlayground({ user }) {
   }, [])
 
   return (
-    <Box sx={{ 
+  <Box ref={mainContainerRef} sx={{ 
       display: 'flex', 
       flexDirection: 'column', 
       maxWidth: 900, 
@@ -882,6 +883,7 @@ export default function AgentPlayground({ user }) {
             openHistory={openHistory}
             clearChat={clearChat}
             onHeightChange={handleInputHeightChange}
+            containerEl={mainContainerRef.current}
           />, portalRef.current
         )}
       </Paper>
@@ -1032,9 +1034,11 @@ const ChatInputBar = React.memo(function ChatInputBar({
   setStagedFiles,
   openHistory,
   clearChat,
-  onHeightChange
+  onHeightChange,
+  containerEl
 }) {
   const containerRef = useRef(null)
+  const [alignedStyle, setAlignedStyle] = useState({ left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 650 })
 
   // Measure and report height upward
   useLayoutEffect(() => {
@@ -1043,12 +1047,27 @@ const ChatInputBar = React.memo(function ChatInputBar({
     const measure = () => {
       const rect = el.getBoundingClientRect()
       onHeightChange(rect.height + 24) // include spacer buffer
+      if (containerEl) {
+        const parentRect = containerEl.getBoundingClientRect()
+        // Keep original maxWidth (650) but align center to parent center
+        const desiredWidth = Math.min(650, parentRect.width)
+        const parentCenter = parentRect.left + parentRect.width / 2
+        const left = parentCenter - desiredWidth / 2
+        setAlignedStyle({
+          position: 'fixed',
+          left: `${left}px`,
+          width: `${desiredWidth}px`,
+          maxWidth: `${desiredWidth}px`,
+          transform: 'none'
+        })
+      }
     }
     measure()
     let ro
     if (window.ResizeObserver) {
       ro = new ResizeObserver(measure)
       ro.observe(el)
+      if (containerEl) ro.observe(containerEl)
     } else {
       window.addEventListener('resize', measure)
     }
@@ -1056,23 +1075,21 @@ const ChatInputBar = React.memo(function ChatInputBar({
       if (ro) ro.disconnect()
       else window.removeEventListener('resize', measure)
     }
-  }, [onHeightChange, stagedFiles, uploadedFiles, running, prompt])
+  }, [onHeightChange, stagedFiles, uploadedFiles, running, prompt, containerEl])
 
   return (
     <Box ref={containerRef} sx={{
       position: 'fixed',
-      bottom: 20,
-      left: '50%',
-      transform: 'translateX(-50%)',
-      width: '100%',
-      maxWidth: 650,
+      bottom: 40,
       backgroundColor: 'background.paper',
       borderRadius: 1.5,
       border: 1,
       borderColor: 'divider',
       p: 1.5,
       zIndex: 1200,
-      boxShadow: 4
+      boxShadow: 4,
+      // dynamic alignment style overrides
+      ...alignedStyle
     }}>
       <Box sx={{ position: 'relative' }}>
         <TextField
