@@ -284,27 +284,11 @@ class AgentService:
         logger.info(f"[AGENTS] Upserting agent '{name}' for tenant: {tenant_id}, user: {user_id}")
 
         try:
-            # Handle both single collection (old format) and multiple collections (new format)
-            collections_data = payload.get("collections", {})
-            if not collections_data and payload.get("collection"):
-                # Backward compatibility: convert old single collection format
-                collection_info = payload.get("collection")
-                if isinstance(collection_info, dict) and collection_info.get("id"):
-                    collections_data = {collection_info["id"]: {}}
-                elif isinstance(collection_info, str) and collection_info:
-                    collections_data = {collection_info: {}}
-            
+            # Store the payload as-is with just tenant/user metadata and timestamps
             record = {
+                **payload,  # Store entire payload as-is
                 "tenantId": tenant_id,
                 "userId": user_id,
-                "name": name,
-                "category": payload.get("category", ""),
-                "description": payload.get("description", ""),
-                "instructions": payload.get("instructions", ""),
-                "model": payload.get("model") or {},
-                "tools": payload.get("tools") or {},
-                "collections": collections_data,
-                "memory": payload.get("memory") or {},
                 "updated_at": datetime.utcnow(),
             }
 

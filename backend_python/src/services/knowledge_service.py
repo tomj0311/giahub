@@ -208,13 +208,11 @@ class KnowledgeService:
             if existing:
                 raise HTTPException(status_code=409, detail="Configuration with this name already exists")
             
-            # Create configuration record
+            # Store config data as-is with tenant/user metadata
             record = {
+                **config_data,  # Store entire config as-is
                 "userId": user_id,
                 "name": name,
-                "description": config_data.get("description", ""),
-                "chunker": config_data.get("chunker", {}),
-                "file_count": 0
             }
             
             await MongoStorageService.insert_one("knowledgeConfig", record, tenant_id=tenant_id)
@@ -237,18 +235,11 @@ class KnowledgeService:
         logger.info(f"[KNOWLEDGE] Updating config '{collection_name}' for tenant: {tenant_id}")
         
         try:
-            update_data = {}
-            
-            # Only update allowed fields
-            allowed_fields = ["description", "chunker"]
-            for field in allowed_fields:
-                if field in config_data:
-                    update_data[field] = config_data[field]
-            
+            # Use config_data as-is for update
             result = await MongoStorageService.update_one(
                 "knowledgeConfig",
                 {"userId": user_id, "name": collection_name},
-                update_data,
+                config_data,  # Use config data directly
                 tenant_id=tenant_id
             )
             

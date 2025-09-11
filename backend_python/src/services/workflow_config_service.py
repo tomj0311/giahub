@@ -242,15 +242,12 @@ class WorkflowConfigService:
                 
                 logger.info(f"[WORKFLOW] BPMN file uploaded to: {bpmn_file_path}")
             
-            # Prepare document
+            # Prepare document - store config as-is with metadata
             doc = {
-                "name": config_data.get("name"),
-                "category": config_data.get("category", ""),
-                "description": config_data.get("description", ""),
+                **config_data,  # Store entire config as-is
                 "bpmn_filename": bpmn_filename,
                 "bpmn_file_path": bpmn_file_path,
                 "type": "workflowConfig",
-                "is_active": config_data.get("is_active", True),
                 "createdAt": datetime.utcnow(),
                 "updatedAt": datetime.utcnow(),
                 "createdBy": user_id,
