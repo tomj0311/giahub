@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState, useLayoutEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -146,6 +147,8 @@ export default function AgentPlayground({ user }) {
   const bottomRef = useRef(null)
   const [autoScroll, setAutoScroll] = useState(true)
   const [atBottom, setAtBottom] = useState(true)
+  // Dynamic input area height spacing so last message rests right above input (no extra gap / no overlap)
+  const [inputHeight, setInputHeight] = useState(180) // fallback default
 
   // Debug component mount
   useEffect(() => {
@@ -222,12 +225,19 @@ export default function AgentPlayground({ user }) {
   // Scroll control - now uses window scroll instead of chat area scroll
   useEffect(() => {
     if (!autoScroll) return
-    // Scroll to bottom of page
+    // Avoid expensive smooth animation for every token while streaming
+    const last = messages[messages.length - 1]
+    const lastIsStreaming = !!last?.streaming
+    const target = Math.max(0, document.documentElement.scrollHeight - inputHeight)
     window.scrollTo({
-      top: document.documentElement.scrollHeight,
-      behavior: 'smooth'
+      top: target,
+      behavior: lastIsStreaming ? 'auto' : 'smooth'
     })
-  }, [messages, autoScroll])
+  }, [messages, autoScroll, inputHeight])
+
+  const handleInputHeightChange = useCallback((h) => {
+    setInputHeight(h)
+  }, [])
 
   const handleScroll = (e) => {
     // Handle window scroll instead of chat area scroll
@@ -280,7 +290,7 @@ export default function AgentPlayground({ user }) {
     }
   }
 
-  const cancelChat = () => {
+  const cancelChat = useCallback(() => {
     if (abortController) {
       // HTTP cancellation
       abortController.abort()
@@ -297,9 +307,9 @@ export default function AgentPlayground({ user }) {
         }]
       })
     }
-  }
+  }, [abortController])
 
-  const runAgent = async () => {
+  const runAgent = useCallback(async () => {
     if (!selected || !prompt.trim()) return
     setRunning(true)
 
@@ -474,7 +484,7 @@ export default function AgentPlayground({ user }) {
       setRunning(false)
       setAbortController(null)
     }
-  }
+  }, [selected, prompt, stagedFiles, uploadedFiles, messages, currentConversationId, sessionCollection, token])
 
   const openHistory = async (page = 1) => {
     console.log('🚀 openHistory CALLED with page:', page)
@@ -611,14 +621,14 @@ export default function AgentPlayground({ user }) {
     setConversations(prev => prev.filter(c => c.conversation_id !== id))
   }
 
-  const clearChat = () => {
+  const clearChat = useCallback(() => {
     setMessages([])
     setUploadedFiles([])
     setStagedFiles([])
     setCurrentConversationId(null)
     setSessionCollection(genUuidHex())
     setLastUserMessage('') // Clear last user message when clearing chat
-  }
+  }, [])
 
   // Generate conversation title from first user message
   const generateTitle = (messages) => {
@@ -677,6 +687,18 @@ export default function AgentPlayground({ user }) {
     })
   }
 
+  // Setup portal container once
+  const portalRef = useRef(null)
+  useEffect(() => {
+    let el = document.getElementById('chat-input-portal')
+    if (!el) {
+      el = document.createElement('div')
+      el.id = 'chat-input-portal'
+      document.body.appendChild(el)
+    }
+    portalRef.current = el
+  }, [])
+
   return (
     <Box sx={{ 
       display: 'flex', 
@@ -684,7 +706,8 @@ export default function AgentPlayground({ user }) {
       maxWidth: 900, 
       mx: 'auto', 
       minHeight: { xs: 'calc(100dvh - 120px)', md: 'calc(100vh - 120px)' },
-      paddingBottom: '180px' // Increased space for fixed input + margin
+      // Dynamic spacer so bottom message never hides behind fixed input
+      paddingBottom: `${inputHeight}px`
     }}>
       <Paper variant="section" elevation={0} square sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, background: 'transparent', boxShadow: 'none', border: 'none' }}>
         {/* Messages area */}
@@ -840,106 +863,27 @@ export default function AgentPlayground({ user }) {
           <span ref={bottomRef} style={{ display: 'block', height: 1, width: 1 }} />
         </Box>
 
-        {/* Input row */}
-        <Box sx={{ 
-          position: 'fixed', 
-          bottom: 20,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: '100%', 
-          maxWidth: 650, 
-          backgroundColor: 'background.paper', 
-          borderRadius: 1.5, 
-          border: 1, 
-          borderColor: 'divider', 
-          p: 1.5,
-          zIndex: 1000,
-          boxShadow: 3
-        }}>
-          <Box sx={{ position: 'relative' }}>
-            <TextField
-              placeholder={!selected ? 'Select an agent first' : (stagedFiles.length ? `Type your message... (${stagedFiles.length} file(s) ready)` : 'Type your message...')}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={(e) => { 
-                if (e.key === 'Enter' && !e.shiftKey) { 
-                  e.preventDefault(); 
-                  runAgent() 
-                } else if (e.key === 'ArrowUp' && prompt === '' && lastUserMessage) {
-                  // Load last user message when up arrow is pressed and input is empty
-                  e.preventDefault();
-                  setPrompt(lastUserMessage);
-                }
-              }}
-              fullWidth
-              multiline
-              minRows={1}
-              maxRows={4}
-              disabled={!selected || running}
-              size="small"
-              sx={{ '& .MuiInputBase-root': { pr: running ? 14 : 8, fontSize: '14px', alignItems: 'flex-start' } }}
-            />
-            {running ? (
-              <IconButton onClick={cancelChat} size="small" color="error" sx={{ position: 'absolute', top: '50%', right: 6, transform: 'translateY(-50%)' }}>
-                <CancelIcon fontSize="small" />
-              </IconButton>
-            ) : (
-              <IconButton onClick={runAgent} disabled={!selected || !prompt.trim() || uploading} size="small" sx={{ position: 'absolute', top: '50%', right: 6, transform: 'translateY(-50%)' }}>
-                {uploading ? <CircularProgress size={18} /> : <SendIcon fontSize="small" />}
-              </IconButton>
-            )}
-          </Box>
-
-          {/* Controls moved to bottom */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-            {/* Agent Selector Button */}
-            <Button
-              variant="text"
-              size="small"
-              onClick={() => setSelectorOpen(true)}
-              disabled={running}
-              startIcon={<MenuIcon />}
-              sx={{
-                textTransform: 'none',
-                fontSize: '12px',
-                minWidth: 'auto',
-                px: 1
-              }}
-            >
-              {selected ? selected.replace(/\.json$/, '').slice(0, 15) + (selected.replace(/\.json$/, '').length > 15 ? '...' : '') : 'Agent'}
-            </Button>
-
-            {/* Attach File Icon */}
-            <input
-              id="file-upload-input"
-              type="file"
-              multiple
-              style={{ display: 'none' }}
-              onChange={(e) => handleFilesSelected(Array.from(e.target.files || []))}
-            />
-            <label htmlFor="file-upload-input">
-              <IconButton component="span" size="small" disabled={running} sx={{ color: stagedFiles.length > 0 ? 'primary.main' : 'text.secondary', opacity: 0.8 }}>
-                <AttachFileIcon fontSize="small" />
-              </IconButton>
-            </label>
-
-            {/* Upload Chips */}
-            {stagedFiles.map((f, idx) => (
-              <Chip key={`${f.name}-${idx}`} size="small" color="primary" variant="outlined" label={f.name.length > 15 ? f.name.slice(0, 12) + '...' : f.name} onDelete={() => setStagedFiles(prev => prev.filter((_, i) => i !== idx))} sx={{ height: 20, fontSize: '10px' }} />
-            ))}
-            {uploadedFiles.map((name, idx) => (
-              <Chip key={`up-${name}-${idx}`} size="small" color="success" variant="filled" label={name.length > 15 ? name.slice(0, 12) + '...' : name} sx={{ height: 20, fontSize: '10px' }} />
-            ))}
-
-            <Box sx={{ flex: 1 }} />
-
-            <IconButton size="small" onClick={() => {
-              console.log('🔘 History button clicked!')
-              openHistory()
-            }} title="History"><HistoryIcon fontSize="small" /></IconButton>
-            <Button size="small" onClick={clearChat} color="error">Clear</Button>
-          </Box>
-        </Box>
+        {/* Input row moved to portal */}
+        {portalRef.current && createPortal(
+          <ChatInputBar
+            prompt={prompt}
+            setPrompt={setPrompt}
+            selected={selected}
+            running={running}
+            runAgent={runAgent}
+            cancelChat={cancelChat}
+            stagedFiles={stagedFiles}
+            uploadedFiles={uploadedFiles}
+            uploading={uploading}
+            setSelectorOpen={setSelectorOpen}
+            handleFilesSelected={handleFilesSelected}
+            lastUserMessage={lastUserMessage}
+            setStagedFiles={setStagedFiles}
+            openHistory={openHistory}
+            clearChat={clearChat}
+            onHeightChange={handleInputHeightChange}
+          />, portalRef.current
+        )}
       </Paper>
 
       {/* Agent selection dialog */}
@@ -1070,3 +1014,135 @@ export function genUuidHex() {
   const u = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID().replace(/-/g, '') : (Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2)).slice(0, 32)
   return u.toLowerCase()
 }
+
+// Portal Chat Input Bar (isolated from main message re-renders to reduce flicker)
+const ChatInputBar = React.memo(function ChatInputBar({
+  prompt,
+  setPrompt,
+  selected,
+  running,
+  runAgent,
+  cancelChat,
+  stagedFiles,
+  uploadedFiles,
+  uploading,
+  setSelectorOpen,
+  handleFilesSelected,
+  lastUserMessage,
+  setStagedFiles,
+  openHistory,
+  clearChat,
+  onHeightChange
+}) {
+  const containerRef = useRef(null)
+
+  // Measure and report height upward
+  useLayoutEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const measure = () => {
+      const rect = el.getBoundingClientRect()
+      onHeightChange(rect.height + 24) // include spacer buffer
+    }
+    measure()
+    let ro
+    if (window.ResizeObserver) {
+      ro = new ResizeObserver(measure)
+      ro.observe(el)
+    } else {
+      window.addEventListener('resize', measure)
+    }
+    return () => {
+      if (ro) ro.disconnect()
+      else window.removeEventListener('resize', measure)
+    }
+  }, [onHeightChange, stagedFiles, uploadedFiles, running, prompt])
+
+  return (
+    <Box ref={containerRef} sx={{
+      position: 'fixed',
+      bottom: 20,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      width: '100%',
+      maxWidth: 650,
+      backgroundColor: 'background.paper',
+      borderRadius: 1.5,
+      border: 1,
+      borderColor: 'divider',
+      p: 1.5,
+      zIndex: 1200,
+      boxShadow: 4
+    }}>
+      <Box sx={{ position: 'relative' }}>
+        <TextField
+          placeholder={!selected ? 'Select an agent first' : (stagedFiles.length ? `Type your message... (${stagedFiles.length} file(s) ready)` : 'Type your message...')}
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              runAgent()
+            } else if (e.key === 'ArrowUp' && prompt === '' && lastUserMessage) {
+              e.preventDefault()
+              setPrompt(lastUserMessage)
+            }
+          }}
+          fullWidth
+          multiline
+          minRows={1}
+            maxRows={4}
+          disabled={!selected || running}
+          size="small"
+          sx={{ '& .MuiInputBase-root': { pr: running ? 14 : 8, fontSize: '14px', alignItems: 'flex-start' } }}
+        />
+        {running ? (
+          <IconButton onClick={cancelChat} size="small" color="error" sx={{ position: 'absolute', top: '50%', right: 6, transform: 'translateY(-50%)' }}>
+            <CancelIcon fontSize="small" />
+          </IconButton>
+        ) : (
+          <IconButton onClick={runAgent} disabled={!selected || !prompt.trim() || uploading} size="small" sx={{ position: 'absolute', top: '50%', right: 6, transform: 'translateY(-50%)' }}>
+            {uploading ? <CircularProgress size={18} /> : <SendIcon fontSize="small" />}
+          </IconButton>
+        )}
+      </Box>
+
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+        <Button
+          variant="text"
+          size="small"
+          onClick={() => setSelectorOpen(true)}
+          disabled={running}
+          startIcon={<MenuIcon />}
+          sx={{ textTransform: 'none', fontSize: '12px', minWidth: 'auto', px: 1 }}
+        >
+          {selected ? selected.replace(/\.json$/, '').slice(0, 15) + (selected.replace(/\.json$/, '').length > 15 ? '...' : '') : 'Agent'}
+        </Button>
+
+        <input
+          id="file-upload-input"
+          type="file"
+          multiple
+          style={{ display: 'none' }}
+          onChange={(e) => handleFilesSelected(Array.from(e.target.files || []))}
+        />
+        <label htmlFor="file-upload-input">
+          <IconButton component="span" size="small" disabled={running} sx={{ color: stagedFiles.length > 0 ? 'primary.main' : 'text.secondary', opacity: 0.8 }}>
+            <AttachFileIcon fontSize="small" />
+          </IconButton>
+        </label>
+
+        {stagedFiles.map((f, idx) => (
+          <Chip key={`${f.name}-${idx}`} size="small" color="primary" variant="outlined" label={f.name.length > 15 ? f.name.slice(0, 12) + '...' : f.name} onDelete={() => setStagedFiles(prev => prev.filter((_, i) => i !== idx))} sx={{ height: 20, fontSize: '10px' }} />
+        ))}
+        {uploadedFiles.map((name, idx) => (
+          <Chip key={`up-${name}-${idx}`} size="small" color="success" variant="filled" label={name.length > 15 ? name.slice(0, 12) + '...' : name} sx={{ height: 20, fontSize: '10px' }} />
+        ))}
+
+        <Box sx={{ flex: 1 }} />
+        <IconButton size="small" onClick={() => openHistory()} title="History"><HistoryIcon fontSize="small" /></IconButton>
+        <Button size="small" onClick={clearChat} color="error">Clear</Button>
+      </Box>
+    </Box>
+  )
+})
