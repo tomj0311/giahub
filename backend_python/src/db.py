@@ -54,8 +54,9 @@ def get_collections():
         "toolConfig": database["toolConfig"],
         "tenants": database["tenants"],
         "knowledgeConfig": database["knowledgeConfig"],
-    "agents": database["agents"],
-    "conversations": database["conversations"],
+        "agents": database["agents"],
+        "conversations": database["conversations"],
+        "workflowConfig": database["workflowConfig"],
     }
     logger.debug(f"[DB] Retrieved {len(_collections_cache)} collections")
     return _collections_cache
@@ -178,6 +179,14 @@ async def ensure_indexes():
         # Conversations collection indexes
         await collections["conversations"].create_index([("tenantId", 1), ("conversation_id", 1)], unique=True)
         await collections["conversations"].create_index("updated_at")
+
+        logger.debug("[DB] Creating workflow configuration indexes")
+        # Workflow configuration indexes
+        await collections["workflowConfig"].create_index([("tenantId", 1), ("name", 1)], unique=True)
+        await collections["workflowConfig"].create_index("category")
+        await collections["workflowConfig"].create_index("type")
+        await collections["workflowConfig"].create_index("created_at")
+        await collections["workflowConfig"].create_index("tenantId")
 
         logger.info("[DB] Indexes created successfully")
     except Exception as e:

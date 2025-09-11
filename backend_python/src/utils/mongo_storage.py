@@ -25,7 +25,8 @@ class MongoStorageService:
         # Collections that are tenant-isolated
         tenant_collections = {
             'roles', 'userRoles', 'modelConfig', 'toolConfig', 
-            'knowledgeConfig', 'agents', 'conversations', 'agent_runs'
+            'knowledgeConfig', 'agents', 'conversations', 'agent_runs',
+            'workflowConfig'
         }
         
         # Special handling for users collection during OAuth flows
@@ -47,7 +48,8 @@ class MongoStorageService:
         # Collections that are tenant-isolated
         tenant_collections = {
             'roles', 'userRoles', 'modelConfig', 'toolConfig', 
-            'knowledgeConfig', 'agents', 'conversations', 'agent_runs'
+            'knowledgeConfig', 'agents', 'conversations', 'agent_runs',
+            'workflowConfig'
         }
         
         # Special handling for users collection during OAuth flows  

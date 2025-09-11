@@ -164,22 +164,6 @@ class AgentRuntimeService:
                     except Exception as e:
                         logger.warning(f"Failed to load knowledge collection {collection_id}: {e}")
             
-            # Fallback to single collection field for backward compatibility
-            collection_ref = agent_config.get("collection")
-            if collection_ref and not collection_names:
-                try:
-                    # Handle both string ID and dict with 'id' key
-                    collection_id = collection_ref if isinstance(collection_ref, str) else collection_ref.get("id")
-                    if collection_id:
-                        knowledge_config = await KnowledgeService.get_collection_by_id(collection_id, user)
-                        if knowledge_config:
-                            # Extract collection name from knowledge config
-                            knowledge_params = knowledge_config.get("knowledge", {}).get("params", {})
-                            collection_name = knowledge_params.get("collection") or collection_id
-                            collection_names.append(collection_name)
-                except Exception as e:
-                    logger.warning(f"Failed to load knowledge collection {collection_ref}: {e}")
-            
             # Create custom retriever
             custom_retriever = None
             if collection_names or session_collection:
@@ -192,6 +176,7 @@ class AgentRuntimeService:
                 "name": agent_config.get("name", "Agent"),
                 "description": agent_config.get("description", ""),
                 "instructions": agent_config.get("instructions", ""),
+                "markdown": True,
                 "model": model,
                 "tools": tools,
                 "retriever": custom_retriever,  # Use custom retriever instead of knowledge_base
@@ -199,7 +184,6 @@ class AgentRuntimeService:
                 "add_context": True,
                 "add_references": True,
                 "resolve_context": True,
-                "markdown": True,
                 "add_history_to_messages": history_config.get("enabled", False),
                 "num_history_responses": history_config.get("num", 3),
             }

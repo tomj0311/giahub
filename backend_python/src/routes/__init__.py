@@ -13,6 +13,7 @@ from .knowledge import router as knowledge_router
 from .agents import router as agents_router
 from .agent_runtime import router as agent_runtime_router
 from .tenant import router as tenant_router
+from .workflow_config import router as workflow_config_router
 
 __all__ = [
     "auth_router", 
@@ -29,5 +30,6 @@ __all__ = [
     "agents_router",
     "agent_runtime_router",
     "tenant_router",
+    "workflow_config_router",
 ]
 

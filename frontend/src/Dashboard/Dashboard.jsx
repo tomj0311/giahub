@@ -50,6 +50,7 @@ const ToolConfig = lazy(() => import('../agents/ToolConfig'))
 const KnowledgeConfig = lazy(() => import('../agents/KnowledgeConfig'))
 const Agent = lazy(() => import('../agents/Agent'))
 const AgentPlayground = lazy(() => import('../playground/AgentPlayground'))
+const WorkflowConfig = lazy(() => import('../workflows/WorkflowConfig'))
 const BPMN = lazy(() => import('../components/bpmn/BPMN'))
 import RouteTransition from '../components/RouteTransition'
 import RouteLoader from '../components/RouteLoader'
@@ -133,6 +134,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			expandable: true,
 			order: 40,
 			children: [
+				{
+					label: 'Workflows',
+					to: '/dashboard/workflows',
+					icon: 'Settings'
+				},
 				{
 					label: 'BPMN',
 					to: '/dashboard/bpmn',
@@ -713,6 +719,7 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="analytics" element={<div>Analytics - Coming Soon</div>} />
 				<Route path="databases" element={<div>Databases - Coming Soon</div>} />
 				<Route path="custom-connectors" element={<div>Custom Connectors - Coming Soon</div>} />
+				<Route path="workflows" element={<WorkflowConfig user={user} />} />
 				<Route path="bpmn" element={<BPMNEditorWrapper />} />
 				<Route path="monitor" element={<div>Monitor - Coming Soon</div>} />
 				<Route path="manage" element={<BPMN initialTheme={themeKey === 'aurora' ? 'dark' : themeKey === 'ocean' ? 'light' : 'auto'} key={themeKey} style={{ width: '100%', minHeight: '70vh', borderRadius: 8, overflow: 'hidden' }} />} />
