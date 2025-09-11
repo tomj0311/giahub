@@ -31,7 +31,7 @@ def module_loader(module_path: str):
         logger.error(f"module_loader failed for {module_path}: {e}")
     return None
 
-def _create_multi_collection_retriever(collection_names: list = None, session_collection: str = None):
+def _create_multi_collection_retriever(collection_names: list = None, session_collection: str = None, embedder = None):
     """Create a custom retriever that searches across multiple collections"""
     def multi_collection_retriever(agent, query: str, num_documents: int = None, **kwargs):
         """Custom retriever that searches across multiple existing collections"""
@@ -61,11 +61,12 @@ def _create_multi_collection_retriever(collection_names: list = None, session_co
                 # Get Qdrant configuration from environment variables
                 qdrant_host = os.getenv('QDRANT_HOST', 'localhost')
                 qdrant_port = int(os.getenv('QDRANT_PORT', 8805))
-                    
+                
                 vector_db = Qdrant(
                     collection=collection,
                     host=qdrant_host,
                     port=qdrant_port,
+                    embedder=embedder
                 )
                 
                 # Check if collection exists
@@ -147,6 +148,7 @@ class AgentRuntimeService:
             
             # Load knowledge collection names and create custom retriever
             collection_names = []
+            embedder_config = None
             session_collection = agent_config.get("session_collection")
             
             # Handle collections object with multiple collection IDs
@@ -157,17 +159,31 @@ class AgentRuntimeService:
                         if collection_id:
                             knowledge_config = await KnowledgeService.get_collection_by_id(collection_id, user)
                             if knowledge_config:
-                                # Extract collection name from knowledge config
-                                knowledge_params = knowledge_config.get("knowledge", {}).get("params", {})
-                                collection_name = knowledge_params.get("collection") or collection_id
-                                collection_names.append(collection_name)
+                                vector_collection_name = knowledge_config.get("vector_collection")
+                                collection_names.append(vector_collection_name)
+                                # Get embedder config from first collection
+                                if not embedder_config and knowledge_config.get("embedder"):
+                                    embedder_config = knowledge_config.get("embedder")
                     except Exception as e:
                         logger.warning(f"Failed to load knowledge collection {collection_id}: {e}")
+            
+            # Build embedder if config exists
+            embedder = None
+            if embedder_config:
+                try:
+                    embedder_strategy = embedder_config.get("strategy")
+                    embedder_params = embedder_config.get("params", {})
+                    if embedder_strategy:
+                        embedder_class = module_loader(embedder_strategy)
+                        if embedder_class:
+                            embedder = embedder_class(**embedder_params)
+                except Exception as e:
+                    logger.warning(f"Failed to load embedder: {e}")
             
             # Create custom retriever
             custom_retriever = None
             if collection_names or session_collection:
-                custom_retriever = _create_multi_collection_retriever(collection_names, session_collection)
+                custom_retriever = _create_multi_collection_retriever(collection_names, session_collection, embedder)
             
             memory_config = agent_config.get("memory", {})
             history_config = memory_config.get("history", {})
