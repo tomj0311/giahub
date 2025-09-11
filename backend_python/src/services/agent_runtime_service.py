@@ -172,10 +172,9 @@ class AgentRuntimeService:
             memory_config = agent_config.get("memory", {})
             history_config = memory_config.get("history", {})
             
+            # Use agent config as-is and add runtime-specific parameters
             kwargs = {
-                "name": agent_config.get("name", "Agent"),
-                "description": agent_config.get("description", ""),
-                "instructions": agent_config.get("instructions", ""),
+                **agent_config,  # Use entire agent config as-is
                 "markdown": True,
                 "model": model,
                 "tools": tools,
@@ -236,14 +235,9 @@ class AgentRuntimeService:
             if not agent_doc:
                 yield {"type": "error", "error": f"Agent '{agent_name}' not found"}
                 return
+            # Use agent document as-is with minimal runtime additions
             agent_config = {
-                "name": agent_doc.get("name"),
-                "description": agent_doc.get("description", ""),
-                "instructions": agent_doc.get("instructions", ""),
-                "model": agent_doc.get("model"),
-                "tools": agent_doc.get("tools"),
-                "collection": agent_doc.get("collection"),
-                "memory": agent_doc.get("memory"),
+                **agent_doc,  # Use entire agent document as-is
             }
             if session_prefix:
                 agent_config["session_collection"] = session_prefix
