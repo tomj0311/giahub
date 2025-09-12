@@ -200,8 +200,9 @@ class FileService:
     ) -> List[str]:
         """List files in a specific collection"""
         try:
-            # Create collection path
-            collection_path = f"uploads/{user_id}/"
+            # Create collection path (scoped to collection)
+            # Stored objects follow: uploads/{user_id}/{collection}/<filename>
+            collection_path = f"uploads/{user_id}/{collection}/"
 
             # List files from MinIO (placeholder)
             files = await cls._list_files_in_minio(collection_path)
@@ -322,8 +323,8 @@ class FileService:
         )
         
         try:
-            # Create collection path
-            collection_path = f"uploads/{user_id}"
+            # Create collection path (scoped to collection)
+            collection_path = f"uploads/{user_id}/{collection}/"
             
             # List all files in the collection
             files = await cls._list_files_in_minio(collection_path)

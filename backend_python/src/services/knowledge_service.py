@@ -16,6 +16,7 @@ from ..utils.mongo_storage import MongoStorageService
 from ..utils.component_discovery import discover_components, get_detailed_class_info
 from .file_service import FileService
 from .vector_service import VectorService
+from .model_config_service import ModelConfigService
 
 
 class KnowledgeService:
@@ -555,24 +556,43 @@ class KnowledgeService:
                 # Get files count from MinIO for each collection
                 files_count = 0
                 try:
-                    collection_files = await FileService.list_files(doc.get("collection", ""), tenant_id)
+                    # Support different token shapes
+                    user_id = user.get("user_id") or user.get("id") or user.get("userId") or ""
+                    logger.debug(f"[KNOWLEDGE] Getting files for collection {doc.get('collection')} with user_id: {user_id}")
+                    collection_files = await FileService.list_files_in_collection(tenant_id, user_id, doc.get("collection", ""))
                     files_count = len(collection_files)
+                    logger.debug(f"[KNOWLEDGE] Found {files_count} files in collection {doc.get('collection')}")
                 except Exception as e:
                     logger.warning(f"[KNOWLEDGE] Could not get files count for collection {doc.get('collection')}: {e}")
+                    import traceback
+                    logger.warning(f"[KNOWLEDGE] Files count error traceback: {traceback.format_exc()}")
                 
-                # Extract chunk configuration - prefer from embedder.chunk, fallback to root chunk
-                chunkConfig = doc.get("embedder", {}).get("chunk", {}) if doc.get("embedder") else doc.get("chunk", {})
+                # Get model information
+                model_id = doc.get("model_id", "")
+                model_name = model_id  # Default to model_id if lookup fails
+                if model_id:
+                    try:
+                        logger.debug(f"[KNOWLEDGE] Looking up model name for model_id: {model_id}")
+                        # model_id is an ObjectID, use get_model_config_by_id
+                        model_config = await ModelConfigService.get_model_config_by_id(model_id, user)
+                        if model_config and model_config.get("name"):
+                            model_name = model_config.get("name", "")
+                            logger.debug(f"[KNOWLEDGE] Found model name: {model_name} for model_id: {model_id}")
+                        else:
+                            logger.warning(f"[KNOWLEDGE] Model config found but no name field for {model_id}")
+                    except Exception as e:
+                        logger.error(f"[KNOWLEDGE] Could not get model name for {model_id}: {str(e)}")
+                        # Keep model_id as display name if lookup fails
+                else:
+                    logger.debug(f"[KNOWLEDGE] No model_id found in collection: {doc.get('collection', '')}")
+                    model_name = ""
                 
                 collection_data = {
                     "id": doc.get("collection", ""),
                     "name": doc.get("collection", ""),
                     "category": doc.get("category", ""),
-                    "chunk_strategy": chunkConfig.get("strategy", ""),
-                    "chunk_strategy_params": chunkConfig.get("params", {}),
-                    "chunk_size": chunkConfig.get("chunk_size"),
-                    "chunk_overlap": chunkConfig.get("chunk_overlap"),
-                    "embedder_strategy": doc.get("embedder", {}).get("strategy", ""),
-                    "embedder_strategy_params": doc.get("embedder", {}).get("params", {}),
+                    "model_id": model_id,
+                    "model_name": model_name,
                     "files_count": files_count,
                     "created_at": doc.get("created_at"),
                     "updated_at": doc.get("updated_at")
@@ -616,10 +636,12 @@ class KnowledgeService:
         if "files" not in doc or not doc.get("files"):
             try:
                 # If ownerId saved in doc use it, else current user
-                owner_id = user.get("id")
+                owner_id = doc.get("ownerId") or user.get("id") or user.get("userId")
                 path_prefix = f"uploads/{owner_id}/{collection_name}/"
-                
-                file_names = await FileService.list_files_by_prefix(path_prefix)
+
+                file_paths = await FileService.list_files_at_path(path_prefix)
+                # Normalize to just filenames
+                file_names = [p.split("/")[-1] for p in file_paths]
                 doc["files"] = file_names
             except Exception as e:
                 logger.warning(f"[KNOWLEDGE] MinIO listing failed for collection {collection_name}: {e}")

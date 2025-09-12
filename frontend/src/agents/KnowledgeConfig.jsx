@@ -187,6 +187,9 @@ export default function KnowledgeConfig({ user }) {
         const data = await collectionsResponse.json();
         const collections = data.collections || [];
         
+        console.log('[KnowledgeConfig] Raw API response:', data);
+        console.log('[KnowledgeConfig] Collections from API:', collections);
+        
         // Set pagination data
         if (data.pagination) {
           setPagination({
@@ -208,6 +211,7 @@ export default function KnowledgeConfig({ user }) {
               name: collection.name,
               category: collection.category || '',
               model_id: collection.model_id || '',
+              model_name: collection.model_name || '',
               files_count: collection.files_count || 0,
               files: [] // Will be loaded when editing
             })
@@ -219,12 +223,14 @@ export default function KnowledgeConfig({ user }) {
               name: collection.name,
               category: '',
               model_id: '',
+              model_name: '',
               files_count: 0,
               files: []
             })
           }
         }
         setExistingConfigs(collectionsWithData)
+        console.log('[KnowledgeConfig] Collections loaded:', collectionsWithData)
       } else {
         console.error('[KnowledgeConfig] Failed to load collections - bad response')
       }
@@ -523,7 +529,7 @@ export default function KnowledgeConfig({ user }) {
                     <TableRow key={cfg.id || cfg.name} hover>
                       <TableCell>{cfg.name}</TableCell>
                       <TableCell>{cfg.category || '-'}</TableCell>
-                      <TableCell>{cfg.model_id || '-'}</TableCell>
+                      <TableCell>{cfg.model_name || cfg.model_id || '-'}</TableCell>
                       <TableCell>{cfg.files_count || 0}</TableCell>
                       <TableCell align="right">
                         <IconButton size="small" color="primary" onClick={() => openEdit(cfg.name)}>
