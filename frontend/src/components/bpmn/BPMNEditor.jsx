@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import ReactFlow, {
   ReactFlowProvider,
   addEdge,
@@ -113,8 +113,8 @@ const generateBpmnId = (elementType) => {
 
 const getId = (elementType = 'element') => generateBpmnId(elementType);
 
-// Generate the initial start node with proper ID
-const getInitialNodes = () => [
+// Generate the initial start node with proper ID - keep it stable
+const initialNodes = [
   {
     id: getId('startEvent'),
     type: 'startEvent',
@@ -125,7 +125,7 @@ const getInitialNodes = () => [
 
 const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPropertyPanel = true, readOnly = false, initialBPMN = null }) => {
   const reactFlowWrapper = useRef(null);
-  const [nodes, setNodes, onNodesChange] = useNodesState(getInitialNodes());
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
   const [participants, setParticipants] = useState([]);
@@ -681,15 +681,12 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   );
 
   const onNodeDoubleClick = useCallback((event, node) => {
-    const newLabel = prompt('Enter new label:', node.data.label);
-    if (newLabel !== null) {
-      setNodes((nds) =>
-        nds.map((n) =>
-          n.id === node.id ? { ...n, data: { ...n.data, label: newLabel } } : n
-        )
-      );
-    }
-  }, [setNodes]);
+    // Open property panel on double-click
+    setSelectedNode(node);
+    setSelectedEdge(null);
+    setIsPropertyPanelOpen(true);
+    setUserManuallyClosed(false);
+  }, []);
 
   // Selection handlers
   const onSelectionChange = useCallback(({ nodes, edges }) => {
@@ -699,33 +696,25 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
     setSelectedNode(selectedNode || null);
     setSelectedEdge(selectedEdge || null);
     
-    // Auto-open property panel when something is selected
-    if (selectedNode || selectedEdge) {
-      setIsPropertyPanelOpen(true);
-      setUserManuallyClosed(false);
-    } else {
-      // Auto-close property panel when nothing is selected
+    // Don't auto-open property panel on selection change
+    // Only close if nothing is selected and panel wasn't manually opened
+    if (!selectedNode && !selectedEdge && !userManuallyClosed) {
       setIsPropertyPanelOpen(false);
-      setUserManuallyClosed(false);
     }
-  }, []);
+  }, [userManuallyClosed]);
 
-  // Node click handler
+  // Node click handler - only select, don't open property panel
   const onNodeClick = useCallback((event, node) => {
     setSelectedNode(node);
     setSelectedEdge(null);
-    // Always open property panel when user clicks a node
-    setIsPropertyPanelOpen(true);
-    setUserManuallyClosed(false);
+    // Don't automatically open property panel on single click
   }, []);
 
-  // Edge click handler
+  // Edge click handler - only select, don't open property panel
   const onEdgeClick = useCallback((event, edge) => {
     setSelectedEdge(edge);
     setSelectedNode(null);
-    // Always open property panel when user clicks an edge
-    setIsPropertyPanelOpen(true);
-    setUserManuallyClosed(false);
+    // Don't automatically open property panel on single click
   }, []);
 
   // Pane click handler (deselect all and close property panel)
@@ -922,8 +911,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
     <div className={`bpmn-editor ${readOnly ? 'readonly-mode' : ''}`}>
       {showToolbox && !readOnly && (
         <Toolbar 
-          isDarkMode={isDarkMode} 
-          onToggleTheme={onToggleTheme}
+          isDarkMode={isDarkMode}
           isPropertyPanelOpen={isPropertyPanelOpen}
           onTogglePropertyPanel={handlePropertyPanelToggle}
           selectionMode={selectionMode}
@@ -991,9 +979,21 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   );
 };
 
+// Memoize the component to prevent re-renders when only theme changes
+const MemoizedBPMNEditorFlow = React.memo(BPMNEditorFlow, (prevProps, nextProps) => {
+  // Only re-render if props other than isDarkMode change
+  return (
+    prevProps.showToolbox === nextProps.showToolbox &&
+    prevProps.showPropertyPanel === nextProps.showPropertyPanel &&
+    prevProps.readOnly === nextProps.readOnly &&
+    prevProps.initialBPMN === nextProps.initialBPMN &&
+    prevProps.onToggleTheme === nextProps.onToggleTheme
+  );
+});
+
 const BPMNEditor = ({ isDarkMode, onToggleTheme, showToolbox, showPropertyPanel, readOnly, initialBPMN }) => (
   <ReactFlowProvider>
-    <BPMNEditorFlow 
+    <MemoizedBPMNEditorFlow 
       isDarkMode={isDarkMode} 
       onToggleTheme={onToggleTheme}
       showToolbox={showToolbox}
