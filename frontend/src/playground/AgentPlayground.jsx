@@ -271,23 +271,75 @@ export default function AgentPlayground({ user }) {
     setStagedFiles(prev => [...prev, ...newStaged])
   }
 
-  // Save knowledge collection with embedder strategy
+  // Save knowledge collection with embedder strategy from selected agent
   const saveKnowledgeCollection = async (collectionName, files) => {
     try {
-      // Create collection with default embedder strategy
+      if (!selected) {
+        throw new Error('No agent selected for knowledge collection')
+      }
+
+      // Get agent configuration to extract API key and embedder details
+      const agentConfig = await agentService.getAgent(selected, token)
+      console.log('Retrieved agent config for knowledge collection:', {
+        name: agentConfig?.name,
+        hasModel: !!agentConfig?.model,
+        hasTools: !!(agentConfig?.tools && agentConfig.tools.length > 0)
+      })
+      
+      // Extract API key from agent's model configuration
+      let apiKey = null
+      if (agentConfig?.model?.api_key) {
+        apiKey = agentConfig.model.api_key
+      } else if (agentConfig?.model?.openai_api_key) {
+        apiKey = agentConfig.model.openai_api_key
+      } else if (agentConfig?.tools && agentConfig.tools.length > 0) {
+        // Try to find API key in tools configuration
+        for (const tool of agentConfig.tools) {
+          if (tool.api_key || tool.openai_api_key) {
+            apiKey = tool.api_key || tool.openai_api_key
+            break
+          }
+        }
+      }
+      
+      if (!apiKey) {
+        console.warn('No API key found in agent configuration, proceeding without API key in embedder params')
+      }
+
+      // Generate a UUID-like identifier for ownerId (simplified version)
+      const ownerId = genUuidHex().substring(0, 22) // Match the sample ownerId length
+      
+      // Get current timestamp
+      const currentTime = Date.now()
+      
+      // Create collection payload similar to the sample structure
       const payload = {
         collection: collectionName,
+        tenantId: user?.tenant_id || user?.tenantId || 'default-tenant', // Use user's tenant ID
         category: 'conversation',
+        created_at: currentTime,
         overwrite: false,
+        ownerId: ownerId,
+        updated_at: new Date().toISOString(),
         embedder: {
-          strategy: 'ai.embeddings.openai',  // Using a simple default embedder
-          params: {},
+          strategy: 'ai.embeddings.openai',
+          params: apiKey ? { api_key: apiKey } : {}, // Only include API key if available
           chunk: {
             strategy: '',
             params: {}
           }
-        }
+        },
+        files: files ? files.map(f => f.name) : [],
+        vector_collection: `${collectionName}_${ownerId}` // Generate vector collection name
       }
+      
+      console.log('Saving knowledge collection with payload structure:', {
+        ...payload,
+        embedder: {
+          ...payload.embedder,
+          params: payload.embedder.params.api_key ? { api_key: '[REDACTED]' } : payload.embedder.params
+        }
+      })
       
       // First save the collection configuration
       const res = await agentRuntimeService.saveKnowledgeCollection(payload, token)
@@ -1094,6 +1146,11 @@ const ChatInputBar = React.memo(function ChatInputBar({
 }) {
   const containerRef = useRef(null)
   const [alignedStyle, setAlignedStyle] = useState({ left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 650 })
+  
+  // Dragging state
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  const [position, setPosition] = useState({ x: null, y: null }) // null means use default positioning
 
   // Measure and report height upward
   useLayoutEffect(() => {
@@ -1102,7 +1159,9 @@ const ChatInputBar = React.memo(function ChatInputBar({
     const measure = () => {
       const rect = el.getBoundingClientRect()
       onHeightChange(rect.height + 24) // include spacer buffer
-      if (containerEl) {
+      
+      // Only set aligned style if not dragged to a custom position
+      if (position.x === null && position.y === null && containerEl) {
         const parentRect = containerEl.getBoundingClientRect()
         // Keep original maxWidth (650) but align center to parent center
         const desiredWidth = Math.min(650, parentRect.width)
@@ -1130,22 +1189,97 @@ const ChatInputBar = React.memo(function ChatInputBar({
       if (ro) ro.disconnect()
       else window.removeEventListener('resize', measure)
     }
-  }, [onHeightChange, stagedFiles, uploadedFiles, running, prompt, containerEl])
+  }, [onHeightChange, stagedFiles, uploadedFiles, running, prompt, containerEl, position])
+
+  // Drag handlers
+  const handleMouseDown = (e) => {
+    if (e.target.closest('input, textarea, button, .MuiIconButton-root')) {
+      return // Don't start drag on interactive elements
+    }
+    
+    setIsDragging(true)
+    const rect = containerRef.current.getBoundingClientRect()
+    setDragOffset({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    })
+    e.preventDefault()
+  }
+
+  const handleMouseMove = useCallback((e) => {
+    if (!isDragging) return
+    
+    const newX = e.clientX - dragOffset.x
+    const newY = e.clientY - dragOffset.y
+    
+    // Constrain to viewport
+    const maxX = window.innerWidth - 300 // min width for input
+    const maxY = window.innerHeight - 100 // min height for input
+    
+    setPosition({
+      x: Math.max(0, Math.min(newX, maxX)),
+      y: Math.max(0, Math.min(newY, maxY))
+    })
+  }, [isDragging, dragOffset])
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false)
+  }, [])
+
+  // Add global mouse event listeners for dragging
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove)
+        document.removeEventListener('mouseup', handleMouseUp)
+      }
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp])
+
+  // Double-click to reset position
+  const handleDoubleClick = () => {
+    setPosition({ x: null, y: null })
+  }
+
+  // Calculate final style
+  const finalStyle = position.x !== null && position.y !== null ? {
+    position: 'fixed',
+    left: `${position.x}px`,
+    top: `${position.y}px`,
+    width: '650px',
+    maxWidth: '650px',
+    transform: 'none'
+  } : {
+    ...alignedStyle,
+    bottom: 40
+  }
 
   return (
-    <Box ref={containerRef} sx={{
-      position: 'fixed',
-      bottom: 40,
-      backgroundColor: 'background.paper',
-      borderRadius: 1.5,
-      border: 1,
-      borderColor: 'divider',
-      p: 1.5,
-      zIndex: 1200,
-      boxShadow: 4,
-      // dynamic alignment style overrides
-      ...alignedStyle
-    }}>
+    <Box 
+      ref={containerRef} 
+      onMouseDown={handleMouseDown}
+      onDoubleClick={handleDoubleClick}
+      sx={{
+        backgroundColor: 'background.paper',
+        borderRadius: 1.5,
+        border: 1,
+        borderColor: 'divider',
+        p: 1.5,
+        zIndex: 1200,
+        boxShadow: 4,
+        cursor: isDragging ? 'grabbing' : 'grab',
+        userSelect: 'none',
+        // dynamic alignment style overrides
+        ...finalStyle,
+        // Add visual feedback for dragging
+        opacity: isDragging ? 0.9 : 1,
+        transform: isDragging ? 'scale(1.02)' : finalStyle.transform,
+        transition: isDragging ? 'none' : 'transform 0.1s ease, opacity 0.1s ease'
+      }}
+      title="Drag to reposition, double-click to reset position"
+    >
       <Box sx={{ position: 'relative' }}>
         <TextField
           placeholder={!selected ? 'Select an agent first' : (stagedFiles.length ? `Type your message... (${stagedFiles.length} file(s) ready)` : 'Type your message...')}
@@ -1163,10 +1297,18 @@ const ChatInputBar = React.memo(function ChatInputBar({
           fullWidth
           multiline
           minRows={1}
-            maxRows={4}
+          maxRows={4}
           disabled={!selected || running}
           size="small"
-          sx={{ '& .MuiInputBase-root': { pr: running ? 14 : 8, fontSize: '14px', alignItems: 'flex-start' } }}
+          sx={{ 
+            '& .MuiInputBase-root': { 
+              pr: running ? 14 : 8, 
+              fontSize: '14px', 
+              alignItems: 'flex-start',
+              cursor: 'text' // Override parent cursor for text input
+            } 
+          }}
+          onMouseDown={(e) => e.stopPropagation()} // Prevent dragging when clicking in text field
         />
         {running ? (
           <IconButton onClick={cancelChat} size="small" color="error" sx={{ position: 'absolute', top: '50%', right: 6, transform: 'translateY(-50%)' }}>
