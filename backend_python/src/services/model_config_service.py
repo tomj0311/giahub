@@ -48,6 +48,7 @@ class ModelConfigService:
                     "name": doc.get("name"),
                     "provider": doc.get("provider"),
                     "model": doc.get("model"),
+                    "embedding": doc.get("embedding"),  # Include embedding data
                     "category": doc.get("category", ""),
                     "description": doc.get("description", ""),
                     "parameters": doc.get("parameters", {}),
@@ -127,6 +128,7 @@ class ModelConfigService:
                     "name": doc.get("name"),
                     "provider": doc.get("provider"),
                     "model": doc.get("model"),
+                    "embedding": doc.get("embedding"),  # Include embedding data
                     "category": doc.get("category", ""),
                     "description": doc.get("description", ""),
                     "parameters": doc.get("parameters", {}),
@@ -176,6 +178,7 @@ class ModelConfigService:
                 "name": doc.get("name"),
                 "provider": doc.get("provider"),
                 "model": doc.get("model"),
+                "embedding": doc.get("embedding"),  # Include embedding data
                 "category": doc.get("category", ""),
                 "description": doc.get("description", ""),
                 "parameters": doc.get("parameters", {}),

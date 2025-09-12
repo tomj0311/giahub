@@ -40,7 +40,7 @@ export default function ModelConfig({ user }) {
     // Simple backend base function replacement
     
 
-    const [components, setComponents] = useState({ models: [] });
+    const [components, setComponents] = useState({ models: [], embeddings: [] });
     const [loadingDiscovery, setLoadingDiscovery] = useState(true);
     const [introspectCache, setIntrospectCache] = useState({});
     const [pendingIntros, setPendingIntros] = useState({});
@@ -59,7 +59,9 @@ export default function ModelConfig({ user }) {
         name: '',
         category: '',
         model: '',
-        model_params: {}
+        model_params: {},
+        embedding: '',
+        embedding_params: {}
     });
     const [saveState, setSaveState] = useState({ loading: false });
     const [categories, setCategories] = useState([]);
@@ -69,50 +71,71 @@ export default function ModelConfig({ user }) {
     const discoverComponents = async () => {
         try {
             setLoadingDiscovery(true);
-            const response = await apiCall(`/api/models/components?folder=ai.models`, {
+            
+            // Discover models
+            const modelsResponse = await apiCall(`/api/models/components?folder=ai.models`, {
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
+            
+            // Discover embeddings
+            const embeddingsResponse = await apiCall(`/api/embedders/components?folder=ai.embeddings`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
 
-            if (response.ok) {
-                const data = await response.json();
-                const comps = data?.components || {};
-                setComponents({ models: comps['ai.models'] || [] });
+            let models = [];
+            let embeddings = [];
+
+            if (modelsResponse.ok) {
+                const modelsData = await modelsResponse.json();
+                const comps = modelsData?.components || {};
+                models = comps['ai.models'] || [];
             } else {
                 showError('Failed to discover models');
             }
+
+            if (embeddingsResponse.ok) {
+                const embeddingsData = await embeddingsResponse.json();
+                const comps = embeddingsData?.components || {};
+                embeddings = comps['ai.embeddings'] || [];
+            } else {
+                showError('Failed to discover embeddings');
+            }
+
+            setComponents({ models, embeddings });
         } catch (error) {
-            console.error('Failed to discover models:', error);
-            showError('Failed to discover models');
+            console.error('Failed to discover components:', error);
+            showError('Failed to discover components');
         } finally {
             setLoadingDiscovery(false);
         }
     };
 
-    // Introspect model using HTTP
+    // Introspect model or embedding using HTTP
     const introspectModel = async (modulePath, kind = 'model') => {
         if (!modulePath || introspectCache[modulePath] || pendingIntros[modulePath]) return;
 
         try {
             setPendingIntros(p => ({ ...p, [modulePath]: true }));
 
-            const response = await apiCall(`/api/models/introspect`, {
+            const endpoint = kind === 'embedding' ? '/api/embedders/introspect' : '/api/models/introspect';
+            const response = await apiCall(endpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 },
-                body: JSON.stringify({ module_path: modulePath, kind })
+                body: JSON.stringify({ module_path: modulePath, kind: kind === 'embedding' ? 'tool' : kind })
             });
 
             if (response.ok) {
                 const data = await response.json();
                 setIntrospectCache(c => ({ ...c, [modulePath]: data }));
             } else {
-                showError(`Failed to introspect model: ${modulePath}`);
+                showError(`Failed to introspect ${kind}: ${modulePath}`);
             }
         } catch (error) {
-            console.error('Failed to introspect model:', error);
-            showError('Failed to introspect model');
+            console.error(`Failed to introspect ${kind}:`, error);
+            showError(`Failed to introspect ${kind}`);
         } finally {
             setPendingIntros(p => { const { [modulePath]: _rm, ...rest } = p; return rest; });
         }
@@ -162,6 +185,7 @@ export default function ModelConfig({ user }) {
             if (resp.ok) {
                 const data = await resp.json();
                 console.log('📄 Configs data:', data);
+                console.log('📄 First config embedding data:', data.configurations?.[0]?.embedding);
                 setExistingConfigs(data.configurations || []);
                 if (data.pagination) {
                     setPagination({
@@ -193,12 +217,12 @@ export default function ModelConfig({ user }) {
         loadExistingConfigs(1, newRowsPerPage); // Reset to first page
     };
 
-    // Show warning when no models are discovered
+    // Show warning when no models or embeddings are discovered
     useEffect(() => {
-        if (!loadingDiscovery && components.models.length === 0) {
-            showWarning('No models discovered. Check backend logs or refresh.');
+        if (!loadingDiscovery && components.models.length === 0 && components.embeddings.length === 0) {
+            showWarning('No models or embeddings discovered. Check backend logs or refresh.');
         }
-    }, [loadingDiscovery, components.models]);
+    }, [loadingDiscovery, components.models, components.embeddings]);
 
     // Run these functions only once on mount
     useEffect(() => {
@@ -228,16 +252,21 @@ export default function ModelConfig({ user }) {
                 name: config.name,
                 category: config.category || '',
                 model: config.model?.strategy || '',
-                model_params: config.model?.params || {}
+                model_params: config.model?.params || {},
+                embedding: config.embedding?.strategy || '',
+                embedding_params: config.embedding?.params || {}
             });
             setIsEditMode(true);
             if (config.model?.strategy) {
                 ensureIntrospection(config.model.strategy, 'model');
             }
+            if (config.embedding?.strategy) {
+                ensureIntrospection(config.embedding.strategy, 'embedding');
+            }
             console.log('✅ Form set to edit mode');
         } else {
             console.log('⚠️ Config not found, creating new...');
-            setForm({ id: null, name: configName, category: '', model: '', model_params: {} });
+            setForm({ id: null, name: configName, category: '', model: '', model_params: {}, embedding: '', embedding_params: {} });
             setIsEditMode(false);
             console.log('✅ Form set to create mode');
         }
@@ -249,9 +278,9 @@ export default function ModelConfig({ user }) {
         console.log('Token:', token ? 'Present' : 'Missing');
         console.log('IsEditMode:', isEditMode);
         
-        if (!form.name || !form.model) {
-            console.log('❌ VALIDATION FAILED - Missing name or model');
-            showError('Name and model selection are required');
+        if (!form.name || !form.model || !form.embedding) {
+            console.log('❌ VALIDATION FAILED - Missing name, model or embedding');
+            showError('Name, model selection and embedding selection are required');
             return;
         }
         
@@ -265,6 +294,10 @@ export default function ModelConfig({ user }) {
             model: {
                 strategy: form.model,
                 params: form.model_params
+            },
+            embedding: {
+                strategy: form.embedding,
+                params: form.embedding_params
             },
             type: 'modelConfig'
         };
@@ -331,7 +364,7 @@ export default function ModelConfig({ user }) {
             loadCategories();
             
             console.log('🧹 Resetting form...');
-            setForm({ id: null, name: '', category: '', model: '', model_params: {} });
+            setForm({ id: null, name: '', category: '', model: '', model_params: {}, embedding: '', embedding_params: {} });
             setIsEditMode(false);
             setDialogOpen(false);
             console.log('✨ SAVE FUNCTION COMPLETED SUCCESSFULLY');
@@ -379,7 +412,7 @@ export default function ModelConfig({ user }) {
 
     const openCreate = () => {
         console.log('➕ OPENING CREATE DIALOG');
-        setForm({ id: null, name: '', category: '', model: '', model_params: {} });
+        setForm({ id: null, name: '', category: '', model: '', model_params: {}, embedding: '', embedding_params: {} });
         setIsEditMode(false);
         setDialogOpen(true);
         console.log('✅ Create dialog opened');
@@ -393,6 +426,7 @@ export default function ModelConfig({ user }) {
     };
 
     const modelIntro = form.model ? introspectCache[form.model] : null;
+    const embeddingIntro = form.embedding ? introspectCache[form.embedding] : null;
 
     return (
         <Box>
@@ -428,6 +462,7 @@ export default function ModelConfig({ user }) {
                                     <TableCell>Name</TableCell>
                                     <TableCell>Category</TableCell>
                                     <TableCell>Model</TableCell>
+                                    <TableCell>Embedding</TableCell>
                                     <TableCell>Params</TableCell>
                                     <TableCell align="right">Actions</TableCell>
                                 </TableRow>
@@ -435,7 +470,7 @@ export default function ModelConfig({ user }) {
                             <TableBody>
                                 {existingConfigs.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                                        <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                                             <Typography color="text.secondary">No configurations found</Typography>
                                         </TableCell>
                                     </TableRow>
@@ -445,7 +480,8 @@ export default function ModelConfig({ user }) {
                                             <TableCell>{cfg.name}</TableCell>
                                             <TableCell>{cfg.category || '-'}</TableCell>
                                             <TableCell>{cfg.model?.strategy || '-'}</TableCell>
-                                            <TableCell>{Object.keys(cfg.model?.params || {}).length}</TableCell>
+                                            <TableCell>{cfg.embedding?.strategy || '-'}</TableCell>
+                                            <TableCell>{Object.keys({...(cfg.model?.params || {}), ...(cfg.embedding?.params || {})}).length}</TableCell>
                                             <TableCell align="right">
                                                 <IconButton size="small" color="primary" onClick={() => openEdit(cfg.name)}>
                                                     <EditIcon size={16} />
@@ -562,6 +598,15 @@ export default function ModelConfig({ user }) {
                             </Fade>
                         )}
 
+                        {!embeddingIntro && form.embedding && (
+                            <Fade in>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <CircularProgress size={16} />
+                                    <Typography variant="caption" sx={{ opacity: 0.7 }}>Fetching embedding parameters…</Typography>
+                                </Box>
+                            </Fade>
+                        )}
+
                         {modelIntro && (
                             <Box>
                                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
@@ -604,6 +649,64 @@ export default function ModelConfig({ user }) {
                                 </Box>
                             </Box>
                         )}
+
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                            <Autocomplete
+                                sx={{ flex: 1 }}
+                                options={components.embeddings || []}
+                                value={form.embedding}
+                                loading={loadingDiscovery && !(components.embeddings || []).length}
+                                loadingText="Loading embeddings…"
+                                onChange={(_, v) => {
+                                    setForm(f => ({ ...f, embedding: v || '', embedding_params: {} }));
+                                    ensureIntrospection(v, 'embedding');
+                                }}
+                                renderInput={(params) => <TextField {...params} label="Select Embedding" />}
+                            />
+                        </Box>
+
+                        {embeddingIntro && (
+                            <Box>
+                                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                    Embedding Parameters ({embeddingIntro.class_name})
+                                </Typography>
+                                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2 }}>
+                                    {(embeddingIntro.formatted_params || []).map(paramFormatted => {
+                                        const paramName = paramFormatted.split(':')[0].trim();
+                                        const typeMatch = paramFormatted.match(/:\s*([^=\s]+)/);
+                                        const paramType = typeMatch ? typeMatch[1].toLowerCase() : 'str';
+                                        let defaultRaw = '';
+                                        const descSplitIdx = paramFormatted.indexOf(' - ');
+                                        const mainPart = descSplitIdx !== -1 ? paramFormatted.slice(0, descSplitIdx) : paramFormatted;
+                                        const eqIdx = mainPart.indexOf('=');
+                                        if (eqIdx !== -1) {
+                                            defaultRaw = mainPart.slice(eqIdx + 1).trim();
+                                            if ((defaultRaw.startsWith("'") && defaultRaw.endsWith("'")) || (defaultRaw.startsWith('"') && defaultRaw.endsWith('"'))) {
+                                                defaultRaw = defaultRaw.slice(1, -1);
+                                            }
+                                        }
+                                        const hasDefault = defaultRaw !== '' && defaultRaw.toLowerCase() !== 'none';
+                                        const placeholderText = hasDefault ? `Default: ${defaultRaw}` : `Enter ${paramName}`;
+                                        let gridColumn = 'span 1';
+                                        if (paramType.includes('int') || paramType.includes('float') || paramType.includes('bool')) gridColumn = 'span 1';
+                                        else if (paramType.includes('str') && (paramName.includes('key') || paramName.includes('token') || paramName.includes('url'))) gridColumn = 'span 2';
+                                        return (
+                                            <TextField
+                                                key={paramName}
+                                                size="small"
+                                                label={paramName}
+                                                InputLabelProps={{ shrink: true }}
+                                                value={form.embedding_params[paramName] || ''}
+                                                onChange={(e) => setForm(f => ({ ...f, embedding_params: { ...f.embedding_params, [paramName]: e.target.value } }))}
+                                                placeholder={placeholderText}
+                                                sx={{ gridColumn }}
+                                                type={paramType.includes('int') || paramType.includes('float') ? 'number' : 'text'}
+                                            />
+                                        );
+                                    })}
+                                </Box>
+                            </Box>
+                        )}
                     </Stack>
                 </DialogContent>
                 <DialogActions>
@@ -612,7 +715,7 @@ export default function ModelConfig({ user }) {
                     )}
                     <Box sx={{ flex: 1 }} />
                     <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={saveModelConfig} variant="contained" disabled={saveState.loading || !form.name || !form.model}>
+                    <Button onClick={saveModelConfig} variant="contained" disabled={saveState.loading || !form.name || !form.model || !form.embedding}>
                         {saveState.loading ? 'Saving...' : isEditMode ? 'Update Configuration' : 'Save Configuration'}
                     </Button>
                 </DialogActions>
