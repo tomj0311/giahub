@@ -57,10 +57,9 @@ def generate_token(payload: Dict[str, Any]) -> str:
 
 def verify_token(token: str) -> Dict[str, Any]:
     """Verify and decode a JWT token"""
-    logger.debug("[AUTH] Verifying JWT token")
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        logger.debug(f"[AUTH] Token verified successfully for: {payload.get('email', payload.get('username', 'unknown'))}")
+        # Only log successful verification once per session, not every request
         return payload
     except jwt.ExpiredSignatureError:
         logger.warning("[AUTH] Token verification failed - token expired")
@@ -86,7 +85,6 @@ def verify_token(token: str) -> Dict[str, Any]:
 
 async def verify_token_middleware(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
     """FastAPI dependency for token verification"""
-    logger.debug("[AUTH] Middleware token verification")
     if not credentials:
         logger.warning("[AUTH] Missing token in request")
         raise HTTPException(
@@ -95,7 +93,6 @@ async def verify_token_middleware(credentials: HTTPAuthorizationCredentials = De
         )
     
     token = credentials.credentials
-    logger.debug("[AUTH] Token found in authorization header")
     return verify_token(token)
 
 

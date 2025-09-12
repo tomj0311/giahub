@@ -31,7 +31,7 @@ def module_loader(module_path: str):
         logger.error(f"module_loader failed for {module_path}: {e}")
     return None
 
-def _create_multi_collection_retriever(collection_names: list = None, session_collection: str = None, embedder = None):
+def _create_multi_collection_retriever(collection_names: list = None, conv_id: str = None, embedder = None):
     """Create a custom retriever that searches across multiple collections"""
     def multi_collection_retriever(agent, query: str, num_documents: int = None, **kwargs):
         """Custom retriever that searches across multiple existing collections"""
@@ -44,9 +44,9 @@ def _create_multi_collection_retriever(collection_names: list = None, session_co
         if collection_names:
             collections_to_search.extend(collection_names)
         
-        # Add session collection if provided
-        if session_collection:
-            collections_to_search.append(session_collection)
+        # Add conv_id collection if provided
+        if conv_id:
+            collections_to_search.append(conv_id)
         
         if not collections_to_search:
             return None
@@ -95,13 +95,13 @@ class AgentRuntimeService:
     # Simple cache to store agents by session_id
     _agents = {}
     
-    @staticmethod
-    async def build_agent_from_config(agent_config: Dict[str, Any], user: Dict[str, Any]) -> Any:
-        # Check if we already have this agent for this session
-        session_id = agent_config.get("session_collection")
-        if session_id and session_id in AgentRuntimeService._agents:
-            logger.info(f"Reusing existing agent for session: {session_id}")
-            return AgentRuntimeService._agents[session_id]
+    @classmethod
+    async def build_agent_from_config(cls, agent_config: Dict[str, Any], user: Dict[str, Any]) -> Any:
+        # Check if we already have this agent for this conversation
+        conv_id = agent_config.get("conv_id")
+        if conv_id and conv_id in AgentRuntimeService._agents:
+            logger.info(f"Reusing existing agent for conv_id: {conv_id}")
+            return AgentRuntimeService._agents[conv_id]
             
         try:
             from ai.agent.agent import Agent
@@ -149,7 +149,7 @@ class AgentRuntimeService:
             # Load knowledge collection names and create custom retriever
             collection_names = []
             embedder_config = None
-            session_collection = agent_config.get("session_collection")
+            conv_id = agent_config.get("conv_id")
             
             # Handle collections object with multiple collection IDs
             collections_config = agent_config.get("collections", {})
@@ -183,7 +183,8 @@ class AgentRuntimeService:
             
             # Create custom retriever
             custom_retriever = None
-            if collection_names or session_collection:
+            session_collection = f"{conv_id}_{agent_config.get('userId')}"
+            if collection_names or conv_id:
                 custom_retriever = _create_multi_collection_retriever(collection_names, session_collection, embedder)
             
             memory_config = agent_config.get("memory", {})
@@ -204,16 +205,16 @@ class AgentRuntimeService:
                 "num_history_responses": history_config.get("num", 3),
             }
             
-            # Use session_id instead of session_collection
-            if agent_config.get("session_collection"):
-                kwargs["session_id"] = agent_config["session_collection"]
+            # Use conv_id directly
+            if conv_id:
+                kwargs["session_id"] = conv_id
                 
             agent = Agent(**kwargs)
             
-            # Cache the agent if we have a session_id
-            if session_id:
-                AgentRuntimeService._agents[session_id] = agent
-                logger.info(f"Created and cached new agent for session: {session_id}")
+            # Cache the agent if we have a conv_id
+            if conv_id:
+                AgentRuntimeService._agents[conv_id] = agent
+                logger.info(f"Created and cached new agent for conv_id: {conv_id}")
                 
             return agent
         except Exception as e:
@@ -246,7 +247,7 @@ class AgentRuntimeService:
             yield {"type": "error", "error": str(e), "timestamp": asyncio.get_event_loop().time()}
 
     @classmethod
-    async def execute_agent(cls, agent_name: str, prompt: str, user: Dict[str, Any], session_prefix: Optional[str] = None, cancel_event: Optional[asyncio.Event] = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute_agent(cls, agent_name: str, prompt: str, user: Dict[str, Any], conv_id: Optional[str] = None, cancel_event: Optional[asyncio.Event] = None) -> AsyncGenerator[Dict[str, Any], None]:
         try:
             agent_doc = await AgentService.get_agent_by_name(agent_name, user)
             if not agent_doc:
@@ -256,8 +257,8 @@ class AgentRuntimeService:
             agent_config = {
                 **agent_doc,  # Use entire agent document as-is
             }
-            if session_prefix:
-                agent_config["session_collection"] = session_prefix
+            if conv_id:
+                agent_config["conv_id"] = conv_id
             agent = await cls.build_agent_from_config(agent_config, user)
             async for response in cls.run_agent_stream(agent, prompt, cancel_event=cancel_event):
                 yield response

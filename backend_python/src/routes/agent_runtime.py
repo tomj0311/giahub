@@ -1,5 +1,10 @@
 """
-Agent Runtime routes for executing and managing agent conversations.
+Agent Runtime routes for executing and man        async for chunk in AgentRuntimeService.execute_agent(
+            agent_name=agent_name,
+            prompt=prompt,
+            user=user,
+            conv_id=conv_id
+        ):agent conversations.
 Handles real-time agent interactions, streaming responses, and conversation management.
 """
 
@@ -25,7 +30,7 @@ router = APIRouter(prefix="/api/agent-runtime", tags=["agent-runtime"])
 async def stream_agent_response(
     agent_name: str,
     prompt: str,
-    session_prefix: str | None = None,
+    conv_id: str | None = None,
     user_id: str | None = None,
     tenant_id: str | None = None
 ) -> AsyncGenerator[str, None]:
@@ -34,7 +39,7 @@ async def stream_agent_response(
     # Generate correlation ID
     correlation_id = str(uuid.uuid4())
     logger.info(f"[AGENT_RUNTIME] Starting agent response stream with correlation ID: {correlation_id}")
-    logger.debug(f"[AGENT_RUNTIME] Request parameters - agent: {agent_name}, session: {session_prefix}, user: {user_id}, tenant: {tenant_id}")
+    logger.debug(f"[AGENT_RUNTIME] Request parameters - agent: {agent_name}, conv_id: {conv_id}, user: {user_id}, tenant: {tenant_id}")
     
     try:
         # Create user object for service calls
@@ -48,7 +53,7 @@ async def stream_agent_response(
             agent_name=agent_name,
             prompt=prompt,
             user=user,
-            session_prefix=session_prefix
+            conv_id=conv_id
         ):
             # Add correlation ID to response
             response['correlation_id'] = correlation_id
@@ -65,12 +70,12 @@ async def stream_agent_response(
 async def run_agent(body: Dict[str, Any], user: dict = Depends(verify_token_middleware)):
     """Stream agent responses using Server-Sent Events.
 
-    body: { agent_name, prompt, session_prefix? | session_collection? }
+    body: { agent_name, prompt, conv_id }
     """
     agent_name = (body.get("agent_name") or body.get("file") or "").strip()
     prompt = (body.get("prompt") or "").strip()
-    # Accept either key from frontend (older code uses session_collection)
-    session_prefix = body.get("session_prefix") or body.get("session_collection")
+    # Get conversation ID from frontend
+    conv_id = body.get("conv_id") or body.get("session_collection")
     
     if not agent_name:
         raise HTTPException(status_code=400, detail="agent_name is required")
@@ -91,7 +96,7 @@ async def run_agent(body: Dict[str, Any], user: dict = Depends(verify_token_midd
         stream_agent_response(
             agent_name=agent_name,
             prompt=prompt, 
-            session_prefix=session_prefix,
+            conv_id=conv_id,
             user_id=user_id,
             tenant_id=tenant_id
         ),
@@ -313,15 +318,13 @@ async def get_conversation(conversation_id: str, user: dict = Depends(verify_tok
     if not doc:
         raise HTTPException(status_code=404, detail="Conversation not found")
     # sanitize
-    # Provide both keys for maximum compatibility with different frontends
-    session_val = doc.get("session_prefix") or doc.get("session_collection")
+    conv_id = doc.get("conv_id") or doc.get("conversation_id")
     return {
         "conversation_id": doc.get("conversation_id"),
         "agent_name": doc.get("agent_name"),
         "messages": doc.get("messages", []),
         "uploaded_files": doc.get("uploaded_files", []),
-        "session_prefix": session_val,
-        "session_collection": session_val,
+        "conv_id": conv_id,
         "updated_at": int((doc.get("updated_at") or datetime.utcnow()).timestamp() * 1000),
         "title": doc.get("title"),
     }
@@ -334,7 +337,7 @@ async def save_conversation(body: Dict[str, Any], user: dict = Depends(verify_to
     messages = body.get("messages", [])
     uploaded_files = body.get("uploaded_files", [])
     # Accept either key and persist under both for now
-    session_prefix = body.get("session_prefix") or body.get("session_collection") or ""
+    conv_id = body.get("conv_id") or body.get("conversation_id") or ""
     agent_name = body.get("agent_name", "")
     
     # CRITICAL: tenant_id is required - no fallbacks allowed
@@ -354,9 +357,7 @@ async def save_conversation(body: Dict[str, Any], user: dict = Depends(verify_to
         "userId": user_id,
         "conversation_id": conversation_id,
         "updated_at": datetime.utcnow(),
-        # Store both field names for transitional compatibility
-        "session_prefix": session_prefix,
-        "session_collection": session_prefix,
+        "conv_id": conv_id,
     })
     
     existing = await MongoStorageService.find_one(

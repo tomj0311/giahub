@@ -102,6 +102,9 @@ export default function AgentPlayground({ user }) {
 
   // Session collection for uploaded knowledge (uuid-like hex)
   const [sessionCollection, setSessionCollection] = useState(() => genUuidHex())
+  
+  // Store the actual vector collection name for the current conversation
+  const [vectorCollectionName, setVectorCollectionName] = useState(null)
 
   // History dialog
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -199,6 +202,7 @@ export default function AgentPlayground({ user }) {
           setMessages(conv.messages || [])
           setUploadedFiles(conv.uploaded_files || [])
           setSessionCollection(conv.session_prefix || conv.session_collection || genUuidHex())
+          setVectorCollectionName(conv.vector_collection_name || null) // Load the vector collection name
           setCurrentConversationId(conv.conversation_id)
           
           // Set last user message from conversation history
@@ -292,8 +296,15 @@ export default function AgentPlayground({ user }) {
         throw new Error('No model_id found in agent configuration')
       }
 
-      // Generate a UUID-like identifier for ownerId (simplified version)
-      const ownerId = genUuidHex().substring(0, 22) // Match the sample ownerId length
+      // Use user ID as ownerId instead of random UUID
+      const ownerId = user?.userId
+      
+      // Generate vector collection name
+      const vectorCollectionName = `${collectionName}_${ownerId}`
+      
+      // Store the vector collection name for later use
+      setVectorCollectionName(vectorCollectionName)
+      console.log('Generated vector collection name:', vectorCollectionName)
       
       // Get current timestamp
       const currentTime = Date.now()
@@ -309,7 +320,7 @@ export default function AgentPlayground({ user }) {
         updated_at: new Date().toISOString(),
         model_id: modelId, // Use model_id from agent instead of hardcoded embedder
         files: files ? files.map(f => f.name) : [],
-        vector_collection: `${collectionName}_${ownerId}` // Generate vector collection name
+        vector_collection: vectorCollectionName // Use the stored vector collection name
       }
       
       console.log('Saving knowledge collection with payload structure:', {
@@ -399,7 +410,7 @@ export default function AgentPlayground({ user }) {
     // Store the last user message for up arrow recall
     setLastUserMessage(prompt)
 
-    // Generate conversation ID before uploading files
+    // Generate conversation ID with user ID format
     const convId = currentConversationId || `conv_${Date.now()}`
     if (!currentConversationId) setCurrentConversationId(convId)
 
@@ -431,7 +442,8 @@ export default function AgentPlayground({ user }) {
         agent_name: selected,
         messages: newMessages,
         uploaded_files: uploadedFiles,
-        session_collection: convId, // Use conversation ID as session collection
+        conv_id: convId,
+        vector_collection_name: vectorCollectionName,
         title: generateTitle(newMessages)
       }, token)
     } catch (e) {
@@ -457,9 +469,7 @@ export default function AgentPlayground({ user }) {
         {
           agent_name: selected,
           prompt: userMsg.content,
-          // Use conversation ID as session collection for knowledge access
-          session_prefix: convId,
-          session_collection: convId
+          conv_id: convId
         },
         token,
         httpController.signal
@@ -519,7 +529,8 @@ export default function AgentPlayground({ user }) {
                       agent_name: selected,
                       messages: updated,
                       uploaded_files: uploadedFiles,
-                      session_collection: convId,
+                      conv_id: convId,
+                      vector_collection_name: vectorCollectionName,
                       title: generateTitle(updated)
                     }, token).catch(e => console.error('Failed to save final conversation:', e))
 
@@ -541,7 +552,8 @@ export default function AgentPlayground({ user }) {
                       agent_name: selected,
                       messages: updated,
                       uploaded_files: uploadedFiles,
-                      session_collection: convId,
+                      conv_id: convId,
+                      vector_collection_name: vectorCollectionName,
                       title: generateTitle(updated)
                     }, token).catch(e => console.error('Failed to save conversation with error:', e))
 
@@ -571,7 +583,8 @@ export default function AgentPlayground({ user }) {
           agent_name: selected,
           messages: updated,
           uploaded_files: uploadedFiles,
-          session_collection: convId,
+          conv_id: convId,
+          vector_collection_name: vectorCollectionName,
           title: generateTitle(updated)
         }, token).catch(e => console.error('Failed to save conversation with error:', e))
 
@@ -581,7 +594,7 @@ export default function AgentPlayground({ user }) {
       setRunning(false)
       setAbortController(null)
     }
-  }, [selected, prompt, stagedFiles, uploadedFiles, messages, currentConversationId, sessionCollection, token])
+  }, [selected, prompt, stagedFiles, uploadedFiles, messages, currentConversationId, sessionCollection, vectorCollectionName, token])
 
   const openHistory = async (page = 1) => {
     console.log('🚀 openHistory CALLED with page:', page)
@@ -701,6 +714,7 @@ export default function AgentPlayground({ user }) {
       setMessages(conv.messages || [])
       setUploadedFiles(conv.uploaded_files || [])
       setSessionCollection(conv.session_prefix || conv.session_collection || genUuidHex())
+      setVectorCollectionName(conv.vector_collection_name || null) // Load the vector collection name
       setCurrentConversationId(conv.conversation_id)
       setHistoryOpen(false)
       
@@ -724,6 +738,7 @@ export default function AgentPlayground({ user }) {
     setStagedFiles([])
     setCurrentConversationId(null)
     setSessionCollection(genUuidHex())
+    setVectorCollectionName(null) // Reset vector collection name
     setLastUserMessage('') // Clear last user message when clearing chat
   }, [])
 
