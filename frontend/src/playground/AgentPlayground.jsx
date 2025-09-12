@@ -271,15 +271,52 @@ export default function AgentPlayground({ user }) {
     setStagedFiles(prev => [...prev, ...newStaged])
   }
 
-  // Upload knowledge files to backend and mark as uploaded
+  // Save knowledge collection with embedder strategy
+  const saveKnowledgeCollection = async (collectionName, files) => {
+    try {
+      // Create collection with default embedder strategy
+      const payload = {
+        collection: collectionName,
+        category: 'conversation',
+        overwrite: false,
+        embedder: {
+          strategy: 'ai.embeddings.openai',  // Using a simple default embedder
+          params: {},
+          chunk: {
+            strategy: '',
+            params: {}
+          }
+        }
+      }
+      
+      // First save the collection configuration
+      const res = await agentRuntimeService.saveKnowledgeCollection(payload, token)
+      
+      // Then upload files if any
+      if (files && files.length > 0) {
+        await agentRuntimeService.uploadKnowledge(collectionName, files, token)
+      }
+      
+      return res
+    } catch (e) {
+      console.error('Failed to save knowledge collection:', e)
+      throw e
+    }
+  }
+
+  // Upload knowledge files to backend and mark as uploaded (legacy function, now handled in runAgent)
   const uploadStagedFiles = async () => {
     if (stagedFiles.length === 0) return []
     if (!sessionCollection) setSessionCollection(genUuidHex())
     setUploading(true)
     try {
       const files = stagedFiles.map(sf => sf.file)
-      const res = await agentRuntimeService.uploadKnowledge(sessionCollection, files, token)
-      const names = (res?.files || []).map(f => f.filename)
+      const collectionName = currentConversationId || `conv_${Date.now()}`
+      
+      // Save knowledge collection with files
+      await saveKnowledgeCollection(collectionName, files)
+      
+      const names = files.map(f => f.name)
       setUploadedFiles(prev => [...prev, ...names])
       setStagedFiles([])
       return names
@@ -314,11 +351,6 @@ export default function AgentPlayground({ user }) {
     if (!selected || !prompt.trim()) return
     setRunning(true)
 
-    // upload first if needed
-    if (stagedFiles.length) {
-      await uploadStagedFiles()
-    }
-
     const userMsg = { role: 'user', content: prompt, ts: Date.now() }
     const newMessages = [...messages, userMsg]
     setMessages(newMessages)
@@ -326,18 +358,41 @@ export default function AgentPlayground({ user }) {
     // Store the last user message for up arrow recall
     setLastUserMessage(prompt)
 
-    // Save user message immediately
+    // Generate conversation ID before uploading files
     const convId = currentConversationId || `conv_${Date.now()}`
+    if (!currentConversationId) setCurrentConversationId(convId)
+
+    // upload files with conversation ID as collection name
+    if (stagedFiles.length) {
+      try {
+        // Override the collection name in uploadStagedFiles to use conversation ID
+        const collectionName = convId
+        setUploading(true)
+        const files = stagedFiles.map(sf => sf.file)
+        
+        // Save knowledge collection with files
+        await saveKnowledgeCollection(collectionName, files)
+        
+        const names = files.map(f => f.name)
+        setUploadedFiles(prev => [...prev, ...names])
+        setStagedFiles([])
+        setUploading(false)
+      } catch (e) {
+        console.error('Upload failed', e)
+        setUploading(false)
+      }
+    }
+
+    // Save user message immediately
     try {
       await agentRuntimeService.saveConversation({
         conversation_id: convId,
         agent_name: selected,
         messages: newMessages,
         uploaded_files: uploadedFiles,
-        session_collection: sessionCollection,
+        session_collection: convId, // Use conversation ID as session collection
         title: generateTitle(newMessages)
       }, token)
-      if (!currentConversationId) setCurrentConversationId(convId)
     } catch (e) {
       console.error('Failed to save user message:', e)
     }
@@ -361,9 +416,9 @@ export default function AgentPlayground({ user }) {
         {
           agent_name: selected,
           prompt: userMsg.content,
-          // Send both keys for backward compatibility during transition
-          session_prefix: sessionCollection,
-          session_collection: sessionCollection
+          // Use conversation ID as session collection for knowledge access
+          session_prefix: convId,
+          session_collection: convId
         },
         token,
         httpController.signal
@@ -423,7 +478,7 @@ export default function AgentPlayground({ user }) {
                       agent_name: selected,
                       messages: updated,
                       uploaded_files: uploadedFiles,
-                      session_collection: sessionCollection,
+                      session_collection: convId,
                       title: generateTitle(updated)
                     }, token).catch(e => console.error('Failed to save final conversation:', e))
 
@@ -445,7 +500,7 @@ export default function AgentPlayground({ user }) {
                       agent_name: selected,
                       messages: updated,
                       uploaded_files: uploadedFiles,
-                      session_collection: sessionCollection,
+                      session_collection: convId,
                       title: generateTitle(updated)
                     }, token).catch(e => console.error('Failed to save conversation with error:', e))
 
@@ -475,7 +530,7 @@ export default function AgentPlayground({ user }) {
           agent_name: selected,
           messages: updated,
           uploaded_files: uploadedFiles,
-          session_collection: sessionCollection,
+          session_collection: convId,
           title: generateTitle(updated)
         }, token).catch(e => console.error('Failed to save conversation with error:', e))
 

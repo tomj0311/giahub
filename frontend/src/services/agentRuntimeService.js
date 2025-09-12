@@ -80,6 +80,19 @@ export const agentRuntimeService = {
     if (!res.ok) throw new Error(j.detail || `HTTP ${res.status}`)
     return j
   },
+  async saveKnowledgeCollection(body, token) {
+    const res = await apiCall('/api/knowledge/collection/save', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify(body)
+    })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(j.detail || `HTTP ${res.status}`)
+    return j
+  },
   async saveConversation(body, token) {
     const res = await apiCall(`/api/agent-runtime/conversations`, {
       method: 'POST',
