@@ -138,6 +138,11 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   const [selectionMode, setSelectionMode] = useState(false);
   const { project, fitView } = useReactFlow();
 
+  // Lasso selection functionality
+  const onToggleSelectionMode = useCallback(() => {
+    setSelectionMode(prev => !prev);
+  }, []);
+
   // Function to update all edges with arrows
   const updateEdgesWithArrows = useCallback((edgesToUpdate) => {
     return edgesToUpdate.map(edge => {
@@ -921,11 +926,13 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
           onToggleTheme={onToggleTheme}
           isPropertyPanelOpen={isPropertyPanelOpen}
           onTogglePropertyPanel={handlePropertyPanelToggle}
+          selectionMode={selectionMode}
+          onToggleSelectionMode={onToggleSelectionMode}
           readOnly={readOnly}
         />
       )}
       <div className="editor-content">
-        <div className="reactflow-wrapper" ref={reactFlowWrapper} tabIndex={0}>
+        <div className={`reactflow-wrapper ${selectionMode ? 'selection-mode' : ''}`} ref={reactFlowWrapper} tabIndex={0}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -944,6 +951,9 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
             nodesDraggable={!readOnly}
             nodesConnectable={!readOnly}
             elementsSelectable={true}
+            selectionOnDrag={selectionMode}
+            panOnDrag={!selectionMode}
+            selectionMode={selectionMode ? 'partial' : null}
             elevateNodesOnSelect={false}
             nodeOrigin={[0, 0]}
             deleteKeyCode={null}
