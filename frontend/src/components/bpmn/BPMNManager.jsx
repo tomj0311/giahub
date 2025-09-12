@@ -301,6 +301,10 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
     if (node.data?.documentation) nodeDocs.push(node.data.documentation);
     if (Array.isArray(node.data?.originalDocumentation)) node.data.originalDocumentation.forEach(d => { if (d) nodeDocs.push(d); });
 
+    // Use the original element type if available, otherwise use current node type
+    const nodeType = node.data?.originalElementType ? 
+      node.data.originalElementType.toLowerCase() : node.type;
+
     // Find incoming and outgoing edges for this node
     const incomingEdges = allFlows.filter(edge => edge.target === nodeId);
     const outgoingEdges = allFlows.filter(edge => edge.source === nodeId);
@@ -349,7 +353,9 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
       case 'receiveTask':
       case 'manualTask':
         {
-          const taskType = node.type === 'task' ? 'task' : node.type;
+          // Use taskType from import or fallback to original element type or node type
+          const taskType = node.data?.taskType || node.data?.originalElementType || (node.type === 'task' ? 'task' : node.type);
+          console.log(`🔥 TASK EXPORT DEBUG: nodeId=${nodeId}, node.type=${node.type}, taskType=${node.data?.taskType}, originalElementType=${node.data?.originalElementType}, final taskType=${taskType}`);
           const attrStr = buildAttributesString(originalAttrs, { exclude: ['id', 'name'] });
           xml += `<bpmn:${taskType} id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr}>`;
           nodeDocs.forEach(text => { xml += `<bpmn:documentation>${escapeXML(text)}</bpmn:documentation>`; });
@@ -364,14 +370,16 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
         break;
 
       case 'gateway':
-        // Determine gateway type based on node data or use exclusiveGateway as default
-        let gatewayType = 'exclusiveGateway';
-        if (node.data?.gatewayType) {
-          gatewayType = node.data.gatewayType;
-        } else if (nodeName.toLowerCase().includes('parallel')) {
-          gatewayType = 'parallelGateway';
-        } else if (nodeName.toLowerCase().includes('event')) {
-          gatewayType = 'eventBasedGateway';
+        // Use original element type if available, otherwise determine gateway type
+        let gatewayType = node.data?.originalElementType || 'exclusiveGateway';
+        if (!node.data?.originalElementType) {
+          if (node.data?.gatewayType) {
+            gatewayType = node.data.gatewayType;
+          } else if (nodeName.toLowerCase().includes('parallel')) {
+            gatewayType = 'parallelGateway';
+          } else if (nodeName.toLowerCase().includes('event')) {
+            gatewayType = 'eventBasedGateway';
+          }
         }
         {
           const attrStr = buildAttributesString(originalAttrs, { exclude: ['id', 'name'] });
@@ -393,8 +401,10 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
       case 'eventBasedGateway':
       case 'complexGateway':
         {
+          // Use original element type if available, otherwise use current node type
+          const gatewayType = node.data?.originalElementType || node.type;
           const attrStr = buildAttributesString(originalAttrs, { exclude: ['id', 'name'] });
-          xml += `<bpmn:${node.type} id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr}>`;
+          xml += `<bpmn:${gatewayType} id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr}>`;
           nodeDocs.forEach(text => { xml += `<bpmn:documentation>${escapeXML(text)}</bpmn:documentation>`; });
           incomingEdges.forEach(edge => {
             xml += `<bpmn:incoming>${edge.id}</bpmn:incoming>`;
@@ -402,7 +412,7 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
           outgoingEdges.forEach(edge => {
             xml += `<bpmn:outgoing>${edge.id}</bpmn:outgoing>`;
           });
-          xml += `</bpmn:${node.type}>`;
+          xml += `</bpmn:${gatewayType}>`;
         }
         break;
 
@@ -411,7 +421,9 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
       case 'intermediateThrowEvent':
       case 'boundaryEvent':
         {
-          const eventType = node.type === 'intermediateEvent' ? 'intermediateCatchEvent' : node.type;
+          // Use original element type if available, otherwise use current logic
+          const eventType = node.data?.originalElementType || 
+            (node.type === 'intermediateEvent' ? 'intermediateCatchEvent' : node.type);
           const attrStr = buildAttributesString(originalAttrs, { exclude: ['id', 'name'] });
           xml += `<bpmn:${eventType} id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr}>`;
           nodeDocs.forEach(text => { xml += `<bpmn:documentation>${escapeXML(text)}</bpmn:documentation>`; });

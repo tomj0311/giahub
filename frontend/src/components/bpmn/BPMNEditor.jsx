@@ -251,7 +251,8 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
         // Only select visual elements, exclude sequenceFlow and other non-visual elements
         const visualElements = [];
         visualElementSelectors.forEach(selector => {
-          const elements = process.querySelectorAll(selector);
+          // Query both with and without namespace prefix to handle all cases
+          const elements = process.querySelectorAll(`${selector}, bpmn\\:${selector}`);
           elements.forEach(el => visualElements.push(el));
         });
 
@@ -260,7 +261,10 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
         visualElements.forEach(element => {
           const id = element.getAttribute('id');
           const name = element.getAttribute('name') || '';
-          const tagName = element.tagName.toLowerCase();
+          // Get the ORIGINAL BPMN element type from XML (remove namespace if present)
+          const originalBpmnType = element.tagName.includes(':') ? 
+            element.tagName.split(':')[1] : element.tagName;
+          const tagName = originalBpmnType.toLowerCase();
 
           // Skip if no ID
           if (!id) return;
@@ -302,6 +306,9 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
 
           // Add taskType to node data for proper icon rendering
           nodeData.taskType = nodeType;
+          
+          // ALWAYS store the ORIGINAL BPMN element type from XML - NEVER the React Flow type
+          nodeData.originalElementType = originalBpmnType;
 
           const node = {
             id: id,
