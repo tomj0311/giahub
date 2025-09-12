@@ -24,7 +24,7 @@ class MongoStorageService:
         """Ensure tenant isolation for multi-tenant collections"""
         # Collections that are tenant-isolated
         tenant_collections = {
-            'roles', 'userRoles', 'modelConfig', 'toolConfig', 
+            'roles', 'userRoles', 'modelConfig', 'toolConfig', 'embedderConfig',
             'knowledgeConfig', 'agents', 'conversations', 'agent_runs',
             'workflowConfig'
         }
@@ -47,7 +47,7 @@ class MongoStorageService:
         """Ensure tenant isolation for insert/update operations"""
         # Collections that are tenant-isolated
         tenant_collections = {
-            'roles', 'userRoles', 'modelConfig', 'toolConfig', 
+            'roles', 'userRoles', 'modelConfig', 'toolConfig', 'embedderConfig',
             'knowledgeConfig', 'agents', 'conversations', 'agent_runs',
             'workflowConfig'
         }

@@ -316,7 +316,7 @@ export default function AgentPlayground({ user }) {
       const payload = {
         collection: collectionName,
         tenantId: user?.tenant_id || user?.tenantId || 'default-tenant', // Use user's tenant ID
-        category: 'conversation',
+        category: 'Runtime',
         created_at: currentTime,
         overwrite: false,
         ownerId: ownerId,
@@ -346,7 +346,20 @@ export default function AgentPlayground({ user }) {
       
       // Then upload files if any
       if (files && files.length > 0) {
-        await agentRuntimeService.uploadKnowledge(collectionName, files, token)
+        // Create upload payload matching the existing structure
+        const uploadPayload = {
+          collection: collectionName,
+          category: "Runtime",
+          tenantId: payload.tenantId,
+          ownerId: payload.ownerId,
+          embedder: payload.embedder,
+          overwrite: payload.overwrite || false,
+          created_at: payload.created_at,
+          updated_at: payload.updated_at,
+          vector_collection: payload.vector_collection
+        }
+        
+        await agentRuntimeService.uploadKnowledge(collectionName, files, token, uploadPayload)
       }
       
       return res
@@ -422,7 +435,7 @@ export default function AgentPlayground({ user }) {
         setUploading(true)
         const files = stagedFiles.map(sf => sf.file)
         
-        // Save knowledge collection with files
+        // Save knowledge collection with files using the proper payload structure
         await saveKnowledgeCollection(collectionName, files)
         
         const names = files.map(f => f.name)

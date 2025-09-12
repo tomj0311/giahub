@@ -67,10 +67,24 @@ export const agentRuntimeService = {
     if (!res.ok) throw new Error(j.detail || `HTTP ${res.status}`)
     return j
   },
-  async uploadKnowledge(collection, files, token) {
+  async uploadKnowledge(collection, files, token, payload = null) {
     const fd = new FormData()
+    
+    // If payload is provided, use it; otherwise create basic payload structure
+    const uploadPayload = payload || {
+      collection: collection,
+      category: "Runtime"
+    }
+    
+    // Append the payload as a JSON string
+    fd.append('payload', JSON.stringify(uploadPayload))
+    
+    // Append collection name for backward compatibility
     fd.append('collection', collection)
+    
+    // Append files
     for (const f of files) fd.append('files', f)
+    
     const res = await apiCall(`/api/knowledge/upload?collection=${encodeURIComponent(collection)}`, {
       method: 'POST',
       headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },

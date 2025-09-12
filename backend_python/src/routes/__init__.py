@@ -9,6 +9,7 @@ from .role_management import router as role_management_router
 from .menu import router as menu_router
 from .model_config import router as model_config_router
 from .tool_config import router as tool_config_router
+from .embedder_config import router as embedder_config_router
 from .knowledge import router as knowledge_router
 from .agents import router as agents_router
 from .agent_runtime import router as agent_runtime_router
@@ -26,6 +27,7 @@ __all__ = [
     "menu_router", 
     "model_config_router",
     "tool_config_router",
+    "embedder_config_router",
     "knowledge_router",
     "agents_router",
     "agent_runtime_router",

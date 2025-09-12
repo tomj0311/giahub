@@ -52,6 +52,7 @@ def get_collections():
         "menuItems": database["menuItems"],
         "modelConfig": database["modelConfig"],
         "toolConfig": database["toolConfig"],
+        "embedderConfig": database["embedderConfig"],
         "tenants": database["tenants"],
         "knowledgeConfig": database["knowledgeConfig"],
         "agents": database["agents"],
