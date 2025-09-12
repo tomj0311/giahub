@@ -135,6 +135,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   const [selectedEdge, setSelectedEdge] = useState(null);
   const [isPropertyPanelOpen, setIsPropertyPanelOpen] = useState(false);
   const [userManuallyClosed, setUserManuallyClosed] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
   const { project, fitView } = useReactFlow();
 
   // Function to update all edges with arrows

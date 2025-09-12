@@ -582,3 +582,44 @@
   width: 100%;
   height: 100%;
 }
+
+/* Lasso Tool Styles */
+.toolbar-tool {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  transition: all 0.3s ease;
+  color: var(--text-primary);
+}
+
+.toolbar-tool:hover {
+  background: var(--hover-bg);
+  border-color: var(--accent-color);
+  transform: scale(1.05);
+}
+
+.toolbar-tool.active {
+  background: var(--accent-color);
+  color: var(--text-on-accent, white);
+  border-color: var(--accent-hover);
+}
+
+.lasso-icon {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lasso-icon svg {
+  width: 100%;
+  height: 100%;
+}

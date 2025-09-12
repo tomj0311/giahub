@@ -43,6 +43,26 @@
   height: 100%;
   outline: none; /* Remove focus outline */
   background-color: var(--bg-primary);
+  position: relative; /* For absolute positioning of selection box */
+}
+
+/* Lasso Selection Box */
+.lasso-selection-box {
+  border: 2px dashed #6366f1;
+  background: rgba(99, 102, 241, 0.1);
+  pointer-events: none;
+  z-index: 1000;
+  border-radius: 4px;
+  transition: none;
+}
+
+/* Selection mode cursor */
+.reactflow-wrapper.selection-mode {
+  cursor: crosshair !important;
+}
+
+.reactflow-wrapper.selection-mode .react-flow__pane {
+  cursor: crosshair !important;
 }
 
 /* React Flow Dark Theme Overrides */

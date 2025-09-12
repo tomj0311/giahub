@@ -1,7 +1,7 @@
 import React from 'react';
 import './Toolbar.css';
 
-const Toolbar = ({ isDarkMode, onToggleTheme, isPropertyPanelOpen, onTogglePropertyPanel }) => {
+const Toolbar = ({ isDarkMode, onToggleTheme, isPropertyPanelOpen, onTogglePropertyPanel, selectionMode, onToggleSelectionMode, readOnly }) => {
   const onDragStart = (event, nodeType) => {
     event.dataTransfer.setData('application/reactflow', nodeType);
     event.dataTransfer.effectAllowed = 'move';
@@ -28,6 +28,25 @@ const Toolbar = ({ isDarkMode, onToggleTheme, isPropertyPanelOpen, onTogglePrope
                   <path d="M12 2.25a.75.75 0 0 1 .75.75v2.25a.75.75 0 0 1-1.5 0V3a.75.75 0 0 1 .75-.75zM7.5 12a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0zM18.894 6.166a.75.75 0 0 0-1.06-1.06l-1.591 1.59a.75.75 0 1 0 1.06 1.061l1.591-1.59zM21.75 12a.75.75 0 0 1-.75.75h-2.25a.75.75 0 0 1 0-1.5H21a.75.75 0 0 1 .75.75zM17.834 18.894a.75.75 0 0 0 1.06-1.06l-1.59-1.591a.75.75 0 1 0-1.061 1.06l1.59 1.591zM12 18a.75.75 0 0 1 .75.75V21a.75.75 0 0 1-1.5 0v-2.25A.75.75 0 0 1 12 18zM7.758 17.303a.75.75 0 0 0-1.061-1.06l-1.591 1.59a.75.75 0 0 0 1.06 1.061l1.591-1.59zM6 12a.75.75 0 0 1-.75.75H3a.75.75 0 0 1 0-1.5h2.25A.75.75 0 0 1 6 12zM6.697 7.757a.75.75 0 0 0 1.06-1.06l-1.59-1.591a.75.75 0 0 0-1.061 1.06l1.59 1.591z"/>
                 </svg>
               )}
+            </div>
+          </button>
+        </div>
+      </div>
+      
+      {/* Selection Tools */}
+      <div className="toolbar-section">
+        <div className="toolbar-items">
+          <button
+            className={`toolbar-tool lasso-tool ${selectionMode ? 'active' : ''}`}
+            onClick={onToggleSelectionMode}
+            title={selectionMode ? "Exit Selection Mode" : "Lasso Selection Mode"}
+            aria-label="Toggle lasso selection mode"
+          >
+            <div className="lasso-icon">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M7 17l5-5 5 5M7 7l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                <rect x="4" y="4" width="16" height="16" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3,3" fill="none" opacity="0.6"/>
+              </svg>
             </div>
           </button>
         </div>
