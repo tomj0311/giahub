@@ -278,32 +278,18 @@ export default function AgentPlayground({ user }) {
         throw new Error('No agent selected for knowledge collection')
       }
 
-      // Get agent configuration to extract API key and embedder details
+      // Get agent configuration to extract model_id
       const agentConfig = await agentService.getAgent(selected, token)
       console.log('Retrieved agent config for knowledge collection:', {
         name: agentConfig?.name,
         hasModel: !!agentConfig?.model,
-        hasTools: !!(agentConfig?.tools && agentConfig.tools.length > 0)
+        modelId: agentConfig?.model?.id
       })
       
-      // Extract API key from agent's model configuration
-      let apiKey = null
-      if (agentConfig?.model?.api_key) {
-        apiKey = agentConfig.model.api_key
-      } else if (agentConfig?.model?.openai_api_key) {
-        apiKey = agentConfig.model.openai_api_key
-      } else if (agentConfig?.tools && agentConfig.tools.length > 0) {
-        // Try to find API key in tools configuration
-        for (const tool of agentConfig.tools) {
-          if (tool.api_key || tool.openai_api_key) {
-            apiKey = tool.api_key || tool.openai_api_key
-            break
-          }
-        }
-      }
-      
-      if (!apiKey) {
-        console.warn('No API key found in agent configuration, proceeding without API key in embedder params')
+      // Extract model_id from agent's model configuration
+      const modelId = agentConfig?.model?.id
+      if (!modelId) {
+        throw new Error('No model_id found in agent configuration')
       }
 
       // Generate a UUID-like identifier for ownerId (simplified version)
@@ -312,7 +298,7 @@ export default function AgentPlayground({ user }) {
       // Get current timestamp
       const currentTime = Date.now()
       
-      // Create collection payload similar to the sample structure
+      // Create collection payload with model_id from agent
       const payload = {
         collection: collectionName,
         tenantId: user?.tenant_id || user?.tenantId || 'default-tenant', // Use user's tenant ID
@@ -321,24 +307,14 @@ export default function AgentPlayground({ user }) {
         overwrite: false,
         ownerId: ownerId,
         updated_at: new Date().toISOString(),
-        embedder: {
-          strategy: 'ai.embeddings.openai',
-          params: apiKey ? { api_key: apiKey } : {}, // Only include API key if available
-          chunk: {
-            strategy: '',
-            params: {}
-          }
-        },
+        model_id: modelId, // Use model_id from agent instead of hardcoded embedder
         files: files ? files.map(f => f.name) : [],
         vector_collection: `${collectionName}_${ownerId}` // Generate vector collection name
       }
       
       console.log('Saving knowledge collection with payload structure:', {
         ...payload,
-        embedder: {
-          ...payload.embedder,
-          params: payload.embedder.params.api_key ? { api_key: '[REDACTED]' } : payload.embedder.params
-        }
+        model_id: payload.model_id
       })
       
       // First save the collection configuration
@@ -352,7 +328,7 @@ export default function AgentPlayground({ user }) {
           category: "Runtime",
           tenantId: payload.tenantId,
           ownerId: payload.ownerId,
-          embedder: payload.embedder,
+          model_id: payload.model_id, // Use model_id instead of embedder
           overwrite: payload.overwrite || false,
           created_at: payload.created_at,
           updated_at: payload.updated_at,
