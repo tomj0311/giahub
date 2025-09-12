@@ -1014,9 +1014,8 @@ export default function AgentPlayground({ user }) {
       >
         <DialogTitle>Select an Agent</DialogTitle>
         <DialogContent dividers>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+          <Box sx={{ mb: 1 }}>
             <Typography variant="body2" sx={{ opacity: 0.8 }}>Choose from available agents</Typography>
-            <Button size="small" onClick={() => window.location.reload()}>Refresh</Button>
           </Box>
           <Autocomplete
             size="small"
