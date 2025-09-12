@@ -585,12 +585,12 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
       }
 
       // Calculate absolute position for diagram
-      // If original bounds exist, they already contain absolute x/y from the diagram
-      let absoluteX = node.data?.originalBounds?.x ?? node.position.x;
-      let absoluteY = node.data?.originalBounds?.y ?? node.position.y;
+      // Always use current position, not original bounds for position
+      let absoluteX = node.position.x;
+      let absoluteY = node.position.y;
 
-      // For child nodes inside participants, keep relative positioning unless original bounds exist
-      if (!node.data?.originalBounds && node.parentNode && node.type !== 'participant' && node.type !== 'lane') {
+      // For child nodes inside participants, keep relative positioning 
+      if (node.parentNode && node.type !== 'participant' && node.type !== 'lane') {
         const parentNode = nodes.find(n => n.id === node.parentNode);
         if (parentNode && parentNode.type === 'participant') {
           // For elements inside participants, add parent position to get absolute coordinates
