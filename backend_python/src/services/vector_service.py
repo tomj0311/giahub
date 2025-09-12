@@ -49,21 +49,39 @@ class VectorService:
         return f"{payload['collection']}_{user_id}"
     
     @staticmethod
-    async def _get_qdrant_client(user_id: str, collection: str):
-        # Load embedder exactly like agent_util.py
+    async def _get_qdrant_client(user: dict, payload: dict):
+        # Load embedder from model config by model_id
         embedder_instance = None
-        # Check if collection is a dictionary or object with embedder attribute
-        if collection and isinstance(collection, dict) and 'embedder' in collection:
-            config = collection['embedder']
-            module_path = config.get("strategy")
-            params = config.get("params", {})
-            
-            embedder_class = module_loader(module_path)
-            if embedder_class:
-                try:
-                    embedder_instance = embedder_class(**params)
-                except Exception as e:
-                    embedder_instance = None
+        
+        # Check if payload has model_id
+        if payload and isinstance(payload, dict) and 'model_id' in payload:
+            model_id = payload['model_id']
+            try:
+                from ..services.model_config_service import ModelConfigService
+                
+                # Get model config using the service with proper user context
+                doc = await ModelConfigService.get_model_config_by_id(model_id, user)
+                
+                if doc and "embedding" in doc:
+                    embedding_config = doc["embedding"]
+                    module_path = embedding_config.get("strategy")
+                    params = embedding_config.get("params", {})
+                    
+                    embedder_class = module_loader(module_path)
+                    if embedder_class:
+                        try:
+                            embedder_instance = embedder_class(**params)
+                            logger.info(f"[VECTOR] Successfully loaded embedder from model config {model_id}")
+                        except Exception as e:
+                            logger.error(f"[VECTOR] Failed to create embedder instance: {e}")
+                            embedder_instance = None
+                    else:
+                        logger.error(f"[VECTOR] Failed to load embedder class from {module_path}")
+                else:
+                    logger.error(f"[VECTOR] No embedding config found in model {model_id}")
+                    
+            except Exception as e:
+                logger.error(f"[VECTOR] Failed to get model config {model_id}: {e}")
         
         if embedder_instance is None:
             logger.error("[VECTOR] No valid embedder configuration found")
@@ -78,12 +96,13 @@ class VectorService:
         }
     
     @classmethod
-    async def get_vector_db_client(cls, user_id: str, payload: dict):
+    async def get_vector_db_client(cls, user: dict, payload: dict):
         """Get a vector database client for the specified user and collection"""
         from ai.vectordb.qdrant import Qdrant
         
+        user_id = user.get("id") or user.get("userId")
         vector_collection_name = cls._get_vector_collection_name(user_id, payload)
-        qdrant_config = await cls._get_qdrant_client(user_id, payload)
+        qdrant_config = await cls._get_qdrant_client(user, payload)
         
         return Qdrant(
             collection=vector_collection_name,
@@ -109,13 +128,14 @@ class VectorService:
         )
     
     @classmethod
-    async def delete_collection(cls, user_id: str, collection: str) -> bool:
+    async def delete_collection(cls, user: dict, collection: str) -> bool:
         """Delete a vector database collection"""
         try:
+            user_id = user.get("id") or user.get("userId")
             # Create payload dictionary for _get_vector_collection_name
             payload = {"collection": collection}
             vector_collection_name = cls._get_vector_collection_name(user_id, payload)
-            vector_db = await cls.get_vector_db_client(user_id, payload)
+            vector_db = await cls.get_vector_db_client(user, payload)
             
             # Delete the collection
             vector_db.delete()
@@ -123,31 +143,33 @@ class VectorService:
             return True
             
         except Exception as e:
+            user_id = user.get("id") or user.get("userId")
             logger.error(f"[VECTOR] Failed to delete collection {collection} for user {user_id}: {e}")
             # Don't raise exception for cleanup operations
             return False
     
     @classmethod
-    async def collection_exists(cls, user_id: str, collection: str) -> bool:
+    async def collection_exists(cls, user: dict, collection: str) -> bool:
         """Check if a vector collection exists"""
         try:
             # Create payload dictionary for get_vector_db_client
             payload = {"collection": collection}
-            vector_db = await cls.get_vector_db_client(user_id, payload)
+            vector_db = await cls.get_vector_db_client(user, payload)
             return vector_db.exists()
         except Exception as e:
             logger.error(f"[VECTOR] Failed to check collection existence for {collection}: {e}")
             return False
 
     @classmethod
-    async def index_knowledge_files(cls, user_id: str, collection: str, payload: dict) -> bool:
+    async def index_knowledge_files(cls, user: dict, collection: str, payload: dict) -> bool:
         """Index files from MinIO bucket to the vector database"""
         try:
             import tempfile
             from pathlib import Path
             from ..services.file_service import FileService
             
-            vector_db = await cls.get_vector_db_client(user_id, payload)
+            user_id = user.get("id") or user.get("userId")
+            vector_db = await cls.get_vector_db_client(user, payload)
             vector_collection_name = cls._get_vector_collection_name(user_id, payload)
             
             logger.info(f"[VECTOR] Indexing files from MinIO to collection {vector_collection_name}")
@@ -236,12 +258,13 @@ class VectorService:
             return False
 
     @classmethod
-    async def search(cls, user_id: str, collection: str, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    async def search(cls, user: dict, collection: str, query: str, limit: int = 5) -> List[Dict[str, Any]]:
         """Search for documents in the vector database"""
         try:
+            user_id = user.get("id") or user.get("userId")
             # Create payload dictionary for get_vector_db_client
             payload = {"collection": collection}
-            vector_db = await cls.get_vector_db_client(user_id, payload)
+            vector_db = await cls.get_vector_db_client(user, payload)
             
             # Perform search
             results = vector_db.search(query, limit=limit)
@@ -269,12 +292,13 @@ class VectorService:
             )
     
     @classmethod
-    async def delete_document(cls, user_id: str, collection: str, file_path: str) -> bool:
+    async def delete_document(cls, user: dict, collection: str, file_path: str) -> bool:
         """Delete a specific document from the vector database"""
         try:
+            user_id = user.get("id") or user.get("userId")
             # Create payload dictionary for get_vector_db_client
             payload = {"collection": collection}
-            vector_db = await cls.get_vector_db_client(user_id, payload)
+            vector_db = await cls.get_vector_db_client(user, payload)
             
             # Delete document by file_path (used as document ID)
             # Note: This depends on the vector DB implementation supporting document deletion
@@ -291,19 +315,20 @@ class VectorService:
             return False
     
     @classmethod
-    async def get_collection_stats(cls, user_id: str, collection: str) -> Dict[str, Any]:
+    async def get_collection_stats(cls, user: dict, collection: str) -> Dict[str, Any]:
         """Get statistics about a vector collection"""
         try:
-            # Create payload dictionary for consistency
+            user_id = user.get("id") or user.get("userId")
+            # Create payload dictionary for get_vector_db_client
             payload = {"collection": collection}
-            vector_db = await cls.get_vector_db_client(user_id, payload)
+            vector_db = await cls.get_vector_db_client(user, payload)
             vector_collection_name = cls._get_vector_collection_name(user_id, payload)
             
             # Get collection info
             # Note: This depends on the vector DB implementation
             stats = {
                 "collection_name": vector_collection_name,
-                "exists": await cls.collection_exists(user_id, collection),
+                "exists": await cls.collection_exists(user, collection),
                 # TODO: Add more stats like document count, size, etc.
             }
             
@@ -314,14 +339,16 @@ class VectorService:
             return {"error": str(e)}
 
     @classmethod
-    async def list_collections(cls, user_id: str) -> List[str]:
+    async def list_collections(cls, user: dict) -> List[str]:
         """List all vector collections for a user"""
         try:
+            user_id = user.get("id") or user.get("userId")
             # This would require accessing the Qdrant client directly to list collections
             # For now, return empty list - this can be implemented based on needs
             logger.info(f"[VECTOR] Listing collections for user {user_id}")
             return []
             
         except Exception as e:
+            user_id = user.get("id") or user.get("userId")
             logger.error(f"[VECTOR] Failed to list collections for user {user_id}: {e}")
             return []

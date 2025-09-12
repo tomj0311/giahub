@@ -291,7 +291,9 @@ class KnowledgeService:
     async def _delete_vector_collection(cls, tenant_id: str, user_id: str, collection: str):
         """Delete a vector database collection"""
         try:
-            await VectorService.delete_collection(user_id, collection)
+            # Construct user dict from available info
+            user = {"id": user_id, "tenantId": tenant_id}
+            await VectorService.delete_collection(user, collection)
             logger.info(f"[KNOWLEDGE] Deleted vector collection for: {collection}")
             
         except Exception as e:
@@ -310,7 +312,7 @@ class KnowledgeService:
                 )
             
             # Use VectorService for search
-            results = await VectorService.search(user_id, collection, query, limit)
+            results = await VectorService.search(user, collection, query, limit)
             logger.info(f"[KNOWLEDGE] Found {len(results)} results for query in collection {collection}")
             return results
             
@@ -891,7 +893,7 @@ class KnowledgeService:
             # Update the MongoDB collection with file information first (before indexing)
             vector_collection_name = f"{collection_name}_{user_id}"
             try:
-                await VectorService.index_knowledge_files(user_id, collection_name, payload)
+                await VectorService.index_knowledge_files(user, collection_name, payload)
                 logger.info(f"[KNOWLEDGE] indexing done fo{vector_collection_name}")
             except Exception as ve:
                 logger.error(f"[KNOWLEDGE] Failed to index collection config: {ve}")
@@ -949,7 +951,7 @@ class KnowledgeService:
                 )
             
             # Get collection statistics from VectorService
-            stats = await VectorService.get_collection_stats(user_id, collection)
+            stats = await VectorService.get_collection_stats(user, collection)
             return stats
             
         except Exception as e:
