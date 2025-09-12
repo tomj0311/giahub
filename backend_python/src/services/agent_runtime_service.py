@@ -161,13 +161,14 @@ class AgentRuntimeService:
                             if knowledge_config:
                                 vector_collection_name = knowledge_config.get("vector_collection")
                                 collection_names.append(vector_collection_name)
-                                # Get embedder config from first collection
-                                if not embedder_config and model_config.get("embedding"):
-                                    embedder_config = model_config.get("embedding")
+                                
                     except Exception as e:
                         logger.warning(f"Failed to load knowledge collection {collection_id}: {e}")
             
             # Build embedder if config exists
+            if not embedder_config and model_config.get("embedding"):
+                embedder_config = model_config.get("embedding")
+
             embedder = None
             if embedder_config:
                 try:
