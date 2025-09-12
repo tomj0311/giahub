@@ -643,15 +643,25 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 				<Toolbar />
 				<Box sx={{
 					width: '100%',
-					maxWidth: '1200px', // Consistent max width for all components
-					mx: 'auto',         // Center the content
-					px: {
-						xs: 2,    // 16px on mobile
-						sm: 3,    // 24px on small tablets
-						md: 4,    // 32px on medium screens
-						lg: 6,    // 48px on large screens
-					},
-					py: 4
+					// Conditional styling for BPMN route
+					...(location.pathname === '/dashboard/bpmn' ? {
+						// Full width for BPMN with minimal padding
+						maxWidth: 'none',
+						mx: 0,
+						px: 2,
+						py: 2
+					} : {
+						// Standard layout for other routes
+						maxWidth: '1200px', // Consistent max width for all components
+						mx: 'auto',         // Center the content
+						px: {
+							xs: 2,    // 16px on mobile
+							sm: 3,    // 24px on small tablets
+							md: 4,    // 32px on medium screens
+							lg: 6,    // 48px on large screens
+						},
+						py: 4
+					})
 				}}>
 					<Suspense fallback={<RouteLoader />}>
 						<RouteTransition>
@@ -684,9 +694,6 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 			<Box>
 				<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
 					<Box>
-						<Typography variant="h4" gutterBottom>
-							BPMN Editor
-						</Typography>
 						<Typography variant="body1" color="text.secondary">
 							Design and visualize business processes with our BPMN 2.0 editor.
 						</Typography>
