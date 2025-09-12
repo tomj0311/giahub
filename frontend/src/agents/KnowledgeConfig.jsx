@@ -8,9 +8,6 @@ import {
   Autocomplete,
   LinearProgress,
   useTheme,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   Chip,
   FormControl,
   InputLabel,
@@ -34,7 +31,6 @@ import {
   Stack,
   TablePagination
 } from '@mui/material'
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react'
 import { apiCall } from '../config/api'
 import { useSnackbar } from '../contexts/SnackbarContext'
@@ -100,31 +96,11 @@ const api = {
     if (!r.ok) throw new Error('Failed to delete file')
     return r.json()
   },
-  async discoverChunking(token) {
-    const r = await apiCall('/api/knowledge/components?folder=ai.chunking', {
+  async getModels(token) {
+    const r = await apiCall('/api/models/configs', {
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     })
     return r.json()
-  },
-  async discoverEmbedders(token) {
-    const r = await apiCall('/api/knowledge/components?folder=ai.embeddings', {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    })
-    return r.json()
-  },
-  async introspect(module_path, token) {
-    console.log('[API] Introspecting module_path:', module_path)
-    const r = await apiCall('/api/knowledge/introspect', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify({ module_path, kind: 'chunk' })
-    })
-    const result = await r.json()
-    console.log('[API] Introspection response:', result)
-    return result
   }
 }
 
@@ -144,10 +120,9 @@ export default function KnowledgeConfig({ user }) {
     total: 0,
     totalPages: 0
   })
+  const [models, setModels] = useState([])
   const [categories, setCategories] = useState([])
   const [loadingCategories, setLoadingCategories] = useState(false)
-  const [components, setComponents] = useState({ chunking: [], embedders: [] })
-  const [introspection, setIntrospection] = useState({})
   const [defaults, setDefaults] = useState({ chunk_size: 5000, chunk_overlap: 0 })
   const [isEdit, setIsEdit] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
@@ -156,12 +131,7 @@ export default function KnowledgeConfig({ user }) {
     id: null,
     name: '',
     category: '',
-    chunk_strategy: '',
-    chunk_strategy_params: {},
-    chunk_size: null,
-    chunk_overlap: null,
-    embedder_strategy: '',
-    embedder_strategy_params: {}
+    model_id: ''
   })
 
   const [pendingFiles, setPendingFiles] = useState([])
@@ -170,6 +140,22 @@ export default function KnowledgeConfig({ user }) {
   const [saveBusy, setSaveBusy] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saveState, setSaveState] = useState({ loading: false })
+
+  const loadModels = async () => {
+    try {
+      console.log('[KnowledgeConfig] Loading models...')
+      const response = await api.getModels(token)
+      console.log('[KnowledgeConfig] Models API response:', response)
+      
+      // The response structure is { configurations: [...] } from ModelConfig
+      const modelsList = response.configurations || []
+      console.log('[KnowledgeConfig] Processed models list:', modelsList)
+      setModels(Array.isArray(modelsList) ? modelsList : [])
+    } catch (error) {
+      console.error('[KnowledgeConfig] Failed to load models:', error)
+      showError('Failed to load models')
+    }
+  }
 
   const loadCategories = async () => {
     try {
@@ -221,12 +207,7 @@ export default function KnowledgeConfig({ user }) {
               id: collection.id || collection.name,
               name: collection.name,
               category: collection.category || '',
-              chunk_strategy: collection.chunk_strategy || '',
-              chunk_strategy_params: collection.chunk_strategy_params || {},
-              chunk_size: collection.chunk_size || null,
-              chunk_overlap: collection.chunk_overlap || null,
-              embedder_strategy: collection.embedder_strategy || '',
-              embedder_strategy_params: collection.embedder_strategy_params || {},
+              model_id: collection.model_id || '',
               files_count: collection.files_count || 0,
               files: [] // Will be loaded when editing
             })
@@ -237,12 +218,7 @@ export default function KnowledgeConfig({ user }) {
               id: collection.name,
               name: collection.name,
               category: '',
-              chunk_strategy: '',
-              chunk_strategy_params: {},
-              chunk_size: null,
-              chunk_overlap: null,
-              embedder_strategy: '',
-              embedder_strategy_params: {},
+              model_id: '',
               files_count: 0,
               files: []
             })
@@ -277,30 +253,18 @@ export default function KnowledgeConfig({ user }) {
       try {
         setLoading(true)
         
-        // Load defaults and components first
-        const [d, comps, embedderComps] = await Promise.all([
-          api.getDefaults(token),
-          api.discoverChunking(token),
-          api.discoverEmbedders(token)
+        // Load defaults and models first
+        const [d] = await Promise.all([
+          api.getDefaults(token)
         ])
         
-        console.log('[KnowledgeConfig] API responses:', { d, comps, embedderComps })
+        console.log('[KnowledgeConfig] API responses:', { d })
         setDefaults(d.defaults || {})
         
-        // Process chunking components
-        const chunkingData = comps.components?.['ai.chunking'] || {}
-        const chunkingComponents = chunkingData['ai.chunking'] || chunkingData['chunking'] || []
+        // Load models separately to handle errors better
+        await loadModels()
         
-        // Process embedder components
-        const embedderData = embedderComps.components?.['ai.embeddings'] || {}
-        const embedderComponents = embedderData['ai.embeddings'] || embedderData['embeddings'] || []
-        
-        setComponents({ 
-          chunking: Array.isArray(chunkingComponents) ? chunkingComponents : [],
-          embedders: Array.isArray(embedderComponents) ? embedderComponents : []
-        })
-        
-        // Load configs and categories like ToolConfig
+        // Load configs and categories
         await Promise.all([
           loadExistingConfigs(),
           loadCategories()
@@ -316,30 +280,6 @@ export default function KnowledgeConfig({ user }) {
     loadData()
   }, [token])
 
-  useEffect(() => {
-    if (form.chunk_strategy && !introspection[form.chunk_strategy]) {
-      console.log('[KnowledgeConfig] Introspecting chunk strategy:', form.chunk_strategy)
-      api.introspect(form.chunk_strategy, token).then(info => {
-        console.log('[KnowledgeConfig] Introspection result:', info)
-        setIntrospection(prev => ({ ...prev, [form.chunk_strategy]: info }))
-      }).catch(err => {
-        console.error('[KnowledgeConfig] Introspection error:', err)
-      })
-    }
-  }, [form.chunk_strategy, token])
-
-  useEffect(() => {
-    if (form.embedder_strategy && !introspection[form.embedder_strategy]) {
-      console.log('[KnowledgeConfig] Introspecting embedder strategy:', form.embedder_strategy)
-      api.introspect(form.embedder_strategy, token).then(info => {
-        console.log('[KnowledgeConfig] Embedder introspection result:', info)
-        setIntrospection(prev => ({ ...prev, [form.embedder_strategy]: info }))
-      }).catch(err => {
-        console.error('[KnowledgeConfig] Embedder introspection error:', err)
-      })
-    }
-  }, [form.embedder_strategy, token])
-
   async function loadExistingConfig(configName) {
     const config = existingConfigs.find(c => c.name === configName)
     if (config) {
@@ -349,12 +289,7 @@ export default function KnowledgeConfig({ user }) {
         id: config.id,
         name: config.name,
         category: config.category || '',
-        chunk_strategy: config.chunk_strategy || '',
-        chunk_strategy_params: config.chunk_strategy_params || {},
-        chunk_size: config.chunk_size || null,
-        chunk_overlap: config.chunk_overlap || null,
-        embedder_strategy: config.embedder_strategy || '',
-        embedder_strategy_params: config.embedder_strategy_params || {}
+        model_id: config.model_id || ''
       })
       setIsEditMode(true)
       setIsEdit(true)
@@ -375,12 +310,7 @@ export default function KnowledgeConfig({ user }) {
         id: null, 
         name: configName, 
         category: '', 
-        chunk_strategy: '', 
-        chunk_strategy_params: {},
-        chunk_size: null,
-        chunk_overlap: null,
-        embedder_strategy: '',
-        embedder_strategy_params: {}
+        model_id: ''
       })
       setIsEditMode(false)
       setIsEdit(false)
@@ -392,12 +322,6 @@ export default function KnowledgeConfig({ user }) {
   const save = async () => {
     if (!form.name) {
       showError('Collection name is required')
-      return
-    }
-    
-    // Validate embedder strategy is required when files are present
-    if ((existingFiles.length > 0 || pendingFiles.length > 0) && !form.embedder_strategy) {
-      showError('Embedder strategy is required when files are present')
       return
     }
     
@@ -420,23 +344,8 @@ export default function KnowledgeConfig({ user }) {
       const payload = {
         collection: form.name,
         category: form.category || '',
-        overwrite: isEdit,
-        embedder: form.embedder_strategy ? {
-          strategy: form.embedder_strategy,
-          params: form.embedder_strategy_params || {},
-          chunk: {
-            strategy: form.chunk_strategy || '',
-            params: {
-              ...(form.chunk_strategy_params || {}),
-              ...(form.chunk_strategy && form.embedder_strategy_params?.api_key && {
-                api_key: form.embedder_strategy_params.api_key
-              }),
-              ...(form.chunk_strategy && form.embedder_strategy_params?.model && {
-                model: form.embedder_strategy_params.model
-              })
-            }
-          }
-        } : undefined
+        model_id: form.model_id || '',
+        overwrite: isEdit
       }
       
       const res = await api.saveCollection(payload, token)
@@ -465,12 +374,7 @@ export default function KnowledgeConfig({ user }) {
         id: null, 
         name: '', 
         category: '', 
-        chunk_strategy: '', 
-        chunk_strategy_params: {},
-        chunk_size: null,
-        chunk_overlap: null,
-        embedder_strategy: '',
-        embedder_strategy_params: {}
+        model_id: ''
       })
       setIsEdit(false)
       setIsEditMode(false)
@@ -513,12 +417,7 @@ export default function KnowledgeConfig({ user }) {
         id: null, 
         name: '', 
         category: '', 
-        chunk_strategy: '', 
-        chunk_strategy_params: {},
-        chunk_size: null,
-        chunk_overlap: null,
-        embedder_strategy: '',
-        embedder_strategy_params: {}
+        model_id: ''
       })
       setIsEdit(false)
       setIsEditMode(false)
@@ -536,10 +435,10 @@ export default function KnowledgeConfig({ user }) {
     }
   }
 
-  const chunkIntro = form.chunk_strategy ? introspection[form.chunk_strategy] : null
-  const embedderIntro = form.embedder_strategy ? introspection[form.embedder_strategy] : null
+  const chunkIntro = null
+  const embedderIntro = null
 
-  console.log('[KnowledgeConfig] Render - loading:', loading, 'existingConfigs:', existingConfigs.length, 'components:', components)
+  console.log('[KnowledgeConfig] Render - loading:', loading, 'existingConfigs:', existingConfigs.length, 'models:', models)
 
   if (loading || loadingConfigs) {
     console.log('[KnowledgeConfig] Showing loading spinner')
@@ -558,12 +457,7 @@ export default function KnowledgeConfig({ user }) {
       id: null, 
       name: '', 
       category: '', 
-      chunk_strategy: '', 
-      chunk_strategy_params: {},
-      chunk_size: null,
-      chunk_overlap: null,
-      embedder_strategy: '',
-      embedder_strategy_params: {}
+      model_id: ''
     })
     setIsEdit(false)
     setIsEditMode(false)
@@ -612,8 +506,7 @@ export default function KnowledgeConfig({ user }) {
                 <TableRow>
                   <TableCell>Name</TableCell>
                   <TableCell>Category</TableCell>
-                  <TableCell>Embedder Strategy</TableCell>
-                  <TableCell>Chunk Strategy</TableCell>
+                  <TableCell>Model</TableCell>
                   <TableCell>Files</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
@@ -621,7 +514,7 @@ export default function KnowledgeConfig({ user }) {
               <TableBody>
                 {existingConfigs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
                       <Typography color="text.secondary">No collections found</Typography>
                     </TableCell>
                   </TableRow>
@@ -630,8 +523,7 @@ export default function KnowledgeConfig({ user }) {
                     <TableRow key={cfg.id || cfg.name} hover>
                       <TableCell>{cfg.name}</TableCell>
                       <TableCell>{cfg.category || '-'}</TableCell>
-                      <TableCell>{cfg.embedder_strategy || '-'}</TableCell>
-                      <TableCell>{cfg.chunk_strategy || '-'}</TableCell>
+                      <TableCell>{cfg.model_id || '-'}</TableCell>
                       <TableCell>{cfg.files_count || 0}</TableCell>
                       <TableCell align="right">
                         <IconButton size="small" color="primary" onClick={() => openEdit(cfg.name)}>
@@ -805,223 +697,36 @@ export default function KnowledgeConfig({ user }) {
               )}
             </Paper>
 
-            {/* Embedder Strategy - Required when files are present */}
-            {(existingFiles.length > 0 || pendingFiles.length > 0) && (
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="h6" gutterBottom>
-                  Embedder Strategy *
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Select an embedder strategy for vector indexing of your documents.
-                </Typography>
-                
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
-                  <FormControl size="small" sx={{ minWidth: 220 }}>
-                    <InputLabel id="embedder-strategy-label">Embedder Strategy</InputLabel>
-                    <Select 
-                      labelId="embedder-strategy-label" 
-                      label="Embedder Strategy" 
-                      value={form.embedder_strategy || ''}
-                      error={!form.embedder_strategy && (existingFiles.length > 0 || pendingFiles.length > 0)}
-                      onChange={(e) => setForm(f => ({ ...f, embedder_strategy: e.target.value, embedder_strategy_params: {} }))}
-                    >
-                      <MenuItem value="">
-                        <em>Select an embedder...</em>
-                      </MenuItem>
-                      {Array.isArray(components.embedders) ? components.embedders.map(c => (
-                        <MenuItem key={c} value={c}>{c}</MenuItem>
-                      )) : []}
-                    </Select>
-                  </FormControl>
-                  <Button variant="outlined" size="small" onClick={async () => {
-                    const comps = await api.discoverEmbedders(token)
-                    const embedderData = comps.components?.['ai.embeddings'] || {}
-                    const embedders = embedderData['ai.embeddings'] || embedderData['embeddings'] || []
-                    setComponents(prev => ({ ...prev, embedders: Array.isArray(embedders) ? embedders : [] }))
-                  }}>Refresh</Button>
-                </Box>
+            {/* Model Selection */}
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                Model Selection
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Select a model for processing your documents.
+              </Typography>
+              
+              <FormControl size="small" sx={{ minWidth: 300 }}>
+                <InputLabel id="model-select-label">Model</InputLabel>
+                <Select 
+                  labelId="model-select-label" 
+                  label="Model" 
+                  value={form.model_id || ''}
+                  onChange={(e) => setForm(f => ({ ...f, model_id: e.target.value }))}
+                >
+                  <MenuItem value="">
+                    <em>Select a model...</em>
+                  </MenuItem>
+                  {console.log('[KnowledgeConfig] Rendering models in dropdown:', models)}
+                  {models.map(model => (
+                    <MenuItem key={model.id || model.name} value={model.id || model.name}>
+                      {model.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
 
-                {!embedderIntro && form.embedder_strategy && (
-                  <Fade in>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                      <CircularProgress size={16} />
-                      <Typography variant="caption" sx={{ opacity: 0.7 }}>Fetching embedder parameters…</Typography>
-                    </Box>
-                  </Fade>
-                )}
-
-                {embedderIntro && (
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                      Embedder Parameters ({embedderIntro.class_name || form.embedder_strategy.split('.').pop()})
-                    </Typography>
-                    <Box sx={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                      gap: 2
-                    }}>
-                      {(embedderIntro.formatted_params || []).map((paramFormatted, idx) => {
-                        const paramName = paramFormatted.split(':')[0].trim();
-                        const typeMatch = paramFormatted.match(/:\s*([^=\s]+)/);
-                        const paramType = typeMatch ? typeMatch[1].toLowerCase() : 'str';
-                        let defaultRaw = '';
-                        const descSplitIdx = paramFormatted.indexOf(' - ');
-                        const mainPart = descSplitIdx !== -1 ? paramFormatted.slice(0, descSplitIdx) : paramFormatted;
-                        const eqIdx = mainPart.indexOf('=');
-                        if (eqIdx !== -1) {
-                          defaultRaw = mainPart.slice(eqIdx + 1).trim();
-                          if ((defaultRaw.startsWith("'") && defaultRaw.endsWith("'")) || (defaultRaw.startsWith('"') && defaultRaw.endsWith('"'))) {
-                            defaultRaw = defaultRaw.slice(1, -1);
-                          }
-                        }
-                        const hasDefault = defaultRaw !== '' && defaultRaw.toLowerCase() !== 'none';
-                        const placeholderText = hasDefault ? `Default: ${defaultRaw}` : `Enter ${paramName}`;
-                        let gridColumn = 'span 1';
-                        if (paramType.includes('int') || paramType.includes('float') || paramType.includes('bool')) {
-                          gridColumn = 'span 1';
-                        } else if (paramType.includes('str') && (paramName.includes('key') || paramName.includes('token') || paramName.includes('url'))) {
-                          gridColumn = 'span 2';
-                        }
-                        return (
-                          <TextField
-                            key={paramName}
-                            size="small"
-                            label={paramName}
-                            InputLabelProps={{ shrink: true }}
-                            value={form.embedder_strategy_params[paramName] || ''}
-                            onChange={(e) => setForm(f => ({
-                              ...f,
-                              embedder_strategy_params: { ...(f.embedder_strategy_params || {}), [paramName]: e.target.value }
-                            }))}
-                            placeholder={placeholderText}
-                            sx={{ gridColumn }}
-                            type={paramType.includes('int') || paramType.includes('float') ? 'number' : 'text'}
-                          />
-                        );
-                      })}
-                    </Box>
-                  </Box>
-                )}
-              </Box>
-            )}
-
-            <Accordion>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>Advanced Configuration</AccordionSummary>
-              <AccordionDetails>
-                {/* Chunking Configuration - only show when embedder is selected and files are present */}
-                {form.embedder_strategy && (existingFiles.length > 0 || pendingFiles.length > 0) ? (
-                  <>
-                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
-                      <FormControl size="small" sx={{ minWidth: 220 }}>
-                        <InputLabel id="chunk-strategy-label">
-                          Chunk Strategy (Optional)
-                        </InputLabel>
-                        <Select 
-                          labelId="chunk-strategy-label" 
-                          label="Chunk Strategy (Optional)"
-                          value={form.chunk_strategy || ''}
-                          onChange={(e) => setForm(f => ({ ...f, chunk_strategy: e.target.value, chunk_strategy_params: {} }))}>
-                          <MenuItem value="">
-                            <em>Select chunking strategy...</em>
-                          </MenuItem>
-                          {Array.isArray(components.chunking) ? components.chunking.map(c => (
-                            <MenuItem key={c} value={c}>{c}</MenuItem>
-                          )) : []}
-                        </Select>
-                      </FormControl>
-                      <Button variant="outlined" size="small" onClick={async () => {
-                        const comps = await api.discoverChunking(token)
-                        const chunkingData = comps.components?.['ai.chunking'] || {}
-                        const chunking = chunkingData['ai.chunking'] || chunkingData['chunking'] || []
-                        setComponents(prev => ({ ...prev, chunking: Array.isArray(chunking) ? chunking : [] }))
-                      }}>Refresh</Button>
-                    </Box>
-
-                    {!form.chunk_strategy && (
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontStyle: 'italic' }}>
-                        No chunking strategy selected. Default chunking will be applied by the backend.
-                      </Typography>
-                    )}
-
-                    {!chunkIntro && form.chunk_strategy && (
-                      <Fade in>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                          <CircularProgress size={16} />
-                          <Typography variant="caption" sx={{ opacity: 0.7 }}>Fetching chunking parameters…</Typography>
-                        </Box>
-                      </Fade>
-                    )}
-
-                    {chunkIntro && (
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                          Chunking Parameters ({chunkIntro.class_name || form.chunk_strategy.split('.').pop()})
-                        </Typography>
-                        {console.log('[KnowledgeConfig] chunkIntro:', chunkIntro)}
-                        {console.log('[KnowledgeConfig] formatted_params:', chunkIntro.formatted_params)}
-                        <Box sx={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                          gap: 2
-                        }}>
-                          {(chunkIntro.formatted_params || []).map((paramFormatted, idx) => {
-                            console.log('[KnowledgeConfig] Processing param:', paramFormatted)
-                            const paramName = paramFormatted.split(':')[0].trim();
-                            const typeMatch = paramFormatted.match(/:\s*([^=\s]+)/);
-                            const paramType = typeMatch ? typeMatch[1].toLowerCase() : 'str';
-                            let defaultRaw = '';
-                            const descSplitIdx = paramFormatted.indexOf(' - ');
-                            const mainPart = descSplitIdx !== -1 ? paramFormatted.slice(0, descSplitIdx) : paramFormatted;
-                            const eqIdx = mainPart.indexOf('=');
-                            if (eqIdx !== -1) {
-                              defaultRaw = mainPart.slice(eqIdx + 1).trim();
-                              if ((defaultRaw.startsWith("'") && defaultRaw.endsWith("'")) || (defaultRaw.startsWith('"') && defaultRaw.endsWith('"'))) {
-                                defaultRaw = defaultRaw.slice(1, -1);
-                              }
-                            }
-                            const hasDefault = defaultRaw !== '' && defaultRaw.toLowerCase() !== 'none';
-                            const placeholderText = hasDefault ? `Default: ${defaultRaw}` : `Enter ${paramName}`;
-                            let gridColumn = 'span 1';
-                            if (paramType.includes('int') || paramType.includes('float') || paramType.includes('bool')) {
-                              gridColumn = 'span 1';
-                            } else if (paramType.includes('str') && (paramName.includes('key') || paramName.includes('token') || paramName.includes('url'))) {
-                              gridColumn = 'span 2';
-                            }
-                            return (
-                              <TextField
-                                key={paramName}
-                                size="small"
-                                label={paramName}
-                                InputLabelProps={{ shrink: true }}
-                                value={form.chunk_strategy_params[paramName] || ''}
-                                onChange={(e) => setForm(f => ({
-                                  ...f,
-                                  chunk_strategy_params: { ...(f.chunk_strategy_params || {}), [paramName]: e.target.value }
-                                }))}
-                                placeholder={placeholderText}
-                                sx={{ gridColumn }}
-                                type={paramType.includes('int') || paramType.includes('float') ? 'number' : 'text'}
-                              />
-                            );
-                          })}
-                        </Box>
-                      </Box>
-                    )}
-
-
-                  </>
-                ) : (
-                  <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                    {!(existingFiles.length > 0 || pendingFiles.length > 0) 
-                      ? 'Upload files to configure chunking options.'
-                      : !form.embedder_strategy 
-                        ? 'Select an embedder strategy to configure chunking options.'
-                        : 'Configure chunking options for your documents.'
-                    }
-                  </Typography>
-                )}
-              </AccordionDetails>
-            </Accordion>
           </Stack>
         </DialogContent>
         <DialogActions>

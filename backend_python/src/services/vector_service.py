@@ -66,7 +66,7 @@ class VectorService:
                     embedder_instance = None
         
         if embedder_instance is None:
-            logger.error("[VECTOR] No valid embedder configuration found, defaulting to OpenAIEmbedder")
+            logger.error("[VECTOR] No valid embedder configuration found")
 
         
         return {
