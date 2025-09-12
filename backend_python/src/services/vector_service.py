@@ -7,7 +7,6 @@ document indexing, search, and vector database configurations.
 
 import os
 import ast
-import tempfile
 import importlib
 from pathlib import Path
 from typing import List, Optional, Dict, Any
