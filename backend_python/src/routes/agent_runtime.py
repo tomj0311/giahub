@@ -232,8 +232,6 @@ async def list_conversations(
         
         items: List[Dict[str, Any]] = []
         for d in docs:
-            logger.debug(f"[AGENT_RUNTIME] Processing conversation: {d.get('conversation_id', 'NO_ID')}")
-            
             # Generate title from first user message, truncated to ~25 words
             title = d.get("title")
             if not title:

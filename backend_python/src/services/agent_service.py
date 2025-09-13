@@ -80,8 +80,6 @@ class AgentService:
                 limit=page_size
             )
             
-            logger.debug(f"[AGENTS] Found {len(docs)} agents for tenant: {tenant_id}")
-            
             items: List[Dict[str, Any]] = []
             for d in docs:
                 # Get model config if model ID is present
@@ -199,7 +197,6 @@ class AgentService:
         
         try:
             docs = await MongoStorageService.find_many("agents", {}, tenant_id=tenant_id, sort_field="created_at", sort_order=-1)
-            logger.debug(f"[AGENTS] Found {len(docs)} agents for tenant: {tenant_id}")
             
             items: List[Dict[str, Any]] = []
             for d in docs:

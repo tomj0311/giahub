@@ -560,10 +560,8 @@ class KnowledgeService:
                 try:
                     # Support different token shapes
                     user_id = user.get("user_id") or user.get("id") or user.get("userId") or ""
-                    logger.debug(f"[KNOWLEDGE] Getting files for collection {doc.get('collection')} with user_id: {user_id}")
                     collection_files = await FileService.list_files_in_collection(tenant_id, user_id, doc.get("collection", ""))
                     files_count = len(collection_files)
-                    logger.debug(f"[KNOWLEDGE] Found {files_count} files in collection {doc.get('collection')}")
                 except Exception as e:
                     logger.warning(f"[KNOWLEDGE] Could not get files count for collection {doc.get('collection')}: {e}")
                     import traceback
@@ -574,12 +572,10 @@ class KnowledgeService:
                 model_name = model_id  # Default to model_id if lookup fails
                 if model_id:
                     try:
-                        logger.debug(f"[KNOWLEDGE] Looking up model name for model_id: {model_id}")
                         # model_id is an ObjectID, use get_model_config_by_id
                         model_config = await ModelConfigService.get_model_config_by_id(model_id, user)
                         if model_config and model_config.get("name"):
                             model_name = model_config.get("name", "")
-                            logger.debug(f"[KNOWLEDGE] Found model name: {model_name} for model_id: {model_id}")
                         else:
                             logger.warning(f"[KNOWLEDGE] Model config found but no name field for {model_id}")
                     except Exception as e:

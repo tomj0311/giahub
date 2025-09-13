@@ -35,7 +35,6 @@ class FileService:
     @staticmethod
     async def validate_tenant_access(user: dict) -> str:
         """Validate tenant access and return tenant_id"""
-        logger.debug(f"[FILE] Validating tenant access for user: {user.get('id')}")
         tenant_id = user.get("tenantId")
         if not tenant_id:
             logger.warning(
@@ -45,7 +44,6 @@ class FileService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User tenant information missing. Please re-login.",
             )
-        logger.debug(f"[FILE] Tenant access validated: {tenant_id}")
         return tenant_id
 
     @classmethod

@@ -53,7 +53,6 @@ async def list_knowledge_configs(user: dict = Depends(verify_token_middleware)):
     logger.info("[KNOWLEDGE] Listing knowledge configurations")
     try:
         result = await KnowledgeService.list_knowledge_configs(user)
-        logger.debug(f"[KNOWLEDGE] Retrieved {len(result)} configurations")
         return {"configurations": result}
     except Exception as e:
         import traceback

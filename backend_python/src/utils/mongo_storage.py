@@ -83,9 +83,6 @@ class MongoStorageService:
             filter_dict = cls._ensure_tenant_filter(filter_dict, tenant_id, collection_name)
             result = await collection.find_one(filter_dict, projection)
             
-            if result:
-                logger.debug(f"Found document in {collection_name} with filter: {filter_dict}")
-            
             return result
         except Exception as e:
             logger.error(f"Failed to find document in {collection_name}: {e}")
@@ -141,7 +138,6 @@ class MongoStorageService:
             filter_dict = cls._ensure_tenant_filter(filter_dict, tenant_id, collection_name)
             
             count = await collection.count_documents(filter_dict)
-            logger.debug(f"Counted {count} documents in {collection_name}")
             
             return count
         except Exception as e:

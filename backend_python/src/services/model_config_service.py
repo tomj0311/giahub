@@ -19,7 +19,6 @@ class ModelConfigService:
     @staticmethod
     async def validate_tenant_access(user: dict) -> str:
         """Validate tenant access and return tenant_id"""
-        logger.debug(f"[MODEL] Validating tenant access for user: {user.get('id')}")
         tenant_id = user.get("tenantId")
         if not tenant_id:
             logger.warning(f"[MODEL] Missing tenant information for user: {user.get('id')}")
@@ -27,7 +26,6 @@ class ModelConfigService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User tenant information missing. Please re-login."
             )
-        logger.debug(f"[MODEL] Tenant access validated: {tenant_id}")
         return tenant_id
     
     @classmethod
@@ -37,7 +35,6 @@ class ModelConfigService:
         logger.info(f"[MODEL] Listing model configs for tenant: {tenant_id}")
         
         try:
-            logger.debug(f"[MODEL] Querying database for model configs - tenant: {tenant_id}")
             docs = await MongoStorageService.find_many("modelConfig", {}, tenant_id=tenant_id, sort_field="name", sort_order=1)
             logger.debug(f"[MODEL] Found {len(docs)} model configs for tenant: {tenant_id}")
             
@@ -119,8 +116,6 @@ class ModelConfigService:
                 limit=page_size
             )
             
-            logger.debug(f"[MODEL] Found {len(docs)} model configs for tenant: {tenant_id}")
-            
             configs = []
             for doc in docs:
                 config = {
@@ -201,7 +196,6 @@ class ModelConfigService:
         # Return raw document (no flattening/normalization) per user request.
         from bson import ObjectId
         tenant_id = await cls.validate_tenant_access(user)
-        logger.debug(f"[MODEL] get_model_config_by_id (raw) - tenant_id: {tenant_id}, config_id: {config_id}")
         try:
             doc = await MongoStorageService.find_one(
                 "modelConfig",

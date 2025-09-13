@@ -26,7 +26,6 @@ class WorkflowConfigService:
     @staticmethod
     async def validate_tenant_access(user: dict) -> str:
         """Validate tenant access and return tenant_id"""
-        logger.debug(f"[WORKFLOW] Validating tenant access for user: {user.get('id')}")
         tenant_id = user.get("tenantId")
         if not tenant_id:
             logger.warning(f"[WORKFLOW] Missing tenant information for user: {user.get('id')}")
@@ -34,21 +33,17 @@ class WorkflowConfigService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User tenant information missing. Please re-login."
             )
-        logger.debug(f"[WORKFLOW] Tenant access validated: {tenant_id}")
         return tenant_id
     
     @staticmethod
     def validate_bpmn_file(file: UploadFile) -> None:
         """Validate uploaded BPMN file"""
-        logger.info(f"[WORKFLOW] Validating BPMN file: {file.filename}")
-
         if not file.filename:
             logger.warning("[WORKFLOW] Upload rejected - No filename provided")
             raise HTTPException(status_code=400, detail="No filename provided")
 
         # Check file extension
         file_extension = os.path.splitext(file.filename.lower())[1]
-        logger.debug(f"[WORKFLOW] File extension: {file_extension}")
 
         if file_extension not in WorkflowConfigService.ALLOWED_BPMN_EXTENSIONS:
             logger.warning(
@@ -79,7 +74,7 @@ class WorkflowConfigService:
     ) -> Dict[str, Any]:
         """List workflow configurations with pagination"""
         tenant_id = await cls.validate_tenant_access(user)
-        logger.info(f"[WORKFLOW] Listing paginated workflow configs for tenant: {tenant_id}")
+        logger.info(f"[WORKFLOW] Listing workflow configs - tenant: {tenant_id}, page: {page}, size: {page_size}")
         
         try:
             # Build query
@@ -96,11 +91,8 @@ class WorkflowConfigService:
             skip = (page - 1) * page_size
             sort_direction = 1 if sort_order == "asc" else -1
             
-            logger.debug(f"[WORKFLOW] Query: {query}, Skip: {skip}, Limit: {page_size}")
-            
             # Get total count
             total_count = await MongoStorageService.count_documents("workflowConfig", query, tenant_id=tenant_id)
-            logger.debug(f"[WORKFLOW] Total count: {total_count}")
             
             # Get documents
             docs = await MongoStorageService.find_many(
@@ -112,7 +104,6 @@ class WorkflowConfigService:
                 skip=skip,
                 limit=page_size
             )
-            logger.debug(f"[WORKFLOW] Found {len(docs)} workflow configs for tenant: {tenant_id}")
             
             configs = []
             for doc in docs:
@@ -144,7 +135,7 @@ class WorkflowConfigService:
                 }
             }
             
-            logger.info(f"[WORKFLOW] Successfully listed {len(configs)} workflow configs")
+            logger.info(f"[WORKFLOW] Found {len(configs)} workflow configs (total: {total_count})")
             return result
             
         except Exception as e:
@@ -158,7 +149,6 @@ class WorkflowConfigService:
     async def get_workflow_config_by_id(cls, config_id: str, user: dict) -> Dict[str, Any]:
         """Get workflow configuration by ID"""
         tenant_id = await cls.validate_tenant_access(user)
-        logger.info(f"[WORKFLOW] Getting workflow config: {config_id} for tenant: {tenant_id}")
         
         try:
             object_id = ObjectId(config_id)
@@ -190,7 +180,6 @@ class WorkflowConfigService:
                 "is_active": doc.get("is_active", True)
             }
             
-            logger.info(f"[WORKFLOW] Successfully retrieved workflow config: {config_id}")
             return config
             
         except HTTPException:
@@ -207,7 +196,7 @@ class WorkflowConfigService:
         """Create new workflow configuration with BPMN file"""
         tenant_id = await cls.validate_tenant_access(user)
         user_id = user.get("id")
-        logger.info(f"[WORKFLOW] Creating workflow config '{config_data.get('name')}' for tenant: {tenant_id}")
+        logger.info(f"[WORKFLOW] Creating workflow config '{config_data.get('name')}'")
         
         try:
             # Validate BPMN file
@@ -248,8 +237,6 @@ class WorkflowConfigService:
                         status_code=500, 
                         detail="Failed to upload BPMN file to storage"
                     )
-                
-                logger.info(f"[WORKFLOW] BPMN file uploaded to: {bpmn_file_path}")
             
             # Prepare document - store config as-is with metadata
             doc = {
@@ -282,7 +269,7 @@ class WorkflowConfigService:
                 "message": "Workflow configuration created successfully"
             }
             
-            logger.info(f"[WORKFLOW] Successfully created workflow config: {doc['name']}")
+            logger.info(f"[WORKFLOW] Created workflow config: {doc['name']} (ID: {result})")
             return response
             
         except HTTPException:
@@ -305,7 +292,7 @@ class WorkflowConfigService:
         """Update workflow configuration by ID"""
         tenant_id = await cls.validate_tenant_access(user)
         user_id = user.get("id")
-        logger.info(f"[WORKFLOW] Updating workflow config: {config_id} for tenant: {tenant_id}")
+        logger.info(f"[WORKFLOW] Updating workflow config: {config_id}")
         
         try:
             object_id = ObjectId(config_id)
@@ -352,8 +339,6 @@ class WorkflowConfigService:
                         status_code=500, 
                         detail="Failed to upload BPMN file to storage"
                     )
-                
-                logger.info(f"[WORKFLOW] BPMN file updated at: {bpmn_file_path}")
             
             # Prepare update data
             update_data = {
@@ -395,7 +380,7 @@ class WorkflowConfigService:
                 "message": "Workflow configuration updated successfully"
             }
             
-            logger.info(f"[WORKFLOW] Successfully updated workflow config: {config_id}")
+            logger.info(f"[WORKFLOW] Updated workflow config: {config_id}")
             return response
             
         except HTTPException:
@@ -411,7 +396,7 @@ class WorkflowConfigService:
     async def delete_workflow_config_by_id(cls, config_id: str, user: dict) -> Dict[str, Any]:
         """Delete workflow configuration by ID"""
         tenant_id = await cls.validate_tenant_access(user)
-        logger.info(f"[WORKFLOW] Deleting workflow config: {config_id} for tenant: {tenant_id}")
+        logger.info(f"[WORKFLOW] Deleting workflow config: {config_id}")
         
         try:
             object_id = ObjectId(config_id)
@@ -436,7 +421,6 @@ class WorkflowConfigService:
             bpmn_file_path = existing.get("bpmn_file_path")
             if bpmn_file_path:
                 await FileService._delete_from_minio(bpmn_file_path)
-                logger.info(f"[WORKFLOW] Deleted BPMN file: {bpmn_file_path}")
             
             # Delete from database
             result = await MongoStorageService.delete_one("workflowConfig", {"_id": object_id}, tenant_id=tenant_id)
@@ -453,7 +437,7 @@ class WorkflowConfigService:
                 "message": "Workflow configuration deleted successfully"
             }
             
-            logger.info(f"[WORKFLOW] Successfully deleted workflow config: {config_id}")
+            logger.info(f"[WORKFLOW] Deleted workflow config: {config_id}")
             return response
             
         except HTTPException:
@@ -469,7 +453,6 @@ class WorkflowConfigService:
     async def get_workflow_categories(cls, user: dict) -> List[str]:
         """Get all unique categories for workflow configurations"""
         tenant_id = await cls.validate_tenant_access(user)
-        logger.info(f"[WORKFLOW] Getting workflow categories for tenant: {tenant_id}")
         
         try:
             # Get distinct categories
@@ -483,7 +466,6 @@ class WorkflowConfigService:
             categories = [cat for cat in categories if cat and cat.strip()]
             categories.sort()
             
-            logger.info(f"[WORKFLOW] Found {len(categories)} workflow categories")
             return categories
             
         except Exception as e:
@@ -497,7 +479,6 @@ class WorkflowConfigService:
     async def get_bpmn_file_content(cls, config_id: str, user: dict) -> bytes:
         """Get BPMN file content for download"""
         tenant_id = await cls.validate_tenant_access(user)
-        logger.info(f"[WORKFLOW] Getting BPMN file for config: {config_id}")
         
         try:
             # Get config
@@ -528,7 +509,6 @@ class WorkflowConfigService:
                     detail="BPMN file content not found"
                 )
             
-            logger.info(f"[WORKFLOW] Successfully retrieved BPMN file content")
             return content
             
         except HTTPException:

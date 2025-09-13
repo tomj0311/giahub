@@ -19,7 +19,6 @@ class ToolConfigService:
     @staticmethod
     async def validate_tenant_access(user: dict) -> str:
         """Validate tenant access and return tenant_id"""
-        logger.debug(f"[TOOL] Validating tenant access for user: {user.get('id')}")
         tenant_id = user.get("tenantId")
         if not tenant_id:
             logger.warning(f"[TOOL] Missing tenant information for user: {user.get('id')}")
@@ -27,14 +26,12 @@ class ToolConfigService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User tenant information missing. Please re-login."
             )
-        logger.debug(f"[TOOL] Tenant access validated: {tenant_id}")
         return tenant_id
     
     @classmethod
     async def create_tool_config(cls, config: dict, user: dict) -> dict:
         """Create a new tool configuration"""
         logger.info(f"[TOOL] Creating tool configuration: {config.get('name')}")
-        logger.debug(f"[TOOL] Tool config data: {config}")
         
         tenant_id = await cls.validate_tenant_access(user)
         user_id = user.get("id")
@@ -148,8 +145,6 @@ class ToolConfigService:
                 skip=skip,
                 limit=page_size
             )
-            
-            logger.debug(f"[TOOL] Found {len(docs)} tool configs for tenant: {tenant_id}")
             
             configs = []
             for config in docs:

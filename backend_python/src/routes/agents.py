@@ -42,7 +42,6 @@ async def list_agents(
             sort_by=sort_by,
             sort_order=sort_order
         )
-        logger.debug(f"[AGENTS] Retrieved {len(result['agents'])} agents, total: {result['pagination']['total']}")
         return result
     except Exception as e:
         logger.error(f"[AGENTS] Error listing agents: {str(e)}")
