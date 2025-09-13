@@ -141,56 +141,165 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   // Undo/Redo state
   const [history, setHistory] = useState([{ nodes: initialNodes, edges: initialEdges }]);
   const [historyIndex, setHistoryIndex] = useState(0);
+  const pendingHistorySave = useRef(false);
+  const isUndoRedoOperation = useRef(false);
+  const lastSavedState = useRef({ nodes: initialNodes, edges: initialEdges });
 
   // Save state to history
   const saveToHistory = useCallback((newNodes, newEdges) => {
+    console.log('🔄 SAVE TO HISTORY:', {
+      currentIndex: historyIndex,
+      historyLength: history.length,
+      nodeCount: newNodes.length,
+      edgeCount: newEdges.length,
+      stackTrace: new Error().stack?.split('\n').slice(1, 4).join('\n')
+    });
+    
     setHistory(prev => {
       const newHistory = prev.slice(0, historyIndex + 1);
       newHistory.push({ nodes: newNodes, edges: newEdges });
-      return newHistory.slice(-50); // Keep last 50 states
+      const trimmed = newHistory.slice(-50); // Keep last 50 states
+      
+      console.log('📚 HISTORY UPDATED:', {
+        prevLength: prev.length,
+        newLength: trimmed.length,
+        addedAt: historyIndex + 1
+      });
+      
+      return trimmed;
     });
-    setHistoryIndex(prev => Math.min(prev + 1, 49));
-  }, [historyIndex]);
+    setHistoryIndex(prev => {
+      const newIndex = Math.min(prev + 1, 49);
+      console.log('📍 HISTORY INDEX CHANGED:', prev, '->', newIndex);
+      return newIndex;
+    });
+  }, [historyIndex, history.length]);
 
   // Undo function
   const undo = useCallback(() => {
+    console.log('⏪ UNDO REQUESTED:', {
+      currentIndex: historyIndex,
+      historyLength: history.length,
+      canUndo: historyIndex > 0
+    });
+    
     if (historyIndex > 0) {
       const newIndex = historyIndex - 1;
       const prevState = history[newIndex];
+      
+      console.log('⏪ UNDO EXECUTING:', {
+        fromIndex: historyIndex,
+        toIndex: newIndex,
+        restoringNodes: prevState.nodes.length,
+        restoringEdges: prevState.edges.length
+      });
+      
+      // Set flag to prevent history saving during restore
+      isUndoRedoOperation.current = true;
+      
       setNodes(prevState.nodes);
       setEdges(prevState.edges);
       setHistoryIndex(newIndex);
+      
+      // Reset flag after a delay
+      setTimeout(() => {
+        isUndoRedoOperation.current = false;
+      }, 100);
+      
+      console.log('✅ UNDO COMPLETED');
+    } else {
+      console.log('❌ UNDO BLOCKED - Already at beginning');
     }
   }, [historyIndex, history, setNodes, setEdges]);
 
   // Redo function
   const redo = useCallback(() => {
+    console.log('⏩ REDO REQUESTED:', {
+      currentIndex: historyIndex,
+      historyLength: history.length,
+      canRedo: historyIndex < history.length - 1
+    });
+    
     if (historyIndex < history.length - 1) {
       const newIndex = historyIndex + 1;
       const nextState = history[newIndex];
+      
+      console.log('⏩ REDO EXECUTING:', {
+        fromIndex: historyIndex,
+        toIndex: newIndex,
+        restoringNodes: nextState.nodes.length,
+        restoringEdges: nextState.edges.length
+      });
+      
+      // Set flag to prevent history saving during restore
+      isUndoRedoOperation.current = true;
+      
       setNodes(nextState.nodes);
       setEdges(nextState.edges);
       setHistoryIndex(newIndex);
+      
+      // Reset flag after a delay
+      setTimeout(() => {
+        isUndoRedoOperation.current = false;
+      }, 100);
+      
+      console.log('✅ REDO COMPLETED');
+    } else {
+      console.log('❌ REDO BLOCKED - Already at end');
     }
   }, [historyIndex, history, setNodes, setEdges]);
 
-  // Keyboard shortcuts for undo/redo
+  // Combined keyboard shortcuts for undo/redo and delete
   useEffect(() => {
     const handleKeyDown = (event) => {
+      console.log('🔑 KEY PRESSED:', {
+        key: event.key,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        readOnly: readOnly,
+        target: event.target.tagName
+      });
+
+      // Handle undo/redo shortcuts
       if ((event.ctrlKey || event.metaKey) && !readOnly) {
-        if (event.key === 'z' && !event.shiftKey) {
+        if ((event.key === 'z' || event.key === 'Z') && !event.shiftKey) {
+          console.log('⌨️ KEYBOARD UNDO TRIGGERED');
           event.preventDefault();
           undo();
-        } else if (event.key === 'z' && event.shiftKey || event.key === 'y') {
+          return;
+        } else if (((event.key === 'z' || event.key === 'Z') && event.shiftKey) || (event.key === 'y' || event.key === 'Y')) {
+          console.log('⌨️ KEYBOARD REDO TRIGGERED');
           event.preventDefault();
           redo();
+          return;
         }
+      }
+
+      // Handle delete/backspace (only when focused on ReactFlow)
+      if ((event.key === 'Delete' || event.key === 'Backspace') && 
+          (event.target.closest('.reactflow-wrapper') || event.target.closest('.react-flow'))) {
+        console.log('🗑️ DELETE KEY TRIGGERED');
+        setNodes((nds) => {
+          const newNodes = nds.filter((node) => !node.selected);
+          if (!readOnly && newNodes.length !== nds.length) {
+            setTimeout(() => saveToHistory(newNodes, edges), 0);
+          }
+          return newNodes;
+        });
+        setEdges((eds) => {
+          const newEdges = eds.filter((edge) => !edge.selected);
+          if (!readOnly && newEdges.length !== eds.length) {
+            setTimeout(() => saveToHistory(nodes, newEdges), 0);
+          }
+          return newEdges;
+        });
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [undo, redo, readOnly]);
+  }, [undo, redo, readOnly, setNodes, setEdges, saveToHistory, nodes, edges]);
 
   // Lasso selection functionality
   const onToggleSelectionMode = useCallback(() => {
@@ -618,8 +727,11 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
       });
       
       // Save to history if needed
-      if (shouldSaveHistory && !readOnly) {
+      if (shouldSaveHistory && !readOnly && !isUndoRedoOperation.current) {
+        console.log('💾 SAVING TO HISTORY (from onNodesChange)');
         setTimeout(() => saveToHistory(newNodes, edges), 0);
+      } else if (isUndoRedoOperation.current) {
+        console.log('🚫 SKIPPING HISTORY SAVE - Undo/Redo operation in progress');
       }
       
       return newNodes;
