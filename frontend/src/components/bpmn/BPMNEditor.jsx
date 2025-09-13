@@ -138,6 +138,60 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   const [selectionMode, setSelectionMode] = useState(false);
   const { project, fitView } = useReactFlow();
 
+  // Undo/Redo state
+  const [history, setHistory] = useState([{ nodes: initialNodes, edges: initialEdges }]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+
+  // Save state to history
+  const saveToHistory = useCallback((newNodes, newEdges) => {
+    setHistory(prev => {
+      const newHistory = prev.slice(0, historyIndex + 1);
+      newHistory.push({ nodes: newNodes, edges: newEdges });
+      return newHistory.slice(-50); // Keep last 50 states
+    });
+    setHistoryIndex(prev => Math.min(prev + 1, 49));
+  }, [historyIndex]);
+
+  // Undo function
+  const undo = useCallback(() => {
+    if (historyIndex > 0) {
+      const newIndex = historyIndex - 1;
+      const prevState = history[newIndex];
+      setNodes(prevState.nodes);
+      setEdges(prevState.edges);
+      setHistoryIndex(newIndex);
+    }
+  }, [historyIndex, history, setNodes, setEdges]);
+
+  // Redo function
+  const redo = useCallback(() => {
+    if (historyIndex < history.length - 1) {
+      const newIndex = historyIndex + 1;
+      const nextState = history[newIndex];
+      setNodes(nextState.nodes);
+      setEdges(nextState.edges);
+      setHistoryIndex(newIndex);
+    }
+  }, [historyIndex, history, setNodes, setEdges]);
+
+  // Keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if ((event.ctrlKey || event.metaKey) && !readOnly) {
+        if (event.key === 'z' && !event.shiftKey) {
+          event.preventDefault();
+          undo();
+        } else if (event.key === 'z' && event.shiftKey || event.key === 'y') {
+          event.preventDefault();
+          redo();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo, readOnly]);
+
   // Lasso selection functionality
   const onToggleSelectionMode = useCallback(() => {
     setSelectionMode(prev => !prev);
@@ -445,6 +499,14 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
     setNodes(currentNodes => {
       let newNodes = applyNodeChanges(changes, currentNodes);
       
+      // Save to history after changes are applied
+      const shouldSaveHistory = changes.some(change => 
+        change.type === 'position' && !change.dragging ||
+        change.type === 'remove' ||
+        change.type === 'add' ||
+        change.type === 'dimensions'
+      );
+      
       // Check if any nodes were moved and update their parent participant bounds
       const movedNodes = changes.filter(change => change.type === 'position' && change.dragging === false);
       const participantsToUpdate = new Set();
@@ -555,9 +617,14 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
         newNodes = updateParticipantBoundsData(participantId, newNodes);
       });
       
+      // Save to history if needed
+      if (shouldSaveHistory && !readOnly) {
+        setTimeout(() => saveToHistory(newNodes, edges), 0);
+      }
+      
       return newNodes;
     });
-  }, [updateParticipantBoundsData]);
+  }, [updateParticipantBoundsData, saveToHistory, edges, readOnly]);
 
   const onConnect = useCallback(
     (params) => {
@@ -586,7 +653,14 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
       
       setEdges((eds) => {
         const updatedEdges = addEdge(newEdge, eds);
-        return updateEdgesWithArrows(updatedEdges);
+        const finalEdges = updateEdgesWithArrows(updatedEdges);
+        
+        // Save to history
+        if (!readOnly) {
+          setTimeout(() => saveToHistory(nodes, finalEdges), 0);
+        }
+        
+        return finalEdges;
       });
     },
     [setEdges, nodes, updateEdgesWithArrows],
@@ -665,6 +739,11 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
       setNodes((nds) => {
         const updatedNodes = nds.concat(newNode);
         
+        // Save to history after adding node
+        if (!readOnly) {
+          setTimeout(() => saveToHistory(updatedNodes, edges), 0);
+        }
+        
         // Check if the new node was dropped inside a participant
         const droppedInParticipant = nds.find(node => 
           node.type === 'participant' &&
@@ -696,7 +775,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
         return updatedNodes;
       });
     },
-    [reactFlowInstance, project, setNodes],
+    [reactFlowInstance, project, setNodes, saveToHistory, edges, readOnly],
   );
 
   const onNodeDoubleClick = useCallback((event, node) => {
@@ -762,31 +841,57 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
 
   // Update node data from property panel
   const handleNodeUpdate = useCallback((updatedNode) => {
-    setNodes((nds) =>
-      nds.map((node) =>
+    setNodes((nds) => {
+      const newNodes = nds.map((node) =>
         node.id === updatedNode.id ? updatedNode : node
-      )
-    );
+      );
+      
+      // Save to history
+      if (!readOnly) {
+        setTimeout(() => saveToHistory(newNodes, edges), 0);
+      }
+      
+      return newNodes;
+    });
     setSelectedNode(updatedNode);
-  }, [setNodes]);
+  }, [setNodes, saveToHistory, edges, readOnly]);
 
   // Update edge data from property panel
   const handleEdgeUpdate = useCallback((updatedEdge) => {
-    setEdges((eds) =>
-      eds.map((edge) =>
+    setEdges((eds) => {
+      const newEdges = eds.map((edge) =>
         edge.id === updatedEdge.id ? updatedEdge : edge
-      )
-    );
+      );
+      
+      // Save to history
+      if (!readOnly) {
+        setTimeout(() => saveToHistory(nodes, newEdges), 0);
+      }
+      
+      return newEdges;
+    });
     setSelectedEdge(updatedEdge);
-  }, [setEdges]);
+  }, [setEdges, saveToHistory, nodes, readOnly]);
 
   // Delete functionality - handle Delete key press
   const onKeyDown = useCallback((event) => {
     if (event.key === 'Delete' || event.key === 'Backspace') {
-      setNodes((nds) => nds.filter((node) => !node.selected));
-      setEdges((eds) => eds.filter((edge) => !edge.selected));
+      setNodes((nds) => {
+        const newNodes = nds.filter((node) => !node.selected);
+        if (!readOnly && newNodes.length !== nds.length) {
+          setTimeout(() => saveToHistory(newNodes, edges), 0);
+        }
+        return newNodes;
+      });
+      setEdges((eds) => {
+        const newEdges = eds.filter((edge) => !edge.selected);
+        if (!readOnly && newEdges.length !== eds.length) {
+          setTimeout(() => saveToHistory(nodes, newEdges), 0);
+        }
+        return newEdges;
+      });
     }
-  }, [setNodes, setEdges]);
+  }, [setNodes, setEdges, saveToHistory, nodes, edges, readOnly]);
 
   // Add keyboard event listener
   useEffect(() => {
@@ -835,6 +940,11 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
     const edgesWithArrows = updateEdgesWithArrows(importedEdges);
     setEdges(edgesWithArrows);
     
+    // Save to history after import
+    if (!readOnly) {
+      setTimeout(() => saveToHistory(importedNodes, edgesWithArrows), 0);
+    }
+    
     // Extract participants from imported nodes
     const importedParticipants = importedNodes
       .filter(node => node.type === 'participant')
@@ -858,7 +968,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
     
     // Trigger fit view after nodes are set
     setShouldFitView(true);
-  }, [setNodes, setEdges, setParticipants, updateEdgesWithArrows]);
+  }, [setNodes, setEdges, setParticipants, updateEdgesWithArrows, saveToHistory, readOnly]);
 
   const handleAddParticipant = useCallback((participantName) => {
     const participantId = `participant_${Date.now()}`;
@@ -894,8 +1004,17 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
       }
     };
     
-    setNodes(nds => [...nds, newNode]);
-  }, [participants.length, setNodes, setParticipants]);
+    setNodes(nds => {
+      const newNodes = [...nds, newNode];
+      
+      // Save to history
+      if (!readOnly) {
+        setTimeout(() => saveToHistory(newNodes, edges), 0);
+      }
+      
+      return newNodes;
+    });
+  }, [participants.length, setNodes, setParticipants, saveToHistory, edges, readOnly]);
 
   const handleAddLane = useCallback((laneName, participantId) => {
     const laneId = `lane_${Date.now()}`;
@@ -923,8 +1042,17 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
       style: { zIndex: 0 }
     };
     
-    setNodes(nds => [...nds, newNode]);
-  }, [participants, setNodes, setParticipants]);
+    setNodes(nds => {
+      const newNodes = [...nds, newNode];
+      
+      // Save to history
+      if (!readOnly) {
+        setTimeout(() => saveToHistory(newNodes, edges), 0);
+      }
+      
+      return newNodes;
+    });
+  }, [participants, setNodes, setParticipants, saveToHistory, edges, readOnly]);
 
   return (
     <div className={`bpmn-editor ${readOnly ? 'readonly-mode' : ''}`}>
