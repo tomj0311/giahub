@@ -78,7 +78,7 @@ export default function ModelConfig({ user }) {
             });
             
             // Discover embeddings
-            const embeddingsResponse = await apiCall(`/api/embedders/components?folder=ai.embeddings`, {
+            const embeddingsResponse = await apiCall(`/api/models/components?folder=ai.embeddings`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
 
@@ -117,14 +117,14 @@ export default function ModelConfig({ user }) {
         try {
             setPendingIntros(p => ({ ...p, [modulePath]: true }));
 
-            const endpoint = kind === 'embedding' ? '/api/embedders/introspect' : '/api/models/introspect';
+            const endpoint = '/api/models/introspect';
             const response = await apiCall(endpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 },
-                body: JSON.stringify({ module_path: modulePath, kind: kind === 'embedding' ? 'tool' : kind })
+                body: JSON.stringify({ module_path: modulePath, kind: kind === 'embedding' ? 'embedding' : kind })
             });
 
             if (response.ok) {
