@@ -828,6 +828,9 @@ class KnowledgeService:
             'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             'text/plain', 'text/csv', 'application/json',
             'text/x-python', 'application/javascript', 'text/javascript',
+            # Image types
+            'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 
+            'image/svg+xml', 'image/bmp', 'image/tiff', 'image/tif',
         }
         MAX_FILE_SIZE = 200 * 1024 * 1024
 

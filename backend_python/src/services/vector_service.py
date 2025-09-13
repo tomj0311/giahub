@@ -230,6 +230,13 @@ class VectorService:
                         
                         # Create appropriate knowledge base based on file type
                         knowledge_base = None
+                        
+                        # Skip vector indexing for image files
+                        image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.tiff', '.tif'}
+                        if file_ext in image_extensions:
+                            logger.info(f"[VECTOR] Skipping vector indexing for image file: {filename}")
+                            continue
+                        
                         if file_ext in ['.pdf']:
                             knowledge_base = PDFKnowledgeBase(path=str(temp_path), vector_db=vector_db)
                         elif file_ext in ['.docx', '.doc']:

@@ -3,11 +3,14 @@ import ast
 import importlib
 import json
 import os
-from typing import Dict, Any, Optional, AsyncGenerator
+import uuid
+import base64
+from typing import Dict, Any, Optional, AsyncGenerator, List
 from fastapi import HTTPException, status
 from ..utils.log import logger
 from ..utils.mongo_storage import MongoStorageService
 from .agent_service import AgentService
+from .file_service import FileService
 
 def module_loader(module_path: str):
     if not module_path:
@@ -95,6 +98,95 @@ def _create_multi_collection_retriever(collection_names: list = None, conv_id: s
 class AgentRuntimeService:
     # Simple cache to store agents by session_id
     _agents = {}
+    
+    @classmethod
+    async def _search_images_for_agent(cls, user: Dict[str, Any], conv_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Search for images in MinIO for the agent to use"""
+        images = []
+        
+        try:
+            # Image file extensions to search for
+            image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.tiff', '.ico'}
+            
+            # Build search paths
+            search_paths = []
+            user_id = user.get("id")
+            tenant_id = user.get("tenantId")
+            
+            if conv_id and tenant_id:
+                # Search for conversation-specific images - using the actual path structure
+                conv_path = f"uploads/{tenant_id}/{conv_id}/"
+                search_paths.append(conv_path)
+                
+                # Also search user's general uploads
+                user_path = f"uploads/{user_id}/"
+                search_paths.append(user_path)
+            
+            if not search_paths:
+                logger.debug("[AGENT] No search paths configured for image search")
+                return images
+            
+            # Get MinIO base URL for image URLs
+            minio_host = os.getenv('MINIO_HOST', 'localhost')
+            minio_port = os.getenv('MINIO_PORT', '8803')
+            minio_secure = os.getenv('MINIO_SECURE', 'false').lower() == 'true'
+            protocol = 'https' if minio_secure else 'http'
+            minio_base_url = f"{protocol}://{minio_host}:{minio_port}"
+            
+            logger.info(f"[AGENT] Searching for images in paths: {search_paths}")
+            
+            for prefix in search_paths:
+                logger.debug(f"[AGENT] Checking images in prefix: {prefix}")
+                try:
+                    # List all files in this path using FileService
+                    file_list = await FileService.list_files_at_path(prefix)
+                    
+                    for file_path in file_list:
+                        logger.debug(f"[AGENT] Found file: {file_path}")
+                        
+                        # Check if it's an image file
+                        file_ext = os.path.splitext(file_path.lower())[1]
+                        if file_ext in image_extensions:
+                            logger.info(f"[AGENT] Found image: {file_path} (type: {file_ext})")
+                            
+                            # Create full URL for the image
+                            image_url = f"{minio_base_url}/uploads/{file_path}"
+                            
+                            # Try to download and get base64 data
+                            base_64_image = None
+                            try:
+                                image_data = await FileService.get_file_content_from_path(file_path)
+                                base_64_image = base64.b64encode(image_data).decode("utf-8")
+                                logger.debug(f"[AGENT] Downloaded base64 data for {file_path}, length: {len(base_64_image)}")
+                            except Exception as e:
+                                logger.warning(f"[AGENT] Failed to download image {file_path}: {e}")
+                            
+                            # Create simple image dict (since we don't need the AI model)
+                            # Extract meaningful alt text from path
+                            path_parts = file_path.split('/')
+                            if len(path_parts) >= 3:
+                                source_info = f"{path_parts[-3]}/{path_parts[-2]}"  # e.g., "tenant_id/conv_id"
+                            else:
+                                source_info = prefix.strip('/')
+                                
+                            image_obj = {
+                                "id": str(uuid.uuid4()),
+                                "url": image_url,
+                                "alt_text": f"Image from {source_info}: {os.path.basename(file_path)}",
+                                "base_64_image": base_64_image
+                            }
+                            images.append(image_obj)
+                            logger.info(f"[AGENT] Added image to agent context: {image_url} (has_base64: {bool(base_64_image)})")
+                            
+                except Exception as e:
+                    logger.error(f"[AGENT] Error listing images in prefix {prefix}: {e}")
+                    continue
+                    
+        except Exception as e:
+            logger.error(f"[AGENT] Error in image search: {e}")
+        
+        logger.info(f"[AGENT] Image search complete. Found {len(images)} images")
+        return images
     
     @classmethod
     async def build_agent_from_config(cls, agent_config: Dict[str, Any], user: Dict[str, Any]) -> Any:
@@ -223,9 +315,35 @@ class AgentRuntimeService:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     @classmethod
-    async def run_agent_stream(cls, agent: Any, prompt: str, cancel_event: Optional[asyncio.Event] = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def run_agent_stream(cls, agent: Any, prompt: str, user: Dict[str, Any], conv_id: Optional[str] = None, cancel_event: Optional[asyncio.Event] = None) -> AsyncGenerator[Dict[str, Any], None]:
         try:
-            for response in agent.run(prompt, stream=True):
+            # Search for images to include with the agent run
+            agent_images = await cls._search_images_for_agent(user, conv_id)
+            images_for_run = []
+            
+            # Convert image objects to format expected by agent
+            if agent_images:
+                for img in agent_images:
+                    if img.get('base_64_image'):
+                        # Use base64 data if available
+                        mime_type = "image/jpeg"  # default
+                        data_url = f"data:{mime_type};base64,{img['base_64_image']}"
+                        images_for_run.append(data_url)
+                    elif img.get('url'):
+                        # Use URL if no base64 data
+                        images_for_run.append(img['url'])
+                    else:
+                        # Handle other formats (strings, etc)
+                        images_for_run.append(str(img))
+            
+            logger.info(f"[AGENT] Starting run with {len(images_for_run)} images")
+            
+            # Run the agent with images if available
+            run_kwargs = {"stream": True}
+            if images_for_run:
+                run_kwargs["images"] = images_for_run
+                
+            for response in agent.run(prompt, **run_kwargs):
                 if cancel_event and cancel_event.is_set():
                     logger.info("Streaming cancelled by user.")
                     yield {"type": "cancelled", "timestamp": asyncio.get_event_loop().time()}
@@ -331,7 +449,7 @@ class AgentRuntimeService:
             if conv_id:
                 agent_config["conv_id"] = conv_id
             agent = await cls.build_agent_from_config(agent_config, user)
-            async for response in cls.run_agent_stream(agent, prompt, cancel_event=cancel_event):
+            async for response in cls.run_agent_stream(agent, prompt, user, conv_id, cancel_event=cancel_event):
                 if response.get("type") == "agent_run_complete":
                     completed = True
                 yield response
