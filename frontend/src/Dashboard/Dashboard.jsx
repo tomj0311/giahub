@@ -115,16 +115,6 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 					label: 'Knowledge',
 					to: '/dashboard/knowledge',
 					icon: 'BookOpen'
-				},
-				{
-					label: 'Databases',
-					to: '/dashboard/databases',
-					icon: 'Database'
-				},
-				{
-					label: 'Custom Connectors',
-					to: '/dashboard/custom-connectors',
-					icon: 'Plug'
 				}
 			]
 		},
@@ -724,8 +714,6 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="knowledge" element={<KnowledgeConfig user={user} />} />
 				<Route path="agent-playground" element={<AgentPlayground user={user} />} />
 				<Route path="analytics" element={<div>Analytics - Coming Soon</div>} />
-				<Route path="databases" element={<div>Databases - Coming Soon</div>} />
-				<Route path="custom-connectors" element={<div>Custom Connectors - Coming Soon</div>} />
 				<Route path="workflows" element={<WorkflowConfig user={user} />} />
 				<Route path="bpmn" element={<BPMNEditorWrapper />} />
 				<Route path="monitor" element={<div>Monitor - Coming Soon</div>} />
