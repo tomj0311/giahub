@@ -851,10 +851,9 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
       setNodes((nds) => {
         const updatedNodes = nds.concat(newNode);
         
-        // Save to history after adding node
-        if (!readOnly) {
-          setTimeout(() => saveToHistory(updatedNodes, edges), 0);
-        }
+        // Don't save to history here - let onNodesChange handle it
+        // to avoid duplicate history entries
+        console.log('➕ NODE ADDED VIA DROP - Letting onNodesChange handle history');
         
         // Check if the new node was dropped inside a participant
         const droppedInParticipant = nds.find(node => 
