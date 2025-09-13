@@ -168,7 +168,6 @@ async def list_conversations(
     """List conversations for current tenant with pagination and sorting."""
     # CRITICAL: tenant_id is required - no fallbacks allowed
     tenant_id = user.get("tenantId")
-    logger.info(f"[AGENT_RUNTIME] List conversations request - user: {user.get('id', 'NO_ID')}, tenant: {tenant_id}")
     
     if not tenant_id:
         logger.error(f"[AGENT_RUNTIME] CRITICAL: No tenant ID found in user object: {user}")
@@ -176,8 +175,6 @@ async def list_conversations(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User tenant information missing. Please re-login."
         )
-    
-    logger.info(f"[AGENT_RUNTIME] Listing conversations for tenant - page: {page}, size: {page_size}")
     
     try:
         # DEBUG: Check total conversations in database (without tenant filter)
@@ -188,7 +185,6 @@ async def list_conversations(
             if conversations_collection is not None:
                 total_all_conversations = await conversations_collection.count_documents({})
                 total_tenant_conversations = await conversations_collection.count_documents({"tenantId": tenant_id})
-                logger.info(f"[AGENT_RUNTIME] DEBUG: Total conversations in DB: {total_all_conversations}, for tenant {tenant_id}: {total_tenant_conversations}")
             else:
                 logger.warning(f"[AGENT_RUNTIME] DEBUG: Conversations collection not found")
         except Exception as debug_e:
@@ -199,7 +195,6 @@ async def list_conversations(
         
         # Get total count first for debugging
         total_count = await MongoStorageService.count_documents("conversations", {}, tenant_id=tenant_id)
-        logger.info(f"[AGENT_RUNTIME] Total conversations count: {total_count} for tenant: {tenant_id}")
         
         if total_count == 0:
             logger.warning(f"[AGENT_RUNTIME] WARNING: No conversations found for tenant {tenant_id}. Check tenant ID or data.")
@@ -212,7 +207,6 @@ async def list_conversations(
         # Determine sort order
         sort_direction = -1 if sort_order == "desc" else 1
         
-        logger.info(f"[AGENT_RUNTIME] Pagination: page={page}, size={page_size}, skip={skip}, total={total_count}, pages={total_pages}")
         
         # Get paginated results
         docs = await MongoStorageService.find_many(
@@ -224,8 +218,6 @@ async def list_conversations(
             skip=skip,
             limit=page_size
         )
-        
-        logger.info(f"[AGENT_RUNTIME] Retrieved {len(docs)} conversations from database")
         
         if len(docs) == 0 and total_count > 0:
             logger.error(f"[AGENT_RUNTIME] CRITICAL: Found {total_count} conversations but query returned 0. Pagination or filtering issue!")
@@ -283,13 +275,6 @@ async def list_conversations(
             }
         }
 
-        logger.info(f"[AGENT_RUNTIME] Final result: {len(items)} conversations returned, total: {total_count}, page: {page}/{total_pages}")
-        logger.info(f"[AGENT_RUNTIME] Response structure: conversations={len(result['conversations'])}, pagination_keys={list(result['pagination'].keys())}")
-        
-        # Log first conversation for debugging
-        if items:
-            first_conv = items[0]
-            logger.info(f"[AGENT_RUNTIME] Sample conversation: id={first_conv.get('conversation_id')}, title='{first_conv.get('title', '')[:50]}...', agent={first_conv.get('agent_name')}")
         
         return result
         

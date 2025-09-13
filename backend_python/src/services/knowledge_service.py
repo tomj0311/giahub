@@ -97,8 +97,6 @@ class KnowledgeService:
         """List knowledge configurations for current tenant"""
         tenant_id = await cls.validate_tenant_access(user)
         
-        logger.info(f"[KNOWLEDGE] Listing configs for tenant: {tenant_id}")
-        
         try:
             docs = await MongoStorageService.find_many(
                 "knowledgeConfig",
@@ -122,7 +120,6 @@ class KnowledgeService:
                 }
                 configs.append(config)
             
-            logger.info(f"[KNOWLEDGE] Found {len(configs)} configurations")
             return configs
             
         except Exception as e:
@@ -471,7 +468,6 @@ class KnowledgeService:
         tenant_id = await cls.validate_tenant_access(user)
         
         try:
-            logger.debug(f"[KNOWLEDGE] Getting categories for tenant: {tenant_id}")
             cats = await MongoStorageService.distinct("knowledgeConfig", "category", {}, tenant_id=tenant_id)
             # filter out empty
             categories = [c for c in cats if c]
@@ -511,7 +507,6 @@ class KnowledgeService:
     ) -> Dict[str, Any]:
         """List knowledge collections with pagination, filtering, and sorting"""
         tenant_id = await cls.validate_tenant_access(user)
-        logger.info(f"[KNOWLEDGE] Listing collections with pagination for tenant: {tenant_id}")
         
         try:
             # Build filter query
@@ -550,8 +545,6 @@ class KnowledgeService:
                 skip=skip,
                 limit=page_size
             )
-            
-            logger.debug(f"[KNOWLEDGE] Found {len(docs)} collections for tenant: {tenant_id}")
             
             collections = []
             for doc in docs:
@@ -610,7 +603,6 @@ class KnowledgeService:
                 }
             }
             
-            logger.info(f"[KNOWLEDGE] Returning {len(collections)} collections, page {page}/{total_pages}")
             return result
             
         except Exception as e:

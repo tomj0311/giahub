@@ -52,7 +52,6 @@ async def list_model_configs(
     sort_order: str = Query("asc", regex="^(asc|desc)$", description="Sort order")
 ):
     """List model configurations for current tenant with pagination"""
-    logger.info(f"[MODEL_CONFIG] Listing configs - page: {page}, size: {page_size}")
     result = await ModelConfigService.list_model_configs_paginated(
         user=user,
         page=page,

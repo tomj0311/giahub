@@ -28,36 +28,27 @@ def _list_children(module_path: str) -> List[str]:
         current_file_path = Path(__file__).parent.parent.parent.parent  # Go up to giahub root
         current_dir = current_file_path / "ai"
         
-        logger.info(f"Starting from directory: {current_dir}")
-        
         # Navigate to the target directory
         for part in module_parts[1:]:  # Skip 'ai' as we already have it
             current_dir = current_dir / part
-            logger.info(f"Navigating to: {current_dir}")
         
         if not current_dir.exists():
             logger.warning(f"Directory does not exist: {current_dir}")
             return []
         
-        logger.info(f"Scanning directory: {current_dir}")
-        
         # Find all Python files (excluding __init__.py and __pycache__)
         names = []
         for item in current_dir.iterdir():
-            logger.info(f"Found item: {item.name}, is_file: {item.is_file()}, is_dir: {item.is_dir()}")
             if item.is_file() and item.suffix == '.py' and item.name != '__init__.py':
                 # Remove .py extension to get module name
                 module_name = item.stem
                 names.append(module_name)
-                logger.info(f"Added Python file: {module_name}")
             elif item.is_dir() and not item.name.startswith('__'):
                 # Check if it's a package (has __init__.py)
                 if (item / '__init__.py').exists():
                     names.append(item.name)
-                    logger.info(f"Added package: {item.name}")
         
         names.sort()
-        logger.info(f"Listed children for module {module_path}: {names}")
         return names
     except Exception as e:
         logger.error(f"Failed to list children for module {module_path}: {e}")
@@ -96,7 +87,6 @@ def discover_components(folder: str = None) -> Dict[str, List[str]]:
             
         children = _list_children(module_path)
         full_paths = [f"{module_path}.{c}" for c in children]
-        logger.info(f"Discovered {folder_key}: {full_paths}")
         return {folder_key: full_paths, folder: full_paths}
     
     # Default behavior - discover all
@@ -105,14 +95,12 @@ def discover_components(folder: str = None) -> Dict[str, List[str]]:
         # Check cache first
         if module_path in _DISCOVERY_CACHE:
             discovered[k] = _DISCOVERY_CACHE[module_path]
-            logger.info(f"Cache hit for discovery of {k}: {discovered[k]}")
             continue
             
         children = _list_children(module_path)
         full_paths = [f"{module_path}.{c}" for c in children]
         discovered[k] = full_paths
         _DISCOVERY_CACHE[module_path] = full_paths
-        logger.info(f"Discovered {k}: {discovered[k]}")
     return discovered
 
 

@@ -25,7 +25,6 @@ async def list_workflow_configs(
     sort_order: str = Query("asc", regex="^(asc|desc)$", description="Sort order")
 ):
     """List workflow configurations for current tenant with pagination"""
-    logger.info(f"[WORKFLOW_CONFIG] Listing configs - page: {page}, size: {page_size}")
     result = await WorkflowConfigService.list_workflow_configs_paginated(
         user=user,
         page=page,

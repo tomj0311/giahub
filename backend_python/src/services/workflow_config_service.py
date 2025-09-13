@@ -74,7 +74,6 @@ class WorkflowConfigService:
     ) -> Dict[str, Any]:
         """List workflow configurations with pagination"""
         tenant_id = await cls.validate_tenant_access(user)
-        logger.info(f"[WORKFLOW] Listing workflow configs - tenant: {tenant_id}, page: {page}, size: {page_size}")
         
         try:
             # Build query
@@ -135,7 +134,6 @@ class WorkflowConfigService:
                 }
             }
             
-            logger.info(f"[WORKFLOW] Found {len(configs)} workflow configs (total: {total_count})")
             return result
             
         except Exception as e:

@@ -20,11 +20,9 @@ router = APIRouter(tags=["knowledge"])
 
 @router.get("/defaults")
 async def get_defaults(user: dict = Depends(verify_token_middleware)):
-    """Return global defaults for knowledge chunking configuration."""
-    logger.info("[KNOWLEDGE] Getting global defaults for knowledge chunking")
+    """Get global defaults for knowledge chunking."""
     try:
         result = await KnowledgeService.get_defaults(user)
-        logger.debug(f"[KNOWLEDGE] Retrieved defaults: {result}")
         return result
     except Exception as e:
         logger.error(f"[KNOWLEDGE] Error retrieving defaults: {str(e)}")
@@ -34,23 +32,17 @@ async def get_defaults(user: dict = Depends(verify_token_middleware)):
 @router.get("/categories")
 async def list_categories(user: dict = Depends(verify_token_middleware)):
     """Return distinct knowledge categories for the user's tenant."""
-    logger.info("[KNOWLEDGE] Listing knowledge categories")
     try:
-        result = await KnowledgeService.list_categories(user)
-        logger.debug(f"[KNOWLEDGE] Retrieved {len(result)} categories")
+        result = await KnowledgeService.get_categories(user)
         return result
     except Exception as e:
-        import traceback
-        error_msg = str(e) if str(e) else repr(e)
-        logger.error(f"[KNOWLEDGE] Error listing categories: {error_msg}")
-        logger.error(f"[KNOWLEDGE] Categories error traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=error_msg)
+        logger.error(f"[KNOWLEDGE] Error retrieving categories: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/configs")
 async def list_knowledge_configs(user: dict = Depends(verify_token_middleware)):
     """List knowledge configurations for current tenant."""
-    logger.info("[KNOWLEDGE] Listing knowledge configurations")
     try:
         result = await KnowledgeService.list_knowledge_configs(user)
         return {"configurations": result}
@@ -73,7 +65,6 @@ async def list_collections(
     sort_order: str = Query("asc", regex="^(asc|desc)$", description="Sort order")
 ):
     """List knowledge collections for current tenant with pagination."""
-    logger.info(f"[KNOWLEDGE] Listing knowledge collections - page: {page}, size: {page_size}")
     try:
         result = await KnowledgeService.list_collections_paginated(
             user=user,
@@ -84,7 +75,6 @@ async def list_collections(
             sort_by=sort_by,
             sort_order=sort_order
         )
-        logger.debug(f"[KNOWLEDGE] Retrieved {len(result.get('collections', [])) if result else 0} collections")
         return result
     except Exception as e:
         import traceback
@@ -97,10 +87,8 @@ async def list_collections(
 @router.get("/collection/{collection}")
 async def get_collection(collection: str, user: dict = Depends(verify_token_middleware)):
     """Get collection details with files from MinIO."""
-    logger.info(f"[KNOWLEDGE] Getting collection details for: {collection}")
     try:
-        result = await KnowledgeService.get_collection(collection, user)
-        logger.debug(f"[KNOWLEDGE] Retrieved collection with {len(result.get('files', [])) if result and 'files' in result else 0} files")
+        result = await KnowledgeService.get_knowledge_collection(user, collection)
         return result
     except Exception as e:
         logger.error(f"[KNOWLEDGE] Error retrieving collection {collection}: {str(e)}")

@@ -40,7 +40,6 @@ class AgentService:
     ) -> Dict[str, Any]:
         """List agents with pagination, filtering, and sorting"""
         tenant_id = await cls.validate_tenant_access(user)
-        logger.info(f"[AGENTS] Listing agents with pagination for tenant: {tenant_id}")
         
         try:
             # Build filter query
@@ -183,7 +182,6 @@ class AgentService:
                 }
             }
             
-            logger.info(f"[AGENTS] Successfully retrieved {len(items)} agents for tenant: {tenant_id}")
             return result
         except Exception as e:
             logger.error(f"[AGENTS] Failed to list agents for tenant {tenant_id}: {e}")
@@ -193,7 +191,6 @@ class AgentService:
     async def list_agents(cls, user: dict) -> List[Dict[str, Any]]:
         """List agents for current tenant with populated references"""
         tenant_id = await cls.validate_tenant_access(user)
-        logger.info(f"[AGENTS] Listing agents for tenant: {tenant_id}")
         
         try:
             docs = await MongoStorageService.find_many("agents", {}, tenant_id=tenant_id, sort_field="created_at", sort_order=-1)
@@ -289,7 +286,6 @@ class AgentService:
                 }
                 items.append(item)
             
-            logger.info(f"[AGENTS] Successfully retrieved {len(items)} agents for tenant: {tenant_id}")
             return items
         except Exception as e:
             logger.error(f"[AGENTS] Failed to list agents for tenant {tenant_id}: {e}")

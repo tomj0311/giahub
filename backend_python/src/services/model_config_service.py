@@ -32,7 +32,6 @@ class ModelConfigService:
     async def list_model_configs(cls, user: dict) -> List[Dict[str, Any]]:
         """List model configurations for current tenant"""
         tenant_id = await cls.validate_tenant_access(user)
-        logger.info(f"[MODEL] Listing model configs for tenant: {tenant_id}")
         
         try:
             docs = await MongoStorageService.find_many("modelConfig", {}, tenant_id=tenant_id, sort_field="name", sort_order=1)
@@ -56,7 +55,6 @@ class ModelConfigService:
                 }
                 configs.append(config)
             
-            logger.info(f"[MODEL] Found {len(configs)} model configurations")
             return configs
             
         except Exception as e:
@@ -76,7 +74,6 @@ class ModelConfigService:
     ) -> Dict[str, Any]:
         """List model configurations with pagination, filtering, and sorting"""
         tenant_id = await cls.validate_tenant_access(user)
-        logger.info(f"[MODEL] Listing model configs with pagination for tenant: {tenant_id}")
         
         try:
             # Build filter query
@@ -147,7 +144,6 @@ class ModelConfigService:
                 }
             }
             
-            logger.info(f"[MODEL] Returning {len(configs)} configs, page {page}/{total_pages}")
             return result
             
         except Exception as e:

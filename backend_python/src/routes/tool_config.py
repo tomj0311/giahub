@@ -47,7 +47,6 @@ async def get_tool_configs(
     sort_order: str = Query("asc", regex="^(asc|desc)$", description="Sort order")
 ):
     """List tool configurations in user's tenant with pagination"""
-    logger.info(f"[TOOL_CONFIG] Listing configs - page: {page}, size: {page_size}")
     try:
         result = await ToolConfigService.get_tool_configs_paginated(
             user=user,

@@ -31,7 +31,6 @@ async def list_agents(
     sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order")
 ):
     """List agents for current tenant with pagination, filtering, and sorting."""
-    logger.info(f"[AGENTS] Listing agents for tenant - page: {page}, size: {page_size}")
     try:
         result = await AgentService.list_agents_paginated(
             user=user,

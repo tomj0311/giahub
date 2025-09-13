@@ -72,7 +72,6 @@ class ToolConfigService:
     async def get_tool_configs(cls, user: dict, category: Optional[str] = None) -> List[dict]:
         """Get all tool configurations for the user's tenant, optionally filtered by category"""
         tenant_id = await cls.validate_tenant_access(user)
-        logger.info(f"[TOOL] Listing tool configs for tenant: {tenant_id}")
         
         # Build query filter
         query = {}
@@ -106,7 +105,6 @@ class ToolConfigService:
     ) -> Dict[str, Any]:
         """Get tool configurations with pagination, filtering, and sorting"""
         tenant_id = await cls.validate_tenant_access(user)
-        logger.info(f"[TOOL] Listing tool configs with pagination for tenant: {tenant_id}")
         
         try:
             # Build filter query
@@ -166,7 +164,6 @@ class ToolConfigService:
                 }
             }
             
-            logger.info(f"[TOOL] Returning {len(configs)} configs, page {page}/{total_pages}")
             return result
             
         except Exception as e:

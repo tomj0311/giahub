@@ -116,7 +116,6 @@ class MongoStorageService:
             # Use length_or_none=None only when no limit is set
             max_results = limit if limit else None
             results = await cursor.to_list(length=max_results)
-            logger.debug(f"Found {len(results)} documents in {collection_name}")
             
             return results
         except Exception as e:
@@ -412,9 +411,6 @@ class MongoStorageService:
                 filter_dict, update_data, upsert=upsert, return_document=return_doc
             )
             
-            if result:
-                logger.info(f"Found and updated document in {collection_name}")
-            
             return result
         except Exception as e:
             logger.error(f"Failed to find and update document in {collection_name}: {e}")
@@ -460,7 +456,6 @@ class MongoStorageService:
             filter_dict = cls._ensure_tenant_filter(filter_dict, tenant_id, collection_name)
             
             distinct_values = await collection.distinct(field, filter_dict)
-            logger.debug(f"Found {len(distinct_values)} distinct values for {field} in {collection_name}")
             
             return distinct_values
         except Exception as e:
