@@ -31,7 +31,7 @@ class AnalyticsService:
             completed_filter = {**filter_query, "completed": True}
             completed_conversations = await collection.count_documents(completed_filter)
             
-            # Average metrics for completed conversations
+            # Average metrics for completed conversations and total tokens consumed
             pipeline = [
                 {"$match": completed_filter},
                 {
@@ -41,7 +41,10 @@ class AnalyticsService:
                         "avg_total_tokens": {"$avg": "$metrics.total_tokens"},
                         "avg_input_tokens": {"$avg": "$metrics.total_input_tokens"},
                         "avg_output_tokens": {"$avg": "$metrics.total_output_tokens"},
-                        "avg_time_to_first_token": {"$avg": "$metrics.avg_time_to_first_token"}
+                        "avg_time_to_first_token": {"$avg": "$metrics.avg_time_to_first_token"},
+                        "total_tokens_consumed": {"$sum": "$metrics.total_tokens"},
+                        "total_input_tokens_consumed": {"$sum": "$metrics.total_input_tokens"},
+                        "total_output_tokens_consumed": {"$sum": "$metrics.total_output_tokens"}
                     }
                 }
             ]
@@ -57,7 +60,10 @@ class AnalyticsService:
                 "avg_total_tokens": round(avg_data.get("avg_total_tokens", 0)),
                 "avg_input_tokens": round(avg_data.get("avg_input_tokens", 0)),
                 "avg_output_tokens": round(avg_data.get("avg_output_tokens", 0)),
-                "avg_time_to_first_token": round(avg_data.get("avg_time_to_first_token", 0), 3)
+                "avg_time_to_first_token": round(avg_data.get("avg_time_to_first_token", 0), 3),
+                "total_tokens_consumed": avg_data.get("total_tokens_consumed", 0),
+                "total_input_tokens_consumed": avg_data.get("total_input_tokens_consumed", 0),
+                "total_output_tokens_consumed": avg_data.get("total_output_tokens_consumed", 0)
             }
             
         except Exception as e:

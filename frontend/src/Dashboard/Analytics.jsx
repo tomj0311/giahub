@@ -22,7 +22,8 @@ import {
   Zap, 
   TrendingUp,
   CheckCircle,
-  XCircle
+  XCircle,
+  Cpu
 } from 'lucide-react'
 import AnalyticsService from '../services/analyticsService'
 
@@ -198,7 +199,7 @@ const Analytics = () => {
       
       {/* Overview Metrics */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} lg={2.4}>
           <MetricCard
             title="Total Conversations"
             value={overview?.total_conversations || 0}
@@ -206,7 +207,7 @@ const Analytics = () => {
             color="primary"
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} lg={2.4}>
           <MetricCard
             title="Completion Rate"
             value={`${overview?.completion_rate || 0}%`}
@@ -215,7 +216,7 @@ const Analytics = () => {
             color="success"
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} lg={2.4}>
           <MetricCard
             title="Avg Response Time"
             value={`${overview?.avg_response_time || 0}s`}
@@ -224,13 +225,22 @@ const Analytics = () => {
             color="warning"
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} lg={2.4}>
           <MetricCard
             title="Avg Tokens"
             value={overview?.avg_total_tokens || 0}
             subtitle={`${overview?.avg_input_tokens || 0} input, ${overview?.avg_output_tokens || 0} output`}
             icon={Zap}
             color="info"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} lg={2.4}>
+          <MetricCard
+            title="Total Tokens Consumed"
+            value={overview?.total_tokens_consumed?.toLocaleString() || 0}
+            subtitle={`${overview?.total_input_tokens_consumed?.toLocaleString() || 0} input, ${overview?.total_output_tokens_consumed?.toLocaleString() || 0} output`}
+            icon={Cpu}
+            color="secondary"
           />
         </Grid>
       </Grid>
