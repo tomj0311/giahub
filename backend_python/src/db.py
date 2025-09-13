@@ -57,6 +57,7 @@ def get_collections():
         "knowledgeConfig": database["knowledgeConfig"],
         "agents": database["agents"],
         "conversations": database["conversations"],
+        "agent_runs": database["agent_runs"],
         "workflowConfig": database["workflowConfig"],
     }
     logger.debug(f"[DB] Retrieved {len(_collections_cache)} collections")
@@ -180,6 +181,16 @@ async def ensure_indexes():
         # Conversations collection indexes
         await collections["conversations"].create_index([("tenantId", 1), ("conversation_id", 1)], unique=True)
         await collections["conversations"].create_index("updated_at")
+
+        logger.debug("[DB] Creating agent runs indexes")
+        # Agent runs collection indexes for audit and analytics
+        await collections["agent_runs"].create_index("tenantId")
+        await collections["agent_runs"].create_index("user_id")
+        await collections["agent_runs"].create_index("agent_name")
+        await collections["agent_runs"].create_index("conv_id")
+        await collections["agent_runs"].create_index("created_at")
+        await collections["agent_runs"].create_index([("tenantId", 1), ("user_id", 1)])
+        await collections["agent_runs"].create_index([("tenantId", 1), ("agent_name", 1)])
 
         logger.debug("[DB] Creating workflow configuration indexes")
         # Workflow configuration indexes

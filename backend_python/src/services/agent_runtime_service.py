@@ -6,6 +6,7 @@ import os
 from typing import Dict, Any, Optional, AsyncGenerator
 from fastapi import HTTPException, status
 from ..utils.log import logger
+from ..utils.mongo_storage import MongoStorageService
 from .agent_service import AgentService
 
 def module_loader(module_path: str):
@@ -247,7 +248,77 @@ class AgentRuntimeService:
             yield {"type": "error", "error": str(e), "timestamp": asyncio.get_event_loop().time()}
 
     @classmethod
+    async def _log_agent_execution_results(cls, agent: Any, user: Dict[str, Any], agent_name: str, conv_id: Optional[str] = None):
+        """Log agent execution results for audit and calculation purposes"""
+        try:
+            run_response = getattr(agent, 'run_response', None)
+            if run_response:
+                run_data = {
+                    "user_id": user.get("id"),
+                    "agent_name": agent_name,
+                    "conv_id": conv_id,
+                    "completed": True
+                }
+                
+                response_data = {
+                    "content": getattr(run_response, 'content', None),
+                    "content_type": getattr(run_response, 'content_type', None),
+                }
+                
+                # Extract metrics from response
+                response_metrics = getattr(run_response, 'metrics', {})
+                if response_metrics:
+                    # Convert defaultdict to regular dict for MongoDB
+                    if hasattr(response_metrics, 'default_factory'):
+                        response_metrics = dict(response_metrics)
+                    response_data["metrics"] = response_metrics
+                    
+                    # Calculate aggregate metrics for easy querying
+                    aggregate_metrics = {}
+                    if 'total_tokens' in response_metrics:
+                        aggregate_metrics["total_tokens"] = sum(response_metrics['total_tokens']) if isinstance(response_metrics['total_tokens'], list) else response_metrics['total_tokens']
+                    if 'input_tokens' in response_metrics:
+                        aggregate_metrics["total_input_tokens"] = sum(response_metrics['input_tokens']) if isinstance(response_metrics['input_tokens'], list) else response_metrics['input_tokens']
+                    if 'output_tokens' in response_metrics:
+                        aggregate_metrics["total_output_tokens"] = sum(response_metrics['output_tokens']) if isinstance(response_metrics['output_tokens'], list) else response_metrics['output_tokens']
+                    if 'time' in response_metrics:
+                        aggregate_metrics["total_response_time"] = sum(response_metrics['time']) if isinstance(response_metrics['time'], list) else response_metrics['time']
+                    if 'time_to_first_token' in response_metrics:
+                        avg_ttft = response_metrics['time_to_first_token']
+                        if isinstance(avg_ttft, list) and avg_ttft:
+                            aggregate_metrics["avg_time_to_first_token"] = sum(avg_ttft) / len(avg_ttft)
+                        elif isinstance(avg_ttft, (int, float)):
+                            aggregate_metrics["avg_time_to_first_token"] = avg_ttft
+                    
+                    run_data["metrics"] = aggregate_metrics
+                
+                run_data["response"] = response_data
+                
+                # Store in MongoDB agent_runs collection
+                tenant_id = user.get("tenantId")
+                if tenant_id:
+                    document_id = await MongoStorageService.insert_one(
+                        collection_name="agent_runs",
+                        document=run_data,
+                        tenant_id=tenant_id
+                    )
+                    if document_id:
+                        logger.info(f"Agent execution results stored in MongoDB: {document_id}")
+                    else:
+                        logger.error("Failed to store agent execution results in MongoDB")
+                else:
+                    logger.warning("No tenant_id found, cannot store agent execution results")
+                
+                # Also log for immediate visibility
+                logger.info(f"Agent execution completed: {json.dumps(run_data, default=str)}")
+                
+        except Exception as e:
+            logger.error(f"Failed to log agent execution results: {e}")
+
+    @classmethod
     async def execute_agent(cls, agent_name: str, prompt: str, user: Dict[str, Any], conv_id: Optional[str] = None, cancel_event: Optional[asyncio.Event] = None) -> AsyncGenerator[Dict[str, Any], None]:
+        agent = None
+        completed = False
         try:
             agent_doc = await AgentService.get_agent_by_name(agent_name, user)
             if not agent_doc:
@@ -261,7 +332,13 @@ class AgentRuntimeService:
                 agent_config["conv_id"] = conv_id
             agent = await cls.build_agent_from_config(agent_config, user)
             async for response in cls.run_agent_stream(agent, prompt, cancel_event=cancel_event):
+                if response.get("type") == "agent_run_complete":
+                    completed = True
                 yield response
         except Exception as e:
             logger.error(f"Failed to execute agent '{agent_name}': {e}")
             yield {"type": "error", "error": f"Failed to execute agent: {str(e)}"}
+        finally:
+            # Log results after execution completion
+            if completed and agent:
+                await cls._log_agent_execution_results(agent, user, agent_name, conv_id)

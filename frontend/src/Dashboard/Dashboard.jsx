@@ -51,6 +51,7 @@ const KnowledgeConfig = lazy(() => import('../agents/KnowledgeConfig'))
 const Agent = lazy(() => import('../agents/Agent'))
 const AgentPlayground = lazy(() => import('../playground/AgentPlayground'))
 const WorkflowConfig = lazy(() => import('../workflows/WorkflowConfig'))
+const Analytics = lazy(() => import('./Analytics'))
 const BPMN = lazy(() => import('../components/bpmn/BPMN'))
 import RouteTransition from '../components/RouteTransition'
 import RouteLoader from '../components/RouteLoader'
@@ -713,7 +714,7 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="tools" element={<ToolConfig user={user} />} />
 				<Route path="knowledge" element={<KnowledgeConfig user={user} />} />
 				<Route path="agent-playground" element={<AgentPlayground user={user} />} />
-				<Route path="analytics" element={<div>Analytics - Coming Soon</div>} />
+				<Route path="analytics" element={<Analytics />} />
 				<Route path="workflows" element={<WorkflowConfig user={user} />} />
 				<Route path="bpmn" element={<BPMNEditorWrapper />} />
 				<Route path="monitor" element={<div>Monitor - Coming Soon</div>} />
