@@ -100,6 +100,17 @@ class AgentRuntimeService:
     _agents = {}
     
     @classmethod
+    def clear_agent_cache(cls, conv_id: Optional[str] = None):
+        """Clear agent cache for a specific conversation or all conversations"""
+        if conv_id:
+            if conv_id in cls._agents:
+                del cls._agents[conv_id]
+                logger.info(f"Cleared agent cache for conv_id: {conv_id}")
+        else:
+            cls._agents.clear()
+            logger.info("Cleared all agent cache")
+    
+    @classmethod
     async def _search_images_for_agent(cls, user: Dict[str, Any], conv_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Search for images in MinIO for the agent to use"""
         images = []
@@ -113,14 +124,10 @@ class AgentRuntimeService:
             user_id = user.get("id")
             tenant_id = user.get("tenantId")
             
-            if conv_id and tenant_id:
-                # Search for conversation-specific images - using the actual path structure
-                conv_path = f"uploads/{tenant_id}/{conv_id}/"
+            if conv_id and user_id:
+                # Search only for conversation-specific images
+                conv_path = f"uploads/{user_id}/{conv_id}/"
                 search_paths.append(conv_path)
-                
-                # Also search user's general uploads
-                user_path = f"uploads/{user_id}/"
-                search_paths.append(user_path)
             
             if not search_paths:
                 logger.debug("[AGENT] No search paths configured for image search")
@@ -150,7 +157,11 @@ class AgentRuntimeService:
                             logger.info(f"[AGENT] Found image: {file_path} (type: {file_ext})")
                             
                             # Create full URL for the image
-                            image_url = f"{minio_base_url}/uploads/{file_path}"
+                            # Check if file_path already starts with 'uploads/' to avoid double 'uploads/'
+                            if file_path.startswith('uploads/'):
+                                image_url = f"{minio_base_url}/{file_path}"
+                            else:
+                                image_url = f"{minio_base_url}/uploads/{file_path}"
                             
                             # Try to download and get base64 data
                             base_64_image = None
