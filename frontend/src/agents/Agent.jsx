@@ -379,7 +379,21 @@ export default function Agent({ user }) {
                         <TableCell>
                           <Typography variant="body2" fontWeight="medium">{a.name}</Typography>
                           {a.description && (
-                            <Typography variant="caption" color="text.secondary">{a.description}</Typography>
+                            <Typography 
+                              variant="caption" 
+                              color="text.secondary"
+                              sx={{
+                                display: '-webkit-box',
+                                WebkitLineClamp: 3,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                lineHeight: 1.2,
+                                maxHeight: '3.6em' // 3 lines * 1.2 line-height
+                              }}
+                            >
+                              {a.description}
+                            </Typography>
                           )}
                         </TableCell>
                         <TableCell>{a.category || '-'}</TableCell>

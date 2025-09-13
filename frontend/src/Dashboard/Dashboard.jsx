@@ -47,7 +47,6 @@ const RoleManagement = lazy(() => import('./RoleManagement'))
 const UserInvitation = lazy(() => import('./UserInvitation'))
 const ModelConfig = lazy(() => import('../agents/ModelConfig'))
 const ToolConfig = lazy(() => import('../agents/ToolConfig'))
-const EmbedderConfig = lazy(() => import('../agents/EmbedderConfig'))
 const KnowledgeConfig = lazy(() => import('../agents/KnowledgeConfig'))
 const Agent = lazy(() => import('../agents/Agent'))
 const AgentPlayground = lazy(() => import('../playground/AgentPlayground'))
@@ -116,11 +115,6 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 					label: 'Knowledge',
 					to: '/dashboard/knowledge',
 					icon: 'BookOpen'
-				},
-				{
-					label: 'Embedders',
-					to: '/dashboard/embedders',
-					icon: 'Layers'
 				},
 				{
 					label: 'Databases',
@@ -728,7 +722,6 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="models" element={<ModelConfig user={user} />} />
 				<Route path="tools" element={<ToolConfig user={user} />} />
 				<Route path="knowledge" element={<KnowledgeConfig user={user} />} />
-				<Route path="embedders" element={<EmbedderConfig user={user} />} />
 				<Route path="agent-playground" element={<AgentPlayground user={user} />} />
 				<Route path="analytics" element={<div>Analytics - Coming Soon</div>} />
 				<Route path="databases" element={<div>Databases - Coming Soon</div>} />
