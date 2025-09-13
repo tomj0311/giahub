@@ -69,6 +69,53 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
     setActiveSection(activeSection === section ? '' : section);
   };
 
+  const getInnerXMLContent = () => {
+    // Look for XML content in multiple possible locations
+    const xmlContent = selectedNode?.data?.originalXML || 
+                      selectedEdge?.data?.originalXML ||
+                      selectedNode?.data?.originalNestedElements ||
+                      selectedEdge?.data?.originalNestedElements;
+    
+    console.log('🔍 PropertyPanel - selectedNode:', selectedNode);
+    console.log('🔍 PropertyPanel - xmlContent:', xmlContent);
+    
+    if (!xmlContent) {
+      return 'No XML data available - originalXML not found in node data';
+    }
+    
+    // If xmlContent is empty string, show message
+    if (xmlContent === "") {
+      return 'No inner elements found for this node';
+    }
+    
+    // If it's already a string of XML elements, return it directly
+    if (typeof xmlContent === 'string' && xmlContent.includes('<')) {
+      return xmlContent;
+    }
+    
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
+      const rootElement = xmlDoc.documentElement;
+      
+      // Get all child elements and convert to string
+      const children = Array.from(rootElement.children);
+      if (children.length === 0) {
+        return 'No inner elements found';
+      }
+      
+      // Return the XML string of all child elements
+      return children.map(child => {
+        // Create a new serializer to get the full XML
+        const serializer = new XMLSerializer();
+        return serializer.serializeToString(child);
+      }).join('\n');
+      
+    } catch (error) {
+      return 'Error parsing XML: ' + error.message + '\n\nRaw content:\n' + xmlContent;
+    }
+  };
+
   const getElementType = () => {
     if (selectedNode) {
       const type = selectedNode.type;
@@ -194,6 +241,33 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
                     placeholder="Enter element documentation"
                     rows={6}
                     disabled={readOnly}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Attributes Section */}
+          <div className="accordion-section">
+            <div 
+              className={`accordion-header ${activeSection === 'attributes' ? 'active' : ''}`}
+              onClick={() => toggleSection('attributes')}
+            >
+              <span>Attributes</span>
+              <span className="accordion-icon">
+                {activeSection === 'attributes' ? '▼' : '▶'}
+              </span>
+            </div>
+            {activeSection === 'attributes' && (
+              <div className="accordion-content">
+                <div className="form-group">
+                  <label htmlFor="element-xml">Inner XML Elements</label>
+                  <textarea
+                    id="element-xml"
+                    value={getInnerXMLContent()}
+                    readOnly
+                    rows={15}
+                    style={{ fontFamily: 'monospace', fontSize: '12px' }}
                   />
                 </div>
               </div>

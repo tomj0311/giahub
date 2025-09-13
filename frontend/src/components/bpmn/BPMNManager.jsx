@@ -7,6 +7,30 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
   const [showPasteArea, setShowPasteArea] = useState(false);
   const [pastedXML, setPastedXML] = useState('');
 
+  // Helper function to capture nested XML elements for preservation
+  const captureNestedElements = (element) => {
+    if (!element) return '';
+    
+    let nestedXML = '';
+    
+    // Capture child elements that are not documentation, incoming, or outgoing
+    const childNodes = element.childNodes;
+    for (let i = 0; i < childNodes.length; i++) {
+      const child = childNodes[i];
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        const tagName = child.tagName.toLowerCase();
+        // Skip basic flow elements and documentation (we handle these separately)
+        if (!tagName.includes('incoming') && 
+            !tagName.includes('outgoing') && 
+            !tagName.includes('documentation')) {
+          nestedXML += child.outerHTML;
+        }
+      }
+    }
+    
+    return nestedXML;
+  };
+
   // Helper function to escape XML characters
   const escapeXML = (str) => {
     if (!str) return '';
@@ -30,19 +54,29 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
     return attrs;
   };
 
-  // Helper to build an attribute string from a map, excluding some keys and allowing overrides
+  // Helper to build an attribute string from a map, preserving ALL original attributes
   const buildAttributesString = (attrsMap = {}, options = {}) => {
     const { exclude = [], overrides = {} } = options;
     const pieces = [];
     const excluded = new Set(exclude);
-    // Merge with overrides while ensuring excluded keys are not duplicated
-    const keys = new Set(Object.keys(attrsMap).concat(Object.keys(overrides)));
-    keys.forEach((key) => {
+    
+    // First add all original attributes (except excluded ones)
+    Object.keys(attrsMap).forEach((key) => {
       if (excluded.has(key)) return;
-      const value = overrides.hasOwnProperty(key) ? overrides[key] : attrsMap[key];
+      const value = attrsMap[key];
       if (value === undefined || value === null) return;
       pieces.push(`${key}="${escapeXML(value)}"`);
     });
+    
+    // Then add any overrides that weren't already included
+    Object.keys(overrides).forEach((key) => {
+      if (excluded.has(key)) return;
+      if (attrsMap.hasOwnProperty(key)) return; // Already added above
+      const value = overrides[key];
+      if (value === undefined || value === null) return;
+      pieces.push(`${key}="${escapeXML(value)}"`);
+    });
+    
     return pieces.length ? ' ' + pieces.join(' ') : '';
   };
 
@@ -106,8 +140,8 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
     console.log('Lane nodes:', laneNodes.length);
 
     // Preserve original IDs when available
-    const originalProcessId = regularNodes.length > 0 && regularNodes[0].data?.originalProcessId || 'Process_0ijwbx8';
-    const originalDefinitionsId = 'Definitions_02c9j3u';
+    const originalProcessId = regularNodes.length > 0 && regularNodes[0].data?.originalProcessId || 'Process_1';
+    const originalDefinitionsId = 'Definitions_1'; // Match the original XML
     const timestamp = Date.now();
     const collaborationId = `Collaboration_${timestamp}`;
     const processId = originalProcessId;
@@ -117,11 +151,19 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
     const messageFlows = edges.filter(edge => edge.data?.isMessageFlow);
 
     let xml = `<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="${originalDefinitionsId}" targetNamespace="http://bpmn.io/schema/bpmn" exporter="bpmn-js (https://demo.bpmn.io)" exporterVersion="18.6.1">`;
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+             xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+             id="${originalDefinitionsId}"
+             targetNamespace="http://example.com/bpmn"
+             xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL http://www.omg.org/spec/BPMN/2.0/20100501/BPMN20.xsd">`;
 
     // If we have participants, create collaboration structure
     if (participantNodes.length > 0) {
-      xml += `<bpmn:collaboration id="${collaborationId}">`;
+      xml += `<collaboration id="${collaborationId}">`;
 
       // Add participants
       participantNodes.forEach(participant => {
@@ -139,13 +181,13 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
           participant.data.originalDocumentation.forEach(d => { if (d) docs.push(d); });
         }
         if (docs.length) {
-          xml += `<bpmn:participant id="${participant.id}" name="${escapeXML(participant.data?.label || '')}" processRef="${participantProcessId}"${participantAttrStr}>`;
+          xml += `<participant id="${participant.id}" name="${escapeXML(participant.data?.label || '')}" processRef="${participantProcessId}"${participantAttrStr}>`;
           docs.forEach(text => {
-            xml += `<bpmn:documentation>${escapeXML(text)}</bpmn:documentation>`;
+            xml += `<documentation>${escapeXML(text)}</documentation>`;
           });
-          xml += `</bpmn:participant>`;
+          xml += `</participant>`;
         } else {
-          xml += `<bpmn:participant id="${participant.id}" name="${escapeXML(participant.data?.label || '')}" processRef="${participantProcessId}"${participantAttrStr} />`;
+          xml += `<participant id="${participant.id}" name="${escapeXML(participant.data?.label || '')}" processRef="${participantProcessId}"${participantAttrStr} />`;
         }
       });
 
@@ -153,13 +195,13 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
       messageFlows.forEach(flow => {
         const flowName = flow.data?.label || flow.label || '';
         if (flowName) {
-          xml += `<bpmn:messageFlow id="${flow.id}" name="${escapeXML(flowName)}" sourceRef="${flow.source}" targetRef="${flow.target}" />`;
+          xml += `<messageFlow id="${flow.id}" name="${escapeXML(flowName)}" sourceRef="${flow.source}" targetRef="${flow.target}" />`;
         } else {
-          xml += `<bpmn:messageFlow id="${flow.id}" sourceRef="${flow.source}" targetRef="${flow.target}" />`;
+          xml += `<messageFlow id="${flow.id}" sourceRef="${flow.source}" targetRef="${flow.target}" />`;
         }
       });
 
-      xml += `</bpmn:collaboration>`;
+      xml += `</collaboration>`;
 
       // Create separate processes for each participant
       participantNodes.forEach(participant => {
@@ -189,27 +231,27 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
           participant.data.originalProcessDocumentation.forEach(d => { if (d) procDocs.push(d); });
         }
         if (procDocs.length) {
-          xml += `<bpmn:process id="${participantProcessId}" name="${escapeXML(participant.data?.label || '')}"${procAttrStr}>`;
+          xml += `<process id="${participantProcessId}" name="${escapeXML(participant.data?.label || '')}"${procAttrStr}>`;
           procDocs.forEach(text => {
-            xml += `<bpmn:documentation>${escapeXML(text)}</bpmn:documentation>`;
+            xml += `<documentation>${escapeXML(text)}</documentation>`;
           });
         } else {
-          xml += `<bpmn:process id="${participantProcessId}" name="${escapeXML(participant.data?.label || '')}"${procAttrStr}>`;
+          xml += `<process id="${participantProcessId}" name="${escapeXML(participant.data?.label || '')}"${procAttrStr}>`;
         }
 
         // Add lane set if lanes exist
         if (participantLanes.length > 0) {
-          xml += `<bpmn:laneSet id="${participant.id}_laneset">`;
+          xml += `<laneSet id="${participant.id}_laneset">`;
           participantLanes.forEach(lane => {
-            xml += `<bpmn:lane id="${lane.id}" name="${escapeXML(lane.data?.label || '')}">`;
+            xml += `<lane id="${lane.id}" name="${escapeXML(lane.data?.label || '')}">`;
             // Add flow node refs for elements in this lane
             const laneElements = participantElements.filter(elem => elem.data.laneId === lane.id);
             laneElements.forEach(elem => {
-              xml += `<bpmn:flowNodeRef>${elem.id}</bpmn:flowNodeRef>`;
+              xml += `<flowNodeRef>${elem.id}</flowNodeRef>`;
             });
-            xml += `</bpmn:lane>`;
+            xml += `</lane>`;
           });
-          xml += `</bpmn:laneSet>`;
+          xml += `</laneSet>`;
         }
 
         // Add elements for this participant
@@ -227,15 +269,25 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
           if (Array.isArray(flow.data?.originalDocumentation)) flow.data.originalDocumentation.forEach(d => { if (d) docs.push(d); });
           const flowAttrStr = buildAttributesString(flowAttrsMap, { exclude: ['id', 'name', 'sourceRef', 'targetRef'] });
           if (docs.length) {
-            xml += `<bpmn:sequenceFlow id="${flow.id}"${flowName ? ` name="${escapeXML(flowName)}"` : ''} sourceRef="${flow.source}" targetRef="${flow.target}"${flowAttrStr}>`;
-            docs.forEach(text => { xml += `<bpmn:documentation>${escapeXML(text)}</bpmn:documentation>`; });
-            xml += `</bpmn:sequenceFlow>`;
+            xml += `<sequenceFlow id="${flow.id}"${flowName ? ` name="${escapeXML(flowName)}"` : ''} sourceRef="${flow.source}" targetRef="${flow.target}"${flowAttrStr}>`;
+            docs.forEach(text => { xml += `<documentation>${escapeXML(text)}</documentation>`; });
+            // Preserve original nested elements
+            if (flow.data?.originalNestedElements) {
+              xml += flow.data.originalNestedElements;
+            }
+            xml += `</sequenceFlow>`;
           } else {
-            xml += `<bpmn:sequenceFlow id="${flow.id}"${flowName ? ` name="${escapeXML(flowName)}"` : ''} sourceRef="${flow.source}" targetRef="${flow.target}"${flowAttrStr} />`;
+            if (flow.data?.originalNestedElements) {
+              xml += `<sequenceFlow id="${flow.id}"${flowName ? ` name="${escapeXML(flowName)}"` : ''} sourceRef="${flow.source}" targetRef="${flow.target}"${flowAttrStr}>`;
+              xml += flow.data.originalNestedElements;
+              xml += `</sequenceFlow>`;
+            } else {
+              xml += `<sequenceFlow id="${flow.id}"${flowName ? ` name="${escapeXML(flowName)}"` : ''} sourceRef="${flow.source}" targetRef="${flow.target}"${flowAttrStr} />`;
+            }
           }
         });
 
-        xml += `</bpmn:process>`;
+        xml += `</process>`;
       });
 
     } else {
@@ -243,7 +295,7 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
       // Preserve original isExecutable value
       const isExecutable = regularNodes.length > 0 && regularNodes[0].data?.originalIsExecutable !== undefined
         ? regularNodes[0].data.originalIsExecutable : "false";
-      xml += `<bpmn:process id="${processId}" isExecutable="${isExecutable}">`;
+      xml += `<process id="${processId}" isExecutable="${isExecutable}">`;
 
       // Add all nodes
       regularNodes.forEach(node => {
@@ -259,21 +311,31 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
         if (Array.isArray(flow.data?.originalDocumentation)) flow.data.originalDocumentation.forEach(d => { if (d) docs.push(d); });
         const flowAttrStr = buildAttributesString(flowAttrsMap, { exclude: ['id', 'name', 'sourceRef', 'targetRef'] });
         if (docs.length) {
-          xml += `<bpmn:sequenceFlow id="${flow.id}"${flowName ? ` name="${escapeXML(flowName)}"` : ''} sourceRef="${flow.source}" targetRef="${flow.target}"${flowAttrStr}>`;
-          docs.forEach(text => { xml += `<bpmn:documentation>${escapeXML(text)}</bpmn:documentation>`; });
-          xml += `</bpmn:sequenceFlow>`;
+          xml += `<sequenceFlow id="${flow.id}"${flowName ? ` name="${escapeXML(flowName)}"` : ''} sourceRef="${flow.source}" targetRef="${flow.target}"${flowAttrStr}>`;
+          docs.forEach(text => { xml += `<documentation>${escapeXML(text)}</documentation>`; });
+          // Preserve original nested elements
+          if (flow.data?.originalNestedElements) {
+            xml += flow.data.originalNestedElements;
+          }
+          xml += `</sequenceFlow>`;
         } else {
-          xml += `<bpmn:sequenceFlow id="${flow.id}"${flowName ? ` name="${escapeXML(flowName)}"` : ''} sourceRef="${flow.source}" targetRef="${flow.target}"${flowAttrStr} />`;
+          if (flow.data?.originalNestedElements) {
+            xml += `<sequenceFlow id="${flow.id}"${flowName ? ` name="${escapeXML(flowName)}"` : ''} sourceRef="${flow.source}" targetRef="${flow.target}"${flowAttrStr}>`;
+            xml += flow.data.originalNestedElements;
+            xml += `</sequenceFlow>`;
+          } else {
+            xml += `<sequenceFlow id="${flow.id}"${flowName ? ` name="${escapeXML(flowName)}"` : ''} sourceRef="${flow.source}" targetRef="${flow.target}"${flowAttrStr} />`;
+          }
         }
       });
 
-      xml += `</bpmn:process>`;
+      xml += `</process>`;
     }
 
     // Generate diagram information
     xml += generateDiagramXML(collaborationId, processId, participantNodes.length > 0);
 
-    xml += `</bpmn:definitions>`;
+    xml += `</definitions>`;
 
     // Format the XML with proper indentation
     const formattedXML = formatXML(xml);
@@ -314,33 +376,39 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
     switch (node.type) {
       case 'startEvent':
         {
+          // Preserve ALL original attributes exactly as they were
           const attrStr = buildAttributesString(originalAttrs, { exclude: ['id', 'name'] });
-          xml += `<bpmn:startEvent id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr}>`;
-          nodeDocs.forEach(text => { xml += `<bpmn:documentation>${escapeXML(text)}</bpmn:documentation>`; });
+          xml += `<startEvent id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr}>`;
+          nodeDocs.forEach(text => { xml += `<documentation>${escapeXML(text)}</documentation>`; });
           outgoingEdges.forEach(edge => {
-            xml += `<bpmn:outgoing>${edge.id}</bpmn:outgoing>`;
+            xml += `<outgoing>${edge.id}</outgoing>`;
           });
-          // Add event definition if specified
-          if (node.data?.eventType === 'message') {
-            xml += `<bpmn:messageEventDefinition id="${nodeId}_def" />`;
+          // Preserve any original nested elements like timerEventDefinition
+          if (node.data?.originalNestedElements) {
+            xml += node.data.originalNestedElements;
+          } else if (node.data?.eventType === 'message') {
+            xml += `<messageEventDefinition id="${nodeId}_def" />`;
           }
-          xml += `</bpmn:startEvent>`;
+          xml += `</startEvent>`;
         }
         break;
 
       case 'endEvent':
         {
+          // Preserve ALL original attributes exactly as they were
           const attrStr = buildAttributesString(originalAttrs, { exclude: ['id', 'name'] });
-          xml += `<bpmn:endEvent id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr}>`;
-          nodeDocs.forEach(text => { xml += `<bpmn:documentation>${escapeXML(text)}</bpmn:documentation>`; });
+          xml += `<endEvent id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr}>`;
+          nodeDocs.forEach(text => { xml += `<documentation>${escapeXML(text)}</documentation>`; });
           incomingEdges.forEach(edge => {
-            xml += `<bpmn:incoming>${edge.id}</bpmn:incoming>`;
+            xml += `<incoming>${edge.id}</incoming>`;
           });
-          // Add event definition if specified
-          if (node.data?.eventType === 'terminate') {
-            xml += `<bpmn:terminateEventDefinition id="${nodeId}_def" />`;
+          // Preserve any original nested elements
+          if (node.data?.originalNestedElements) {
+            xml += node.data.originalNestedElements;
+          } else if (node.data?.eventType === 'terminate') {
+            xml += `<terminateEventDefinition id="${nodeId}_def" />`;
           }
-          xml += `</bpmn:endEvent>`;
+          xml += `</endEvent>`;
         }
         break;
 
@@ -356,16 +424,21 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
           // Use taskType from import or fallback to original element type or node type
           const taskType = node.data?.taskType || node.data?.originalElementType || (node.type === 'task' ? 'task' : node.type);
           console.log(`🔥 TASK EXPORT DEBUG: nodeId=${nodeId}, node.type=${node.type}, taskType=${node.data?.taskType}, originalElementType=${node.data?.originalElementType}, final taskType=${taskType}`);
+          // Preserve ALL original attributes exactly as they were
           const attrStr = buildAttributesString(originalAttrs, { exclude: ['id', 'name'] });
-          xml += `<bpmn:${taskType} id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr}>`;
-          nodeDocs.forEach(text => { xml += `<bpmn:documentation>${escapeXML(text)}</bpmn:documentation>`; });
+          xml += `<${taskType} id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr}>`;
+          nodeDocs.forEach(text => { xml += `<documentation>${escapeXML(text)}</documentation>`; });
           incomingEdges.forEach(edge => {
-            xml += `<bpmn:incoming>${edge.id}</bpmn:incoming>`;
+            xml += `<incoming>${edge.id}</incoming>`;
           });
           outgoingEdges.forEach(edge => {
-            xml += `<bpmn:outgoing>${edge.id}</bpmn:outgoing>`;
+            xml += `<outgoing>${edge.id}</outgoing>`;
           });
-          xml += `</bpmn:${taskType}>`;
+          // Preserve any original nested elements like extensionElements
+          if (node.data?.originalNestedElements) {
+            xml += node.data.originalNestedElements;
+          }
+          xml += `</${taskType}>`;
         }
         break;
 
@@ -383,15 +456,15 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
         }
         {
           const attrStr = buildAttributesString(originalAttrs, { exclude: ['id', 'name'] });
-          xml += `<bpmn:${gatewayType} id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr}>`;
-          nodeDocs.forEach(text => { xml += `<bpmn:documentation>${escapeXML(text)}</bpmn:documentation>`; });
+          xml += `<${gatewayType} id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr}>`;
+          nodeDocs.forEach(text => { xml += `<documentation>${escapeXML(text)}</documentation>`; });
           incomingEdges.forEach(edge => {
-            xml += `<bpmn:incoming>${edge.id}</bpmn:incoming>`;
+            xml += `<incoming>${edge.id}</incoming>`;
           });
           outgoingEdges.forEach(edge => {
-            xml += `<bpmn:outgoing>${edge.id}</bpmn:outgoing>`;
+            xml += `<outgoing>${edge.id}</outgoing>`;
           });
-          xml += `</bpmn:${gatewayType}>`;
+          xml += `</${gatewayType}>`;
         }
         break;
 
@@ -404,15 +477,15 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
           // Use original element type if available, otherwise use current node type
           const gatewayType = node.data?.originalElementType || node.type;
           const attrStr = buildAttributesString(originalAttrs, { exclude: ['id', 'name'] });
-          xml += `<bpmn:${gatewayType} id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr}>`;
-          nodeDocs.forEach(text => { xml += `<bpmn:documentation>${escapeXML(text)}</bpmn:documentation>`; });
+          xml += `<${gatewayType} id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr}>`;
+          nodeDocs.forEach(text => { xml += `<documentation>${escapeXML(text)}</documentation>`; });
           incomingEdges.forEach(edge => {
-            xml += `<bpmn:incoming>${edge.id}</bpmn:incoming>`;
+            xml += `<incoming>${edge.id}</incoming>`;
           });
           outgoingEdges.forEach(edge => {
-            xml += `<bpmn:outgoing>${edge.id}</bpmn:outgoing>`;
+            xml += `<outgoing>${edge.id}</outgoing>`;
           });
-          xml += `</bpmn:${gatewayType}>`;
+          xml += `</${gatewayType}>`;
         }
         break;
 
@@ -425,53 +498,53 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
           const eventType = node.data?.originalElementType || 
             (node.type === 'intermediateEvent' ? 'intermediateCatchEvent' : node.type);
           const attrStr = buildAttributesString(originalAttrs, { exclude: ['id', 'name'] });
-          xml += `<bpmn:${eventType} id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr}>`;
-          nodeDocs.forEach(text => { xml += `<bpmn:documentation>${escapeXML(text)}</bpmn:documentation>`; });
+          xml += `<${eventType} id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr}>`;
+          nodeDocs.forEach(text => { xml += `<documentation>${escapeXML(text)}</documentation>`; });
           incomingEdges.forEach(edge => {
-            xml += `<bpmn:incoming>${edge.id}</bpmn:incoming>`;
+            xml += `<incoming>${edge.id}</incoming>`;
           });
           outgoingEdges.forEach(edge => {
-            xml += `<bpmn:outgoing>${edge.id}</bpmn:outgoing>`;
+            xml += `<outgoing>${edge.id}</outgoing>`;
           });
 
           // Add event definitions based on event type or name
           if (node.data?.eventType === 'timer' || nodeName.toLowerCase().includes('minute')) {
-            xml += `<bpmn:timerEventDefinition id="${nodeId}_def" />`;
+            xml += `<timerEventDefinition id="${nodeId}_def" />`;
           } else if (node.data?.eventType === 'message' || nodeName.toLowerCase().includes('received') || nodeName.toLowerCase().includes('pizza')) {
-            xml += `<bpmn:messageEventDefinition id="${nodeId}_def" />`;
+            xml += `<messageEventDefinition id="${nodeId}_def" />`;
           }
 
-          xml += `</bpmn:${eventType}>`;
+          xml += `</${eventType}>`;
         }
         break;
 
       case 'subProcess':
         {
           const attrStr = buildAttributesString(originalAttrs, { exclude: ['id', 'name'] });
-          xml += `<bpmn:subProcess id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr}>`;
-          nodeDocs.forEach(text => { xml += `<bpmn:documentation>${escapeXML(text)}</bpmn:documentation>`; });
+          xml += `<subProcess id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr}>`;
+          nodeDocs.forEach(text => { xml += `<documentation>${escapeXML(text)}</documentation>`; });
           incomingEdges.forEach(edge => {
-            xml += `<bpmn:incoming>${edge.id}</bpmn:incoming>`;
+            xml += `<incoming>${edge.id}</incoming>`;
           });
           outgoingEdges.forEach(edge => {
-            xml += `<bpmn:outgoing>${edge.id}</bpmn:outgoing>`;
+            xml += `<outgoing>${edge.id}</outgoing>`;
           });
-          xml += `</bpmn:subProcess>`;
+          xml += `</subProcess>`;
         }
         break;
 
       case 'callActivity':
         {
           const attrStr = buildAttributesString(originalAttrs, { exclude: ['id', 'name'] });
-          xml += `<bpmn:callActivity id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr}>`;
-          nodeDocs.forEach(text => { xml += `<bpmn:documentation>${escapeXML(text)}</bpmn:documentation>`; });
+          xml += `<callActivity id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr}>`;
+          nodeDocs.forEach(text => { xml += `<documentation>${escapeXML(text)}</documentation>`; });
           incomingEdges.forEach(edge => {
-            xml += `<bpmn:incoming>${edge.id}</bpmn:incoming>`;
+            xml += `<incoming>${edge.id}</incoming>`;
           });
           outgoingEdges.forEach(edge => {
-            xml += `<bpmn:outgoing>${edge.id}</bpmn:outgoing>`;
+            xml += `<outgoing>${edge.id}</outgoing>`;
           });
-          xml += `</bpmn:callActivity>`;
+          xml += `</callActivity>`;
         }
         break;
 
@@ -480,8 +553,8 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
         // Simple data object reference
         {
           const attrStr = buildAttributesString(originalAttrs, { exclude: ['id', 'name'] });
-          xml += `<bpmn:dataObjectReference id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr} dataObjectRef="DataObject_${nodeId}" />`;
-          xml += `<bpmn:dataObject id="DataObject_${nodeId}"${nodeName ? ` name="${nodeName}"` : ''} />`;
+          xml += `<dataObjectReference id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr} dataObjectRef="DataObject_${nodeId}" />`;
+          xml += `<dataObject id="DataObject_${nodeId}"${nodeName ? ` name="${nodeName}"` : ''} />`;
         }
         break;
 
@@ -489,21 +562,21 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
       case 'dataStoreReference':
         {
           const attrStr = buildAttributesString(originalAttrs, { exclude: ['id', 'name'] });
-          xml += `<bpmn:dataStoreReference id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr} />`;
+          xml += `<dataStoreReference id="${nodeId}"${nodeName ? ` name="${nodeName}"` : ''}${attrStr} />`;
         }
         break;
 
       case 'group':
         {
           const attrStr = buildAttributesString(originalAttrs, { exclude: ['id'] });
-          xml += `<bpmn:group id="${nodeId}"${attrStr} />`;
+          xml += `<group id="${nodeId}"${attrStr} />`;
         }
         break;
 
       case 'textAnnotation':
         {
           const attrStr = buildAttributesString(originalAttrs, { exclude: ['id'] });
-          xml += `<bpmn:textAnnotation id="${nodeId}"${attrStr}><bpmn:text>${nodeName}</bpmn:text></bpmn:textAnnotation>`;
+          xml += `<textAnnotation id="${nodeId}"${attrStr}><text>${nodeName}</text></textAnnotation>`;
         }
         break;
         break;
@@ -779,14 +852,24 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
         const xmlDoc = parser.parseFromString(xml, 'text/xml');
         const parseError = xmlDoc.querySelector('parsererror');
         if (parseError) {
-          console.warn('Generated XML has parsing issues:', parseError.textContent);
+          const errorDetails = parseError.textContent;
+          console.error('XML Parsing Error:', errorDetails);
+          console.error('Generated XML that failed:', xml.substring(0, 1000));
+          alert(`XML Validation Failed:\n\n${errorDetails}\n\nCheck the console for more details.`);
+          return;
+        } else {
+          console.log('✅ XML validation successful');
         }
       } catch (validationError) {
-        console.warn('XML validation warning:', validationError);
+        console.error('XML validation error:', validationError);
+        console.error('Generated XML that failed:', xml.substring(0, 1000));
+        alert(`XML Validation Error:\n\n${validationError.message}\n\nCheck the console for more details.`);
+        return;
       }
     } catch (error) {
       console.error('Error generating BPMN XML:', error);
-      alert('Error generating BPMN XML: ' + error.message);
+      console.error('Error stack:', error.stack);
+      alert(`Detailed Error generating BPMN XML:\n\nError: ${error.message}\n\nType: ${error.name}\n\nCheck the console for full stack trace.`);
     }
   };
 
@@ -807,7 +890,8 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading BPMN:', error);
-      alert('Error downloading BPMN: ' + error.message);
+      console.error('Error stack:', error.stack);
+      alert(`Detailed Error downloading BPMN:\n\nError: ${error.message}\n\nType: ${error.name}\n\nCheck the console for full stack trace.`);
     }
   };
 
@@ -1054,6 +1138,7 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
             const originalAttributes = getAttributesMap(element);
             const docEls = element.querySelectorAll('bpmn2\\:documentation, bpmn\\:documentation, documentation');
             const originalDocumentation = Array.from(docEls).map(d => d.textContent || '');
+            const originalNestedElements = captureNestedElements(element);
 
             // Find which lane this element belongs to
             let containingLane = null;
@@ -1162,7 +1247,8 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
               } : undefined,
               originalLabelBounds: shapeMap[id]?.labelBounds,
               originalAttributes,
-              originalDocumentation
+              originalDocumentation,
+              originalNestedElements
             };
 
             const node = {
@@ -1191,6 +1277,7 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
           const originalAttributes = getAttributesMap(element);
           const docEls = element.querySelectorAll('bpmn2\\:documentation, bpmn\\:documentation, documentation');
           const originalDocumentation = Array.from(docEls).map(d => d.textContent || '');
+          const originalNestedElements = captureNestedElements(element);
 
           if (sourceRef && targetRef) {
             // Find original edge info from diagram
@@ -1208,7 +1295,8 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
                 originalWaypoints: edgeInfo?.waypoints,
                 originalLabelBounds: edgeInfo?.labelBounds,
                 originalAttributes,
-                originalDocumentation
+                originalDocumentation,
+                originalNestedElements
               }
             });
           }

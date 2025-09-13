@@ -310,8 +310,9 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
           // ALWAYS store the ORIGINAL BPMN element type from XML - NEVER the React Flow type
           nodeData.originalElementType = originalBpmnType;
 
-          // Store the complete original XML element
-          nodeData.originalXML = element.outerHTML;
+          // Store the complete original XML element using XMLSerializer
+          const serializer = new XMLSerializer();
+          nodeData.originalXML = serializer.serializeToString(element);
 
           const node = {
             id: id,
@@ -337,13 +338,17 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
 
           if (sourceRef && targetRef) {
             console.log('➕ Adding edge:', { id, source: sourceRef, target: targetRef });
+            const serializer = new XMLSerializer();
             edges.push({
               id: id,
               source: sourceRef,
               target: targetRef,
               label: name,
               type: 'smoothstep',
-              markerEnd: { type: MarkerType.ArrowClosed }
+              markerEnd: { type: MarkerType.ArrowClosed },
+              data: {
+                originalXML: serializer.serializeToString(flow)
+              }
             });
           }
         });
@@ -643,13 +648,17 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
         return typeNames[nodeType] || nodeType.charAt(0).toUpperCase() + nodeType.slice(1);
       };
 
+      const nodeId = getId(type);
+      const nodeLabel = getDefaultLabel(type);
+      
       const newNode = {
-        id: getId(type),
+        id: nodeId,
         type,
         position,
         data: { 
-          label: getDefaultLabel(type),
-          taskType: type 
+          label: nodeLabel,
+          taskType: type,
+          originalXML: `<${type} id="${nodeId}" name="${nodeLabel}" />`
         },
       };
 
