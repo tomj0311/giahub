@@ -60,27 +60,19 @@ export default function WorkflowConfig({ user }) {
     const [uploadState, setUploadState] = useState({ loading: false });
 
     const loadCategories = async () => {
-        console.log('🏷️ LOADING WORKFLOW CATEGORIES...');
         try {
             setLoadingCategories(true);
             const response = await apiCall(`/api/workflows/categories`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
-            console.log('📡 Load categories response:', response.status, response.ok);
             if (response.ok) {
                 const data = await response.json();
-                console.log('📄 Categories data:', data);
                 setCategories(data.categories || []);
-                console.log('✅ Categories loaded successfully');
-            } else {
-                console.log('❌ Failed to load categories - bad response');
             }
         } catch (error) {
-            console.log('💥 ERROR loading categories:', error);
             console.error('Failed to load categories:', error);
         } finally {
             setLoadingCategories(false);
-            console.log('🏁 Load categories finished');
         }
     };
 
@@ -187,11 +179,8 @@ export default function WorkflowConfig({ user }) {
     }, []);
 
     function loadExistingConfig(configName) {
-        console.log('🔍 LOADING EXISTING WORKFLOW CONFIG:', configName);
         const config = existingConfigs.find(c => c.name === configName);
-        console.log('Found config:', config);
         if (config) {
-            console.log('✅ Config found, setting form...');
             setForm({
                 ...config,
                 id: config.id,
@@ -201,36 +190,24 @@ export default function WorkflowConfig({ user }) {
                 bpmn_filename: config.bpmn_filename || ''
             });
             setIsEditMode(true);
-            console.log('✅ Form set to edit mode');
         } else {
-            console.log('⚠️ Config not found, creating new...');
             setForm({ id: null, name: configName, category: '', bpmn_file: null, bpmn_filename: '' });
             setIsEditMode(false);
-            console.log('✅ Form set to create mode');
         }
     }
 
     async function saveWorkflowConfig() {
-        console.log('🚀 SAVE WORKFLOW FUNCTION STARTED');
-        console.log('Form data:', form);
-        console.log('Token:', token ? 'Present' : 'Missing');
-        console.log('IsEditMode:', isEditMode);
-        
         if (!form.name) {
-            console.log('❌ VALIDATION FAILED - Missing name');
             showError('Name is required');
             return;
         }
 
         if (!isEditMode && !form.bpmn_file) {
-            console.log('❌ VALIDATION FAILED - Missing BPMN file for new workflow');
             showError('BPMN file is required for new workflows');
             return;
         }
         
-        console.log('✅ VALIDATION PASSED');
         setSaveState(s => ({ ...s, loading: true }));
-        console.log('💾 Save state set to loading');
         
         // Create FormData for file upload
         const formData = new FormData();
@@ -242,34 +219,25 @@ export default function WorkflowConfig({ user }) {
             formData.append('bpmn_file', form.bpmn_file);
         }
         
-        console.log('📦 FormData prepared');
-        
         try {
-            console.log('🌐 Starting API call...');
             let resp;
             if (isEditMode && form.id) {
-                console.log('📝 UPDATE mode - ID:', form.id);
                 resp = await apiCall(`/api/workflows/configs/${form.id}`, {
                     method: 'PUT',
                     headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
                     body: formData
                 });
             } else {
-                console.log('✨ CREATE mode');
                 resp = await apiCall(`/api/workflows/configs`, {
                     method: 'POST',
                     headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
                     body: formData
                 });
             }
-            console.log('📡 API response received:', resp.status, resp.ok);
             
             const data = await resp.json().catch(() => ({}));
-            console.log('📄 Response data:', data);
             
             if (!resp.ok) {
-                console.log('❌ API ERROR:', data.detail || `Save failed (HTTP ${resp.status})`);
-                
                 // Handle validation errors (422) which come as an array
                 let errorMessage = `Save failed (HTTP ${resp.status})`;
                 if (data.detail) {
@@ -286,35 +254,25 @@ export default function WorkflowConfig({ user }) {
                     }
                 }
                 
-                console.log('📝 Formatted error message:', errorMessage);
                 showError(errorMessage);
                 setSaveState({ loading: false });
-                console.log('🔄 Save state reset to not loading');
                 return;
             }
             
             const action = isEditMode ? 'updated' : 'saved';
-            console.log('✅ SUCCESS! Action:', action);
             showSuccess(`Workflow configuration "${form.name}" ${action} successfully`);
             setSaveState({ loading: false });
-            console.log('🔄 Save state reset to not loading');
             
-            console.log('🔄 Reloading configs and categories...');
             loadExistingConfigs();
             loadCategories();
             
-            console.log('🧹 Resetting form...');
             setForm({ id: null, name: '', category: '', bpmn_file: null, bpmn_filename: '' });
             setIsEditMode(false);
             setDialogOpen(false);
-            console.log('✨ SAVE WORKFLOW FUNCTION COMPLETED SUCCESSFULLY');
             
         } catch (e) {
-            console.log('💥 CATCH BLOCK ERROR:', e);
-            console.error('Full error object:', e);
             showError(e.message || 'Network error');
             setSaveState({ loading: false });
-            console.log('🔄 Save state reset to not loading (error)');
         }
     }
 

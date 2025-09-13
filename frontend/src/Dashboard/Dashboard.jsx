@@ -695,7 +695,7 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
 					<Box>
 						<Typography variant="body1" color="text.secondary">
-							Design and visualize business processes with our BPMN 2.0 editor.
+							Design and visualize business processes with BPMN 2.0 editor.
 						</Typography>
 					</Box>
 				</Box>

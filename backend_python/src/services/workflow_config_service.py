@@ -9,6 +9,7 @@ import os
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from fastapi import HTTPException, status, UploadFile
+from bson import ObjectId
 
 from ..utils.log import logger
 from ..utils.mongo_storage import MongoStorageService
@@ -160,7 +161,15 @@ class WorkflowConfigService:
         logger.info(f"[WORKFLOW] Getting workflow config: {config_id} for tenant: {tenant_id}")
         
         try:
-            doc = await MongoStorageService.find_one("workflowConfig", {"_id": config_id}, tenant_id=tenant_id)
+            object_id = ObjectId(config_id)
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid configuration ID"
+            )
+        
+        try:
+            doc = await MongoStorageService.find_one("workflowConfig", {"_id": object_id}, tenant_id=tenant_id)
             
             if not doc:
                 logger.warning(f"[WORKFLOW] Workflow config not found: {config_id}")
@@ -299,8 +308,16 @@ class WorkflowConfigService:
         logger.info(f"[WORKFLOW] Updating workflow config: {config_id} for tenant: {tenant_id}")
         
         try:
+            object_id = ObjectId(config_id)
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid configuration ID"
+            )
+        
+        try:
             # Check if config exists
-            existing = await MongoStorageService.find_one("workflowConfig", {"_id": config_id}, tenant_id=tenant_id)
+            existing = await MongoStorageService.find_one("workflowConfig", {"_id": object_id}, tenant_id=tenant_id)
             
             if not existing:
                 logger.warning(f"[WORKFLOW] Workflow config not found for update: {config_id}")
@@ -361,14 +378,17 @@ class WorkflowConfigService:
             # Update in database
             result = await MongoStorageService.update_one(
                 "workflowConfig", 
-                {"_id": config_id}, 
+                {"_id": object_id}, 
                 {"$set": update_data}, 
                 tenant_id=tenant_id
             )
             
-            if result.modified_count == 0:
-                logger.warning(f"[WORKFLOW] No changes made to workflow config: {config_id}")
-                return {"message": "No changes made", "id": config_id}
+            if not result:
+                logger.warning(f"[WORKFLOW] Workflow config not found for update: {config_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Workflow configuration not found"
+                )
             
             response = {
                 "id": config_id,
@@ -394,8 +414,16 @@ class WorkflowConfigService:
         logger.info(f"[WORKFLOW] Deleting workflow config: {config_id} for tenant: {tenant_id}")
         
         try:
+            object_id = ObjectId(config_id)
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid configuration ID"
+            )
+        
+        try:
             # Check if config exists
-            existing = await MongoStorageService.find_one("workflowConfig", {"_id": config_id}, tenant_id=tenant_id)
+            existing = await MongoStorageService.find_one("workflowConfig", {"_id": object_id}, tenant_id=tenant_id)
             
             if not existing:
                 logger.warning(f"[WORKFLOW] Workflow config not found for deletion: {config_id}")
@@ -411,13 +439,13 @@ class WorkflowConfigService:
                 logger.info(f"[WORKFLOW] Deleted BPMN file: {bpmn_file_path}")
             
             # Delete from database
-            result = await MongoStorageService.delete_one("workflowConfig", {"_id": config_id}, tenant_id=tenant_id)
+            result = await MongoStorageService.delete_one("workflowConfig", {"_id": object_id}, tenant_id=tenant_id)
             
-            if result.deleted_count == 0:
-                logger.warning(f"[WORKFLOW] Failed to delete workflow config from database: {config_id}")
+            if not result:
+                logger.warning(f"[WORKFLOW] Workflow config not found for deletion: {config_id}")
                 raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Failed to delete workflow configuration"
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Workflow configuration not found"
                 )
             
             response = {

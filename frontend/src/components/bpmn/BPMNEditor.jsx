@@ -310,6 +310,9 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
           // ALWAYS store the ORIGINAL BPMN element type from XML - NEVER the React Flow type
           nodeData.originalElementType = originalBpmnType;
 
+          // Store the complete original XML element
+          nodeData.originalXML = element.outerHTML;
+
           const node = {
             id: id,
             type: nodeType,

@@ -236,24 +236,6 @@ const Toolbar = ({ isDarkMode, isPropertyPanelOpen, onTogglePropertyPanel, selec
           </div>
         </div>
       </div>
-
-      {/* Property Panel Toggle */}
-      <div className="toolbar-section">
-        <div className="property-panel-toggle-container">
-          <button
-            className={`property-panel-toggle-button ${isPropertyPanelOpen ? 'active' : ''}`}
-            onClick={onTogglePropertyPanel}
-            title={isPropertyPanelOpen ? "Hide Properties Panel" : "Show Properties Panel"}
-            aria-label="Toggle properties panel"
-          >
-            <div className="properties-icon">
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M3 17h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V5H3z"/>
-              </svg>
-            </div>
-          </button>
-        </div>
-      </div>
     </div>
   );
 };
