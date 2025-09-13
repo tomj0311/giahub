@@ -12,6 +12,9 @@ from ..utils.log import logger
 from ..utils.mongo_storage import MongoStorageService
 from src.utils.component_discovery import discover_components, get_detailed_class_info
 
+# Module loaded log
+logger.debug("[TOOL] Service module loaded")
+
 
 class ToolConfigService:
     """Service for managing tool configurations"""

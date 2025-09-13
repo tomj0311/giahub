@@ -74,7 +74,6 @@ class MongoStorageService:
                       tenant_id: Optional[str] = None, projection: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
         """Find a single document"""
         try:
-            logger.debug(f"[MONGO] Finding one document in {collection_name} with filter keys: {list(filter_dict.keys())}")
             collections = cls._get_collections()
             collection = collections.get(collection_name)
             if collection is None:
@@ -82,9 +81,7 @@ class MongoStorageService:
                 return None
             
             filter_dict = cls._ensure_tenant_filter(filter_dict, tenant_id, collection_name)
-            logger.debug(f"[MONGO] Executing find_one on {collection_name} with tenant filter applied")
             result = await collection.find_one(filter_dict, projection)
-            logger.debug(f"[MONGO] find_one result: {'found' if result else 'not found'}")
             
             return result
         except Exception as e:

@@ -18,6 +18,9 @@ from .file_service import FileService
 from .vector_service import VectorService
 from .model_config_service import ModelConfigService
 
+# Module loaded log
+logger.debug("[KNOWLEDGE] Service module loaded")
+
 
 class KnowledgeService:
     """Service for managing knowledge configurations and operations"""
@@ -385,18 +388,6 @@ class KnowledgeService:
             )
     
     @classmethod
-    async def list_categories(cls, user: dict) -> List[str]:
-        """List knowledge categories for current tenant"""
-        tenant_id = await cls.validate_tenant_access(user)
-        
-        try:
-            categories = await MongoStorageService.distinct("knowledgeConfig", "category", {}, tenant_id=tenant_id)
-            return sorted(categories)
-        except Exception as e:
-            logger.error(f"[KNOWLEDGE] Failed to list categories: {e}")
-            raise HTTPException(status_code=500, detail="Failed to list categories")
-    
-    @classmethod
     async def introspect_component(cls, module_name: str) -> Dict[str, Any]:
         """Introspect a chunking component to get its parameters"""
         logger.info(f"[KNOWLEDGE] Introspecting component: {module_name}")
@@ -463,7 +454,7 @@ class KnowledgeService:
         return {"defaults": defaults}
     
     @classmethod
-    async def list_categories(cls, user: dict) -> Dict[str, List[str]]:
+    async def get_categories(cls, user: dict) -> Dict[str, List[str]]:
         """Return distinct knowledge categories for the user's tenant"""
         tenant_id = await cls.validate_tenant_access(user)
         
@@ -473,7 +464,7 @@ class KnowledgeService:
             categories = [c for c in cats if c]
             return {"categories": categories}
         except Exception as e:
-            logger.error(f"[KNOWLEDGE] Database error in list_categories: {str(e)}")
+            logger.error(f"[KNOWLEDGE] Database error in get_categories: {str(e)}")
             import traceback
             logger.error(f"[KNOWLEDGE] Categories traceback: {traceback.format_exc()}")
             raise

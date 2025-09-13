@@ -12,6 +12,9 @@ from fastapi import HTTPException, status
 from ..utils.log import logger
 from ..utils.mongo_storage import MongoStorageService
 
+# Module loaded log
+logger.debug("[AGENTS] Service module loaded")
+
 
 class AgentService:
     """Service for managing agents"""
@@ -40,6 +43,7 @@ class AgentService:
     ) -> Dict[str, Any]:
         """List agents with pagination, filtering, and sorting"""
         tenant_id = await cls.validate_tenant_access(user)
+        logger.debug(f"[AGENTS] Listing agents for tenant: {tenant_id}, page: {page}, category: {category}")
         
         try:
             # Build filter query

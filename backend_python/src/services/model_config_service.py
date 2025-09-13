@@ -12,6 +12,9 @@ from fastapi import HTTPException, status
 from ..utils.log import logger
 from ..utils.mongo_storage import MongoStorageService
 
+# Module loaded log
+logger.debug("[MODEL] Service module loaded")
+
 
 class ModelConfigService:
     """Service for managing model configurations"""
