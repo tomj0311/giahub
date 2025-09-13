@@ -438,8 +438,8 @@ class AgentRuntimeService:
                 else:
                     logger.warning("No tenant_id found, cannot store agent execution results")
                 
-                # Also log for immediate visibility
-                logger.info(f"Agent execution completed: {json.dumps(run_data, default=str)}")
+                # Also log for immediate visibility it is commnted becuase itisalraedy stored in mongo
+                # logger.info(f"Agent execution completed: {json.dumps(run_data, default=str)}")
                 
         except Exception as e:
             logger.error(f"Failed to log agent execution results: {e}")
