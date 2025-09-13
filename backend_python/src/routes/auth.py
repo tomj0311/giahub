@@ -33,9 +33,11 @@ class LoginResponse(BaseModel):
 async def login(request: LoginRequest):
     """Login endpoint for admin and users"""
     logger.info(f"[LOGIN] Attempting login for user: {request.username}")
+    logger.debug(f"[LOGIN] Login request received with username: {request.username}")
     try:
         result = await AuthService.authenticate_user(request.username, request.password)
         logger.info(f"[LOGIN] Success for user: {request.username}")
+        logger.debug(f"[LOGIN] Generated response for user: {request.username}")
         return LoginResponse(**result)
     except Exception as e:
         logger.error(f"[LOGIN] Failed for user: {request.username} - {str(e)}")

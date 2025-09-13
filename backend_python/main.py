@@ -48,7 +48,9 @@ logger.info('[BOOT] Starting API with config: {}'.format({
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.debug("[STARTUP] Starting application lifespan")
     # Initialize database on startup
+    logger.debug("[STARTUP] Initializing database connection")
     await init_database()
     logger.info("Database initialized")
     
@@ -57,11 +59,14 @@ async def lifespan(app: FastAPI):
     # logger.info("Default roles initialized")
     
     # Initialize default menu items
+    logger.debug("[STARTUP] Seeding default menu items")
     await MenuService.seed_default_menu_items()
     logger.info("Default menu items initialized")
     
+    logger.debug("[STARTUP] Application startup completed")
     yield
     # Close database on shutdown
+    logger.debug("[SHUTDOWN] Closing database connection")
     await close_database()
     logger.info("Database closed")
 

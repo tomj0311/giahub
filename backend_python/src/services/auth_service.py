@@ -50,13 +50,14 @@ class AuthService:
         logger.debug(f"[AUTH] Checking admin credentials for: {normalized_username}")
         if normalized_username == normalize_email(cls.ADMIN_USER) and password == cls.ADMIN_PASS:
             logger.info(f"[AUTH] Admin login successful for: {username}")
+            logger.debug(f"[AUTH] Generating admin token for: {username}")
             token = generate_token({
                 "role": "admin",
                 "username": username,
                 "id": "admin",
                 "tenantId": "admin"
             })
-            logger.debug("[AUTH] Generated admin token")
+            logger.debug("[AUTH] Generated admin token successfully")
             return {
                 "token": token,
                 "role": "admin",

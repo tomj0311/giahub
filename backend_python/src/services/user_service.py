@@ -41,9 +41,10 @@ class UserService:
         """Register a new user"""
         email = user_data.get('email', 'unknown')
         logger.info(f"[USER] Registration attempt for: {email}")
-        logger.debug(f"[USER] Registration data: {user_data}")
+        logger.debug(f"[USER] Registration data keys: {list(user_data.keys())}")
         
         # Validate required fields
+        logger.debug(f"[USER] Validating required fields for: {email}")
         required_fields = ['firstName', 'lastName', 'email', 'password']
         missing_fields = [field for field in required_fields if not user_data.get(field)]
         if missing_fields:
@@ -53,9 +54,11 @@ class UserService:
                 detail=f"Missing required fields: {', '.join(missing_fields)}"
             )
         
+        logger.debug(f"[USER] Normalizing email: {user_data['email']}")
         email = normalize_email(user_data["email"])
         
         # Check if email already exists
+        logger.debug(f"[USER] Checking if email already exists: {email}")
         if await cls.check_email_exists(email):
             logger.warning(f"[USER] Registration failed - email already exists: {email}")
             raise HTTPException(

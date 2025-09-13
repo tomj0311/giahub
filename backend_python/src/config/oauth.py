@@ -40,9 +40,11 @@ else:
     logger.warning('⚠️ MICROSOFT_CLIENT_SECRET is not set in environment variables')
 
 # OAuth configuration
+logger.debug("[OAUTH] Initializing OAuth configuration")
 oauth = OAuth()
 
 if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
+    logger.debug("[OAUTH] Registering Google OAuth provider")
     oauth.register(
         name='google',
         client_id=GOOGLE_CLIENT_ID,

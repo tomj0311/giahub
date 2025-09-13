@@ -59,7 +59,7 @@ def verify_token(token: str) -> Dict[str, Any]:
     """Verify and decode a JWT token"""
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        # Only log successful verification once per session, not every request
+        # Only log token verification for non-health endpoints
         return payload
     except jwt.ExpiredSignatureError:
         logger.warning("[AUTH] Token verification failed - token expired")

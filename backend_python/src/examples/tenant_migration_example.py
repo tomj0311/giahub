@@ -9,6 +9,7 @@ AFTER: Automatic tenant filtering (secure by default)
 """
 
 from ..utils.mongo_storage import MongoStorageService
+from ..utils.log import logger
 
 # BEFORE: Manual tenant filtering - error-prone and can be forgotten
 """
@@ -58,6 +59,7 @@ async def get_users_v1(user: dict = Depends(verify_token_middleware), collection
     Get users with automatic tenant filtering.
     The @with_tenant_db decorator automatically injects tenant-aware collections.
     """
+    logger.info("[EXAMPLE] Getting users with automatic tenant filtering")
     # collections is now tenant-aware - automatic filtering by tenant_id
     users = await MongoStorageService.find_many("users", {})
     
