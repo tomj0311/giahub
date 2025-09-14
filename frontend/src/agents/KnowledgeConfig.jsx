@@ -164,7 +164,7 @@ export default function KnowledgeConfig({ user }) {
         showError('Failed to load models')
       }
     }
-  }, [token, showError])
+  }, [token]) // Remove showError - it's unstable
 
   const loadCategories = useCallback(async () => {
     if (!isMountedRef.current) return;

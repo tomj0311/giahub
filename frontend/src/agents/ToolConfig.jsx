@@ -30,7 +30,7 @@ import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucid
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { useConfirmation } from '../contexts/ConfirmationContext';
 
-export default function ToolConfig({ user }) {
+function ToolConfig({ user }) {
     const token = user?.token;
     const { showSuccess, showError, showWarning } = useSnackbar();
     const { showDeleteConfirmation } = useConfirmation();
@@ -92,7 +92,7 @@ export default function ToolConfig({ user }) {
                 setLoadingDiscovery(false);
             }
         }
-    }, [token, showError]);
+    }, [token]); // Remove showError - it's unstable
 
     const introspectTool = async (modulePath, kind = 'tool') => {
         if (!modulePath || introspectCache[modulePath] || pendingIntros[modulePath]) return;
@@ -199,12 +199,30 @@ export default function ToolConfig({ user }) {
         if (!loadingDiscovery && components.functions.length === 0) {
             showWarning('No tools discovered. Check backend logs or refresh.');
         }
-    }, [loadingDiscovery, components.functions, showWarning]);
+    }, [loadingDiscovery, components.functions]); // Remove showWarning - it's unstable
 
+    // Use exact same pattern as KnowledgeConfig
     useEffect(() => {
-        discoverComponents();
-        loadExistingConfigs();
-        loadCategories();
+        const loadData = async () => {
+            console.log('🚀 TOOLCONFIG COMPONENT MOUNTED - Starting initialization...');
+            if (!isMountedRef.current) return;
+            
+            try {
+                // Load components first
+                await discoverComponents();
+                
+                // Load configs and categories
+                await Promise.all([
+                    loadExistingConfigs(),
+                    loadCategories()
+                ]);
+                
+            } catch (err) {
+                console.error('❌ TOOLCONFIG Error during initialization:', err);
+            }
+        };
+        
+        loadData();
     }, [discoverComponents, loadExistingConfigs, loadCategories]);
 
     // Cleanup function to handle component unmount
@@ -565,3 +583,5 @@ export default function ToolConfig({ user }) {
         </Box>
     );
 }
+
+export default React.memo(ToolConfig);

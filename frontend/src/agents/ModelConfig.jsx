@@ -30,7 +30,7 @@ import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucid
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { useConfirmation } from '../contexts/ConfirmationContext';
 
-export default function ModelConfig({ user }) {
+function ModelConfig({ user }) {
     // Use the user token from props (same pattern as other dashboard components)
     const token = user?.token;
 
@@ -123,7 +123,7 @@ export default function ModelConfig({ user }) {
                 setLoadingDiscovery(false);
             }
         }
-    }, [token, showError]);
+    }, [token]); // Remove showError - it's unstable
 
     // Introspect model or embedding using HTTP
     const introspectModel = async (modulePath, kind = 'model') => {
@@ -255,15 +255,28 @@ export default function ModelConfig({ user }) {
         }
     }, [loadingDiscovery, components.models, components.embeddings, showWarning]);
 
-    // Run these functions only once on mount
+    // Use exact same pattern as KnowledgeConfig
     useEffect(() => {
-        console.log('🚀 COMPONENT MOUNTED - Starting initialization...');
-        console.log('User:', user);
-        console.log('Token available:', !!token);
-        discoverComponents();
-        loadExistingConfigs();
-        loadCategories();
-        console.log('✅ Initialization functions called');
+        const loadData = async () => {
+            console.log('🚀 MODELCONFIG COMPONENT MOUNTED - Starting initialization...');
+            if (!isMountedRef.current) return;
+            
+            try {
+                // Load components first
+                await discoverComponents();
+                
+                // Load configs and categories
+                await Promise.all([
+                    loadExistingConfigs(),
+                    loadCategories()
+                ]);
+                
+            } catch (err) {
+                console.error('❌ MODELCONFIG Error during initialization:', err);
+            }
+        };
+        
+        loadData();
     }, [discoverComponents, loadExistingConfigs, loadCategories]);
 
     // Cleanup function to handle component unmount
@@ -765,3 +778,5 @@ export default function ModelConfig({ user }) {
         </Box>
     );
 }
+
+export default React.memo(ModelConfig);
