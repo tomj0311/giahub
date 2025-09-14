@@ -34,7 +34,7 @@
 
 .bpmn-container.bpmn-dark-theme {
   /* Dark theme variables */
-  --bg-primary: #1a1a1a;
+  --bg-primary: #000000;
   --bg-secondary: #2d2d2d;
   --bg-tertiary: #404040;
   --text-primary: #e0e0e0;
