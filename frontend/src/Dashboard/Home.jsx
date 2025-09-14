@@ -17,7 +17,12 @@ import {
   Divider,
   Paper,
   useTheme,
-  LinearProgress
+  LinearProgress,
+  alpha,
+  Fade,
+  Slide,
+  Grow,
+  CircularProgress
 } from '@mui/material'
 import {
   Bot,
@@ -140,29 +145,52 @@ function AgentCard({ agent, onEdit, onChat }) {
   }
 
   return (
-    <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
-      <CardContent sx={{ flexGrow: 1 }}>
+    <Card sx={{ 
+      height: '100%', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      position: 'relative',
+      transition: theme.transitions.create(['transform', 'box-shadow'], {
+        duration: theme.transitions.duration.short,
+      }),
+      '&:hover': {
+        transform: 'translateY(-4px)',
+        boxShadow: theme.shadows[8],
+      },
+      border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+      background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.95)})`,
+      backdropFilter: 'blur(10px)'
+    }}>
+      <CardContent sx={{ flexGrow: 1, p: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
           <Avatar
             sx={{
               bgcolor: `${getStatusColor(agent.category)}.main`,
-              width: 40,
-              height: 40,
-              fontSize: '0.875rem'
+              width: 48,
+              height: 48,
+              fontSize: '1rem',
+              boxShadow: theme.shadows[2]
             }}
           >
             {getAvatarText(agent.name)}
           </Avatar>
-          <IconButton size="small" onClick={(e) => { e.stopPropagation(); onEdit(agent); }}>
+          <IconButton 
+            size="small" 
+            onClick={(e) => { e.stopPropagation(); onEdit(agent); }}
+            sx={{ 
+              bgcolor: alpha(theme.palette.action.selected, 0.05),
+              '&:hover': { bgcolor: alpha(theme.palette.action.selected, 0.1) }
+            }}
+          >
             <Edit size={16} />
           </IconButton>
         </Box>
 
-        <Typography variant="h6" fontWeight="bold" gutterBottom noWrap>
+        <Typography variant="h6" fontWeight="bold" gutterBottom noWrap sx={{ mb: 1 }}>
           {agent.name || 'Unnamed Agent'}
         </Typography>
 
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, minHeight: 40 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, minHeight: 40, lineHeight: 1.4 }}>
           {agent.description || 'No description available'}
         </Typography>
 
@@ -172,7 +200,7 @@ function AgentCard({ agent, onEdit, onChat }) {
             size="small"
             color={getStatusColor(agent.category)}
             variant="outlined"
-            sx={{ mb: 1 }}
+            sx={{ mb: 2 }}
           />
         )}
 
@@ -191,14 +219,15 @@ function AgentCard({ agent, onEdit, onChat }) {
         </Box>
       </CardContent>
 
-      <CardActions sx={{ pt: 0, justifyContent: 'center' }}>
+      <CardActions sx={{ pt: 0, p: 3, justifyContent: 'center' }}>
         <Button
-          size="small"
+          size="medium"
           color="primary"
           startIcon={<MessageSquare size={16} />}
           onClick={() => onChat(agent)}
           fullWidth
           variant="contained"
+          sx={{ borderRadius: 2 }}
         >
           Chat
         </Button>
@@ -482,8 +511,16 @@ export default function Home({ user }) {
 
   if (loading) {
     return (
-      <Box sx={{ width: '100%', mt: 2 }}>
-        <Typography variant="body2" sx={{ mt: 2, textAlign: 'center' }}>
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: 'column',
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        minHeight: '60vh',
+        p: 3
+      }}>
+        <CircularProgress size={48} sx={{ mb: 2 }} />
+        <Typography variant="body1" color="text.secondary">
           Loading dashboard...
         </Typography>
       </Box>
@@ -491,10 +528,14 @@ export default function Home({ user }) {
   }
 
   return (
-    <Box>
+    <Box sx={{ 
+      p: 3,
+      background: theme.custom?.backgroundGradient || theme.palette.background.default,
+      minHeight: '100vh'
+    }}>
       {/* Welcome Section */}
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" gutterBottom>
+        <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold' }}>
           Welcome back, {user?.name || 'User'}! 🤖
         </Typography>
         <Typography variant="body1" color="text.secondary">
@@ -510,6 +551,7 @@ export default function Home({ user }) {
           size="large"
           startIcon={<Plus size={20} />}
           onClick={handleCreateAgent}
+          sx={{ borderRadius: 2, px: 3 }}
         >
           Create New Agent
         </Button>
@@ -522,12 +564,19 @@ export default function Home({ user }) {
         </Typography>
 
         {displayedAgents.length === 0 ? (
-          <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <Paper sx={{ 
+            p: 4, 
+            textAlign: 'center',
+            background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.95)})`,
+            backdropFilter: 'blur(10px)',
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            borderRadius: 3
+          }}>
             <Bot size={48} color={theme.palette.text.secondary} style={{ marginBottom: 16 }} />
             <Typography variant="h6" color="text.secondary" gutterBottom>
               No agents created yet
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               Create your first AI agent to get started
             </Typography>
             <Button
@@ -535,6 +584,7 @@ export default function Home({ user }) {
               color="primary"
               startIcon={<Plus size={16} />}
               onClick={handleCreateAgent}
+              sx={{ borderRadius: 2 }}
             >
               Create Your First Agent
             </Button>
@@ -587,13 +637,25 @@ export default function Home({ user }) {
       <Grid container spacing={3}>
         {/* Recent Conversations */}
         <Grid item xs={12} md={6}>
-          <Card sx={{ height: '100%' }}>
+          <Card sx={{ 
+            height: '100%',
+            background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.95)})`,
+            backdropFilter: 'blur(10px)',
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`
+          }}>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                 <Typography variant="h6" fontWeight="bold">
                   Recent Conversations
                 </Typography>
-                <MessageSquare color="action" />
+                <Avatar sx={{ 
+                  backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                  color: theme.palette.primary.main,
+                  width: 32,
+                  height: 32
+                }}>
+                  <MessageSquare size={16} />
+                </Avatar>
               </Box>
               <List sx={{ p: 0 }}>
                 {recentConversations.length > 0 ? (
@@ -626,13 +688,25 @@ export default function Home({ user }) {
 
         {/* Task Progress */}
         <Grid item xs={12} md={6}>
-          <Card sx={{ height: '100%' }}>
+          <Card sx={{ 
+            height: '100%',
+            background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.95)})`,
+            backdropFilter: 'blur(10px)',
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`
+          }}>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                 <Typography variant="h6" fontWeight="bold">
                   Task Progress
                 </Typography>
-                <Activity color="action" />
+                <Avatar sx={{ 
+                  backgroundColor: alpha(theme.palette.secondary.main, 0.1),
+                  color: theme.palette.secondary.main,
+                  width: 32,
+                  height: 32
+                }}>
+                  <Activity size={16} />
+                </Avatar>
               </Box>
               <Box sx={{ mt: 2 }}>
                 {taskProgress.length > 0 ? (
