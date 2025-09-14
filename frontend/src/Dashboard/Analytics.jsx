@@ -14,7 +14,12 @@ import {
   Paper,
   Chip,
   CircularProgress,
-  Alert
+  Alert,
+  Avatar,
+  useTheme,
+  alpha,
+  Fade,
+  Slide
 } from '@mui/material'
 import { 
   MessageSquare, 
@@ -23,123 +28,520 @@ import {
   TrendingUp,
   CheckCircle,
   XCircle,
-  Cpu
+  Cpu,
+  Activity,
+  BarChart3,
+  Users
 } from 'lucide-react'
 import sharedApiService from '../utils/apiService'
 
-// Metric Card Component
-const MetricCard = ({ title, value, subtitle, icon: Icon, color = "primary" }) => (
-  <Card sx={{ height: '100%' }}>
-    <CardContent>
-      <Box display="flex" alignItems="center" justifyContent="space-between">
-        <Box>
-          <Typography color="textSecondary" gutterBottom variant="subtitle2">
-            {title}
-          </Typography>
-          <Typography variant="h4" component="div" color={color}>
-            {value}
-          </Typography>
-          {subtitle && (
-            <Typography variant="body2" color="textSecondary">
-              {subtitle}
+// Dynamic metric card configurations
+const getMetricConfig = (type, theme) => {
+  const configs = {
+    conversations: {
+      title: 'Total Conversations',
+      icon: MessageSquare,
+      gradient: `linear-gradient(135deg, ${theme.palette.primary.main}15, ${theme.palette.primary.main}25)`,
+      color: theme.palette.primary.main,
+      iconBg: alpha(theme.palette.primary.main, 0.1)
+    },
+    completion: {
+      title: 'Completion Rate',
+      icon: CheckCircle,
+      gradient: `linear-gradient(135deg, ${theme.palette.success.main}15, ${theme.palette.success.main}25)`,
+      color: theme.palette.success.main,
+      iconBg: alpha(theme.palette.success.main, 0.1)
+    },
+    response_time: {
+      title: 'Avg Response Time',
+      icon: Clock,
+      gradient: `linear-gradient(135deg, ${theme.palette.warning.main}15, ${theme.palette.warning.main}25)`,
+      color: theme.palette.warning.main,
+      iconBg: alpha(theme.palette.warning.main, 0.1)
+    },
+    tokens: {
+      title: 'Avg Tokens',
+      icon: Zap,
+      gradient: `linear-gradient(135deg, ${theme.palette.info.main}15, ${theme.palette.info.main}25)`,
+      color: theme.palette.info.main,
+      iconBg: alpha(theme.palette.info.main, 0.1)
+    },
+    total_tokens: {
+      title: 'Total Tokens Consumed',
+      icon: Cpu,
+      gradient: `linear-gradient(135deg, ${theme.palette.secondary.main}15, ${theme.palette.secondary.main}25)`,
+      color: theme.palette.secondary.main,
+      iconBg: alpha(theme.palette.secondary.main, 0.1)
+    }
+  }
+  return configs[type] || configs.conversations
+}
+
+// Enhanced Metric Card Component
+const MetricCard = ({ type, value, subtitle, delay = 0 }) => {
+  const theme = useTheme()
+  const config = getMetricConfig(type, theme)
+  const Icon = config.icon
+
+  return (
+    <Slide direction="up" in={true} timeout={theme.transitions.duration.enteringScreen + delay}>
+      <Card 
+        sx={{ 
+          height: '100%',
+          minHeight: { xs: '160px', sm: '180px' },
+          background: config.gradient,
+          backdropFilter: 'blur(10px)',
+          border: `1px solid ${alpha(config.color, 0.1)}`,
+          transition: theme.transitions.create(['transform', 'box-shadow'], {
+            duration: theme.transitions.duration.short,
+          }),
+          '&:hover': {
+            transform: 'translateY(-4px)',
+            boxShadow: theme.shadows[8],
+          }
+        }}
+      >
+        <CardContent sx={{ 
+          p: { xs: theme.spacing(2), sm: theme.spacing(2.5) },
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          '&:last-child': { pb: { xs: theme.spacing(2), sm: theme.spacing(2.5) } }
+        }}>
+          <Box display="flex" alignItems="flex-start" justifyContent="space-between" sx={{ mb: 1 }}>
+            <Box flex={1} sx={{ minWidth: 0, pr: 1 }}>
+              <Typography 
+                color="text.secondary" 
+                gutterBottom 
+                variant="subtitle2"
+                sx={{ 
+                  fontWeight: theme.typography.fontWeightMedium,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  fontSize: '0.7rem',
+                  lineHeight: 1.2,
+                  mb: 1
+                }}
+              >
+                {config.title}
+              </Typography>
+            </Box>
+            <Avatar
+              sx={{
+                backgroundColor: config.iconBg,
+                color: config.color,
+                width: { xs: theme.spacing(5), sm: theme.spacing(6) },
+                height: { xs: theme.spacing(5), sm: theme.spacing(6) },
+                flexShrink: 0
+              }}
+            >
+              <Icon size={theme.spacing(2.5)} />
+            </Avatar>
+          </Box>
+          <Box sx={{ flex: 1 }}>
+            <Typography 
+              variant="h4" 
+              component="div" 
+              sx={{ 
+                color: config.color,
+                fontWeight: theme.typography.fontWeightBold,
+                mb: subtitle ? 1 : 0,
+                background: theme.custom?.colors?.gradientText || config.color,
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                fontSize: { xs: '1.1rem', sm: '1.3rem', md: '1.4rem', lg: '1.2rem', xl: '1.4rem' },
+                lineHeight: 1.2,
+                wordBreak: 'keep-all',
+                whiteSpace: 'normal',
+                overflow: 'visible'
+              }}
+              title={value}
+            >
+              {value}
             </Typography>
+            {subtitle && (
+              <Typography 
+                variant="body2" 
+                sx={{ 
+                  color: theme.custom?.colors?.textMuted || theme.palette.text.secondary,
+                  fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                  lineHeight: 1.3,
+                  wordBreak: 'break-word',
+                  overflow: 'hidden',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  mt: 0.5
+                }}
+                title={subtitle}
+              >
+                {subtitle}
+              </Typography>
+            )}
+          </Box>
+        </CardContent>
+      </Card>
+    </Slide>
+  )
+}
+
+// Enhanced Agent Performance Table Component
+const AgentPerformanceTable = ({ agents, loading }) => {
+  const theme = useTheme()
+  
+  const getPerformanceColor = (value, max, type = 'default') => {
+    const ratio = value / max
+    if (type === 'time') {
+      // Lower is better for response time
+      return ratio < 0.3 ? theme.palette.success.main : 
+             ratio < 0.7 ? theme.palette.warning.main : 
+             theme.palette.error.main
+    }
+    // Higher is better for conversations and tokens
+    return ratio > 0.7 ? theme.palette.success.main : 
+           ratio > 0.3 ? theme.palette.warning.main : 
+           theme.palette.error.main
+  }
+
+  const maxConversations = Math.max(...agents.map(a => a.total_conversations), 1)
+  const maxResponseTime = Math.max(...agents.map(a => parseFloat(a.avg_response_time) || 0), 1)
+  const maxTokens = Math.max(...agents.map(a => a.avg_tokens), 1)
+
+  return (
+    <Fade in={true} timeout={theme.transitions.duration.enteringScreen + 200}>
+      <Card sx={{ 
+        background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.95)})`,
+        backdropFilter: 'blur(10px)',
+        border: `1px solid ${theme.custom?.colors?.borderColor || alpha(theme.palette.divider, 0.1)}`
+      }}>
+        <CardContent sx={{ p: theme.spacing(3) }}>
+          <Box display="flex" alignItems="center" mb={2} sx={{ width: '100%' }}>
+            <Avatar sx={{ 
+              backgroundColor: alpha(theme.palette.primary.main, 0.1),
+              color: theme.palette.primary.main,
+              mr: 2,
+              width: theme.spacing(5),
+              height: theme.spacing(5),
+              flexShrink: 0
+            }}>
+              <BarChart3 size={theme.spacing(2.5)} />
+            </Avatar>
+            <Typography 
+              variant="h6" 
+              sx={{ 
+                fontWeight: theme.typography.fontWeightSemiBold,
+                background: theme.custom?.colors?.gradientText || theme.palette.text.primary,
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                flex: 1,
+                minWidth: 0,
+                whiteSpace: 'nowrap',
+                overflow: 'visible'
+              }}
+            >
+              Top Performing Agents
+            </Typography>
+          </Box>
+          {loading ? (
+            <Box display="flex" justifyContent="center" p={theme.spacing(4)}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <TableContainer component={Paper} elevation={0} sx={{ 
+              backgroundColor: 'transparent',
+              '& .MuiTable-root': {
+                minWidth: 'auto'
+              }
+            }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ 
+                    '& .MuiTableCell-head': {
+                      backgroundColor: alpha(theme.palette.primary.main, 0.05),
+                      fontWeight: theme.typography.fontWeightSemiBold,
+                      textTransform: 'uppercase',
+                      fontSize: '0.75rem',
+                      letterSpacing: '0.5px',
+                      borderBottom: `2px solid ${alpha(theme.palette.primary.main, 0.1)}`
+                    }
+                  }}>
+                    <TableCell>Agent Name</TableCell>
+                    <TableCell align="right">Conversations</TableCell>
+                    <TableCell align="right">Avg Response Time</TableCell>
+                    <TableCell align="right">Avg Tokens</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {agents.map((agent, index) => (
+                    <TableRow 
+                      key={index}
+                      sx={{ 
+                        '&:hover': {
+                          backgroundColor: alpha(theme.palette.primary.main, 0.04),
+                        },
+                        '& .MuiTableCell-root': {
+                          borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`
+                        }
+                      }}
+                    >
+                      <TableCell sx={{ 
+                        fontWeight: theme.typography.fontWeightMedium,
+                        color: theme.palette.text.primary
+                      }}>
+                        {agent.agent_name}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Box display="flex" alignItems="center" justifyContent="flex-end">
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              color: getPerformanceColor(agent.total_conversations, maxConversations),
+                              fontWeight: theme.typography.fontWeightMedium,
+                              mr: 1
+                            }}
+                          >
+                            {agent.total_conversations}
+                          </Typography>
+                          <Box
+                            sx={{
+                              width: theme.spacing(6),
+                              height: theme.spacing(0.5),
+                              backgroundColor: alpha(theme.palette.divider, 0.2),
+                              borderRadius: theme.custom?.borderRadius?.pill || theme.shape.borderRadius,
+                              overflow: 'hidden'
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                width: `${(agent.total_conversations / maxConversations) * 100}%`,
+                                height: '100%',
+                                backgroundColor: getPerformanceColor(agent.total_conversations, maxConversations),
+                                borderRadius: 'inherit'
+                              }}
+                            />
+                          </Box>
+                        </Box>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography 
+                          variant="body2" 
+                          sx={{ 
+                            color: getPerformanceColor(parseFloat(agent.avg_response_time) || 0, maxResponseTime, 'time'),
+                            fontWeight: theme.typography.fontWeightMedium
+                          }}
+                        >
+                          {agent.avg_response_time}s
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography 
+                          variant="body2" 
+                          sx={{ 
+                            color: getPerformanceColor(agent.avg_tokens, maxTokens),
+                            fontWeight: theme.typography.fontWeightMedium
+                          }}
+                        >
+                          {agent.avg_tokens}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           )}
-        </Box>
-        <Icon size={40} color="currentColor" style={{ opacity: 0.7 }} />
-      </Box>
-    </CardContent>
-  </Card>
-)
+        </CardContent>
+      </Card>
+    </Fade>
+  )
+}
 
-// Agent Performance Table Component
-const AgentPerformanceTable = ({ agents, loading }) => (
-  <Card>
-    <CardContent>
-      <Typography variant="h6" gutterBottom>
-        Top Performing Agents
-      </Typography>
-      {loading ? (
-        <Box display="flex" justifyContent="center" p={3}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Agent Name</TableCell>
-                <TableCell align="right">Conversations</TableCell>
-                <TableCell align="right">Avg Response Time</TableCell>
-                <TableCell align="right">Avg Tokens</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {agents.map((agent, index) => (
-                <TableRow key={index}>
-                  <TableCell>{agent.agent_name}</TableCell>
-                  <TableCell align="right">{agent.total_conversations}</TableCell>
-                  <TableCell align="right">{agent.avg_response_time}s</TableCell>
-                  <TableCell align="right">{agent.avg_tokens}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-    </CardContent>
-  </Card>
-)
+// Enhanced Recent Conversations Table Component
+const RecentConversationsTable = ({ conversations, loading }) => {
+  const theme = useTheme()
+  
+  const getStatusConfig = (completed) => {
+    if (completed) {
+      return {
+        color: theme.palette.success.main,
+        bgcolor: alpha(theme.palette.success.main, 0.1),
+        icon: CheckCircle,
+        label: 'Completed'
+      }
+    }
+    return {
+      color: theme.palette.warning.main,
+      bgcolor: alpha(theme.palette.warning.main, 0.1),
+      icon: XCircle,
+      label: 'Pending'
+    }
+  }
 
-// Recent Conversations Table Component
-const RecentConversationsTable = ({ conversations, loading }) => (
-  <Card>
-    <CardContent>
-      <Typography variant="h6" gutterBottom>
-        Recent Conversations
-      </Typography>
-      {loading ? (
-        <Box display="flex" justifyContent="center" p={3}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Agent</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell align="right">Tokens</TableCell>
-                <TableCell align="right">Response Time</TableCell>
-                <TableCell>Created</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {conversations.map((conv) => (
-                <TableRow key={conv.id}>
-                  <TableCell>{conv.agent_name}</TableCell>
-                  <TableCell>
-                    <Chip
-                      size="small"
-                      icon={conv.completed ? <CheckCircle size={16} /> : <XCircle size={16} />}
-                      label={conv.completed ? 'Completed' : 'Pending'}
-                      color={conv.completed ? 'success' : 'warning'}
-                      variant="outlined"
-                    />
-                  </TableCell>
-                  <TableCell align="right">{conv.total_tokens}</TableCell>
-                  <TableCell align="right">{conv.response_time}s</TableCell>
-                  <TableCell>
-                    {conv.created_at ? new Date(conv.created_at).toLocaleDateString() : 'N/A'}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-    </CardContent>
-  </Card>
-)
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A'
+    const date = new Date(dateString)
+    return date.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  return (
+    <Fade in={true} timeout={theme.transitions.duration.enteringScreen + 400}>
+      <Card sx={{ 
+        background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.95)})`,
+        backdropFilter: 'blur(10px)',
+        border: `1px solid ${theme.custom?.colors?.borderColor || alpha(theme.palette.divider, 0.1)}`
+      }}>
+        <CardContent sx={{ p: theme.spacing(3) }}>
+          <Box display="flex" alignItems="center" mb={2} sx={{ width: '100%' }}>
+            <Avatar sx={{ 
+              backgroundColor: alpha(theme.palette.secondary.main, 0.1),
+              color: theme.palette.secondary.main,
+              mr: 2,
+              width: theme.spacing(5),
+              height: theme.spacing(5),
+              flexShrink: 0
+            }}>
+              <Activity size={theme.spacing(2.5)} />
+            </Avatar>
+            <Typography 
+              variant="h6" 
+              sx={{ 
+                fontWeight: theme.typography.fontWeightSemiBold,
+                background: theme.custom?.colors?.gradientText || theme.palette.text.primary,
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                flex: 1,
+                minWidth: 0,
+                whiteSpace: 'nowrap',
+                overflow: 'visible'
+              }}
+            >
+              Recent Conversations
+            </Typography>
+          </Box>
+          {loading ? (
+            <Box display="flex" justifyContent="center" p={theme.spacing(4)}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <TableContainer component={Paper} elevation={0} sx={{ 
+              backgroundColor: 'transparent',
+              '& .MuiTable-root': {
+                minWidth: 'auto'
+              }
+            }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ 
+                    '& .MuiTableCell-head': {
+                      backgroundColor: alpha(theme.palette.secondary.main, 0.05),
+                      fontWeight: theme.typography.fontWeightSemiBold,
+                      textTransform: 'uppercase',
+                      fontSize: '0.75rem',
+                      letterSpacing: '0.5px',
+                      borderBottom: `2px solid ${alpha(theme.palette.secondary.main, 0.1)}`
+                    }
+                  }}>
+                    <TableCell>Agent</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell align="right">Tokens</TableCell>
+                    <TableCell align="right">Response Time</TableCell>
+                    <TableCell>Created</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {conversations.map((conv) => {
+                    const statusConfig = getStatusConfig(conv.completed)
+                    const StatusIcon = statusConfig.icon
+                    
+                    return (
+                      <TableRow 
+                        key={conv.id}
+                        sx={{ 
+                          '&:hover': {
+                            backgroundColor: alpha(theme.palette.secondary.main, 0.04),
+                          },
+                          '& .MuiTableCell-root': {
+                            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`
+                          }
+                        }}
+                      >
+                        <TableCell sx={{ 
+                          fontWeight: theme.typography.fontWeightMedium,
+                          color: theme.palette.text.primary
+                        }}>
+                          {conv.agent_name}
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            icon={<StatusIcon size={theme.spacing(2)} />}
+                            label={statusConfig.label}
+                            sx={{
+                              color: statusConfig.color,
+                              backgroundColor: statusConfig.bgcolor,
+                              borderColor: statusConfig.color,
+                              fontWeight: theme.typography.fontWeightMedium,
+                              fontSize: '0.75rem',
+                              '& .MuiChip-icon': {
+                                color: 'inherit'
+                              }
+                            }}
+                            variant="outlined"
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              fontWeight: theme.typography.fontWeightMedium,
+                              color: theme.palette.info.main
+                            }}
+                          >
+                            {conv.total_tokens?.toLocaleString() || '0'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              fontWeight: theme.typography.fontWeightMedium,
+                              color: theme.palette.warning.main
+                            }}
+                          >
+                            {conv.response_time}s
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              color: theme.custom?.colors?.textMuted || theme.palette.text.secondary,
+                              fontSize: '0.8rem'
+                            }}
+                          >
+                            {formatDate(conv.created_at)}
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </CardContent>
+      </Card>
+    </Fade>
+  )
+}
 
 // Main Analytics Component
 const Analytics = () => {
@@ -148,6 +550,62 @@ const Analytics = () => {
   const [conversations, setConversations] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const theme = useTheme()
+
+  // Enhanced loading component
+  const LoadingComponent = () => (
+    <Box 
+      display="flex" 
+      flexDirection="column"
+      justifyContent="center" 
+      alignItems="center" 
+      minHeight="60vh"
+      sx={{
+        background: `linear-gradient(135deg, ${alpha(theme.palette.background.default, 0.8)}, ${alpha(theme.palette.background.default, 0.95)})`,
+        backdropFilter: 'blur(10px)'
+      }}
+    >
+      <CircularProgress 
+        size={theme.spacing(8)} 
+        thickness={4}
+        sx={{ 
+          color: theme.palette.primary.main,
+          mb: 2
+        }}
+      />
+      <Typography 
+        variant="h6" 
+        sx={{ 
+          color: theme.custom?.colors?.textMuted || theme.palette.text.secondary,
+          fontWeight: theme.typography.fontWeightMedium
+        }}
+      >
+        Loading Analytics...
+      </Typography>
+    </Box>
+  )
+
+  // Enhanced error component
+  const ErrorComponent = () => (
+    <Fade in={true} timeout={theme.transitions.duration.enteringScreen}>
+      <Box p={theme.spacing(3)}>
+        <Alert 
+          severity="error"
+          sx={{
+            backgroundColor: alpha(theme.palette.error.main, 0.1),
+            color: theme.palette.error.main,
+            border: `1px solid ${alpha(theme.palette.error.main, 0.2)}`,
+            borderRadius: theme.custom?.borderRadius?.standard || theme.shape.borderRadius,
+            '& .MuiAlert-icon': {
+              color: theme.palette.error.main
+            }
+          }}
+        >
+          {error}
+        </Alert>
+      </Box>
+    </Fade>
+  )
 
   useEffect(() => {
     const fetchAnalyticsData = async () => {
@@ -217,84 +675,119 @@ const Analytics = () => {
   }, [])
 
   if (loading && !overview) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress size={60} />
-      </Box>
-    )
+    return <LoadingComponent />
   }
 
   if (error) {
-    return (
-      <Box p={3}>
-        <Alert severity="error">{error}</Alert>
-      </Box>
-    )
+    return <ErrorComponent />
   }
 
-  return (
-    <Box p={3}>
-      <Typography variant="h4" gutterBottom>
-        Analytics Dashboard
-      </Typography>
-      
-      {/* Overview Metrics */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} lg={2.4}>
-          <MetricCard
-            title="Total Conversations"
-            value={overview?.total_conversations || 0}
-            icon={MessageSquare}
-            color="primary"
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} lg={2.4}>
-          <MetricCard
-            title="Completion Rate"
-            value={`${overview?.completion_rate || 0}%`}
-            subtitle={`${overview?.completed_conversations || 0} completed`}
-            icon={CheckCircle}
-            color="success"
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} lg={2.4}>
-          <MetricCard
-            title="Avg Response Time"
-            value={`${overview?.avg_response_time || 0}s`}
-            subtitle="Per conversation"
-            icon={Clock}
-            color="warning"
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} lg={2.4}>
-          <MetricCard
-            title="Avg Tokens"
-            value={overview?.avg_total_tokens || 0}
-            subtitle={`${overview?.avg_input_tokens || 0} input, ${overview?.avg_output_tokens || 0} output`}
-            icon={Zap}
-            color="info"
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} lg={2.4}>
-          <MetricCard
-            title="Total Tokens Consumed"
-            value={overview?.total_tokens_consumed?.toLocaleString() || 0}
-            subtitle={`${overview?.total_input_tokens_consumed?.toLocaleString() || 0} input, ${overview?.total_output_tokens_consumed?.toLocaleString() || 0} output`}
-            icon={Cpu}
-            color="secondary"
-          />
-        </Grid>
-      </Grid>
+  // Metric configurations with dynamic values
+  const metricConfigs = [
+    {
+      type: 'conversations',
+      value: overview?.total_conversations || 0,
+      subtitle: null,
+      delay: 0
+    },
+    {
+      type: 'completion',
+      value: `${overview?.completion_rate || 0}%`,
+      subtitle: `${overview?.completed_conversations || 0} completed`,
+      delay: 100
+    },
+    {
+      type: 'response_time',
+      value: `${overview?.avg_response_time || 0}s`,
+      subtitle: 'Per conversation',
+      delay: 200
+    },
+    {
+      type: 'tokens',
+      value: overview?.avg_total_tokens || 0,
+      subtitle: `${overview?.avg_input_tokens || 0} input, ${overview?.avg_output_tokens || 0} output`,
+      delay: 300
+    },
+    {
+      type: 'total_tokens',
+      value: overview?.total_tokens_consumed?.toLocaleString() || 0,
+      subtitle: `${overview?.total_input_tokens_consumed?.toLocaleString() || 0} input, ${overview?.total_output_tokens_consumed?.toLocaleString() || 0} output`,
+      delay: 400
+    }
+  ]
 
-      {/* Tables */}
-      <Grid container spacing={3}>
-        <Grid item xs={12} lg={6}>
-          <AgentPerformanceTable agents={agents} loading={loading} />
-        </Grid>
-        <Grid item xs={12} lg={6}>
-          <RecentConversationsTable conversations={conversations} loading={loading} />
-        </Grid>
-      </Grid>
+  return (
+    <Box 
+      sx={{ 
+        p: theme.custom?.layout?.pageY || 3,
+        background: theme.custom?.backgroundGradient || theme.palette.background.default,
+        minHeight: '100vh'
+      }}
+    >
+      <Fade in={true} timeout={theme.transitions.duration.enteringScreen}>
+        <Box>
+          <Box display="flex" alignItems="center" mb={theme.custom?.layout?.section || 4} sx={{ width: '100%' }}>
+            <Avatar sx={{ 
+              backgroundColor: alpha(theme.palette.primary.main, 0.1),
+              color: theme.palette.primary.main,
+              mr: 2,
+              width: theme.spacing(6),
+              height: theme.spacing(6),
+              flexShrink: 0
+            }}>
+              <TrendingUp size={theme.spacing(3)} />
+            </Avatar>
+            <Typography 
+              variant="h4" 
+              sx={{
+                fontWeight: theme.typography.fontWeightBold,
+                background: theme.custom?.colors?.gradientText || theme.palette.text.primary,
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                flex: 1,
+                minWidth: 0,
+                whiteSpace: 'nowrap',
+                overflow: 'visible',
+                fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' }
+              }}
+            >
+              Analytics Dashboard
+            </Typography>
+          </Box>
+          
+          {/* Overview Metrics */}
+          <Grid 
+            container 
+            spacing={theme.custom?.layout?.block || 3} 
+            sx={{ mb: theme.custom?.layout?.section || 4 }}
+          >
+            {metricConfigs.map((config, index) => (
+              <Grid 
+                item 
+                xs={12} 
+                sm={6} 
+                md={4} 
+                lg={2.4} 
+                xl={2.4}
+                key={config.type}
+              >
+                <MetricCard {...config} />
+              </Grid>
+            ))}
+          </Grid>
+
+          {/* Tables */}
+          <Grid container spacing={theme.custom?.layout?.block || 3}>
+            <Grid item xs={12} xl={6}>
+              <AgentPerformanceTable agents={agents} loading={loading} />
+            </Grid>
+            <Grid item xs={12} xl={6}>
+              <RecentConversationsTable conversations={conversations} loading={loading} />
+            </Grid>
+          </Grid>
+        </Box>
+      </Fade>
     </Box>
   )
 }
