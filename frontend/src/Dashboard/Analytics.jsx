@@ -25,7 +25,7 @@ import {
   XCircle,
   Cpu
 } from 'lucide-react'
-import AnalyticsService from '../services/analyticsService'
+import sharedApiService from '../utils/apiService'
 
 // Metric Card Component
 const MetricCard = ({ title, value, subtitle, icon: Icon, color = "primary" }) => (
@@ -152,22 +152,63 @@ const Analytics = () => {
   useEffect(() => {
     const fetchAnalyticsData = async () => {
       try {
+        console.log('[Analytics] Starting to fetch analytics data...')
         setLoading(true)
         setError(null)
 
-        const [overviewData, agentsData, conversationsData] = await Promise.all([
-          AnalyticsService.getOverviewMetrics(),
-          AnalyticsService.getAgentPerformance(10),
-          AnalyticsService.getRecentConversations(10)
+        const [overviewResult, agentsResult, conversationsResult] = await Promise.all([
+          sharedApiService.makeRequest(
+            '/api/analytics/overview',
+            {},
+            { endpoint: 'overview' }
+          ),
+          sharedApiService.makeRequest(
+            '/api/analytics/agent-performance?limit=10',
+            {},
+            { endpoint: 'agent-performance', limit: 10 }
+          ),
+          sharedApiService.makeRequest(
+            '/api/analytics/recent-conversations?limit=10',
+            {},
+            { endpoint: 'recent-conversations', limit: 10 }
+          )
         ])
 
-        setOverview(overviewData)
-        setAgents(agentsData)
-        setConversations(conversationsData)
+        console.log('[Analytics] Raw API results:', { overviewResult, agentsResult, conversationsResult })
+
+        if (overviewResult.success) {
+          // Extract the actual data from the nested structure
+          const overviewData = overviewResult.data?.data || overviewResult.data
+          console.log('[Analytics] Overview data:', overviewData)
+          setOverview(overviewData)
+        } else {
+          throw new Error(overviewResult.error || 'Failed to load overview metrics')
+        }
+
+        if (agentsResult.success) {
+          // Extract the actual data from the nested structure  
+          const agentsData = agentsResult.data?.data || agentsResult.data
+          console.log('[Analytics] Agents data:', agentsData)
+          setAgents(Array.isArray(agentsData) ? agentsData : [])
+        } else {
+          throw new Error(agentsResult.error || 'Failed to load agent performance')
+        }
+
+        if (conversationsResult.success) {
+          // Extract the actual data from the nested structure
+          const conversationsData = conversationsResult.data?.data || conversationsResult.data
+          console.log('[Analytics] Conversations data:', conversationsData)
+          setConversations(Array.isArray(conversationsData) ? conversationsData : [])
+        } else {
+          throw new Error(conversationsResult.error || 'Failed to load recent conversations')
+        }
+        
+        console.log('[Analytics] Successfully loaded all data')
       } catch (err) {
         console.error('Error fetching analytics data:', err)
         setError('Failed to load analytics data. Please try again.')
       } finally {
+        console.log('[Analytics] Setting loading to false')
         setLoading(false)
       }
     }

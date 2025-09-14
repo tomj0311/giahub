@@ -26,6 +26,7 @@ import {
     TablePagination
 } from '@mui/material';
 import { apiCall } from '../config/api';
+import sharedApiService from '../utils/apiService';
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { useConfirmation } from '../contexts/ConfirmationContext';
@@ -35,8 +36,15 @@ function ToolConfig({ user }) {
     const { showSuccess, showError, showWarning } = useSnackbar();
     const { showDeleteConfirmation } = useConfirmation();
     
-    // Add ref to track if component is mounted
+    // Add ref to track if component is mounted and prevent duplicate calls
     const isMountedRef = useRef(true);
+    const isLoadingConfigsRef = useRef(false);
+    const isLoadingCategoriesRef = useRef(false);
+    const isLoadingDiscoveryRef = useRef(false);
+
+    // Store token ref to avoid useCallback dependency issues
+    const tokenRef = useRef(token);
+    tokenRef.current = token;
 
     const [components, setComponents] = useState({ functions: [] });
     const [loadingDiscovery, setLoadingDiscovery] = useState(true);
@@ -66,17 +74,35 @@ function ToolConfig({ user }) {
     const discoverComponents = useCallback(async () => {
         if (!isMountedRef.current) return;
         
+        // Prevent duplicate calls
+        if (isLoadingDiscoveryRef.current) {
+            console.log('🚫 Already loading components, skipping duplicate call');
+            return;
+        }
+        
         try {
+            isLoadingDiscoveryRef.current = true;
             setLoadingDiscovery(true);
-            const response = await apiCall(`/api/tools/components?folder=ai.functions`, {
-                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-            });
-            if (response.ok) {
-                const data = await response.json();
-                const comps = data?.components || {};
-                if (isMountedRef.current) {
-                    setComponents({ functions: comps['ai.functions'] || [] });
+            
+            const result = await sharedApiService.makeRequest(
+                '/api/tools/components?folder=ai.functions',
+                {
+                    headers: tokenRef.current ? { 'Authorization': `Bearer ${tokenRef.current}` } : {}
+                },
+                { 
+                    folder: 'ai.functions',
+                    token: tokenRef.current?.substring(0, 10)
                 }
+            );
+            
+            if (!isMountedRef.current) {
+                console.log('🚫 Component unmounted, aborting discovery load');
+                return;
+            }
+            
+            if (result.success) {
+                const comps = result.data?.components || {};
+                setComponents({ functions: comps['ai.functions'] || [] });
             } else {
                 if (isMountedRef.current) {
                     showError('Failed to discover tools');
@@ -89,10 +115,11 @@ function ToolConfig({ user }) {
             }
         } finally {
             if (isMountedRef.current) {
+                isLoadingDiscoveryRef.current = false;
                 setLoadingDiscovery(false);
             }
         }
-    }, [token]); // Remove showError - it's unstable
+    }, []); // Empty dependencies
 
     const introspectTool = async (modulePath, kind = 'tool') => {
         if (!modulePath || introspectCache[modulePath] || pendingIntros[modulePath]) return;
@@ -123,30 +150,55 @@ function ToolConfig({ user }) {
     const loadCategories = useCallback(async () => {
         if (!isMountedRef.current) return;
         
+        // Prevent duplicate calls
+        if (isLoadingCategoriesRef.current) {
+            console.log('🚫 Already loading categories, skipping duplicate call');
+            return;
+        }
+        
         try {
+            isLoadingCategoriesRef.current = true;
             setLoadingCategories(true);
-            const response = await apiCall(`/api/tools/categories`, {
-                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-            });
-            if (response.ok) {
-                const data = await response.json();
-                if (isMountedRef.current) {
-                    setCategories(data.categories || []);
-                }
+            
+            const result = await sharedApiService.makeRequest(
+                '/api/tools/categories',
+                {
+                    headers: tokenRef.current ? { 'Authorization': `Bearer ${tokenRef.current}` } : {}
+                },
+                { token: tokenRef.current?.substring(0, 10) }
+            );
+            
+            if (!isMountedRef.current) {
+                console.log('🚫 Component unmounted, aborting category load');
+                return;
+            }
+            
+            if (result.success) {
+                setCategories(result.data.categories || []);
             }
         } catch (error) {
             console.error('Failed to load categories:', error);
         } finally {
             if (isMountedRef.current) {
+                isLoadingCategoriesRef.current = false;
                 setLoadingCategories(false);
             }
         }
-    }, [token]);
+    }, []); // Empty dependencies
 
     const loadExistingConfigs = useCallback(async (page = 1, pageSize = 8) => {
         if (!isMountedRef.current) return;
         
+        // Prevent duplicate calls
+        if (isLoadingConfigsRef.current) {
+            console.log('🚫 Already loading configs, skipping duplicate call');
+            return;
+        }
+        
         try {
+            isLoadingConfigsRef.current = true;
+            setLoadingConfigs(true);
+            
             const queryParams = new URLSearchParams({
                 page: page.toString(),
                 page_size: pageSize.toString(),
@@ -154,33 +206,46 @@ function ToolConfig({ user }) {
                 sort_order: 'asc'
             });
             
-            const resp = await apiCall(`/api/tools/configs?${queryParams}`, {
-                headers: {
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                }
-            });
-            if (resp.ok) {
-                const data = await resp.json();
-                if (isMountedRef.current) {
-                    setExistingConfigs(data.configurations || []);
-                    if (data.pagination) {
-                        setPagination({
-                            page: data.pagination.page - 1, // Convert to 0-based for MUI
-                            rowsPerPage: data.pagination.page_size,
-                            total: data.pagination.total,
-                            totalPages: data.pagination.total_pages
-                        });
+            const result = await sharedApiService.makeRequest(
+                `/api/tools/configs?${queryParams}`,
+                {
+                    headers: {
+                        ...(tokenRef.current ? { 'Authorization': `Bearer ${tokenRef.current}` } : {})
                     }
+                },
+                { 
+                    page, 
+                    pageSize, 
+                    token: tokenRef.current?.substring(0, 10) 
+                }
+            );
+            
+            if (!isMountedRef.current) {
+                console.log('🚫 Component unmounted, aborting config load');
+                return;
+            }
+            
+            if (result.success) {
+                const data = result.data;
+                setExistingConfigs(data.configurations || []);
+                if (data.pagination) {
+                    setPagination({
+                        page: data.pagination.page - 1, // Convert to 0-based for MUI
+                        rowsPerPage: data.pagination.page_size,
+                        total: data.pagination.total,
+                        totalPages: data.pagination.total_pages
+                    });
                 }
             }
         } catch (e) {
             console.error('Failed to load existing configurations:', e);
         } finally {
             if (isMountedRef.current) {
+                isLoadingConfigsRef.current = false;
                 setLoadingConfigs(false);
             }
         }
-    }, [token]);
+    }, []); // Empty dependencies
 
     const handlePageChange = (event, newPage) => {
         if (!loadingConfigs && !saveState.loading) {
@@ -201,11 +266,14 @@ function ToolConfig({ user }) {
         }
     }, [loadingDiscovery, components.functions]); // Remove showWarning - it's unstable
 
-    // Use exact same pattern as KnowledgeConfig
+    // Use exact same pattern as other components
     useEffect(() => {
         const loadData = async () => {
             console.log('MOUNT: ToolConfig');
             if (!isMountedRef.current) return;
+            
+            // Set mounted to true
+            isMountedRef.current = true;
             
             try {
                 // Load components first
@@ -223,15 +291,16 @@ function ToolConfig({ user }) {
         };
         
         loadData();
-    }, [discoverComponents, loadExistingConfigs, loadCategories]);
-
-    // Cleanup function to handle component unmount
-    useEffect(() => {
+        
         return () => {
             console.log('UNMOUNT: ToolConfig');
+            // Set mounted to false FIRST to prevent any state updates
             isMountedRef.current = false;
+            isLoadingConfigsRef.current = false;
+            isLoadingCategoriesRef.current = false;
+            isLoadingDiscoveryRef.current = false;
         };
-    }, []);
+    }, []); // EMPTY DEPENDENCIES - NO BULLSHIT
 
     function ensureIntrospection(path, kind) {
         if (!path || introspectCache[path]) return;
@@ -298,6 +367,12 @@ function ToolConfig({ user }) {
             const action = isEditMode ? 'updated' : 'saved';
             showSuccess(`Tool configuration "${form.name}" ${action} successfully`);
             setSaveState({ loading: false });
+            
+            // Invalidate cache after successful save
+            sharedApiService.invalidateCache('/api/tools/configs');
+            sharedApiService.invalidateCache('/api/tools/categories');
+            sharedApiService.invalidateCache('/api/tools/components');
+            
             if (isMountedRef.current) {
                 loadExistingConfigs();
                 loadCategories();
@@ -334,6 +409,12 @@ function ToolConfig({ user }) {
                 return;
             }
             showSuccess('Tool configuration deleted');
+            
+            // Invalidate cache after successful delete
+            sharedApiService.invalidateCache('/api/tools/configs');
+            sharedApiService.invalidateCache('/api/tools/categories');
+            sharedApiService.invalidateCache('/api/tools/components');
+            
             if (isMountedRef.current) {
                 await loadExistingConfigs();
             }

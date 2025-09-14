@@ -38,7 +38,6 @@ export default function RouteTransition({ children, duration = 1000, delay = 320
 
       {ready && (
         <Box
-          key={location.pathname}
           sx={{
             '@keyframes subtleIn': {
               from: { opacity: 0, transform: 'translateY(6px)' },

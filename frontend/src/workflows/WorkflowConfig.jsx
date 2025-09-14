@@ -1,10 +1,9 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, memo } from 'react';
 import {
     Box,
     Button,
     TextField,
     Typography,
-    CircularProgress,
     Autocomplete,
     Fade,
     Stack,
@@ -26,11 +25,18 @@ import {
     Chip
 } from '@mui/material';
 import { apiCall } from '../config/api';
+import sharedApiService from '../utils/apiService';
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon, Upload as UploadIcon, Download as DownloadIcon } from 'lucide-react';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { useConfirmation } from '../contexts/ConfirmationContext';
 
-export default function WorkflowConfig({ user }) {
+function WorkflowConfig({ user }) {
+    // Add render logging to track what's causing re-renders
+    console.log('🔄 WorkflowConfig RENDER', { 
+        userToken: user?.token?.substring(0, 10) + '...', 
+        timestamp: Date.now() 
+    });
+    
     // Use the user token from props (same pattern as other dashboard components)
     const token = user?.token;
 
@@ -39,9 +45,16 @@ export default function WorkflowConfig({ user }) {
 
     // Add ref to track if component is mounted
     const isMountedRef = useRef(true);
+    const hasLoadedRef = useRef(false);
+    const isLoadingConfigsRef = useRef(false);
+    const isLoadingCategoriesRef = useRef(false);
+    
+    // Create a ref to store the current token to avoid useCallback dependency issues
+    const tokenRef = useRef(token);
+    tokenRef.current = token;
 
     const [existingConfigs, setExistingConfigs] = useState([]);
-    const [loadingConfigs, setLoadingConfigs] = useState(true);
+    const [loadingConfigs, setLoadingConfigs] = useState(false);
     const [pagination, setPagination] = useState({
         page: 0, // MUI uses 0-based pagination
         rowsPerPage: 8,
@@ -62,33 +75,64 @@ export default function WorkflowConfig({ user }) {
     const [loadingCategories, setLoadingCategories] = useState(false);
     const [uploadState, setUploadState] = useState({ loading: false });
 
-    const loadCategories = useCallback(async () => {
+    const loadCategories = async () => {
         if (!isMountedRef.current) return;
         
+        // Prevent duplicate calls using ref for immediate synchronous check
+        if (isLoadingCategoriesRef.current) {
+            console.log('🚫 Already loading categories, skipping duplicate call');
+            return;
+        }
+        
         try {
+            isLoadingCategoriesRef.current = true;
             setLoadingCategories(true);
-            const response = await apiCall(`/api/workflows/categories`, {
-                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-            });
-            if (response.ok) {
-                const data = await response.json();
-                if (isMountedRef.current) {
-                    setCategories(data.categories || []);
-                }
+            
+            const result = await sharedApiService.makeRequest(
+                '/api/workflows/categories',
+                {
+                    headers: tokenRef.current ? { 'Authorization': `Bearer ${tokenRef.current}` } : {}
+                },
+                { token: tokenRef.current?.substring(0, 10) } // Include token in cache key
+            );
+            
+            // Check mounted state before proceeding
+            if (!isMountedRef.current) {
+                console.log('🚫 Component unmounted, aborting category load');
+                return;
+            }
+            
+            if (result.success) {
+                setCategories(result.data.categories || []);
+            } else {
+                console.error('Failed to load categories:', result.error);
             }
         } catch (error) {
             console.error('Failed to load categories:', error);
         } finally {
+            // Only update loading state if still mounted
             if (isMountedRef.current) {
+                isLoadingCategoriesRef.current = false;
                 setLoadingCategories(false);
             }
         }
-    }, [token]);
+    };
 
-    const loadExistingConfigs = useCallback(async (page = 1, pageSize = 8) => {
+    const loadExistingConfigs = async (page = 1, pageSize = 8) => {
         if (!isMountedRef.current) return;
         
+        // Prevent duplicate calls using ref for immediate synchronous check
+        if (isLoadingConfigsRef.current) {
+            console.log('🚫 Already loading configs, skipping duplicate call');
+            return;
+        }
+        
         console.log('🔄 LOADING EXISTING WORKFLOW CONFIGS...');
+        
+        // Set loading state IMMEDIATELY in both ref and state
+        isLoadingConfigsRef.current = true;
+        setLoadingConfigs(true);
+        
         try {
             const queryParams = new URLSearchParams({
                 page: page.toString(),
@@ -97,49 +141,71 @@ export default function WorkflowConfig({ user }) {
                 sort_order: 'asc'
             });
             
-            const resp = await apiCall(`/api/workflows/configs?${queryParams}`, {
-                headers: {
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                }
-            });
-            console.log('📡 Load configs response:', resp.status, resp.ok);
-            if (resp.ok) {
-                const data = await resp.json();
-                console.log('📄 Configs data:', data);
-                if (isMountedRef.current) {
-                    setExistingConfigs(data.configurations || []);
-                    if (data.pagination) {
-                        setPagination({
-                            page: data.pagination.page - 1, // Convert to 0-based for MUI
-                            rowsPerPage: data.pagination.page_size,
-                            total: data.pagination.total,
-                            totalPages: data.pagination.total_pages
-                        });
+            const result = await sharedApiService.makeRequest(
+                `/api/workflows/configs?${queryParams}`,
+                {
+                    headers: {
+                        ...(tokenRef.current ? { 'Authorization': `Bearer ${tokenRef.current}` } : {})
                     }
+                },
+                { 
+                    page, 
+                    pageSize, 
+                    token: tokenRef.current?.substring(0, 10) 
+                }
+            );
+            
+            // Double-check mounted state before proceeding
+            if (!isMountedRef.current) {
+                console.log('🚫 Component unmounted, aborting config load');
+                return;
+            }
+            
+            console.log('📡 Load configs response:', result.success ? 'SUCCESS' : 'FAILED');
+            if (result.success) {
+                const data = result.data;
+                console.log('📄 Configs data:', data);
+                
+                // Triple-check mounted state before state updates
+                if (!isMountedRef.current) {
+                    console.log('🚫 Component unmounted during data processing, aborting');
+                    return;
+                }
+                
+                setExistingConfigs(data.configurations || []);
+                if (data.pagination) {
+                    setPagination({
+                        page: data.pagination.page - 1, // Convert to 0-based for MUI
+                        rowsPerPage: data.pagination.page_size,
+                        total: data.pagination.total,
+                        totalPages: data.pagination.total_pages
+                    });
                 }
                 console.log('✅ Configs loaded successfully');
             } else {
-                console.log('❌ Failed to load configs - bad response');
+                console.log('❌ Failed to load configs:', result.error);
             }
         } catch (e) {
             console.log('💥 ERROR loading configs:', e);
             console.error('Failed to load existing configurations:', e);
         } finally {
+            // Only update loading state if still mounted
             if (isMountedRef.current) {
+                isLoadingConfigsRef.current = false;
                 setLoadingConfigs(false);
             }
             console.log('🏁 Load configs finished');
         }
-    }, [token]);
+    };
 
     const handlePageChange = (event, newPage) => {
-        if (!loadingConfigs && !saveState.loading) {
+        if (!isLoadingConfigsRef.current && !saveState.loading) {
             loadExistingConfigs(newPage + 1, pagination.rowsPerPage); // Convert to 1-based for API
         }
     };
 
     const handleRowsPerPageChange = (event) => {
-        if (!loadingConfigs && !saveState.loading) {
+        if (!isLoadingConfigsRef.current && !saveState.loading) {
             const newRowsPerPage = parseInt(event.target.value, 10);
             loadExistingConfigs(1, newRowsPerPage); // Reset to first page
         }
@@ -189,21 +255,24 @@ export default function WorkflowConfig({ user }) {
 
     // Run these functions only once on mount
     useEffect(() => {
-        console.log('MOUNT: WorkflowConfig');
+        console.log('MOUNT: WorkflowConfig', 'Token:', token?.substring(0, 10) + '...', 'User:', user, 'LoadingConfigs:', loadingConfigs);
+        
+        // Set mounted to true
+        isMountedRef.current = true;
+        
+        // Always load on mount - the loading state is just for UI feedback
         loadExistingConfigs();
         loadCategories();
         
         return () => {
             console.log('UNMOUNT: WorkflowConfig');
-        };
-    }, [loadExistingConfigs, loadCategories]);
-
-    // Cleanup function to handle component unmount
-    useEffect(() => {
-        return () => {
+            // Set mounted to false FIRST to prevent any state updates
             isMountedRef.current = false;
+            hasLoadedRef.current = false;
+            isLoadingConfigsRef.current = false;
+            isLoadingCategoriesRef.current = false;
         };
-    }, []);
+    }, []); // EMPTY DEPENDENCIES - NO BULLSHIT
 
     function loadExistingConfig(configName) {
         const config = existingConfigs.find(c => c.name === configName);
@@ -290,6 +359,10 @@ export default function WorkflowConfig({ user }) {
             showSuccess(`Workflow configuration "${form.name}" ${action} successfully`);
             setSaveState({ loading: false });
             
+            // Invalidate cache after successful save
+            sharedApiService.invalidateCache('/api/workflows/configs');
+            sharedApiService.invalidateCache('/api/workflows/categories');
+            
             if (isMountedRef.current) {
                 loadExistingConfigs();
                 loadCategories();
@@ -328,6 +401,11 @@ export default function WorkflowConfig({ user }) {
                 return;
             }
             showSuccess('Workflow configuration deleted');
+            
+            // Invalidate cache after successful delete
+            sharedApiService.invalidateCache('/api/workflows/configs');
+            sharedApiService.invalidateCache('/api/workflows/categories');
+            
             if (isMountedRef.current) {
                 await loadExistingConfigs();
             }
@@ -569,3 +647,6 @@ export default function WorkflowConfig({ user }) {
         </Box>
     );
 }
+
+// Memoize the component to prevent unnecessary re-renders
+export default memo(WorkflowConfig);

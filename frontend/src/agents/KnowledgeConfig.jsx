@@ -33,76 +33,9 @@ import {
 } from '@mui/material'
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react'
 import { apiCall } from '../config/api'
+import sharedApiService from '../utils/apiService'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { useConfirmation } from '../contexts/ConfirmationContext'
-
-const api = {
-  async getDefaults(token) {
-    const r = await apiCall('/api/knowledge/defaults', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-    return r.json()
-  },
-  async getCategories(token) {
-    const r = await apiCall('/api/knowledge/categories', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-    return r.json()
-  },
-  async getCollections(token) {
-    const r = await apiCall('/api/knowledge/collections', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-    return r.json()
-  },
-  async getCollection(collection, token) {
-    const r = await apiCall(`/api/knowledge/collection/${encodeURIComponent(collection)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-    if (!r.ok) throw new Error('Failed to load collection')
-    return r.json()
-  },
-  async saveCollection(body, token) {
-    const r = await apiCall('/api/knowledge/collection/save', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify(body)
-    })
-    return r.json()
-  },
-  async deleteCollection(collection, token) {
-    const r = await apiCall(`/api/knowledge/collection/${encodeURIComponent(collection)}`, {
-      method: 'DELETE',
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    })
-    if (!r.ok) throw new Error('Delete failed')
-    return r.json()
-  },
-  async uploadFiles(collection, files, token, payload = null) {
-    const fd = new FormData()
-    fd.append('collection', collection)
-    for (const f of files) fd.append('files', f)
-    if (payload) {
-      fd.append('payload', JSON.stringify(payload))
-    }
-    const r = await apiCall(`/api/knowledge/upload?collection=${encodeURIComponent(collection)}`, {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: fd
-    })
-    if (!r.ok) throw new Error('Upload failed')
-    return r.json()
-  },
-  async deleteFile(collection, filename, token) {
-    const r = await apiCall(`/api/knowledge/collection/${encodeURIComponent(collection)}/file/${encodeURIComponent(filename)}`, {
-      method: 'DELETE',
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    })
-    if (!r.ok) throw new Error('Failed to delete file')
-    return r.json()
-  },
-  async getModels(token) {
-    const r = await apiCall('/api/models/configs', {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    })
-    return r.json()
-  }
-}
 
 export default function KnowledgeConfig({ user }) {
   const theme = useTheme()
@@ -110,8 +43,15 @@ export default function KnowledgeConfig({ user }) {
   const { showSuccess, showError, showWarning } = useSnackbar()
   const { showDeleteConfirmation } = useConfirmation()
 
-  // Add ref to track if component is mounted
+  // Add ref to track if component is mounted and prevent duplicate calls
   const isMountedRef = useRef(true)
+  const isLoadingConfigsRef = useRef(false)
+  const isLoadingCategoriesRef = useRef(false)
+  const isLoadingModelsRef = useRef(false)
+
+  // Store token ref to avoid useCallback dependency issues
+  const tokenRef = useRef(token)
+  tokenRef.current = token
 
   const [loading, setLoading] = useState(true)
   const [collections, setCollections] = useState([])
@@ -147,48 +87,108 @@ export default function KnowledgeConfig({ user }) {
   const loadModels = useCallback(async () => {
     if (!isMountedRef.current) return;
     
+    // Prevent duplicate calls
+    if (isLoadingModelsRef.current) {
+      console.log('🚫 Already loading models, skipping duplicate call');
+      return;
+    }
+    
     try {
+      isLoadingModelsRef.current = true;
       console.log('[KnowledgeConfig] Loading models...')
-      const response = await api.getModels(token)
-      console.log('[KnowledgeConfig] Models API response:', response)
       
-      // The response structure is { configurations: [...] } from ModelConfig
-      const modelsList = response.configurations || []
-      console.log('[KnowledgeConfig] Processed models list:', modelsList)
-      if (isMountedRef.current) {
+      const result = await sharedApiService.makeRequest(
+        '/api/models/configs',
+        {
+          headers: tokenRef.current ? { Authorization: `Bearer ${tokenRef.current}` } : {}
+        },
+        { token: tokenRef.current?.substring(0, 10) }
+      );
+      
+      console.log('[KnowledgeConfig] Models API response:', result)
+      
+      if (!isMountedRef.current) {
+        console.log('🚫 Component unmounted, aborting models load');
+        return;
+      }
+      
+      if (result.success) {
+        // The response structure is { configurations: [...] } from ModelConfig
+        const modelsList = result.data.configurations || []
+        console.log('[KnowledgeConfig] Processed models list:', modelsList)
         setModels(Array.isArray(modelsList) ? modelsList : [])
+      } else {
+        console.error('[KnowledgeConfig] Failed to load models:', result.error)
+        if (isMountedRef.current) {
+          showError('Failed to load models')
+        }
       }
     } catch (error) {
       console.error('[KnowledgeConfig] Failed to load models:', error)
       if (isMountedRef.current) {
         showError('Failed to load models')
       }
+    } finally {
+      if (isMountedRef.current) {
+        isLoadingModelsRef.current = false;
+      }
     }
-  }, [token]) // Remove showError - it's unstable
+  }, []); // Empty dependencies
 
   const loadCategories = useCallback(async () => {
     if (!isMountedRef.current) return;
     
+    // Prevent duplicate calls
+    if (isLoadingCategoriesRef.current) {
+      console.log('🚫 Already loading categories, skipping duplicate call');
+      return;
+    }
+    
     try {
+      isLoadingCategoriesRef.current = true;
       setLoadingCategories(true)
-      const response = await api.getCategories(token)
-      if (isMountedRef.current) {
-        setCategories(response.categories || [])
+      
+      const result = await sharedApiService.makeRequest(
+        '/api/knowledge/categories',
+        {
+          headers: tokenRef.current ? { Authorization: `Bearer ${tokenRef.current}` } : {}
+        },
+        { token: tokenRef.current?.substring(0, 10) }
+      );
+      
+      if (!isMountedRef.current) {
+        console.log('🚫 Component unmounted, aborting categories load');
+        return;
+      }
+      
+      if (result.success) {
+        setCategories(result.data.categories || [])
+      } else {
+        console.error('[KnowledgeConfig] Failed to load categories:', result.error)
       }
     } catch (error) {
       console.error('[KnowledgeConfig] Failed to load categories:', error)
     } finally {
       if (isMountedRef.current) {
+        isLoadingCategoriesRef.current = false;
         setLoadingCategories(false)
       }
     }
-  }, [token])
+  }, []); // Empty dependencies
 
   const loadExistingConfigs = useCallback(async (page = 1, pageSize = 8) => {
     if (!isMountedRef.current) return;
     
+    // Prevent duplicate calls
+    if (isLoadingConfigsRef.current) {
+      console.log('🚫 Already loading configs, skipping duplicate call');
+      return;
+    }
+    
     try {
+      isLoadingConfigsRef.current = true;
       setLoadingConfigs(true)
+      
       const queryParams = new URLSearchParams({
         page: page.toString(),
         page_size: pageSize.toString(),
@@ -196,71 +196,83 @@ export default function KnowledgeConfig({ user }) {
         sort_order: 'asc'
       });
       
-      const collectionsResponse = await apiCall(`/api/knowledge/collections?${queryParams}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
+      const result = await sharedApiService.makeRequest(
+        `/api/knowledge/collections?${queryParams}`,
+        {
+          headers: tokenRef.current ? { Authorization: `Bearer ${tokenRef.current}` } : {}
+        },
+        { 
+          page, 
+          pageSize, 
+          token: tokenRef.current?.substring(0, 10) 
+        }
+      );
       
-      if (collectionsResponse.ok) {
-        const data = await collectionsResponse.json();
+      if (!isMountedRef.current) {
+        console.log('🚫 Component unmounted, aborting config load');
+        return;
+      }
+      
+      if (result.success) {
+        const data = result.data;
         const collections = data.collections || [];
         
         console.log('[KnowledgeConfig] Raw API response:', data);
         console.log('[KnowledgeConfig] Collections from API:', collections);
         
-        if (isMountedRef.current) {
-          // Set pagination data
-          if (data.pagination) {
-            setPagination({
-              page: data.pagination.page - 1, // Convert to 0-based for MUI
-              rowsPerPage: data.pagination.page_size,
-              total: data.pagination.total,
-              totalPages: data.pagination.total_pages
-            });
-          }
-          
-          // Load full data for each collection like ToolConfig loads configurations
-          const collectionsWithData = []
-          for (const collection of collections) {
-            try {
-              // For paginated results, collections already have the needed structure
-              // from the backend's list_collections_paginated method
-              collectionsWithData.push({
-                id: collection.id || collection.name,
-                name: collection.name,
-                category: collection.category || '',
-                model_id: collection.model_id || '',
-                model_name: collection.model_name || '',
-                files_count: collection.files_count || 0,
-                files: [] // Will be loaded when editing
-              })
-            } catch (error) {
-              console.error(`[KnowledgeConfig] Failed to process collection ${collection.name}:`, error)
-              // Add basic entry if collection data can't be processed
-              collectionsWithData.push({
-                id: collection.name,
-                name: collection.name,
-                category: '',
-                model_id: '',
-                model_name: '',
-                files_count: 0,
-                files: []
-              })
-            }
-          }
-          setExistingConfigs(collectionsWithData)
-          console.log('[KnowledgeConfig] Collections loaded:', collectionsWithData)
+        // Set pagination data
+        if (data.pagination) {
+          setPagination({
+            page: data.pagination.page - 1, // Convert to 0-based for MUI
+            rowsPerPage: data.pagination.page_size,
+            total: data.pagination.total,
+            totalPages: data.pagination.total_pages
+          });
         }
+        
+        // Load full data for each collection like ToolConfig loads configurations
+        const collectionsWithData = []
+        for (const collection of collections) {
+          try {
+            // For paginated results, collections already have the needed structure
+            // from the backend's list_collections_paginated method
+            collectionsWithData.push({
+              id: collection.id || collection.name,
+              name: collection.name,
+              category: collection.category || '',
+              model_id: collection.model_id || '',
+              model_name: collection.model_name || '',
+              files_count: collection.files_count || 0,
+              files: [] // Will be loaded when editing
+            })
+          } catch (error) {
+            console.error(`[KnowledgeConfig] Failed to process collection ${collection.name}:`, error)
+            // Add basic entry if collection data can't be processed
+            collectionsWithData.push({
+              id: collection.name,
+              name: collection.name,
+              category: '',
+              model_id: '',
+              model_name: '',
+              files_count: 0,
+              files: []
+            })
+          }
+        }
+        setExistingConfigs(collectionsWithData)
+        console.log('[KnowledgeConfig] Collections loaded:', collectionsWithData)
       } else {
-        console.error('[KnowledgeConfig] Failed to load collections - bad response')
+        console.error('[KnowledgeConfig] Failed to load collections:', result.error)
       }
     } catch (error) {
       console.error('[KnowledgeConfig] Failed to load collections:', error)
     } finally {
       if (isMountedRef.current) {
+        isLoadingConfigsRef.current = false;
         setLoadingConfigs(false)
       }
     }
-  }, [token])
+  }, []); // Empty dependencies
 
   const handlePageChange = (event, newPage) => {
     if (!loadingConfigs && !saveState.loading) {
@@ -280,34 +292,24 @@ export default function KnowledgeConfig({ user }) {
   useEffect(() => {
     // Load data like ToolConfig does
     const loadData = async () => {
-      console.log('MOUNT: KnowledgeConfig')
+      console.log('🚀 KnowledgeConfig MOUNT')
       if (!isMountedRef.current) return;
       
       try {
         setLoading(true)
         
-        // Load defaults and models first
-        const [d] = await Promise.all([
-          api.getDefaults(token)
-        ])
-        
-        console.log('[KnowledgeConfig] API responses:', { d })
-        if (isMountedRef.current) {
-          setDefaults(d.defaults || {})
-        }
-        
-        // Load models separately to handle errors better
-        await loadModels()
-        
-        // Load configs and categories
+        // Load data using singleton service
         await Promise.all([
-          loadExistingConfigs(),
-          loadCategories()
-        ])
+          loadModels(),
+          loadCategories(),
+          loadExistingConfigs()
+        ]);
         
-      } catch (err) {
-        console.error('[KnowledgeConfig] Error loading data:', err)
-      } finally {
+        if (isMountedRef.current) {
+          setLoading(false)
+        }
+      } catch (error) {
+        console.error('[KnowledgeConfig] Failed to load initial data:', error)
         if (isMountedRef.current) {
           setLoading(false)
         }
@@ -315,7 +317,7 @@ export default function KnowledgeConfig({ user }) {
     }
     
     loadData()
-  }, [token, loadModels, loadExistingConfigs, loadCategories])
+  }, []); // Empty dependencies to prevent duplicate calls
 
   // Cleanup function to handle component unmount
   useEffect(() => {
@@ -341,10 +343,20 @@ export default function KnowledgeConfig({ user }) {
       
       // Load files from the collection API when editing
       try {
-        const collectionData = await api.getCollection(configName, token);
-        const files = collectionData.files || [];
-        console.log('[KnowledgeConfig] Setting existing files to:', files)
-        setExistingFiles(files)
+        const result = await sharedApiService.makeRequest(
+          `/api/knowledge/collection/${encodeURIComponent(configName)}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+          { collection: configName, token: token?.substring(0, 10) }
+        );
+        
+        if (result.success) {
+          const files = result.data.files || [];
+          console.log('[KnowledgeConfig] Setting existing files to:', files)
+          setExistingFiles(files)
+        } else {
+          console.error('[KnowledgeConfig] Failed to load collection files:', result.error)
+          setExistingFiles([])
+        }
       } catch (error) {
         console.error('[KnowledgeConfig] Failed to load collection files:', error)
         setExistingFiles([])
@@ -378,7 +390,18 @@ export default function KnowledgeConfig({ user }) {
       if (filesToDelete.length > 0) {
         for (const filename of filesToDelete) {
           try {
-            await api.deleteFile(form.name, filename, token)
+            const result = await sharedApiService.makeRequest(
+              `/api/knowledge/collection/${encodeURIComponent(form.name)}/file/${encodeURIComponent(filename)}`,
+              {
+                method: 'DELETE',
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
+              },
+              { collection: form.name, filename, token: token?.substring(0, 10) }
+            );
+            
+            if (!result.success) {
+              throw new Error(result.error || 'Failed to delete file');
+            }
           } catch (error) {
             console.error(`Failed to delete file ${filename}:`, error)
             showWarning(`Failed to delete file: ${filename}`)
@@ -393,22 +416,75 @@ export default function KnowledgeConfig({ user }) {
         overwrite: isEdit
       }
       
-      const res = await api.saveCollection(payload, token)
+      const result = await sharedApiService.makeRequest(
+        '/api/knowledge/collection/save',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify(payload)
+        },
+        { collection: form.name, token: token?.substring(0, 10) }
+      );
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to save collection');
+      }
+      
+      const res = result.data;
       
       if (pendingFiles.length > 0) {
-        await api.uploadFiles(form.name, pendingFiles, token, payload)
+        const fd = new FormData()
+        fd.append('collection', form.name)
+        for (const f of pendingFiles) fd.append('files', f)
+        if (payload) {
+          fd.append('payload', JSON.stringify(payload))
+        }
+        
+        const uploadResult = await sharedApiService.makeRequest(
+          `/api/knowledge/upload?collection=${encodeURIComponent(form.name)}`,
+          {
+            method: 'POST',
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            body: fd
+          },
+          { collection: form.name, upload: true, token: token?.substring(0, 10) }
+        );
+        
+        if (!uploadResult.success) {
+          throw new Error(uploadResult.error || 'Upload failed');
+        }
+        
         setPendingFiles([])
       }
       
       if (res.exists) {
         // Save again forcing overwrite
-        await api.saveCollection({ ...payload, overwrite: true }, token)
+        const overwriteResult = await sharedApiService.makeRequest(
+          '/api/knowledge/collection/save',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({ ...payload, overwrite: true })
+          },
+          { collection: form.name, overwrite: true, token: token?.substring(0, 10) }
+        );
+        
+        if (!overwriteResult.success) {
+          throw new Error(overwriteResult.error || 'Failed to overwrite collection');
+        }
       }
       
       const action = isEdit ? 'updated' : 'saved'
       showSuccess(`Knowledge collection "${form.name}" ${action} successfully`)
       
-      // Reload data like ToolConfig
+      // Invalidate cache and reload data like ToolConfig
+      sharedApiService.invalidateCache();
       if (isMountedRef.current) {
         await Promise.all([
           loadExistingConfigs(),
@@ -453,10 +529,23 @@ export default function KnowledgeConfig({ user }) {
     setSaveBusy(true)
     
     try {
-      await api.deleteCollection(form.name, token)
+      const result = await sharedApiService.makeRequest(
+        `/api/knowledge/collection/${encodeURIComponent(form.name)}`,
+        {
+          method: 'DELETE',
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        },
+        { collection: form.name, delete: true, token: token?.substring(0, 10) }
+      );
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Delete failed');
+      }
+      
       showSuccess('Knowledge collection deleted')
       
-      // Reload configurations like ToolConfig
+      // Invalidate cache and reload configurations like ToolConfig
+      sharedApiService.invalidateCache();
       if (isMountedRef.current) {
         await loadExistingConfigs()
       }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   Grid,
   Card,
@@ -35,6 +35,92 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { apiCall } from '../config/api'
 import { agentRuntimeService } from '../services/agentRuntimeService'
+
+// Global singleton to prevent duplicate API calls across component instances
+class HomeService {
+    constructor() {
+        this.activeRequests = new Map();
+        this.cache = new Map();
+        this.cacheTimestamps = new Map();
+        this.CACHE_DURATION = 30000; // 30 seconds cache
+    }
+
+    // Create a unique key for each request
+    getRequestKey(endpoint, params = {}) {
+        return `${endpoint}:${JSON.stringify(params)}`;
+    }
+
+    // Check if cache is still valid
+    isCacheValid(key) {
+        const timestamp = this.cacheTimestamps.get(key);
+        return timestamp && (Date.now() - timestamp) < this.CACHE_DURATION;
+    }
+
+    // Deduplicated API call
+    async makeRequest(endpoint, options = {}, params = {}) {
+        const requestKey = this.getRequestKey(endpoint, params);
+        
+        // Return cached result if valid
+        if (this.isCacheValid(requestKey)) {
+            console.log('📦 Returning cached result for:', requestKey);
+            return this.cache.get(requestKey);
+        }
+
+        // Return existing promise if request is already in flight
+        if (this.activeRequests.has(requestKey)) {
+            console.log('⏳ Request already in flight, waiting for result:', requestKey);
+            return this.activeRequests.get(requestKey);
+        }
+
+        console.log('🚀 Making new API request:', requestKey);
+        
+        // Create new request promise
+        const requestPromise = this._executeRequest(endpoint, options)
+            .then(result => {
+                // Cache successful results
+                this.cache.set(requestKey, result);
+                this.cacheTimestamps.set(requestKey, Date.now());
+                return result;
+            })
+            .finally(() => {
+                // Remove from active requests when done
+                this.activeRequests.delete(requestKey);
+            });
+
+        // Store active request
+        this.activeRequests.set(requestKey, requestPromise);
+        
+        return requestPromise;
+    }
+
+    async _executeRequest(endpoint, options) {
+        const response = await apiCall(endpoint, options);
+        if (response.ok) {
+            const data = await response.json();
+            return { success: true, data };
+        } else {
+            return { success: false, error: `Request failed with status ${response.status}` };
+        }
+    }
+
+    // Clear cache for specific patterns (e.g., after create/update/delete)
+    invalidateCache(pattern = '') {
+        const keysToDelete = [];
+        for (const key of this.cache.keys()) {
+            if (key.includes(pattern)) {
+                keysToDelete.push(key);
+            }
+        }
+        keysToDelete.forEach(key => {
+            this.cache.delete(key);
+            this.cacheTimestamps.delete(key);
+        });
+        console.log('🗑️ Invalidated cache for pattern:', pattern, 'Keys:', keysToDelete);
+    }
+}
+
+// Create singleton instance
+const homeService = new HomeService();
 
 function AgentCard({ agent, onEdit, onChat }) {
   const theme = useTheme()
@@ -207,6 +293,10 @@ export default function Home({ user }) {
   const [taskProgress, setTaskProgress] = useState([])
   const [showAll, setShowAll] = useState(false)
 
+  // Add ref to track if component is mounted
+  const isMountedRef = useRef(true)
+  const isLoadingRef = useRef(false)
+
   // Pagination state
   const [pagination, setPagination] = useState({
     page: 1,
@@ -231,22 +321,48 @@ export default function Home({ user }) {
 
   useEffect(() => {
     console.log('MOUNT: Home');
+    
+    // Set mounted to true
+    isMountedRef.current = true;
+    
     const fetchDashboardData = async () => {
+      if (!isMountedRef.current) return;
+      
+      // Prevent duplicate calls
+      if (isLoadingRef.current) {
+        console.log('🚫 Already loading home data, skipping duplicate call');
+        return;
+      }
+      
       try {
+        isLoadingRef.current = true;
         setLoading(true)
 
-        // Fetch agents with pagination - use API's new pagination endpoint
+        // Fetch agents with pagination - use singleton service
         const agentsUrl = `/api/agents?page=${pagination.page}&page_size=${pagination.page_size}`
-        const agentsResponse = await apiCall(agentsUrl, {
-          headers: {
-            ...(user?.token ? { 'Authorization': `Bearer ${user?.token}` } : {})
+        const agentsResult = await homeService.makeRequest(
+          agentsUrl,
+          {
+            headers: {
+              ...(user?.token ? { 'Authorization': `Bearer ${user?.token}` } : {})
+            }
+          },
+          {
+            page: pagination.page,
+            pageSize: pagination.page_size,
+            token: user?.token?.substring(0, 10)
           }
-        })
+        );
 
-        console.log('🔍 AGENTS API RESPONSE:', agentsResponse.status, agentsResponse.ok)
+        console.log('🔍 AGENTS API RESPONSE:', agentsResult.success ? 'SUCCESS' : 'FAILED')
 
-        if (agentsResponse.ok) {
-          const agentsData = await agentsResponse.json()
+        if (!isMountedRef.current) {
+          console.log('🚫 Component unmounted, aborting home data load');
+          return;
+        }
+
+        if (agentsResult.success) {
+          const agentsData = agentsResult.data
           console.log('📄 AGENTS DATA:', agentsData)
           const agentsList = agentsData.agents || []
           const paginationData = agentsData.pagination || {}
@@ -258,21 +374,28 @@ export default function Home({ user }) {
           setDisplayedAgents(agentsList)
           setPagination(paginationData)
         } else {
-          console.log('❌ AGENTS API FAILED:', agentsResponse.status)
-          const errorData = await agentsResponse.json().catch(() => ({}))
-          console.log('💥 ERROR DATA:', errorData)
+          console.log('❌ AGENTS API FAILED:', agentsResult.error)
         }
 
         // Fetch recent conversations - Use agent runtime endpoint with pagination
         try {
-          const conversationsResponse = await apiCall('/api/agent-runtime/conversations?page=1&page_size=5', {
-            headers: {
-              ...(user?.token ? { 'Authorization': `Bearer ${user?.token}` } : {})
+          const conversationsResult = await homeService.makeRequest(
+            '/api/agent-runtime/conversations?page=1&page_size=5',
+            {
+              headers: {
+                ...(user?.token ? { 'Authorization': `Bearer ${user?.token}` } : {})
+              }
+            },
+            {
+              token: user?.token?.substring(0, 10),
+              endpoint: 'conversations'
             }
-          })
+          );
 
-          if (conversationsResponse.ok) {
-            const conversationsData = await conversationsResponse.json()
+          if (!isMountedRef.current) return;
+
+          if (conversationsResult.success) {
+            const conversationsData = conversationsResult.data
             // Handle both paginated and legacy response formats
             let allConversations = []
             if (conversationsData.conversations) {
@@ -316,7 +439,10 @@ export default function Home({ user }) {
         setRecentConversations([])
         setTaskProgress([])
       } finally {
-        setLoading(false)
+        if (isMountedRef.current) {
+          isLoadingRef.current = false;
+          setLoading(false)
+        }
       }
     }
 
@@ -324,8 +450,11 @@ export default function Home({ user }) {
     
     return () => {
       console.log('UNMOUNT: Home');
+      // Set mounted to false FIRST to prevent any state updates
+      isMountedRef.current = false;
+      isLoadingRef.current = false;
     };
-  }, [user?.token, pagination.page, pagination.page_size])
+  }, []) // EMPTY DEPENDENCIES - NO BULLSHIT
 
   const handleShowMore = () => {
     if (pagination.has_next) {

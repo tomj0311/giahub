@@ -26,6 +26,7 @@ import {
     TablePagination
 } from '@mui/material';
 import { apiCall } from '../config/api';
+import sharedApiService from '../utils/apiService';
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { useConfirmation } from '../contexts/ConfirmationContext';
@@ -37,10 +38,15 @@ function ModelConfig({ user }) {
     const { showSuccess, showError, showWarning, showInfo } = useSnackbar();
     const { showDeleteConfirmation } = useConfirmation();
 
-    // Add ref to track if component is mounted
+    // Add ref to track if component is mounted and prevent duplicate calls
     const isMountedRef = useRef(true);
+    const isLoadingConfigsRef = useRef(false);
+    const isLoadingCategoriesRef = useRef(false);
+    const isLoadingDiscoveryRef = useRef(false);
 
-    // Simple backend base function replacement
+    // Store token ref to avoid useCallback dependency issues
+    const tokenRef = useRef(token);
+    tokenRef.current = token;
     
 
     const [components, setComponents] = useState({ models: [], embeddings: [] });
@@ -74,25 +80,50 @@ function ModelConfig({ user }) {
     const discoverComponents = useCallback(async () => {
         if (!isMountedRef.current) return;
         
+        // Prevent duplicate calls
+        if (isLoadingDiscoveryRef.current) {
+            console.log('🚫 Already loading components, skipping duplicate call');
+            return;
+        }
+        
         try {
+            isLoadingDiscoveryRef.current = true;
             setLoadingDiscovery(true);
             
-            // Discover models
-            const modelsResponse = await apiCall(`/api/models/components?folder=ai.models`, {
-                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-            });
-            
-            // Discover embeddings
-            const embeddingsResponse = await apiCall(`/api/models/components?folder=ai.embeddings`, {
-                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-            });
+            // Use singleton service for both model and embedding discovery
+            const [modelsResult, embeddingsResult] = await Promise.all([
+                sharedApiService.makeRequest(
+                    '/api/models/components?folder=ai.models',
+                    {
+                        headers: tokenRef.current ? { 'Authorization': `Bearer ${tokenRef.current}` } : {}
+                    },
+                    { 
+                        folder: 'ai.models',
+                        token: tokenRef.current?.substring(0, 10)
+                    }
+                ),
+                sharedApiService.makeRequest(
+                    '/api/models/components?folder=ai.embeddings',
+                    {
+                        headers: tokenRef.current ? { 'Authorization': `Bearer ${tokenRef.current}` } : {}
+                    },
+                    { 
+                        folder: 'ai.embeddings',
+                        token: tokenRef.current?.substring(0, 10)
+                    }
+                )
+            ]);
+
+            if (!isMountedRef.current) {
+                console.log('🚫 Component unmounted, aborting discovery load');
+                return;
+            }
 
             let models = [];
             let embeddings = [];
 
-            if (modelsResponse.ok) {
-                const modelsData = await modelsResponse.json();
-                const comps = modelsData?.components || {};
+            if (modelsResult.success) {
+                const comps = modelsResult.data?.components || {};
                 models = comps['ai.models'] || [];
             } else {
                 if (isMountedRef.current) {
@@ -100,9 +131,8 @@ function ModelConfig({ user }) {
                 }
             }
 
-            if (embeddingsResponse.ok) {
-                const embeddingsData = await embeddingsResponse.json();
-                const comps = embeddingsData?.components || {};
+            if (embeddingsResult.success) {
+                const comps = embeddingsResult.data?.components || {};
                 embeddings = comps['ai.embeddings'] || [];
             } else {
                 if (isMountedRef.current) {
@@ -120,10 +150,11 @@ function ModelConfig({ user }) {
             }
         } finally {
             if (isMountedRef.current) {
+                isLoadingDiscoveryRef.current = false;
                 setLoadingDiscovery(false);
             }
         }
-    }, [token]); // Remove showError - it's unstable
+    }, []); // Empty dependencies
 
     // Introspect model or embedding using HTTP
     const introspectModel = async (modulePath, kind = 'model') => {
@@ -159,39 +190,65 @@ function ModelConfig({ user }) {
     const loadCategories = useCallback(async () => {
         if (!isMountedRef.current) return;
         
+        // Prevent duplicate calls
+        if (isLoadingCategoriesRef.current) {
+            console.log('🚫 Already loading categories, skipping duplicate call');
+            return;
+        }
+        
         console.log('🏷️ LOADING CATEGORIES...');
         try {
+            isLoadingCategoriesRef.current = true;
             setLoadingCategories(true);
-            const response = await apiCall(`/api/models/categories`, {
-                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-            });
-            console.log('📡 Load categories response:', response.status, response.ok);
-            if (response.ok) {
-                const data = await response.json();
-                console.log('📄 Categories data:', data);
-                if (isMountedRef.current) {
-                    setCategories(data.categories || []);
-                }
+            
+            const result = await sharedApiService.makeRequest(
+                '/api/models/categories',
+                {
+                    headers: tokenRef.current ? { 'Authorization': `Bearer ${tokenRef.current}` } : {}
+                },
+                { token: tokenRef.current?.substring(0, 10) }
+            );
+            
+            console.log('📡 Load categories response:', result.success ? 'SUCCESS' : 'FAILED');
+            
+            if (!isMountedRef.current) {
+                console.log('🚫 Component unmounted, aborting category load');
+                return;
+            }
+            
+            if (result.success) {
+                console.log('📄 Categories data:', result.data);
+                setCategories(result.data.categories || []);
                 console.log('✅ Categories loaded successfully');
             } else {
-                console.log('❌ Failed to load categories - bad response');
+                console.log('❌ Failed to load categories:', result.error);
             }
         } catch (error) {
             console.log('💥 ERROR loading categories:', error);
             console.error('Failed to load categories:', error);
         } finally {
             if (isMountedRef.current) {
+                isLoadingCategoriesRef.current = false;
                 setLoadingCategories(false);
             }
             console.log('🏁 Load categories finished');
         }
-    }, [token]);
+    }, []); // Empty dependencies
 
     const loadExistingConfigs = useCallback(async (page = 1, pageSize = 8) => {
         if (!isMountedRef.current) return;
         
-        console.log('🔄 LOADING EXISTING CONFIGS...');
+        // Prevent duplicate calls
+        if (isLoadingConfigsRef.current) {
+            console.log('� Already loading configs, skipping duplicate call');
+            return;
+        }
+        
+        console.log('�🔄 LOADING EXISTING CONFIGS...');
         try {
+            isLoadingConfigsRef.current = true;
+            setLoadingConfigs(true);
+            
             const queryParams = new URLSearchParams({
                 page: page.toString(),
                 page_size: pageSize.toString(),
@@ -199,41 +256,56 @@ function ModelConfig({ user }) {
                 sort_order: 'asc'
             });
             
-            const resp = await apiCall(`/api/models/configs?${queryParams}`, {
-                headers: {
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            const result = await sharedApiService.makeRequest(
+                `/api/models/configs?${queryParams}`,
+                {
+                    headers: {
+                        ...(tokenRef.current ? { 'Authorization': `Bearer ${tokenRef.current}` } : {})
+                    }
+                },
+                { 
+                    page, 
+                    pageSize, 
+                    token: tokenRef.current?.substring(0, 10) 
                 }
-            });
-            console.log('📡 Load configs response:', resp.status, resp.ok);
-            if (resp.ok) {
-                const data = await resp.json();
+            );
+            
+            console.log('📡 Load configs response:', result.success ? 'SUCCESS' : 'FAILED');
+            
+            if (!isMountedRef.current) {
+                console.log('🚫 Component unmounted, aborting config load');
+                return;
+            }
+            
+            if (result.success) {
+                const data = result.data;
                 console.log('📄 Configs data:', data);
                 console.log('📄 First config embedding data:', data.configurations?.[0]?.embedding);
-                if (isMountedRef.current) {
-                    setExistingConfigs(data.configurations || []);
-                    if (data.pagination) {
-                        setPagination({
-                            page: data.pagination.page - 1, // Convert to 0-based for MUI
-                            rowsPerPage: data.pagination.page_size,
-                            total: data.pagination.total,
-                            totalPages: data.pagination.total_pages
-                        });
-                    }
+                
+                setExistingConfigs(data.configurations || []);
+                if (data.pagination) {
+                    setPagination({
+                        page: data.pagination.page - 1, // Convert to 0-based for MUI
+                        rowsPerPage: data.pagination.page_size,
+                        total: data.pagination.total,
+                        totalPages: data.pagination.total_pages
+                    });
                 }
                 console.log('✅ Configs loaded successfully');
             } else {
-                console.log('❌ Failed to load configs - bad response');
+                console.log('❌ Failed to load configs:', result.error);
             }
         } catch (e) {
             console.log('💥 ERROR loading configs:', e);
             console.error('Failed to load existing configurations:', e);
         } finally {
             if (isMountedRef.current) {
+                isLoadingConfigsRef.current = false;
                 setLoadingConfigs(false);
             }
             console.log('🏁 Load configs finished');
         }
-    }, [token]);
+    }, []); // Empty dependencies
 
     const handlePageChange = (event, newPage) => {
         if (!loadingConfigs && !saveState.loading) {
@@ -255,11 +327,14 @@ function ModelConfig({ user }) {
         }
     }, [loadingDiscovery, components.models, components.embeddings, showWarning]);
 
-    // Use exact same pattern as KnowledgeConfig
+    // Use exact same pattern as other components
     useEffect(() => {
         const loadData = async () => {
             console.log('MOUNT: ModelConfig');
             if (!isMountedRef.current) return;
+            
+            // Set mounted to true
+            isMountedRef.current = true;
             
             try {
                 // Load components first
@@ -277,15 +352,16 @@ function ModelConfig({ user }) {
         };
         
         loadData();
-    }, [discoverComponents, loadExistingConfigs, loadCategories]);
-
-    // Cleanup function to handle component unmount
-    useEffect(() => {
+        
         return () => {
             console.log('UNMOUNT: ModelConfig');
+            // Set mounted to false FIRST to prevent any state updates
             isMountedRef.current = false;
+            isLoadingConfigsRef.current = false;
+            isLoadingCategoriesRef.current = false;
+            isLoadingDiscoveryRef.current = false;
         };
-    }, []);
+    }, []); // EMPTY DEPENDENCIES - NO BULLSHIT
 
     function ensureIntrospection(path, kind) {
         if (!path || introspectCache[path]) return;
@@ -411,6 +487,11 @@ function ModelConfig({ user }) {
             setSaveState({ loading: false });
             console.log('🔄 Save state reset to not loading');
             
+            // Invalidate cache after successful save
+            sharedApiService.invalidateCache('/api/models/configs');
+            sharedApiService.invalidateCache('/api/models/categories');
+            sharedApiService.invalidateCache('/api/models/components');
+            
             console.log('🔄 Reloading configs and categories...');
             if (isMountedRef.current) {
                 loadExistingConfigs();
@@ -455,6 +536,12 @@ function ModelConfig({ user }) {
                 return;
             }
             showSuccess('Model configuration deleted');
+            
+            // Invalidate cache after successful delete
+            sharedApiService.invalidateCache('/api/models/configs');
+            sharedApiService.invalidateCache('/api/models/categories');
+            sharedApiService.invalidateCache('/api/models/components');
+            
             if (isMountedRef.current) {
                 await loadExistingConfigs();
             }

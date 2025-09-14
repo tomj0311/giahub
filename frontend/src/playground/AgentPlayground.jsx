@@ -40,6 +40,7 @@ import CancelIcon from '@mui/icons-material/Cancel'
 import EditIcon from '@mui/icons-material/Edit'
 import { agentService } from '../services/agentService'
 import { agentRuntimeService } from '../services/agentRuntimeService'
+import sharedApiService from '../utils/apiService'
 
 // Simple function to detect and extract BPMN content
 const detectBPMN = (content) => {
@@ -167,7 +168,17 @@ export default function AgentPlayground({ user }) {
     const loadAgents = async () => {
       setLoading(true)
       try {
-        const agents = await agentService.listAgents(token)
+        const result = await sharedApiService.makeRequest(
+          '/api/agents',
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+          { endpoint: 'agents', token: token?.substring(0, 10) }
+        )
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to load agents')
+        }
+        
+        const agents = result.data.agents || []
         console.log('Loaded agents:', agents) // Debug log
         const groupedByCat = agents.reduce((acc, a) => {
           const cat = a.category || '_root'

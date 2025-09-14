@@ -31,8 +31,15 @@ import { useSnackbar } from '../contexts/SnackbarContext'
 import { useConfirmation } from '../contexts/ConfirmationContext'
 
 import { apiCall } from '../config/api'
+import sharedApiService from '../utils/apiService'
 
 export default function Agent({ user }) {
+  // Add render logging to track what's causing re-renders
+  console.log('🤖 Agent RENDER', { 
+    userToken: user?.token?.substring(0, 10) + '...', 
+    timestamp: Date.now() 
+  });
+  
   const token = user?.token
   const navigate = useNavigate()
   const { showSuccess, showError } = useSnackbar()
@@ -47,7 +54,7 @@ export default function Agent({ user }) {
   const isMountedRef = useRef(true)
   const currentRequestRef = useRef(null)
 
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [pagination, setPagination] = useState({
@@ -95,14 +102,18 @@ export default function Agent({ user }) {
   }
 
   const fetchAll = useCallback(async (page = 1, pageSize = 8) => {
+    if (!isMountedRef.current) return;
+    
+    // Prevent duplicate calls
+    if (loading) {
+      console.log('🚫 Already loading agents, skipping duplicate call');
+      return;
+    }
+    
     // Cancel any pending request
     if (currentRequestRef.current) {
       currentRequestRef.current.abort()
     }
-
-    // Create new AbortController for this request
-    const abortController = new AbortController()
-    currentRequestRef.current = abortController
 
     setLoading(true)
     try {
@@ -114,34 +125,39 @@ export default function Agent({ user }) {
         sort_order: 'desc'
       });
 
-      // Fetch all required data in parallel
-      const [agentsResponse, modelsResponse, toolsResponse, knowledgeResponse] = await Promise.all([
-        apiCall(`/api/agents?${agentsQueryParams}`, { 
-          headers: authHeaders,
-          signal: abortController.signal 
-        }),
-        apiCall('/api/models/configs', { 
-          headers: authHeaders,
-          signal: abortController.signal 
-        }),
-        apiCall('/api/tools/configs', { 
-          headers: authHeaders,
-          signal: abortController.signal 
-        }),
-        apiCall('/api/knowledge/configs', { 
-          headers: authHeaders,
-          signal: abortController.signal 
-        })
+      // Use the singleton service for all API calls to prevent duplicates
+      const [agentsResult, modelsResult, toolsResult, knowledgeResult] = await Promise.all([
+        sharedApiService.makeRequest(
+          `/api/agents?${agentsQueryParams}`,
+          { headers: authHeaders },
+          { page, pageSize, token: token?.substring(0, 10) }
+        ),
+        sharedApiService.makeRequest(
+          '/api/models/configs',
+          { headers: authHeaders },
+          { token: token?.substring(0, 10) }
+        ),
+        sharedApiService.makeRequest(
+          '/api/tools/configs',
+          { headers: authHeaders },
+          { token: token?.substring(0, 10) }
+        ),
+        sharedApiService.makeRequest(
+          '/api/knowledge/configs',
+          { headers: authHeaders },
+          { token: token?.substring(0, 10) }
+        )
       ])
 
-      // Check if component is still mounted and request wasn't aborted
-      if (!isMountedRef.current || abortController.signal.aborted) {
+      // Check if component is still mounted
+      if (!isMountedRef.current) {
+        console.log('🚫 Component unmounted, aborting agent load');
         return
       }
 
       // Handle agents with pagination
-      if (agentsResponse.ok) {
-        const agentsData = await agentsResponse.json()
+      if (agentsResult.success) {
+        const agentsData = agentsResult.data
         const agentsList = agentsData.agents || []
         setExistingAgents(agentsList)
 
@@ -164,46 +180,41 @@ export default function Agent({ user }) {
         })
         setCategories(Array.from(uniqueCategories).sort())
       } else {
-        console.error('Failed to fetch agents:', agentsResponse.status)
+        console.error('Failed to fetch agents:', agentsResult.error)
         showError('Failed to load agents')
       }
 
       // Handle models
-      if (modelsResponse.ok) {
-        const modelsData = await modelsResponse.json()
+      if (modelsResult.success) {
+        const modelsData = modelsResult.data
         const modelsList = modelsData.configurations || []
         setModels(modelsList.map(m => ({ id: m.id, name: m.name })).sort((a, b) => a.name.localeCompare(b.name)))
       } else {
-        console.error('Failed to fetch models:', modelsResponse.status)
+        console.error('Failed to fetch models:', modelsResult.error)
         showError('Failed to load models')
       }
 
       // Handle tools
-      if (toolsResponse.ok) {
-        const toolsData = await toolsResponse.json()
+      if (toolsResult.success) {
+        const toolsData = toolsResult.data
         const toolsList = toolsData.configurations || []
         setTools(toolsList.map(t => ({ id: t.id, name: t.name })).sort((a, b) => a.name.localeCompare(b.name)))
       } else {
-        console.error('Failed to fetch tools:', toolsResponse.status)
+        console.error('Failed to fetch tools:', toolsResult.error)
         showError('Failed to load tools')
       }
 
       // Handle knowledge collections
-      if (knowledgeResponse.ok) {
-        const knowledgeData = await knowledgeResponse.json()
+      if (knowledgeResult.success) {
+        const knowledgeData = knowledgeResult.data
         const configsList = knowledgeData.configurations || []
         // Use knowledge config objects with proper IDs
         setKnowledgeCollections(configsList.map(c => ({ id: c.id, name: c.collection || c.name })).sort((a, b) => a.name.localeCompare(b.name)))
       } else {
-        console.error('Failed to fetch knowledge collections:', knowledgeResponse.status)
+        console.error('Failed to fetch knowledge collections:', knowledgeResult.error)
         showError('Failed to load knowledge collections')
       }
     } catch (e) {
-      // Handle abort error separately to avoid showing error messages for cancelled requests
-      if (e.name === 'AbortError' || abortController.signal.aborted) {
-        console.log('Request was cancelled')
-        return
-      }
       console.error(e)
       if (isMountedRef.current) {
         showError('Failed to load data')
@@ -212,12 +223,10 @@ export default function Agent({ user }) {
       if (isMountedRef.current) {
         setLoading(false)
       }
-      // Clear the current request ref if this was the active request
-      if (currentRequestRef.current === abortController) {
-        currentRequestRef.current = null
-      }
+      // Clear the current request ref
+      currentRequestRef.current = null
     }
-  }, [authHeaders, showError]) // Add dependencies
+  }, [authHeaders, showError, loading, token]) // Add dependencies
 
   const handlePageChange = (event, newPage) => {
     if (!loading && !saving) {
@@ -233,14 +242,23 @@ export default function Agent({ user }) {
   };
 
   useEffect(() => { 
-    console.log('MOUNT: Agent');
+    console.log('MOUNT: Agent', 'Token:', token?.substring(0, 10) + '...', 'User:', user, 'Loading:', loading);
+    
+    // Set mounted to true
+    isMountedRef.current = true;
+    
+    // Always load on mount
     fetchAll() 
-  }, [fetchAll]) // Add fetchAll as dependency
+  }, [token]) // Only depend on token
 
   // Cleanup function to handle component unmount
   useEffect(() => {
+    // Initialize as mounted
+    isMountedRef.current = true;
+    
     return () => {
       console.log('UNMOUNT: Agent');
+      // Set mounted to false FIRST to prevent any state updates
       isMountedRef.current = false
       if (currentRequestRef.current) {
         currentRequestRef.current.abort()
@@ -300,6 +318,13 @@ export default function Agent({ user }) {
       const data = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(data.detail || `Save failed (${resp.status})`)
       showSuccess(`Agent ${data.name} saved`)
+      
+      // Invalidate cache after successful save
+      sharedApiService.invalidateCache('/api/agents');
+      sharedApiService.invalidateCache('/api/models/configs');
+      sharedApiService.invalidateCache('/api/tools/configs');
+      sharedApiService.invalidateCache('/api/knowledge/configs');
+      
       // Only refresh if component is still mounted and not already loading
       if (isMountedRef.current && !loading) {
         await fetchAll(pagination.page + 1, pagination.rowsPerPage) // Refresh current page
@@ -331,6 +356,13 @@ export default function Agent({ user }) {
       const data = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(data.detail || `Delete failed (${resp.status})`)
       showSuccess(`Agent ${form.name} deleted`)
+      
+      // Invalidate cache after successful delete
+      sharedApiService.invalidateCache('/api/agents');
+      sharedApiService.invalidateCache('/api/models/configs');
+      sharedApiService.invalidateCache('/api/tools/configs');
+      sharedApiService.invalidateCache('/api/knowledge/configs');
+      
       setForm(f => ({ ...f, id: null, name: '' }))
       // Only refresh if component is still mounted and not already loading
       if (isMountedRef.current && !loading) {
