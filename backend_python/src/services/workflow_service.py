@@ -13,7 +13,7 @@ from fastapi import HTTPException, UploadFile
 from spiffworkflow.bpmn.parser import BpmnParser
 from spiffworkflow.bpmn.workflow import BpmnWorkflow
 from spiffworkflow.bpmn.serializer import BpmnWorkflowSerializer
-from spiffworkflow.backend.task import TaskState
+from spiffworkflow.task import TaskState
 import redis
 
 from ..utils.log import logger
@@ -29,7 +29,7 @@ class WorkflowService:
         
         # Redis configuration with production persistence
         redis_host = os.getenv('REDIS_HOST', 'localhost')
-        redis_port = int(os.getenv('REDIS_PORT', '6379'))
+        redis_port = int(os.getenv('REDIS_PORT', '8810'))
         redis_db = int(os.getenv('REDIS_DB', '0'))
         redis_password = os.getenv('REDIS_PASSWORD', None)
         
