@@ -498,6 +498,7 @@ class KnowledgeService:
     ) -> Dict[str, Any]:
         """List knowledge collections with pagination, filtering, and sorting"""
         tenant_id = await cls.validate_tenant_access(user)
+        logger.debug(f"[KNOWLEDGE] Listing knowledge for tenant: {tenant_id}, page: {page}, category: {category}")
         
         try:
             # Build filter query

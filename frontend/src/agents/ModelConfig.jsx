@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Box,
     Button,
@@ -37,6 +37,9 @@ export default function ModelConfig({ user }) {
     const { showSuccess, showError, showWarning, showInfo } = useSnackbar();
     const { showDeleteConfirmation } = useConfirmation();
 
+    // Add ref to track if component is mounted
+    const isMountedRef = useRef(true);
+
     // Simple backend base function replacement
     
 
@@ -68,7 +71,9 @@ export default function ModelConfig({ user }) {
     const [loadingCategories, setLoadingCategories] = useState(false);
 
     // Discover components using HTTP
-    const discoverComponents = async () => {
+    const discoverComponents = useCallback(async () => {
+        if (!isMountedRef.current) return;
+        
         try {
             setLoadingDiscovery(true);
             
@@ -90,7 +95,9 @@ export default function ModelConfig({ user }) {
                 const comps = modelsData?.components || {};
                 models = comps['ai.models'] || [];
             } else {
-                showError('Failed to discover models');
+                if (isMountedRef.current) {
+                    showError('Failed to discover models');
+                }
             }
 
             if (embeddingsResponse.ok) {
@@ -98,17 +105,25 @@ export default function ModelConfig({ user }) {
                 const comps = embeddingsData?.components || {};
                 embeddings = comps['ai.embeddings'] || [];
             } else {
-                showError('Failed to discover embeddings');
+                if (isMountedRef.current) {
+                    showError('Failed to discover embeddings');
+                }
             }
 
-            setComponents({ models, embeddings });
+            if (isMountedRef.current) {
+                setComponents({ models, embeddings });
+            }
         } catch (error) {
             console.error('Failed to discover components:', error);
-            showError('Failed to discover components');
+            if (isMountedRef.current) {
+                showError('Failed to discover components');
+            }
         } finally {
-            setLoadingDiscovery(false);
+            if (isMountedRef.current) {
+                setLoadingDiscovery(false);
+            }
         }
-    };
+    }, [token, showError]);
 
     // Introspect model or embedding using HTTP
     const introspectModel = async (modulePath, kind = 'model') => {
@@ -141,7 +156,9 @@ export default function ModelConfig({ user }) {
         }
     };
 
-    const loadCategories = async () => {
+    const loadCategories = useCallback(async () => {
+        if (!isMountedRef.current) return;
+        
         console.log('🏷️ LOADING CATEGORIES...');
         try {
             setLoadingCategories(true);
@@ -152,7 +169,9 @@ export default function ModelConfig({ user }) {
             if (response.ok) {
                 const data = await response.json();
                 console.log('📄 Categories data:', data);
-                setCategories(data.categories || []);
+                if (isMountedRef.current) {
+                    setCategories(data.categories || []);
+                }
                 console.log('✅ Categories loaded successfully');
             } else {
                 console.log('❌ Failed to load categories - bad response');
@@ -161,12 +180,16 @@ export default function ModelConfig({ user }) {
             console.log('💥 ERROR loading categories:', error);
             console.error('Failed to load categories:', error);
         } finally {
-            setLoadingCategories(false);
+            if (isMountedRef.current) {
+                setLoadingCategories(false);
+            }
             console.log('🏁 Load categories finished');
         }
-    };
+    }, [token]);
 
-    const loadExistingConfigs = async (page = 1, pageSize = 8) => {
+    const loadExistingConfigs = useCallback(async (page = 1, pageSize = 8) => {
+        if (!isMountedRef.current) return;
+        
         console.log('🔄 LOADING EXISTING CONFIGS...');
         try {
             const queryParams = new URLSearchParams({
@@ -186,14 +209,16 @@ export default function ModelConfig({ user }) {
                 const data = await resp.json();
                 console.log('📄 Configs data:', data);
                 console.log('📄 First config embedding data:', data.configurations?.[0]?.embedding);
-                setExistingConfigs(data.configurations || []);
-                if (data.pagination) {
-                    setPagination({
-                        page: data.pagination.page - 1, // Convert to 0-based for MUI
-                        rowsPerPage: data.pagination.page_size,
-                        total: data.pagination.total,
-                        totalPages: data.pagination.total_pages
-                    });
+                if (isMountedRef.current) {
+                    setExistingConfigs(data.configurations || []);
+                    if (data.pagination) {
+                        setPagination({
+                            page: data.pagination.page - 1, // Convert to 0-based for MUI
+                            rowsPerPage: data.pagination.page_size,
+                            total: data.pagination.total,
+                            totalPages: data.pagination.total_pages
+                        });
+                    }
                 }
                 console.log('✅ Configs loaded successfully');
             } else {
@@ -203,18 +228,24 @@ export default function ModelConfig({ user }) {
             console.log('💥 ERROR loading configs:', e);
             console.error('Failed to load existing configurations:', e);
         } finally {
-            setLoadingConfigs(false);
+            if (isMountedRef.current) {
+                setLoadingConfigs(false);
+            }
             console.log('🏁 Load configs finished');
+        }
+    }, [token]);
+
+    const handlePageChange = (event, newPage) => {
+        if (!loadingConfigs && !saveState.loading) {
+            loadExistingConfigs(newPage + 1, pagination.rowsPerPage); // Convert to 1-based for API
         }
     };
 
-    const handlePageChange = (event, newPage) => {
-        loadExistingConfigs(newPage + 1, pagination.rowsPerPage); // Convert to 1-based for API
-    };
-
     const handleRowsPerPageChange = (event) => {
-        const newRowsPerPage = parseInt(event.target.value, 10);
-        loadExistingConfigs(1, newRowsPerPage); // Reset to first page
+        if (!loadingConfigs && !saveState.loading) {
+            const newRowsPerPage = parseInt(event.target.value, 10);
+            loadExistingConfigs(1, newRowsPerPage); // Reset to first page
+        }
     };
 
     // Show warning when no models or embeddings are discovered
@@ -222,7 +253,7 @@ export default function ModelConfig({ user }) {
         if (!loadingDiscovery && components.models.length === 0 && components.embeddings.length === 0) {
             showWarning('No models or embeddings discovered. Check backend logs or refresh.');
         }
-    }, [loadingDiscovery, components.models, components.embeddings]);
+    }, [loadingDiscovery, components.models, components.embeddings, showWarning]);
 
     // Run these functions only once on mount
     useEffect(() => {
@@ -233,6 +264,13 @@ export default function ModelConfig({ user }) {
         loadExistingConfigs();
         loadCategories();
         console.log('✅ Initialization functions called');
+    }, [discoverComponents, loadExistingConfigs, loadCategories]);
+
+    // Cleanup function to handle component unmount
+    useEffect(() => {
+        return () => {
+            isMountedRef.current = false;
+        };
     }, []);
 
     function ensureIntrospection(path, kind) {
@@ -360,8 +398,10 @@ export default function ModelConfig({ user }) {
             console.log('🔄 Save state reset to not loading');
             
             console.log('🔄 Reloading configs and categories...');
-            loadExistingConfigs();
-            loadCategories();
+            if (isMountedRef.current) {
+                loadExistingConfigs();
+                loadCategories();
+            }
             
             console.log('🧹 Resetting form...');
             setForm({ id: null, name: '', category: '', model: '', model_params: {}, embedding: '', embedding_params: {} });
@@ -401,7 +441,9 @@ export default function ModelConfig({ user }) {
                 return;
             }
             showSuccess('Model configuration deleted');
-            await loadExistingConfigs();
+            if (isMountedRef.current) {
+                await loadExistingConfigs();
+            }
             setSaveState({ loading: false });
             setDialogOpen(false);
         } catch (e) {

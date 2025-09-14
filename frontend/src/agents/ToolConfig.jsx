@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Box,
     Button,
@@ -35,6 +35,8 @@ export default function ToolConfig({ user }) {
     const { showSuccess, showError, showWarning } = useSnackbar();
     const { showDeleteConfirmation } = useConfirmation();
     
+    // Add ref to track if component is mounted
+    const isMountedRef = useRef(true);
 
     const [components, setComponents] = useState({ functions: [] });
     const [loadingDiscovery, setLoadingDiscovery] = useState(true);
@@ -61,7 +63,9 @@ export default function ToolConfig({ user }) {
     const [categories, setCategories] = useState([]);
     const [loadingCategories, setLoadingCategories] = useState(false);
 
-    const discoverComponents = async () => {
+    const discoverComponents = useCallback(async () => {
+        if (!isMountedRef.current) return;
+        
         try {
             setLoadingDiscovery(true);
             const response = await apiCall(`/api/tools/components?folder=ai.functions`, {
@@ -70,17 +74,25 @@ export default function ToolConfig({ user }) {
             if (response.ok) {
                 const data = await response.json();
                 const comps = data?.components || {};
-                setComponents({ functions: comps['ai.functions'] || [] });
+                if (isMountedRef.current) {
+                    setComponents({ functions: comps['ai.functions'] || [] });
+                }
             } else {
-                showError('Failed to discover tools');
+                if (isMountedRef.current) {
+                    showError('Failed to discover tools');
+                }
             }
         } catch (error) {
             console.error('Failed to discover tools:', error);
-            showError('Failed to discover tools');
+            if (isMountedRef.current) {
+                showError('Failed to discover tools');
+            }
         } finally {
-            setLoadingDiscovery(false);
+            if (isMountedRef.current) {
+                setLoadingDiscovery(false);
+            }
         }
-    };
+    }, [token, showError]);
 
     const introspectTool = async (modulePath, kind = 'tool') => {
         if (!modulePath || introspectCache[modulePath] || pendingIntros[modulePath]) return;
@@ -108,7 +120,9 @@ export default function ToolConfig({ user }) {
         }
     };
 
-    const loadCategories = async () => {
+    const loadCategories = useCallback(async () => {
+        if (!isMountedRef.current) return;
+        
         try {
             setLoadingCategories(true);
             const response = await apiCall(`/api/tools/categories`, {
@@ -116,16 +130,22 @@ export default function ToolConfig({ user }) {
             });
             if (response.ok) {
                 const data = await response.json();
-                setCategories(data.categories || []);
+                if (isMountedRef.current) {
+                    setCategories(data.categories || []);
+                }
             }
         } catch (error) {
             console.error('Failed to load categories:', error);
         } finally {
-            setLoadingCategories(false);
+            if (isMountedRef.current) {
+                setLoadingCategories(false);
+            }
         }
-    };
+    }, [token]);
 
-    const loadExistingConfigs = async (page = 1, pageSize = 8) => {
+    const loadExistingConfigs = useCallback(async (page = 1, pageSize = 8) => {
+        if (!isMountedRef.current) return;
+        
         try {
             const queryParams = new URLSearchParams({
                 page: page.toString(),
@@ -141,42 +161,57 @@ export default function ToolConfig({ user }) {
             });
             if (resp.ok) {
                 const data = await resp.json();
-                setExistingConfigs(data.configurations || []);
-                if (data.pagination) {
-                    setPagination({
-                        page: data.pagination.page - 1, // Convert to 0-based for MUI
-                        rowsPerPage: data.pagination.page_size,
-                        total: data.pagination.total,
-                        totalPages: data.pagination.total_pages
-                    });
+                if (isMountedRef.current) {
+                    setExistingConfigs(data.configurations || []);
+                    if (data.pagination) {
+                        setPagination({
+                            page: data.pagination.page - 1, // Convert to 0-based for MUI
+                            rowsPerPage: data.pagination.page_size,
+                            total: data.pagination.total,
+                            totalPages: data.pagination.total_pages
+                        });
+                    }
                 }
             }
         } catch (e) {
             console.error('Failed to load existing configurations:', e);
         } finally {
-            setLoadingConfigs(false);
+            if (isMountedRef.current) {
+                setLoadingConfigs(false);
+            }
+        }
+    }, [token]);
+
+    const handlePageChange = (event, newPage) => {
+        if (!loadingConfigs && !saveState.loading) {
+            loadExistingConfigs(newPage + 1, pagination.rowsPerPage); // Convert to 1-based for API
         }
     };
 
-    const handlePageChange = (event, newPage) => {
-        loadExistingConfigs(newPage + 1, pagination.rowsPerPage); // Convert to 1-based for API
-    };
-
     const handleRowsPerPageChange = (event) => {
-        const newRowsPerPage = parseInt(event.target.value, 10);
-        loadExistingConfigs(1, newRowsPerPage); // Reset to first page
+        if (!loadingConfigs && !saveState.loading) {
+            const newRowsPerPage = parseInt(event.target.value, 10);
+            loadExistingConfigs(1, newRowsPerPage); // Reset to first page
+        }
     };
 
     useEffect(() => {
         if (!loadingDiscovery && components.functions.length === 0) {
             showWarning('No tools discovered. Check backend logs or refresh.');
         }
-    }, [loadingDiscovery, components.functions]);
+    }, [loadingDiscovery, components.functions, showWarning]);
 
     useEffect(() => {
         discoverComponents();
         loadExistingConfigs();
         loadCategories();
+    }, [discoverComponents, loadExistingConfigs, loadCategories]);
+
+    // Cleanup function to handle component unmount
+    useEffect(() => {
+        return () => {
+            isMountedRef.current = false;
+        };
     }, []);
 
     function ensureIntrospection(path, kind) {
@@ -244,8 +279,10 @@ export default function ToolConfig({ user }) {
             const action = isEditMode ? 'updated' : 'saved';
             showSuccess(`Tool configuration "${form.name}" ${action} successfully`);
             setSaveState({ loading: false });
-            loadExistingConfigs();
-            loadCategories();
+            if (isMountedRef.current) {
+                loadExistingConfigs();
+                loadCategories();
+            }
             setForm({ id: null, name: '', category: '', tool: '', tool_params: {} });
             setIsEditMode(false);
             setDialogOpen(false);
@@ -278,7 +315,9 @@ export default function ToolConfig({ user }) {
                 return;
             }
             showSuccess('Tool configuration deleted');
-            await loadExistingConfigs();
+            if (isMountedRef.current) {
+                await loadExistingConfigs();
+            }
             setSaveState({ loading: false });
             setDialogOpen(false);
         } catch (e) {

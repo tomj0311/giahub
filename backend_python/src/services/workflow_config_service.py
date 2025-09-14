@@ -77,6 +77,7 @@ class WorkflowConfigService:
     ) -> Dict[str, Any]:
         """List workflow configurations with pagination"""
         tenant_id = await cls.validate_tenant_access(user)
+        logger.debug(f"[WORKFLOWS] Listing workflows for tenant: {tenant_id}, page: {page}, category: {category}")
         
         try:
             # Build query

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Box,
     Button,
@@ -37,6 +37,9 @@ export default function WorkflowConfig({ user }) {
     const { showSuccess, showError, showWarning, showInfo } = useSnackbar();
     const { showDeleteConfirmation } = useConfirmation();
 
+    // Add ref to track if component is mounted
+    const isMountedRef = useRef(true);
+
     const [existingConfigs, setExistingConfigs] = useState([]);
     const [loadingConfigs, setLoadingConfigs] = useState(true);
     const [pagination, setPagination] = useState({
@@ -59,7 +62,9 @@ export default function WorkflowConfig({ user }) {
     const [loadingCategories, setLoadingCategories] = useState(false);
     const [uploadState, setUploadState] = useState({ loading: false });
 
-    const loadCategories = async () => {
+    const loadCategories = useCallback(async () => {
+        if (!isMountedRef.current) return;
+        
         try {
             setLoadingCategories(true);
             const response = await apiCall(`/api/workflows/categories`, {
@@ -67,16 +72,22 @@ export default function WorkflowConfig({ user }) {
             });
             if (response.ok) {
                 const data = await response.json();
-                setCategories(data.categories || []);
+                if (isMountedRef.current) {
+                    setCategories(data.categories || []);
+                }
             }
         } catch (error) {
             console.error('Failed to load categories:', error);
         } finally {
-            setLoadingCategories(false);
+            if (isMountedRef.current) {
+                setLoadingCategories(false);
+            }
         }
-    };
+    }, [token]);
 
-    const loadExistingConfigs = async (page = 1, pageSize = 8) => {
+    const loadExistingConfigs = useCallback(async (page = 1, pageSize = 8) => {
+        if (!isMountedRef.current) return;
+        
         console.log('🔄 LOADING EXISTING WORKFLOW CONFIGS...');
         try {
             const queryParams = new URLSearchParams({
@@ -95,14 +106,16 @@ export default function WorkflowConfig({ user }) {
             if (resp.ok) {
                 const data = await resp.json();
                 console.log('📄 Configs data:', data);
-                setExistingConfigs(data.configurations || []);
-                if (data.pagination) {
-                    setPagination({
-                        page: data.pagination.page - 1, // Convert to 0-based for MUI
-                        rowsPerPage: data.pagination.page_size,
-                        total: data.pagination.total,
-                        totalPages: data.pagination.total_pages
-                    });
+                if (isMountedRef.current) {
+                    setExistingConfigs(data.configurations || []);
+                    if (data.pagination) {
+                        setPagination({
+                            page: data.pagination.page - 1, // Convert to 0-based for MUI
+                            rowsPerPage: data.pagination.page_size,
+                            total: data.pagination.total,
+                            totalPages: data.pagination.total_pages
+                        });
+                    }
                 }
                 console.log('✅ Configs loaded successfully');
             } else {
@@ -112,18 +125,24 @@ export default function WorkflowConfig({ user }) {
             console.log('💥 ERROR loading configs:', e);
             console.error('Failed to load existing configurations:', e);
         } finally {
-            setLoadingConfigs(false);
+            if (isMountedRef.current) {
+                setLoadingConfigs(false);
+            }
             console.log('🏁 Load configs finished');
+        }
+    }, [token]);
+
+    const handlePageChange = (event, newPage) => {
+        if (!loadingConfigs && !saveState.loading) {
+            loadExistingConfigs(newPage + 1, pagination.rowsPerPage); // Convert to 1-based for API
         }
     };
 
-    const handlePageChange = (event, newPage) => {
-        loadExistingConfigs(newPage + 1, pagination.rowsPerPage); // Convert to 1-based for API
-    };
-
     const handleRowsPerPageChange = (event) => {
-        const newRowsPerPage = parseInt(event.target.value, 10);
-        loadExistingConfigs(1, newRowsPerPage); // Reset to first page
+        if (!loadingConfigs && !saveState.loading) {
+            const newRowsPerPage = parseInt(event.target.value, 10);
+            loadExistingConfigs(1, newRowsPerPage); // Reset to first page
+        }
     };
 
     const handleFileUpload = (event) => {
@@ -176,6 +195,13 @@ export default function WorkflowConfig({ user }) {
         loadExistingConfigs();
         loadCategories();
         console.log('✅ Initialization functions called');
+    }, [loadExistingConfigs, loadCategories]);
+
+    // Cleanup function to handle component unmount
+    useEffect(() => {
+        return () => {
+            isMountedRef.current = false;
+        };
     }, []);
 
     function loadExistingConfig(configName) {
@@ -263,8 +289,10 @@ export default function WorkflowConfig({ user }) {
             showSuccess(`Workflow configuration "${form.name}" ${action} successfully`);
             setSaveState({ loading: false });
             
-            loadExistingConfigs();
-            loadCategories();
+            if (isMountedRef.current) {
+                loadExistingConfigs();
+                loadCategories();
+            }
             
             setForm({ id: null, name: '', category: '', bpmn_file: null, bpmn_filename: '' });
             setIsEditMode(false);
@@ -299,7 +327,9 @@ export default function WorkflowConfig({ user }) {
                 return;
             }
             showSuccess('Workflow configuration deleted');
-            await loadExistingConfigs();
+            if (isMountedRef.current) {
+                await loadExistingConfigs();
+            }
             setSaveState({ loading: false });
             setDialogOpen(false);
         } catch (e) {

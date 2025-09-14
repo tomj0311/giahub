@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Box,
   Typography,
@@ -110,6 +110,9 @@ export default function KnowledgeConfig({ user }) {
   const { showSuccess, showError, showWarning } = useSnackbar()
   const { showDeleteConfirmation } = useConfirmation()
 
+  // Add ref to track if component is mounted
+  const isMountedRef = useRef(true)
+
   const [loading, setLoading] = useState(true)
   const [collections, setCollections] = useState([])
   const [existingConfigs, setExistingConfigs] = useState([]) // Full collection configurations like ToolConfig
@@ -141,7 +144,9 @@ export default function KnowledgeConfig({ user }) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saveState, setSaveState] = useState({ loading: false })
 
-  const loadModels = async () => {
+  const loadModels = useCallback(async () => {
+    if (!isMountedRef.current) return;
+    
     try {
       console.log('[KnowledgeConfig] Loading models...')
       const response = await api.getModels(token)
@@ -150,26 +155,38 @@ export default function KnowledgeConfig({ user }) {
       // The response structure is { configurations: [...] } from ModelConfig
       const modelsList = response.configurations || []
       console.log('[KnowledgeConfig] Processed models list:', modelsList)
-      setModels(Array.isArray(modelsList) ? modelsList : [])
+      if (isMountedRef.current) {
+        setModels(Array.isArray(modelsList) ? modelsList : [])
+      }
     } catch (error) {
       console.error('[KnowledgeConfig] Failed to load models:', error)
-      showError('Failed to load models')
+      if (isMountedRef.current) {
+        showError('Failed to load models')
+      }
     }
-  }
+  }, [token, showError])
 
-  const loadCategories = async () => {
+  const loadCategories = useCallback(async () => {
+    if (!isMountedRef.current) return;
+    
     try {
       setLoadingCategories(true)
       const response = await api.getCategories(token)
-      setCategories(response.categories || [])
+      if (isMountedRef.current) {
+        setCategories(response.categories || [])
+      }
     } catch (error) {
       console.error('[KnowledgeConfig] Failed to load categories:', error)
     } finally {
-      setLoadingCategories(false)
+      if (isMountedRef.current) {
+        setLoadingCategories(false)
+      }
     }
-  }
+  }, [token])
 
-  const loadExistingConfigs = async (page = 1, pageSize = 8) => {
+  const loadExistingConfigs = useCallback(async (page = 1, pageSize = 8) => {
+    if (!isMountedRef.current) return;
+    
     try {
       setLoadingConfigs(true)
       const queryParams = new URLSearchParams({
@@ -190,72 +207,82 @@ export default function KnowledgeConfig({ user }) {
         console.log('[KnowledgeConfig] Raw API response:', data);
         console.log('[KnowledgeConfig] Collections from API:', collections);
         
-        // Set pagination data
-        if (data.pagination) {
-          setPagination({
-            page: data.pagination.page - 1, // Convert to 0-based for MUI
-            rowsPerPage: data.pagination.page_size,
-            total: data.pagination.total,
-            totalPages: data.pagination.total_pages
-          });
-        }
-        
-        // Load full data for each collection like ToolConfig loads configurations
-        const collectionsWithData = []
-        for (const collection of collections) {
-          try {
-            // For paginated results, collections already have the needed structure
-            // from the backend's list_collections_paginated method
-            collectionsWithData.push({
-              id: collection.id || collection.name,
-              name: collection.name,
-              category: collection.category || '',
-              model_id: collection.model_id || '',
-              model_name: collection.model_name || '',
-              files_count: collection.files_count || 0,
-              files: [] // Will be loaded when editing
-            })
-          } catch (error) {
-            console.error(`[KnowledgeConfig] Failed to process collection ${collection.name}:`, error)
-            // Add basic entry if collection data can't be processed
-            collectionsWithData.push({
-              id: collection.name,
-              name: collection.name,
-              category: '',
-              model_id: '',
-              model_name: '',
-              files_count: 0,
-              files: []
-            })
+        if (isMountedRef.current) {
+          // Set pagination data
+          if (data.pagination) {
+            setPagination({
+              page: data.pagination.page - 1, // Convert to 0-based for MUI
+              rowsPerPage: data.pagination.page_size,
+              total: data.pagination.total,
+              totalPages: data.pagination.total_pages
+            });
           }
+          
+          // Load full data for each collection like ToolConfig loads configurations
+          const collectionsWithData = []
+          for (const collection of collections) {
+            try {
+              // For paginated results, collections already have the needed structure
+              // from the backend's list_collections_paginated method
+              collectionsWithData.push({
+                id: collection.id || collection.name,
+                name: collection.name,
+                category: collection.category || '',
+                model_id: collection.model_id || '',
+                model_name: collection.model_name || '',
+                files_count: collection.files_count || 0,
+                files: [] // Will be loaded when editing
+              })
+            } catch (error) {
+              console.error(`[KnowledgeConfig] Failed to process collection ${collection.name}:`, error)
+              // Add basic entry if collection data can't be processed
+              collectionsWithData.push({
+                id: collection.name,
+                name: collection.name,
+                category: '',
+                model_id: '',
+                model_name: '',
+                files_count: 0,
+                files: []
+              })
+            }
+          }
+          setExistingConfigs(collectionsWithData)
+          console.log('[KnowledgeConfig] Collections loaded:', collectionsWithData)
         }
-        setExistingConfigs(collectionsWithData)
-        console.log('[KnowledgeConfig] Collections loaded:', collectionsWithData)
       } else {
         console.error('[KnowledgeConfig] Failed to load collections - bad response')
       }
     } catch (error) {
       console.error('[KnowledgeConfig] Failed to load collections:', error)
     } finally {
-      setLoadingConfigs(false)
+      if (isMountedRef.current) {
+        setLoadingConfigs(false)
+      }
     }
-  }
+  }, [token])
 
   const handlePageChange = (event, newPage) => {
-    const actualPage = newPage + 1; // Convert from 0-based to 1-based
-    loadExistingConfigs(actualPage, pagination.rowsPerPage);
+    if (!loadingConfigs && !saveState.loading) {
+      const actualPage = newPage + 1; // Convert from 0-based to 1-based
+      loadExistingConfigs(actualPage, pagination.rowsPerPage);
+    }
   };
 
   const handleRowsPerPageChange = (event) => {
-    const newPageSize = parseInt(event.target.value, 10);
-    setPagination(prev => ({ ...prev, page: 0, rowsPerPage: newPageSize })); // Reset to first page
-    loadExistingConfigs(1, newPageSize);
+    if (!loadingConfigs && !saveState.loading) {
+      const newPageSize = parseInt(event.target.value, 10);
+      setPagination(prev => ({ ...prev, page: 0, rowsPerPage: newPageSize })); // Reset to first page
+      loadExistingConfigs(1, newPageSize);
+    }
   };
 
   useEffect(() => {
     // Load data like ToolConfig does
     const loadData = async () => {
       console.log('[KnowledgeConfig] Starting data load...')
+      if (!isMountedRef.current) return;
+      
       try {
         setLoading(true)
         
@@ -265,7 +292,9 @@ export default function KnowledgeConfig({ user }) {
         ])
         
         console.log('[KnowledgeConfig] API responses:', { d })
-        setDefaults(d.defaults || {})
+        if (isMountedRef.current) {
+          setDefaults(d.defaults || {})
+        }
         
         // Load models separately to handle errors better
         await loadModels()
@@ -279,12 +308,21 @@ export default function KnowledgeConfig({ user }) {
       } catch (err) {
         console.error('[KnowledgeConfig] Error loading data:', err)
       } finally {
-        setLoading(false)
+        if (isMountedRef.current) {
+          setLoading(false)
+        }
       }
     }
     
     loadData()
-  }, [token])
+  }, [token, loadModels, loadExistingConfigs, loadCategories])
+
+  // Cleanup function to handle component unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   async function loadExistingConfig(configName) {
     const config = existingConfigs.find(c => c.name === configName)
@@ -370,10 +408,12 @@ export default function KnowledgeConfig({ user }) {
       showSuccess(`Knowledge collection "${form.name}" ${action} successfully`)
       
       // Reload data like ToolConfig
-      await Promise.all([
-        loadExistingConfigs(),
-        loadCategories()
-      ])
+      if (isMountedRef.current) {
+        await Promise.all([
+          loadExistingConfigs(),
+          loadCategories()
+        ])
+      }
       
       // Reset form and close dialog
       setForm({ 
@@ -416,7 +456,9 @@ export default function KnowledgeConfig({ user }) {
       showSuccess('Knowledge collection deleted')
       
       // Reload configurations like ToolConfig
-      await loadExistingConfigs()
+      if (isMountedRef.current) {
+        await loadExistingConfigs()
+      }
       
       // Reset form and close dialog
       setForm({ 

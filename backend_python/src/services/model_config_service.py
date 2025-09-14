@@ -77,6 +77,7 @@ class ModelConfigService:
     ) -> Dict[str, Any]:
         """List model configurations with pagination, filtering, and sorting"""
         tenant_id = await cls.validate_tenant_access(user)
+        logger.debug(f"[MODELS] Listing models for tenant: {tenant_id}, page: {page}, category: {category}")
         
         try:
             # Build filter query

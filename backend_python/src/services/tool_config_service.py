@@ -108,6 +108,7 @@ class ToolConfigService:
     ) -> Dict[str, Any]:
         """Get tool configurations with pagination, filtering, and sorting"""
         tenant_id = await cls.validate_tenant_access(user)
+        logger.debug(f"[TOOLS] Listing tools for tenant: {tenant_id}, page: {page}, category: {category}")
         
         try:
             # Build filter query

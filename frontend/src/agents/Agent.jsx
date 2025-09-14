@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Box,
@@ -42,6 +42,10 @@ export default function Agent({ user }) {
     'Content-Type': 'application/json',
     ...(token ? { 'Authorization': `Bearer ${token}` } : {})
   }), [token])
+
+  // Add ref to track if component is mounted and cancel pending requests
+  const isMountedRef = useRef(true)
+  const currentRequestRef = useRef(null)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -90,7 +94,16 @@ export default function Agent({ user }) {
     })
   }
 
-  async function fetchAll(page = 1, pageSize = 8) {
+  const fetchAll = useCallback(async (page = 1, pageSize = 8) => {
+    // Cancel any pending request
+    if (currentRequestRef.current) {
+      currentRequestRef.current.abort()
+    }
+
+    // Create new AbortController for this request
+    const abortController = new AbortController()
+    currentRequestRef.current = abortController
+
     setLoading(true)
     try {
       // Build query parameters for agents with pagination
@@ -103,11 +116,28 @@ export default function Agent({ user }) {
 
       // Fetch all required data in parallel
       const [agentsResponse, modelsResponse, toolsResponse, knowledgeResponse] = await Promise.all([
-        apiCall(`/api/agents?${agentsQueryParams}`, { headers: authHeaders }),
-        apiCall('/api/models/configs', { headers: authHeaders }),
-        apiCall('/api/tools/configs', { headers: authHeaders }),
-        apiCall('/api/knowledge/configs', { headers: authHeaders })
+        apiCall(`/api/agents?${agentsQueryParams}`, { 
+          headers: authHeaders,
+          signal: abortController.signal 
+        }),
+        apiCall('/api/models/configs', { 
+          headers: authHeaders,
+          signal: abortController.signal 
+        }),
+        apiCall('/api/tools/configs', { 
+          headers: authHeaders,
+          signal: abortController.signal 
+        }),
+        apiCall('/api/knowledge/configs', { 
+          headers: authHeaders,
+          signal: abortController.signal 
+        })
       ])
+
+      // Check if component is still mounted and request wasn't aborted
+      if (!isMountedRef.current || abortController.signal.aborted) {
+        return
+      }
 
       // Handle agents with pagination
       if (agentsResponse.ok) {
@@ -169,23 +199,52 @@ export default function Agent({ user }) {
         showError('Failed to load knowledge collections')
       }
     } catch (e) {
+      // Handle abort error separately to avoid showing error messages for cancelled requests
+      if (e.name === 'AbortError' || abortController.signal.aborted) {
+        console.log('Request was cancelled')
+        return
+      }
       console.error(e)
-      showError('Failed to load data')
+      if (isMountedRef.current) {
+        showError('Failed to load data')
+      }
     } finally {
-      setLoading(false)
+      if (isMountedRef.current) {
+        setLoading(false)
+      }
+      // Clear the current request ref if this was the active request
+      if (currentRequestRef.current === abortController) {
+        currentRequestRef.current = null
+      }
     }
-  }
+  }, [authHeaders, showError]) // Add dependencies
 
   const handlePageChange = (event, newPage) => {
-    fetchAll(newPage + 1, pagination.rowsPerPage); // Convert to 1-based for API
+    if (!loading && !saving) {
+      fetchAll(newPage + 1, pagination.rowsPerPage); // Convert to 1-based for API
+    }
   };
 
   const handleRowsPerPageChange = (event) => {
-    const newRowsPerPage = parseInt(event.target.value, 10);
-    fetchAll(1, newRowsPerPage); // Reset to first page
+    if (!loading && !saving) {
+      const newRowsPerPage = parseInt(event.target.value, 10);
+      fetchAll(1, newRowsPerPage); // Reset to first page
+    }
   };
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => { 
+    fetchAll() 
+  }, [fetchAll]) // Add fetchAll as dependency
+
+  // Cleanup function to handle component unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false
+      if (currentRequestRef.current) {
+        currentRequestRef.current.abort()
+      }
+    }
+  }, [])
 
   const loadAgent = (agent) => {
     if (!agent) return
@@ -239,7 +298,10 @@ export default function Agent({ user }) {
       const data = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(data.detail || `Save failed (${resp.status})`)
       showSuccess(`Agent ${data.name} saved`)
-      await fetchAll(pagination.page + 1, pagination.rowsPerPage) // Refresh current page
+      // Only refresh if component is still mounted and not already loading
+      if (isMountedRef.current && !loading) {
+        await fetchAll(pagination.page + 1, pagination.rowsPerPage) // Refresh current page
+      }
       setDialogOpen(false)
     } catch (e) {
       showError(e.message || 'Failed to save')
@@ -268,7 +330,10 @@ export default function Agent({ user }) {
       if (!resp.ok) throw new Error(data.detail || `Delete failed (${resp.status})`)
       showSuccess(`Agent ${form.name} deleted`)
       setForm(f => ({ ...f, id: null, name: '' }))
-      await fetchAll(pagination.page + 1, pagination.rowsPerPage) // Refresh current page
+      // Only refresh if component is still mounted and not already loading
+      if (isMountedRef.current && !loading) {
+        await fetchAll(pagination.page + 1, pagination.rowsPerPage) // Refresh current page
+      }
       setDialogOpen(false)
     } catch (e) {
       showError(e.message || 'Failed to delete')
