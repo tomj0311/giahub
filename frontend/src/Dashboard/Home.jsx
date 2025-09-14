@@ -40,92 +40,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { apiCall } from '../config/api'
 import { agentRuntimeService } from '../services/agentRuntimeService'
-
-// Global singleton to prevent duplicate API calls across component instances
-class HomeService {
-    constructor() {
-        this.activeRequests = new Map();
-        this.cache = new Map();
-        this.cacheTimestamps = new Map();
-        this.CACHE_DURATION = 30000; // 30 seconds cache
-    }
-
-    // Create a unique key for each request
-    getRequestKey(endpoint, params = {}) {
-        return `${endpoint}:${JSON.stringify(params)}`;
-    }
-
-    // Check if cache is still valid
-    isCacheValid(key) {
-        const timestamp = this.cacheTimestamps.get(key);
-        return timestamp && (Date.now() - timestamp) < this.CACHE_DURATION;
-    }
-
-    // Deduplicated API call
-    async makeRequest(endpoint, options = {}, params = {}) {
-        const requestKey = this.getRequestKey(endpoint, params);
-        
-        // Return cached result if valid
-        if (this.isCacheValid(requestKey)) {
-            console.log('📦 Returning cached result for:', requestKey);
-            return this.cache.get(requestKey);
-        }
-
-        // Return existing promise if request is already in flight
-        if (this.activeRequests.has(requestKey)) {
-            console.log('⏳ Request already in flight, waiting for result:', requestKey);
-            return this.activeRequests.get(requestKey);
-        }
-
-        console.log('🚀 Making new API request:', requestKey);
-        
-        // Create new request promise
-        const requestPromise = this._executeRequest(endpoint, options)
-            .then(result => {
-                // Cache successful results
-                this.cache.set(requestKey, result);
-                this.cacheTimestamps.set(requestKey, Date.now());
-                return result;
-            })
-            .finally(() => {
-                // Remove from active requests when done
-                this.activeRequests.delete(requestKey);
-            });
-
-        // Store active request
-        this.activeRequests.set(requestKey, requestPromise);
-        
-        return requestPromise;
-    }
-
-    async _executeRequest(endpoint, options) {
-        const response = await apiCall(endpoint, options);
-        if (response.ok) {
-            const data = await response.json();
-            return { success: true, data };
-        } else {
-            return { success: false, error: `Request failed with status ${response.status}` };
-        }
-    }
-
-    // Clear cache for specific patterns (e.g., after create/update/delete)
-    invalidateCache(pattern = '') {
-        const keysToDelete = [];
-        for (const key of this.cache.keys()) {
-            if (key.includes(pattern)) {
-                keysToDelete.push(key);
-            }
-        }
-        keysToDelete.forEach(key => {
-            this.cache.delete(key);
-            this.cacheTimestamps.delete(key);
-        });
-        console.log('🗑️ Invalidated cache for pattern:', pattern, 'Keys:', keysToDelete);
-    }
-}
-
-// Create singleton instance
-const homeService = new HomeService();
+import sharedApiService from '../utils/apiService'
 
 function AgentCard({ agent, onEdit, onChat }) {
   const theme = useTheme()
@@ -369,7 +284,7 @@ export default function Home({ user }) {
 
         // Fetch agents with pagination - use singleton service
         const agentsUrl = `/api/agents?page=${pagination.page}&page_size=${pagination.page_size}`
-        const agentsResult = await homeService.makeRequest(
+        const agentsResult = await sharedApiService.makeRequest(
           agentsUrl,
           {
             headers: {
@@ -408,7 +323,7 @@ export default function Home({ user }) {
 
         // Fetch recent conversations - Use agent runtime endpoint with pagination
         try {
-          const conversationsResult = await homeService.makeRequest(
+          const conversationsResult = await sharedApiService.makeRequest(
             '/api/agent-runtime/conversations?page=1&page_size=5',
             {
               headers: {

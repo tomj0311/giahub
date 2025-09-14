@@ -13,7 +13,11 @@ import {
   alpha,
   useTheme,
   IconButton,
-  Divider
+  Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material'
 import {
   Play,
@@ -23,6 +27,7 @@ import {
   FileText,
   Settings
 } from 'lucide-react'
+import WorkflowConfig from './WorkflowConfig'
 
 const WorkflowDashboard = () => {
   const theme = useTheme()
@@ -32,12 +37,27 @@ const WorkflowDashboard = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [newWorkflowName, setNewWorkflowName] = useState('');
   const [instanceId, setInstanceId] = useState('');
+  const [runningInstances, setRunningInstances] = useState([]);
+  const [configDialogOpen, setConfigDialogOpen] = useState(false);
+
+  // Helpers to persist instance IDs locally (simple, no backend list yet)
+  const getSavedInstanceIds = () => {
+    try {
+      const raw = localStorage.getItem('workflow_instances');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  };
+  const saveInstanceIds = (ids) => {
+    localStorage.setItem('workflow_instances', JSON.stringify(ids));
+  };
 
   // Start a new workflow
   const startWorkflow = async (workflowName, initialData = {}) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/workflows/${workflowName}/start`, {
+      const response = await fetch(`/api/workflow/workflows/${encodeURIComponent(workflowName)}/start`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -48,8 +68,15 @@ const WorkflowDashboard = () => {
       
       if (response.ok) {
         const data = await response.json();
-        alert(`Workflow started with ID: ${data.instance_id}`);
-        loadWorkflows();
+        const id = data.instance_id;
+        alert(`Workflow started with ID: ${id}`);
+        // persist instance id and refresh list
+        const ids = getSavedInstanceIds();
+        if (!ids.includes(id)) {
+          ids.push(id);
+          saveInstanceIds(ids);
+        }
+        await refreshRunningInstances();
       } else {
         alert('Failed to start workflow');
       }
@@ -62,7 +89,7 @@ const WorkflowDashboard = () => {
   // Get workflow status
   const getWorkflowStatus = async (instanceId) => {
     try {
-      const response = await fetch(`/api/workflows/${instanceId}`, {
+      const response = await fetch(`/api/workflow/workflows/${instanceId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -82,7 +109,7 @@ const WorkflowDashboard = () => {
   const completeTask = async (instanceId, taskId, taskData = {}) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/workflows/${instanceId}/tasks/${taskId}/complete`, {
+      const response = await fetch(`/api/workflow/workflows/${instanceId}/tasks/${taskId}/complete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -107,7 +134,7 @@ const WorkflowDashboard = () => {
   const runWorkflow = async (instanceId, maxSteps = null) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/workflows/${instanceId}/run`, {
+      const response = await fetch(`/api/workflow/workflows/${instanceId}/run`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -135,7 +162,7 @@ const WorkflowDashboard = () => {
     
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/workflows/${instanceId}`, {
+      const response = await fetch(`/api/workflow/workflows/${instanceId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -146,7 +173,10 @@ const WorkflowDashboard = () => {
         alert('Workflow stopped');
         setSelectedWorkflow(null);
         setTasks([]);
-        loadWorkflows();
+        // remove from local list
+        const ids = getSavedInstanceIds().filter(id => id !== instanceId);
+        saveInstanceIds(ids);
+        await refreshRunningInstances();
       } else {
         alert('Failed to stop workflow');
       }
@@ -164,7 +194,7 @@ const WorkflowDashboard = () => {
       formData.append('file', file);
       formData.append('workflow_name', workflowName);
 
-      const response = await fetch('/api/bpmn/upload', {
+      const response = await fetch('/api/workflow/bpmn/upload', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -184,11 +214,53 @@ const WorkflowDashboard = () => {
     setIsLoading(false);
   };
 
-  // Load workflows (placeholder - you'd need an endpoint to list workflows)
+  // Load available workflow configurations (tiles)
   const loadWorkflows = async () => {
-    // This would need a proper endpoint to list workflows
-    // For now, just a placeholder
+    try {
+      const params = new URLSearchParams({ page: '1', page_size: '12', sort_by: 'name', sort_order: 'asc' });
+      const resp = await fetch(`/api/workflows/configs?${params.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        setWorkflows(data.configurations || []);
+      }
+    } catch (e) {
+      console.error('Failed to load workflows', e);
+    }
   };
+
+  // Refresh running instances by checking saved IDs, keep only non-completed
+  const refreshRunningInstances = async () => {
+    const ids = getSavedInstanceIds();
+    if (ids.length === 0) { setRunningInstances([]); return; }
+    try {
+      const results = await Promise.allSettled(ids.map(async (id) => {
+        const resp = await fetch(`/api/workflow/workflows/${id}`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!resp.ok) throw new Error('not found');
+        const data = await resp.json();
+        return data;
+      }));
+      const active = results
+        .filter(r => r.status === 'fulfilled')
+        .map(r => r.value)
+        .filter(wf => wf.status && wf.status !== 'completed');
+      setRunningInstances(active);
+      saveInstanceIds(active.map(wf => wf.instance_id));
+    } catch (e) {
+      console.error('Failed to refresh instances', e);
+    }
+  };
+
+  useEffect(() => {
+    loadWorkflows();
+    refreshRunningInstances();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
@@ -224,7 +296,7 @@ const WorkflowDashboard = () => {
       </Box>
 
       <Grid container spacing={3}>
-        {/* Start Workflow Section */}
+        {/* Available Workflows Section */}
         <Grid item xs={12} md={6}>
           <Card sx={{ 
             height: '100%',
@@ -235,29 +307,49 @@ const WorkflowDashboard = () => {
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                 <Typography variant="h6" fontWeight="bold">
-                  Start New Workflow
+                  Available Workflows
                 </Typography>
-                <Play size={20} color={theme.palette.primary.main} />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Button size="small" variant="outlined" onClick={() => setConfigDialogOpen(true)}>Create Workflow</Button>
+                  <Play size={20} color={theme.palette.primary.main} />
+                </Box>
               </Box>
-              <Box sx={{ display: 'flex', gap: 2, flexDirection: 'column' }}>
-                <TextField
-                  fullWidth
-                  label="Workflow Name"
-                  value={newWorkflowName}
-                  onChange={(e) => setNewWorkflowName(e.target.value)}
-                  variant="outlined"
-                  size="small"
-                />
-                <Button 
-                  variant="contained"
-                  onClick={() => startWorkflow(newWorkflowName)}
-                  disabled={!newWorkflowName || isLoading}
-                  startIcon={<Play size={16} />}
-                  sx={{ borderRadius: 2 }}
-                >
-                  Start Workflow
-                </Button>
-              </Box>
+              <Grid container spacing={2}>
+                {workflows.length === 0 ? (
+                  <Grid item xs={12}>
+                    <Typography variant="body2" color="text.secondary">No workflows found. Upload BPMN to create one.</Typography>
+                  </Grid>
+                ) : (
+                  workflows.map((wf) => (
+                    <Grid item xs={12} key={wf.id}>
+                      <Card variant="outlined" sx={{ borderRadius: 2 }}>
+                        <CardContent>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Box>
+                              <Typography variant="subtitle1" fontWeight="bold">{wf.name}</Typography>
+                              {wf.category && (
+                                <Chip size="small" label={wf.category} sx={{ mt: 0.5 }} />
+                              )}
+                              {wf.description && (
+                                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>{wf.description}</Typography>
+                              )}
+                            </Box>
+                            <Button 
+                              variant="contained" 
+                              startIcon={<Play size={16} />} 
+                              onClick={() => startWorkflow(wf.name)}
+                              disabled={isLoading}
+                              sx={{ borderRadius: 2 }}
+                            >
+                              Start
+                            </Button>
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  ))
+                )}
+              </Grid>
             </CardContent>
           </Card>
         </Grid>
@@ -305,7 +397,7 @@ const WorkflowDashboard = () => {
           </Card>
         </Grid>
 
-        {/* Workflow Status Lookup Section */}
+        {/* Running Instances Section */}
         <Grid item xs={12} md={6}>
           <Card sx={{ 
             height: '100%',
@@ -316,34 +408,77 @@ const WorkflowDashboard = () => {
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                 <Typography variant="h6" fontWeight="bold">
-                  Check Workflow Status
+                  Running Instances
                 </Typography>
                 <Activity size={20} color={theme.palette.info.main} />
               </Box>
-              <Box sx={{ display: 'flex', gap: 2, flexDirection: 'column' }}>
+              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
                 <TextField
                   fullWidth
-                  label="Workflow Instance ID"
+                  label="Lookup Instance ID"
                   value={instanceId}
                   onChange={(e) => setInstanceId(e.target.value)}
                   variant="outlined"
                   size="small"
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter' && instanceId) {
-                      getWorkflowStatus(instanceId);
-                    }
-                  }}
                 />
                 <Button 
-                  variant="contained"
+                  variant="outlined"
                   onClick={() => instanceId && getWorkflowStatus(instanceId)}
                   disabled={!instanceId || isLoading}
                   startIcon={<Activity size={16} />}
                   sx={{ borderRadius: 2 }}
                 >
-                  Get Status
+                  View
+                </Button>
+                <Button 
+                  variant="contained"
+                  onClick={refreshRunningInstances}
+                  disabled={isLoading}
+                  sx={{ borderRadius: 2 }}
+                >
+                  Refresh
                 </Button>
               </Box>
+
+              {runningInstances.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">No running instances found.</Typography>
+              ) : (
+                <Grid container spacing={2}>
+                  {runningInstances.map((wf) => (
+                    <Grid item xs={12} key={wf.instance_id}>
+                      <Card variant="outlined" sx={{ borderRadius: 2 }}>
+                        <CardContent>
+                          <Grid container spacing={2} alignItems="center">
+                            <Grid item xs={12} sm={6}>
+                              <Typography variant="subtitle2" color="text.secondary">Instance</Typography>
+                              <Typography variant="body2" fontWeight="medium">{wf.instance_id}</Typography>
+                            </Grid>
+                            <Grid item xs={12} sm={3}>
+                              <Typography variant="subtitle2" color="text.secondary">Status</Typography>
+                              <Chip 
+                                label={wf.status}
+                                color={wf.status === 'completed' ? 'success' : wf.status === 'error' ? 'error' : 'primary'}
+                                size="small"
+                                variant="outlined"
+                              />
+                            </Grid>
+                            <Grid item xs={12} sm={3}>
+                              <Box sx={{ display: 'flex', gap: 1, justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
+                                <Button size="small" variant="contained" onClick={() => runWorkflow(wf.instance_id)} startIcon={<Play size={14} />}>
+                                  Run
+                                </Button>
+                                <Button size="small" color="error" variant="contained" onClick={() => stopWorkflow(wf.instance_id)} startIcon={<Square size={14} />}>
+                                  Stop
+                                </Button>
+                              </Box>
+                            </Grid>
+                          </Grid>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -463,6 +598,23 @@ const WorkflowDashboard = () => {
           </Grid>
         )}
       </Grid>
+
+      {/* Create/Edit Workflow Configuration Dialog */}
+      <Dialog
+        open={configDialogOpen}
+        onClose={() => { setConfigDialogOpen(false); loadWorkflows(); }}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>Workflow Configuration</DialogTitle>
+        <DialogContent dividers sx={{ p: 0 }}>
+          {/* Pass token from localStorage as user prop */}
+          <WorkflowConfig user={{ token: localStorage.getItem('token') }} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setConfigDialogOpen(false); loadWorkflows(); }}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
