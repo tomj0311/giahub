@@ -16,6 +16,51 @@
   position: relative;
 }
 
+/* BPMN Action Bar - positioned at top */
+.bpmn-action-bar {
+  display: flex;
+  gap: 10px;
+  padding: 10px 20px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  z-index: 100;
+}
+
+.bpmn-action-bar .btn-primary,
+.bpmn-action-bar .btn-secondary {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.bpmn-action-bar .btn-primary {
+  background: var(--accent-color);
+  color: var(--bg-primary);
+}
+
+.bpmn-action-bar .btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.bpmn-action-bar .btn-secondary {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.bpmn-action-bar .btn-secondary:hover {
+  background: var(--hover-bg);
+}
+
+/* Hide original BPMNExporter buttons when action bar is present */
+.bpmn-editor .bpmn-exporter .exporter-controls {
+  display: none !important;
+}
+
 /* Read-only mode adjustments */
 .bpmn-readonly-viewer .bpmn-editor {
   flex-direction: column;

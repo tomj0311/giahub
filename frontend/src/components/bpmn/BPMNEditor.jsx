@@ -1178,6 +1178,46 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
         />
       )}
       <div className="editor-content">
+        {!readOnly && (
+          <div className="bpmn-action-bar">
+            <button onClick={() => {
+              const bpmnManager = document.querySelector('.bpmn-exporter');
+              if (bpmnManager) {
+                const generateBtn = bpmnManager.querySelector('button');
+                if (generateBtn) generateBtn.click();
+              }
+            }} className="btn-primary">
+              Generate XML
+            </button>
+            <button onClick={() => {
+              const bpmnManager = document.querySelector('.bpmn-exporter');
+              if (bpmnManager) {
+                const buttons = bpmnManager.querySelectorAll('button');
+                if (buttons[1]) buttons[1].click();
+              }
+            }} className="btn-secondary">
+              Download .bpmn
+            </button>
+            <button onClick={() => {
+              const bpmnManager = document.querySelector('.bpmn-exporter');
+              if (bpmnManager) {
+                const buttons = bpmnManager.querySelectorAll('button');
+                if (buttons[2]) buttons[2].click();
+              }
+            }} className="btn-secondary">
+              Import .bpmn
+            </button>
+            <button onClick={() => {
+              const bpmnManager = document.querySelector('.bpmn-exporter');
+              if (bpmnManager) {
+                const buttons = bpmnManager.querySelectorAll('button');
+                if (buttons[3]) buttons[3].click();
+              }
+            }} className="btn-secondary">
+              Paste XML
+            </button>
+          </div>
+        )}
         <div className={`reactflow-wrapper ${selectionMode ? 'selection-mode' : ''}`} ref={reactFlowWrapper} tabIndex={0}>
           <ReactFlow
             nodes={nodes}
