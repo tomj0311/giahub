@@ -84,29 +84,16 @@ const MetricCard = ({ type, value, subtitle, delay = 0 }) => {
   const Icon = config.icon
 
   return (
-    <Slide direction="up" in={true} timeout={theme.transitions.duration.enteringScreen + delay}>
-      <Card 
-        sx={{ 
-          height: '100%',
-          minHeight: { xs: '160px', sm: '180px' },
-          background: config.gradient,
-          backdropFilter: 'blur(10px)',
-          border: `1px solid ${alpha(config.color, 0.1)}`,
-          transition: theme.transitions.create(['transform', 'box-shadow'], {
-            duration: theme.transitions.duration.short,
-          }),
-          '&:hover': {
-            transform: 'translateY(-4px)',
-            boxShadow: theme.shadows[8],
-          }
-        }}
-      >
+    <Card 
+      sx={{ 
+        height: '100%'
+      }}
+    >
         <CardContent sx={{ 
-          p: { xs: theme.spacing(2), sm: theme.spacing(2.5) },
+          p: 2,
           height: '100%',
           display: 'flex',
-          flexDirection: 'column',
-          '&:last-child': { pb: { xs: theme.spacing(2), sm: theme.spacing(2.5) } }
+          flexDirection: 'column'
         }}>
           <Box display="flex" alignItems="flex-start" justifyContent="space-between" sx={{ mb: 1 }}>
             <Box flex={1} sx={{ minWidth: 0, pr: 1 }}>
@@ -115,11 +102,9 @@ const MetricCard = ({ type, value, subtitle, delay = 0 }) => {
                 gutterBottom 
                 variant="subtitle2"
                 sx={{ 
-                  fontWeight: theme.typography.fontWeightMedium,
+                  fontWeight: 'medium',
                   textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
                   fontSize: '0.7rem',
-                  lineHeight: 1.2,
                   mb: 1
                 }}
               >
@@ -128,14 +113,13 @@ const MetricCard = ({ type, value, subtitle, delay = 0 }) => {
             </Box>
             <Avatar
               sx={{
-                backgroundColor: config.iconBg,
-                color: config.color,
-                width: { xs: theme.spacing(5), sm: theme.spacing(6) },
-                height: { xs: theme.spacing(5), sm: theme.spacing(6) },
-                flexShrink: 0
+                backgroundColor: config.color,
+                color: 'white',
+                width: 40,
+                height: 40
               }}
             >
-              <Icon size={theme.spacing(2.5)} />
+              <Icon size={20} />
             </Avatar>
           </Box>
           <Box sx={{ flex: 1 }}>
@@ -144,19 +128,10 @@ const MetricCard = ({ type, value, subtitle, delay = 0 }) => {
               component="div" 
               sx={{ 
                 color: config.color,
-                fontWeight: theme.typography.fontWeightBold,
+                fontWeight: 'bold',
                 mb: subtitle ? 1 : 0,
-                background: theme.custom?.colors?.gradientText || config.color,
-                backgroundClip: 'text',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                fontSize: { xs: '1.1rem', sm: '1.3rem', md: '1.4rem', lg: '1.2rem', xl: '1.4rem' },
-                lineHeight: 1.2,
-                wordBreak: 'keep-all',
-                whiteSpace: 'normal',
-                overflow: 'visible'
+                fontSize: '1.4rem'
               }}
-              title={value}
             >
               {value}
             </Typography>
@@ -164,17 +139,9 @@ const MetricCard = ({ type, value, subtitle, delay = 0 }) => {
               <Typography 
                 variant="body2" 
                 sx={{ 
-                  color: theme.custom?.colors?.textMuted || theme.palette.text.secondary,
-                  fontSize: { xs: '0.7rem', sm: '0.75rem' },
-                  lineHeight: 1.3,
-                  wordBreak: 'break-word',
-                  overflow: 'hidden',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical',
-                  mt: 0.5
+                  color: 'text.secondary',
+                  fontSize: '0.75rem'
                 }}
-                title={subtitle}
               >
                 {subtitle}
               </Typography>
@@ -182,7 +149,6 @@ const MetricCard = ({ type, value, subtitle, delay = 0 }) => {
           </Box>
         </CardContent>
       </Card>
-    </Slide>
   )
 }
 
@@ -231,10 +197,7 @@ const AgentPerformanceTable = ({ agents, loading }) => {
               variant="h6" 
               sx={{ 
                 fontWeight: theme.typography.fontWeightSemiBold,
-                background: theme.custom?.colors?.gradientText || theme.palette.text.primary,
-                backgroundClip: 'text',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
+                color: theme.palette.text.primary,
                 flex: 1,
                 minWidth: 0,
                 whiteSpace: 'nowrap',
@@ -413,10 +376,7 @@ const RecentConversationsTable = ({ conversations, loading }) => {
               variant="h6" 
               sx={{ 
                 fontWeight: theme.typography.fontWeightSemiBold,
-                background: theme.custom?.colors?.gradientText || theme.palette.text.primary,
-                backgroundClip: 'text',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
+                color: theme.palette.text.primary,
                 flex: 1,
                 minWidth: 0,
                 whiteSpace: 'nowrap',
@@ -741,10 +701,7 @@ const Analytics = () => {
               variant="h4" 
               sx={{
                 fontWeight: theme.typography.fontWeightBold,
-                background: theme.custom?.colors?.gradientText || theme.palette.text.primary,
-                backgroundClip: 'text',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
+                color: theme.palette.text.primary,
                 flex: 1,
                 minWidth: 0,
                 whiteSpace: 'nowrap',
