@@ -156,9 +156,11 @@ export default function AgentPlayground({ user }) {
 
   // Debug component mount
   useEffect(() => {
-    console.log('🏗️ AgentPlayground component mounted')
-    console.log('🏗️ Initial token:', token ? 'Present' : 'Missing')
-    console.log('🏗️ Initial user:', user)
+    console.log('MOUNT: AgentPlayground')
+    
+    return () => {
+      console.log('UNMOUNT: AgentPlayground');
+    };
   }, [])
 
   useEffect(() => {

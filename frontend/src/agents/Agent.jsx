@@ -233,12 +233,14 @@ export default function Agent({ user }) {
   };
 
   useEffect(() => { 
+    console.log('MOUNT: Agent');
     fetchAll() 
   }, [fetchAll]) // Add fetchAll as dependency
 
   // Cleanup function to handle component unmount
   useEffect(() => {
     return () => {
+      console.log('UNMOUNT: Agent');
       isMountedRef.current = false
       if (currentRequestRef.current) {
         currentRequestRef.current.abort()

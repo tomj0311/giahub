@@ -189,12 +189,13 @@ export default function WorkflowConfig({ user }) {
 
     // Run these functions only once on mount
     useEffect(() => {
-        console.log('🚀 WORKFLOW COMPONENT MOUNTED - Starting initialization...');
-        console.log('User:', user);
-        console.log('Token available:', !!token);
+        console.log('MOUNT: WorkflowConfig');
         loadExistingConfigs();
         loadCategories();
-        console.log('✅ Initialization functions called');
+        
+        return () => {
+            console.log('UNMOUNT: WorkflowConfig');
+        };
     }, [loadExistingConfigs, loadCategories]);
 
     // Cleanup function to handle component unmount

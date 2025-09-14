@@ -280,7 +280,7 @@ export default function KnowledgeConfig({ user }) {
   useEffect(() => {
     // Load data like ToolConfig does
     const loadData = async () => {
-      console.log('[KnowledgeConfig] Starting data load...')
+      console.log('MOUNT: KnowledgeConfig')
       if (!isMountedRef.current) return;
       
       try {
@@ -320,6 +320,7 @@ export default function KnowledgeConfig({ user }) {
   // Cleanup function to handle component unmount
   useEffect(() => {
     return () => {
+      console.log('UNMOUNT: KnowledgeConfig');
       isMountedRef.current = false;
     };
   }, []);

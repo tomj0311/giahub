@@ -230,6 +230,7 @@ export default function Home({ user }) {
   }
 
   useEffect(() => {
+    console.log('MOUNT: Home');
     const fetchDashboardData = async () => {
       try {
         setLoading(true)
@@ -320,6 +321,10 @@ export default function Home({ user }) {
     }
 
     fetchDashboardData()
+    
+    return () => {
+      console.log('UNMOUNT: Home');
+    };
   }, [user?.token, pagination.page, pagination.page_size])
 
   const handleShowMore = () => {

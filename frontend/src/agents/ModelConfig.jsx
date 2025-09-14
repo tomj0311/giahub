@@ -258,7 +258,7 @@ function ModelConfig({ user }) {
     // Use exact same pattern as KnowledgeConfig
     useEffect(() => {
         const loadData = async () => {
-            console.log('🚀 MODELCONFIG COMPONENT MOUNTED - Starting initialization...');
+            console.log('MOUNT: ModelConfig');
             if (!isMountedRef.current) return;
             
             try {
@@ -282,6 +282,7 @@ function ModelConfig({ user }) {
     // Cleanup function to handle component unmount
     useEffect(() => {
         return () => {
+            console.log('UNMOUNT: ModelConfig');
             isMountedRef.current = false;
         };
     }, []);

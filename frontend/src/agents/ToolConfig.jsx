@@ -204,7 +204,7 @@ function ToolConfig({ user }) {
     // Use exact same pattern as KnowledgeConfig
     useEffect(() => {
         const loadData = async () => {
-            console.log('🚀 TOOLCONFIG COMPONENT MOUNTED - Starting initialization...');
+            console.log('MOUNT: ToolConfig');
             if (!isMountedRef.current) return;
             
             try {
@@ -228,6 +228,7 @@ function ToolConfig({ user }) {
     // Cleanup function to handle component unmount
     useEffect(() => {
         return () => {
+            console.log('UNMOUNT: ToolConfig');
             isMountedRef.current = false;
         };
     }, []);
