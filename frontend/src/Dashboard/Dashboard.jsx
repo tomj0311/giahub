@@ -217,7 +217,8 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			const isSectionSelected = item.children?.some((child) =>
 				location.pathname === child.to || location.pathname.startsWith(child.to)
 			)
-			const isExpanded = expandedSections[item.label] || false
+			// Force all sections to be expanded
+			const isExpanded = true
 			const ExpandIcon = isExpanded ? ChevronUp : ChevronDown
 			const Icon = getIconComponent(item.icon)
 
