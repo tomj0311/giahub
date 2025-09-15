@@ -20,8 +20,9 @@ from spiffworkflow.bpmn.workflow import BpmnWorkflow
 from spiffworkflow.bpmn.serializer import BpmnWorkflowSerializer
 from spiffworkflow.task import TaskState
 import redis
+from lxml import etree
 
-from ..utils.log import logger
+from backend.src.utils.log import logger
 
 
 class WorkflowService:
@@ -198,7 +199,6 @@ class WorkflowService:
         wf = BpmnWorkflow(spec)
         if initial_data:
             wf.data.update(initial_data)
-        wf.initialize()
         
         instance_id = str(uuid.uuid4())
         serialized = self.serializer.to_dict(wf)
@@ -225,12 +225,10 @@ class WorkflowService:
                 "type": task.task_spec.__class__.__name__,
                 "state": task.state.value if hasattr(task.state, 'value') else str(task.state)
             }
-            for task in wf.get_ready_tasks()
+            for task in wf.get_tasks(state=TaskState.READY)
         ]
         
         status = "completed" if wf.is_completed() else "running"
-        if wf.is_error():
-            status = "error"
         
         return {
             "instance_id": instance_id,
@@ -239,14 +237,25 @@ class WorkflowService:
             "data": dict(wf.data)
         }
     
-    def run_workflow_sync(self, instance_id: str, max_steps: Optional[int] = None) -> Dict[str, Any]:
+    def run_workflow_sync(self, instance_id: str) -> Dict[str, Any]:
         """Run workflow synchronously with persistence"""
         serialized = self._get_workflow(instance_id)
         if not serialized:
             raise HTTPException(status_code=404, detail="Workflow instance not found")
         
         wf = self.serializer.from_dict(json.loads(serialized))
-        steps = wf.do_engine_steps(max_steps=max_steps or 100)
+        
+        # Count initial ready tasks to estimate steps
+        initial_ready_count = len(wf.get_tasks(state=TaskState.READY))
+        
+        # Execute engine steps (note: do_engine_steps doesn't return step count)
+        wf.do_engine_steps()
+        
+        # Count final ready tasks to estimate steps executed
+        final_ready_count = len(wf.get_tasks(state=TaskState.READY))
+        
+        # Estimate steps as difference in ready tasks (rough approximation)
+        estimated_steps = max(0, initial_ready_count - final_ready_count + (1 if wf.is_completed() else 0))
         
         # Store updated workflow state
         serialized = self.serializer.to_dict(wf)
@@ -255,11 +264,11 @@ class WorkflowService:
         # Extend TTL for active workflows
         self._extend_workflow_ttl(instance_id)
         
-        logger.info(f"[WORKFLOW] Ran {steps} steps for workflow {instance_id}")
+        logger.info(f"[WORKFLOW] Ran {estimated_steps} steps for workflow {instance_id}")
         return {
-            "steps_executed": steps,
+            "steps_executed": estimated_steps,
             "is_completed": wf.is_completed(),
-            "ready_tasks": [str(t.id) for t in wf.get_ready_tasks()]
+            "ready_tasks": [str(t.id) for t in wf.get_tasks(state=TaskState.READY)]
         }
     
     def stop_workflow(self, instance_id: str):
@@ -322,10 +331,27 @@ class WorkflowService:
         try:
             content = file.file.read()
             parser = BpmnParser()
-            parser.add_bpmn_xml(content, filename=file.filename)
-            spec = parser.find_process_spec_by_name(workflow_name)
-            if not spec:
-                raise HTTPException(status_code=400, detail="Invalid BPMN or workflow name")
+            # Use bytes content directly with etree.fromstring to handle XML declarations properly
+            if isinstance(content, str):
+                content = content.encode('utf-8')
+            # Parse XML from bytes and pass to add_bpmn_xml
+            xml_element = etree.fromstring(content)
+            parser.add_bpmn_xml(xml_element, filename=file.filename)
+            
+            # Get available process IDs and find the requested spec
+            process_ids = parser.get_process_ids()
+            if not process_ids:
+                raise HTTPException(status_code=400, detail="No executable processes found in BPMN file")
+            
+            spec = None
+            if workflow_name in process_ids:
+                spec = parser.get_spec(workflow_name)
+            else:
+                # If the requested workflow name is not found, list available ones
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Workflow '{workflow_name}' not found. Available processes: {', '.join(process_ids)}"
+                )
             
             # Store spec in memory for immediate use
             self.specs[workflow_name] = spec
@@ -587,14 +613,26 @@ class WorkflowService:
                 with open(bpmn_file_path, 'rb') as bpmn_file:
                     bpmn_content = bpmn_file.read()
                 
-                # Use a special version of upload_bpmn that accepts raw content
+                # Parse XML from bytes to handle XML declarations properly
                 parser = BpmnParser()
-                parser.add_bpmn_xml(bpmn_content, filename=bpmn_file_path)
-                spec = parser.find_process_spec_by_name(workflow_name)
-                if not spec:
-                    # Try with the default process name from the BPMN file
-                    spec = parser.get_spec(parser.get_process_id())
-                    workflow_name = spec.name
+                xml_element = etree.fromstring(bpmn_content)
+                parser.add_bpmn_xml(xml_element, filename=bpmn_file_path)
+                
+                # Get the first available process spec
+                process_ids = parser.get_process_ids()
+                if not process_ids:
+                    raise Exception("No executable processes found in BPMN file")
+                
+                # Try to get spec by the given workflow name first, then fall back to first available
+                spec = None
+                if workflow_name in process_ids:
+                    spec = parser.get_spec(workflow_name)
+                    workflow_name_to_use = workflow_name
+                else:
+                    # Use the first process ID found
+                    workflow_name_to_use = process_ids[0]
+                    spec = parser.get_spec(workflow_name_to_use)
+                    workflow_name = workflow_name_to_use  # Update workflow_name for subsequent use
                 
                 # Store spec in memory for immediate use
                 self.specs[workflow_name] = spec
