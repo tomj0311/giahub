@@ -205,3 +205,25 @@ async def get_workflow_metrics(
     except Exception as e:
         logger.error(f"[WORKFLOW] Error getting metrics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/redis/all")
+async def list_all_redis_workflows_by_tenant(
+    service: WorkflowService = Depends(get_workflow_service),
+    current_user: dict = Depends(verify_token_middleware)
+):
+    """NEW: List ALL workflows stored in Redis for current user's tenant"""
+    try:
+        # Extract tenant_id from JWT token payload
+        tenant_id = current_user.get('tenant_id') or current_user.get('tenantId') or 'default-tenant'
+        logger.info(f"[WORKFLOW] Listing ALL Redis workflows for tenant: {tenant_id} (from user: {current_user.get('email', 'unknown')})")
+        workflows = service.list_all_redis_workflows_by_tenant(tenant_id)
+        return {
+            "success": True,
+            "tenant_id": tenant_id,
+            "workflows": workflows,
+            "count": len(workflows)
+        }
+    except Exception as e:
+        logger.error(f"[WORKFLOW] Error listing Redis workflows: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

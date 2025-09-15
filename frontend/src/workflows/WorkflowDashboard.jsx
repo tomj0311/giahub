@@ -139,13 +139,31 @@ function WorkflowCard({ workflow, onEdit, onRun }) {
 export default function WorkflowDashboard({ user }) {
   const theme = useTheme()
   const navigate = useNavigate()
+  
+  // Add render logging to track what's causing re-renders
+  console.log('🔄 WorkflowDashboard RENDER', { 
+      userToken: user?.token?.substring(0, 10) + '...', 
+      timestamp: Date.now() 
+  });
+  
+  // Use the user token from props (same pattern as other dashboard components)
+  const token = user?.token;
+
+  // Add ref to track if component is mounted
+  const isMountedRef = useRef(true);
+  const isLoadingRef = useRef(false);
+  
+  // Create a ref to store the current token to avoid useCallback dependency issues
+  const tokenRef = useRef(token);
+  tokenRef.current = token;
+  
   const [loading, setLoading] = useState(true)
   const [workflows, setWorkflows] = useState([])
   const [displayedWorkflows, setDisplayedWorkflows] = useState([])
 
-  // Add ref to track if component is mounted
-  const isMountedRef = useRef(true)
-  const isLoadingRef = useRef(false)
+  // NEW: All workflows from Redis for current tenant - SEPARATE LOGIC
+  const [allRedisWorkflows, setAllRedisWorkflows] = useState([])
+  const [redisWorkflowsLoading, setRedisWorkflowsLoading] = useState(false)
 
   // Pagination state
   const [pagination, setPagination] = useState({
@@ -158,9 +176,10 @@ export default function WorkflowDashboard({ user }) {
   })
 
   useEffect(() => {
-    console.log('MOUNT: WorkflowDashboard');
-    console.log('🔍 USER PROP:', user);
-    console.log('🔍 USER TOKEN:', user?.token?.substring(0, 10) + '...');
+    console.log('MOUNT: WorkflowDashboard', 'Token:', token?.substring(0, 10) + '...', 'User:', user);
+    console.log('🔍 USER TENANT_ID:', user?.tenant_id);
+    console.log('🔍 USER TENANTID:', user?.tenantId);
+    console.log('🔍 USER ALL KEYS:', Object.keys(user || {}));
     
     // Set mounted to true
     isMountedRef.current = true;
@@ -181,19 +200,17 @@ export default function WorkflowDashboard({ user }) {
         // Fetch workflows with pagination - use singleton service
         const workflowsUrl = `/api/workflows/configs?page=${pagination.page}&page_size=${pagination.page_size}`
         console.log('🔍 FETCHING WORKFLOWS URL:', workflowsUrl);
-        console.log('🔍 WITH TOKEN:', user?.token ? 'YES' : 'NO');
+        console.log('🔍 WITH TOKEN:', tokenRef.current ? 'YES' : 'NO');
         
         const workflowsResult = await sharedApiService.makeRequest(
           workflowsUrl,
           {
-            headers: {
-              ...(user?.token ? { 'Authorization': `Bearer ${user?.token}` } : {})
-            }
+            headers: tokenRef.current ? { 'Authorization': `Bearer ${tokenRef.current}` } : {}
           },
           {
             page: pagination.page,
             pageSize: pagination.page_size,
-            token: user?.token?.substring(0, 10)
+            token: tokenRef.current?.substring(0, 10)
           }
         );
 
@@ -236,13 +253,66 @@ export default function WorkflowDashboard({ user }) {
 
     fetchWorkflowData()
     
+    // NEW: Fetch ALL workflows from Redis for current tenant - SEPARATE FUNCTION
+    const fetchAllRedisWorkflows = async () => {
+      if (!isMountedRef.current) return;
+      
+      try {
+        setRedisWorkflowsLoading(true)
+        
+        // Fetch ALL workflows from Redis for current tenant (backend gets tenant from JWT)
+        const redisUrl = `/api/workflows/redis/all`
+        console.log('🔍 FETCHING ALL REDIS WORKFLOWS URL:', redisUrl);
+        
+        const redisResult = await sharedApiService.makeRequest(
+          redisUrl,
+          {
+            headers: tokenRef.current ? { 'Authorization': `Bearer ${tokenRef.current}` } : {}
+          },
+          {
+            token: tokenRef.current?.substring(0, 10)
+          }
+        );
+
+        console.log('🔍 REDIS WORKFLOWS API RESPONSE:', redisResult.success ? 'SUCCESS' : 'FAILED')
+        console.log('🔍 REDIS FULL RESPONSE:', redisResult);
+
+        if (!isMountedRef.current) {
+          console.log('🚫 Component unmounted, aborting Redis workflow data load');
+          return;
+        }
+
+        if (redisResult.success) {
+          const redisWorkflowsData = redisResult.data
+          console.log('📄 REDIS WORKFLOWS DATA:', redisWorkflowsData)
+          const redisWorkflowsList = redisWorkflowsData.workflows || []
+
+          console.log('📋 REDIS WORKFLOWS LIST:', redisWorkflowsList)
+          setAllRedisWorkflows(redisWorkflowsList)
+        } else {
+          console.log('❌ REDIS WORKFLOWS API FAILED:', redisResult.error)
+          console.log('❌ REDIS ERROR DETAILS:', redisResult)
+        }
+
+      } catch (error) {
+        console.error('Failed to fetch Redis workflow data:', error)
+        setAllRedisWorkflows([])
+      } finally {
+        if (isMountedRef.current) {
+          setRedisWorkflowsLoading(false)
+        }
+      }
+    }
+
+    fetchAllRedisWorkflows()
+    
     return () => {
       console.log('UNMOUNT: WorkflowDashboard');
       // Set mounted to false FIRST to prevent any state updates
       isMountedRef.current = false;
       isLoadingRef.current = false;
     };
-  }, []) // EMPTY DEPENDENCIES
+  }, []); // EMPTY DEPENDENCIES - NO BULLSHIT
 
   const handleShowMore = () => {
     if (pagination.has_next) {
@@ -391,6 +461,51 @@ export default function WorkflowDashboard({ user }) {
               </Box>
             )}
           </>
+        )}
+      </Box>
+
+      {/* NEW: All Redis Workflows Section - SEPARATE SECTION */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
+          All Workflows in Redis (Tenant: {user?.tenant_id || user?.tenantId || 'default-tenant'})
+        </Typography>
+
+        {redisWorkflowsLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+            <CircularProgress size={32} />
+            <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+              Loading Redis workflows...
+            </Typography>
+          </Box>
+        ) : allRedisWorkflows.length === 0 ? (
+          <Paper sx={{ 
+            p: 4, 
+            textAlign: 'center',
+            background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.95)})`,
+            backdropFilter: 'blur(10px)',
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            borderRadius: 3
+          }}>
+            <Settings size={48} color={theme.palette.text.secondary} style={{ marginBottom: 16 }} />
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              No workflows found in Redis
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              No workflows stored in Redis for tenant: {user?.tenant_id || user?.tenantId || 'default-tenant'}
+            </Typography>
+          </Paper>
+        ) : (
+          <Grid container spacing={3}>
+            {allRedisWorkflows.map((workflow, index) => (
+              <Grid item xs={12} sm={6} md={4} lg={3} key={workflow.id || `redis-workflow-${index}`}>
+                <WorkflowCard
+                  workflow={workflow}
+                  onEdit={handleEditWorkflow}
+                  onRun={handleRunWorkflow}
+                />
+              </Grid>
+            ))}
+          </Grid>
         )}
       </Box>
     </Box>

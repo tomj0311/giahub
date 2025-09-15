@@ -105,6 +105,7 @@ class WorkflowService:
                 # Set with TTL for automatic cleanup (default 24 hours)
                 ttl_seconds = ttl_hours * 3600
                 self.redis.setex(f"workflow:{instance_id}", ttl_seconds, workflow_data)
+                logger.info(f"[WORKFLOW] Successfully uploaded workflow {instance_id} to Redis with {ttl_hours}h TTL")
                 logger.debug(f"[WORKFLOW] Stored workflow {instance_id} with {ttl_hours}h TTL")
             except Exception as e:
                 logger.error(f"[WORKFLOW] Failed to store workflow in Redis: {e}")
@@ -328,6 +329,7 @@ class WorkflowService:
             if self.redis:
                 try:
                     self.redis.set(f"spec:{workflow_name}", content.decode('utf-8'))
+                    logger.info(f"[WORKFLOW] Successfully uploaded BPMN spec for {workflow_name} to Redis")
                     logger.info(f"[WORKFLOW] Stored BPMN spec for {workflow_name} in Redis")
                 except Exception as e:
                     logger.error(f"[WORKFLOW] Failed to store BPMN spec in Redis: {e}")
@@ -338,3 +340,85 @@ class WorkflowService:
         except Exception as e:
             logger.error(f"[WORKFLOW] Error processing BPMN file: {e}")
             raise HTTPException(status_code=400, detail=f"Invalid BPMN file: {e}")
+    
+    def store_workflow_config(self, config_data: Dict[str, Any]) -> bool:
+        """Store complete workflow configuration document to Redis"""
+        if not self.redis:
+            logger.warning("[WORKFLOW] Redis not available, cannot store config")
+            return False
+        
+        try:
+            workflow_name = config_data.get("name", "unknown_workflow")
+            self.redis.set(f"config:{workflow_name}", json.dumps(config_data))
+            logger.info(f"[WORKFLOW] Successfully stored complete workflow config {workflow_name} to Redis with user {config_data.get('userName')} and tenant {config_data.get('tenantId')}")
+            return True
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Failed to store workflow config to Redis: {e}")
+            return False
+    
+    def list_all_redis_workflows_by_tenant(self, tenant_id: str) -> List[Dict[str, Any]]:
+        """NEW: List ALL workflows stored in Redis for a specific tenant"""
+        logger.info(f"[WORKFLOW] Listing ALL Redis workflows for tenant: {tenant_id}")
+        
+        if not self.redis:
+            logger.warning("[WORKFLOW] Redis not available, returning empty list")
+            return []
+        
+        try:
+            # Get all workflow keys from Redis - check both workflow: and config: keys
+            workflow_keys = self.redis.keys("workflow:*")
+            config_keys = self.redis.keys("config:*")
+            all_keys = workflow_keys + config_keys
+            workflows = []
+            
+            for key in all_keys:
+                try:
+                    workflow_data = self.redis.get(key)
+                    if workflow_data:
+                        workflow_dict = json.loads(workflow_data)
+                        
+                        if key.startswith("config:"):
+                            # Handle config keys - data is stored directly
+                            workflow_info = {
+                                "id": workflow_dict.get("id", key.replace("config:", "")),
+                                "redis_key": key,
+                                "tenant_id": workflow_dict.get("tenantId", "unknown"),
+                                "name": workflow_dict.get("name", "Unknown Workflow"),
+                                "description": workflow_dict.get("description", "No description"),
+                                "category": workflow_dict.get("category", "general"),
+                                "is_active": workflow_dict.get("is_active", True),
+                                "type": "workflow_config",
+                                "status": "stored_in_redis",
+                                "created_at": workflow_dict.get("createdAt", "unknown"),
+                                "bpmn_filename": workflow_dict.get("workflowFileName", workflow_dict.get("bpmn_filename", "no_file.bpmn"))
+                            }
+                        else:
+                            # Handle workflow keys - legacy format
+                            workflow_info = {
+                                "id": key.replace("workflow:", ""),
+                                "redis_key": key,
+                                "tenant_id": workflow_dict.get("data", {}).get("tenant_id", "unknown"),
+                                "name": workflow_dict.get("spec", {}).get("name", "Unknown Workflow"),
+                                "description": workflow_dict.get("data", {}).get("description", "No description"),
+                                "category": workflow_dict.get("data", {}).get("category", "general"),
+                                "is_active": True,  # Assume active if in Redis
+                                "type": "redis_workflow",
+                                "status": "stored_in_redis",
+                                "created_at": workflow_dict.get("data", {}).get("created_at", "unknown"),
+                                "bpmn_filename": workflow_dict.get("data", {}).get("bpmn_filename", "redis_stored.bpmn")
+                            }
+                        
+                        # Only include workflows for the specified tenant
+                        if workflow_info["tenant_id"] == tenant_id:
+                            workflows.append(workflow_info)
+                            
+                except Exception as e:
+                    logger.error(f"[WORKFLOW] Error processing Redis workflow {key}: {e}")
+                    continue
+            
+            logger.info(f"[WORKFLOW] Found {len(workflows)} Redis workflows for tenant {tenant_id}")
+            return workflows
+            
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Error listing Redis workflows for tenant {tenant_id}: {e}")
+            return []
