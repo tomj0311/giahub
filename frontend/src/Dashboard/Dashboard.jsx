@@ -737,7 +737,7 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="analytics" element={<Analytics />} />
 				<Route path="workflows" element={<WorkflowConfig user={user} />} />
 				<Route path="bpmn" element={<BPMNEditorWrapper />} />
-				<Route path="monitor" element={<WorkflowDashboard />} />
+				<Route path="monitor" element={<WorkflowDashboard user={user} />} />
 				<Route path="manage" element={<BPMN initialTheme={themeKey === 'aurora' ? 'dark' : themeKey === 'ocean' ? 'light' : 'auto'} key={themeKey} style={{ width: '100%', minHeight: '70vh', borderRadius: 8, overflow: 'hidden' }} />} />
 				<Route path="tenants" element={<div>Tenants - Coming Soon</div>} />
 				<Route path="help" element={<div>Help & Support - Coming Soon</div>} />

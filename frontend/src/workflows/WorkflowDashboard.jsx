@@ -1,275 +1,292 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
+  Button,
   Card,
   CardContent,
-  Button,
-  TextField,
+  CardActions,
   Grid,
+  CircularProgress,
   Paper,
   Chip,
-  CircularProgress,
-  alpha,
-  useTheme,
+  Avatar,
   IconButton,
-  Divider,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions
-} from '@mui/material'
+  alpha,
+  useTheme
+} from '@mui/material';
 import {
-  Play,
-  Square,
-  Upload,
-  Activity,
+  Plus,
+  Settings,
+  ArrowLeft,
+  ArrowRight,
+  Edit,
   FileText,
-  Settings
-} from 'lucide-react'
-import WorkflowConfig from './WorkflowConfig'
+  Bot
+} from 'lucide-react';
+import sharedApiService from '../utils/apiService';
 
-const WorkflowDashboard = () => {
+function WorkflowCard({ workflow, onEdit, onRun }) {
   const theme = useTheme()
-  const [workflows, setWorkflows] = useState([]);
-  const [selectedWorkflow, setSelectedWorkflow] = useState(null);
-  const [tasks, setTasks] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [newWorkflowName, setNewWorkflowName] = useState('');
-  const [instanceId, setInstanceId] = useState('');
-  const [runningInstances, setRunningInstances] = useState([]);
-  const [configDialogOpen, setConfigDialogOpen] = useState(false);
 
-  // Helpers to persist instance IDs locally (simple, no backend list yet)
-  const getSavedInstanceIds = () => {
-    try {
-      const raw = localStorage.getItem('workflow_instances');
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
+  const getStatusColor = (category) => {
+    switch (category?.toLowerCase()) {
+      case 'business process': return 'primary'
+      case 'automation': return 'secondary'
+      case 'integration': return 'success'
+      case 'analytics': return 'info'
+      default: return 'default'
     }
-  };
-  const saveInstanceIds = (ids) => {
-    localStorage.setItem('workflow_instances', JSON.stringify(ids));
-  };
+  }
 
-  // Start a new workflow
-  const startWorkflow = async (workflowName, initialData = {}) => {
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/workflow/workflows/${encodeURIComponent(workflowName)}/start`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ initial_data: initialData })
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        const id = data.instance_id;
-        alert(`Workflow started with ID: ${id}`);
-        // persist instance id and refresh list
-        const ids = getSavedInstanceIds();
-        if (!ids.includes(id)) {
-          ids.push(id);
-          saveInstanceIds(ids);
-        }
-        await refreshRunningInstances();
-      } else {
-        alert('Failed to start workflow');
-      }
-    } catch (error) {
-      alert('Error starting workflow: ' + error.message);
-    }
-    setIsLoading(false);
-  };
+  const getAvatarText = (name) => {
+    return name ? name.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2) : 'WF'
+  }
 
-  // Get workflow status
-  const getWorkflowStatus = async (instanceId) => {
-    try {
-      const response = await fetch(`/api/workflow/workflows/${instanceId}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setSelectedWorkflow(data);
-        setTasks(data.ready_tasks || []);
-      }
-    } catch (error) {
-      console.error('Error getting workflow status:', error);
-    }
-  };
+  return (
+    <Card sx={{ 
+      height: '100%', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      position: 'relative',
+      transition: theme.transitions.create(['transform', 'box-shadow'], {
+        duration: theme.transitions.duration.short,
+      }),
+      '&:hover': {
+        transform: 'translateY(-4px)',
+        boxShadow: theme.shadows[8],
+      },
+      border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+      background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.95)})`,
+      backdropFilter: 'blur(10px)'
+    }}>
+      <CardContent sx={{ flexGrow: 1, p: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+          <Avatar
+            sx={{
+              bgcolor: `${getStatusColor(workflow.category)}.main`,
+              width: 48,
+              height: 48,
+              fontSize: '1rem',
+              boxShadow: theme.shadows[2]
+            }}
+          >
+            {getAvatarText(workflow.name)}
+          </Avatar>
+          <IconButton 
+            size="small" 
+            onClick={(e) => { e.stopPropagation(); onEdit(workflow); }}
+            sx={{ 
+              bgcolor: alpha(theme.palette.action.selected, 0.05),
+              '&:hover': { bgcolor: alpha(theme.palette.action.selected, 0.1) }
+            }}
+          >
+            <Edit size={16} />
+          </IconButton>
+        </Box>
 
-  // Complete a task
-  const completeTask = async (instanceId, taskId, taskData = {}) => {
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/workflow/workflows/${instanceId}/tasks/${taskId}/complete`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ data: taskData })
-      });
-      
-      if (response.ok) {
-        alert('Task completed successfully');
-        getWorkflowStatus(instanceId);
-      } else {
-        alert('Failed to complete task');
-      }
-    } catch (error) {
-      alert('Error completing task: ' + error.message);
-    }
-    setIsLoading(false);
-  };
+        <Typography variant="h6" fontWeight="bold" gutterBottom noWrap sx={{ mb: 1 }}>
+          {workflow.name || 'Unnamed Workflow'}
+        </Typography>
 
-  // Run workflow
-  const runWorkflow = async (instanceId, maxSteps = null) => {
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/workflow/workflows/${instanceId}/run`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ max_steps: maxSteps })
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        alert('Workflow executed');
-        getWorkflowStatus(instanceId);
-      } else {
-        alert('Failed to run workflow');
-      }
-    } catch (error) {
-      alert('Error running workflow: ' + error.message);
-    }
-    setIsLoading(false);
-  };
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, minHeight: 40, lineHeight: 1.4 }}>
+          {workflow.description || 'No description available'}
+        </Typography>
 
-  // Stop workflow
-  const stopWorkflow = async (instanceId) => {
-    if (!confirm('Are you sure you want to stop this workflow?')) return;
-    
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/workflow/workflows/${instanceId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (response.ok) {
-        alert('Workflow stopped');
-        setSelectedWorkflow(null);
-        setTasks([]);
-        // remove from local list
-        const ids = getSavedInstanceIds().filter(id => id !== instanceId);
-        saveInstanceIds(ids);
-        await refreshRunningInstances();
-      } else {
-        alert('Failed to stop workflow');
-      }
-    } catch (error) {
-      alert('Error stopping workflow: ' + error.message);
-    }
-    setIsLoading(false);
-  };
+        {workflow.category && (
+          <Chip
+            label={workflow.category}
+            size="small"
+            color={getStatusColor(workflow.category)}
+            variant="outlined"
+            sx={{ mb: 2 }}
+          />
+        )}
 
-  // Upload BPMN file
-  const uploadBpmn = async (file, workflowName) => {
-    setIsLoading(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('workflow_name', workflowName);
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+          <FileText size={14} color={theme.palette.text.secondary} />
+          <Typography variant="caption" color="text.secondary">
+            {workflow.bpmn_filename || 'No BPMN file'}
+          </Typography>
+        </Box>
 
-      const response = await fetch('/api/workflow/bpmn/upload', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        alert(`BPMN uploaded successfully for workflow: ${data.workflow_name}`);
-      } else {
-        alert('Failed to upload BPMN');
-      }
-    } catch (error) {
-      alert('Error uploading BPMN: ' + error.message);
-    }
-    setIsLoading(false);
-  };
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+          <Settings size={14} color={theme.palette.text.secondary} />
+          <Typography variant="caption" color="text.secondary">
+            {workflow.is_active ? 'Active' : 'Inactive'} • Type: {workflow.type || 'workflowConfig'}
+          </Typography>
+        </Box>
+      </CardContent>
 
-  // Load available workflow configurations (tiles)
-  const loadWorkflows = async () => {
-    try {
-      const params = new URLSearchParams({ page: '1', page_size: '12', sort_by: 'name', sort_order: 'asc' });
-      const resp = await fetch(`/api/workflows/configs?${params.toString()}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        setWorkflows(data.configurations || []);
-      }
-    } catch (e) {
-      console.error('Failed to load workflows', e);
-    }
-  };
+      <CardActions sx={{ pt: 0, p: 3, justifyContent: 'center' }}>
+        <Button
+          size="medium"
+          color="primary"
+          startIcon={<Bot size={16} />}
+          onClick={() => onRun(workflow)}
+          fullWidth
+          variant="contained"
+          sx={{ borderRadius: 2 }}
+        >
+          Run
+        </Button>
+      </CardActions>
+    </Card>
+  )
+}
 
-  // Refresh running instances by checking saved IDs, keep only non-completed
-  const refreshRunningInstances = async () => {
-    const ids = getSavedInstanceIds();
-    if (ids.length === 0) { setRunningInstances([]); return; }
-    try {
-      const results = await Promise.allSettled(ids.map(async (id) => {
-        const resp = await fetch(`/api/workflow/workflows/${id}`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-        if (!resp.ok) throw new Error('not found');
-        const data = await resp.json();
-        return data;
-      }));
-      const active = results
-        .filter(r => r.status === 'fulfilled')
-        .map(r => r.value)
-        .filter(wf => wf.status && wf.status !== 'completed');
-      setRunningInstances(active);
-      saveInstanceIds(active.map(wf => wf.instance_id));
-    } catch (e) {
-      console.error('Failed to refresh instances', e);
-    }
-  };
+export default function WorkflowDashboard({ user }) {
+  const theme = useTheme()
+  const navigate = useNavigate()
+  const [loading, setLoading] = useState(true)
+  const [workflows, setWorkflows] = useState([])
+  const [displayedWorkflows, setDisplayedWorkflows] = useState([])
+
+  // Add ref to track if component is mounted
+  const isMountedRef = useRef(true)
+  const isLoadingRef = useRef(false)
+
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    page: 1,
+    page_size: 8,
+    total: 0,
+    total_pages: 0,
+    has_next: false,
+    has_prev: false
+  })
 
   useEffect(() => {
-    loadWorkflows();
-    refreshRunningInstances();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    console.log('MOUNT: WorkflowDashboard');
+    console.log('🔍 USER PROP:', user);
+    console.log('🔍 USER TOKEN:', user?.token?.substring(0, 10) + '...');
+    
+    // Set mounted to true
+    isMountedRef.current = true;
+    
+    const fetchWorkflowData = async () => {
+      if (!isMountedRef.current) return;
+      
+      // Prevent duplicate calls
+      if (isLoadingRef.current) {
+        console.log('🚫 Already loading workflow data, skipping duplicate call');
+        return;
+      }
+      
+      try {
+        isLoadingRef.current = true;
+        setLoading(true)
 
-  const handleFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (file && newWorkflowName) {
-      uploadBpmn(file, newWorkflowName);
-    } else {
-      alert('Please enter workflow name and select a file');
+        // Fetch workflows with pagination - use singleton service
+        const workflowsUrl = `/api/workflows/configs?page=${pagination.page}&page_size=${pagination.page_size}`
+        console.log('🔍 FETCHING WORKFLOWS URL:', workflowsUrl);
+        console.log('🔍 WITH TOKEN:', user?.token ? 'YES' : 'NO');
+        
+        const workflowsResult = await sharedApiService.makeRequest(
+          workflowsUrl,
+          {
+            headers: {
+              ...(user?.token ? { 'Authorization': `Bearer ${user?.token}` } : {})
+            }
+          },
+          {
+            page: pagination.page,
+            pageSize: pagination.page_size,
+            token: user?.token?.substring(0, 10)
+          }
+        );
+
+        console.log('🔍 WORKFLOWS API RESPONSE:', workflowsResult.success ? 'SUCCESS' : 'FAILED')
+        console.log('🔍 FULL RESPONSE:', workflowsResult);
+
+        if (!isMountedRef.current) {
+          console.log('🚫 Component unmounted, aborting workflow data load');
+          return;
+        }
+
+        if (workflowsResult.success) {
+          const workflowsData = workflowsResult.data
+          console.log('📄 WORKFLOWS DATA:', workflowsData)
+          const workflowsList = workflowsData.configurations || []
+          const paginationData = workflowsData.pagination || {}
+
+          console.log('📋 WORKFLOWS LIST:', workflowsList)
+          console.log('📊 PAGINATION:', paginationData)
+
+          setWorkflows(workflowsList)
+          setDisplayedWorkflows(workflowsList)
+          setPagination(paginationData)
+        } else {
+          console.log('❌ WORKFLOWS API FAILED:', workflowsResult.error)
+          console.log('❌ ERROR DETAILS:', workflowsResult)
+        }
+
+      } catch (error) {
+        console.error('Failed to fetch workflow data:', error)
+        setWorkflows([])
+        setDisplayedWorkflows([])
+      } finally {
+        if (isMountedRef.current) {
+          setLoading(false)
+          isLoadingRef.current = false
+        }
+      }
     }
-  };
+
+    fetchWorkflowData()
+    
+    return () => {
+      console.log('UNMOUNT: WorkflowDashboard');
+      // Set mounted to false FIRST to prevent any state updates
+      isMountedRef.current = false;
+      isLoadingRef.current = false;
+    };
+  }, []) // EMPTY DEPENDENCIES
+
+  const handleShowMore = () => {
+    if (pagination.has_next) {
+      setPagination(prev => ({ ...prev, page: prev.page + 1 }))
+    }
+  }
+
+  const handleShowLess = () => {
+    if (pagination.has_prev) {
+      setPagination(prev => ({ ...prev, page: prev.page - 1 }))
+    }
+  }
+
+  const handleEditWorkflow = (workflow) => {
+    // Navigate to workflow configuration page
+    navigate('/dashboard/workflows')
+  }
+
+  const handleRunWorkflow = (workflow) => {
+    // Navigate to workflow execution page with workflow ID
+    navigate(`/dashboard/workflow-execution?workflow=${workflow.id}`)
+  }
+
+  const handleCreateWorkflow = () => {
+    navigate('/dashboard/workflows')
+  }
+
+  if (loading) {
+    return (
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: 'column',
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        minHeight: '60vh',
+        p: 3
+      }}>
+        <CircularProgress size={48} sx={{ mb: 2 }} />
+        <Typography variant="body1" color="text.secondary">
+          Loading workflows...
+        </Typography>
+      </Box>
+    )
+  }
 
   return (
     <Box sx={{ 
@@ -277,346 +294,105 @@ const WorkflowDashboard = () => {
       background: theme.custom?.backgroundGradient || theme.palette.background.default,
       minHeight: '100vh'
     }}>
-      {/* Header Section */}
+      {/* Welcome Section */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold' }}>
           Workflow Dashboard 🔄
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Monitor and manage your BPMN workflows and process instances.
+          Manage your BPMN workflows and process configurations.
         </Typography>
-        {isLoading && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2 }}>
-            <CircularProgress size={20} />
-            <Typography variant="body2" color="text.secondary">
-              Loading...
-            </Typography>
-          </Box>
-        )}
       </Box>
 
-      <Grid container spacing={3}>
-        {/* Available Workflows Section */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{ 
-            height: '100%',
-            background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.95)})`,
-            backdropFilter: 'blur(10px)',
-            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`
-          }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Typography variant="h6" fontWeight="bold">
-                  Available Workflows
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Button size="small" variant="outlined" onClick={() => setConfigDialogOpen(true)}>Create Workflow</Button>
-                  <Play size={20} color={theme.palette.primary.main} />
-                </Box>
-              </Box>
-              <Grid container spacing={2}>
-                {workflows.length === 0 ? (
-                  <Grid item xs={12}>
-                    <Typography variant="body2" color="text.secondary">No workflows found. Upload BPMN to create one.</Typography>
-                  </Grid>
-                ) : (
-                  workflows.map((wf) => (
-                    <Grid item xs={12} key={wf.id}>
-                      <Card variant="outlined" sx={{ borderRadius: 2 }}>
-                        <CardContent>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Box>
-                              <Typography variant="subtitle1" fontWeight="bold">{wf.name}</Typography>
-                              {wf.category && (
-                                <Chip size="small" label={wf.category} sx={{ mt: 0.5 }} />
-                              )}
-                              {wf.description && (
-                                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>{wf.description}</Typography>
-                              )}
-                            </Box>
-                            <Button 
-                              variant="contained" 
-                              startIcon={<Play size={16} />} 
-                              onClick={() => startWorkflow(wf.name)}
-                              disabled={isLoading}
-                              sx={{ borderRadius: 2 }}
-                            >
-                              Start
-                            </Button>
-                          </Box>
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                  ))
-                )}
-              </Grid>
-            </CardContent>
-          </Card>
-        </Grid>
+      {/* Create Workflow Button */}
+      <Box sx={{ mb: 4 }}>
+        <Button
+          variant="contained"
+          color="primary"
+          size="large"
+          startIcon={<Plus size={20} />}
+          onClick={handleCreateWorkflow}
+          sx={{ borderRadius: 2, px: 3 }}
+        >
+          Create New Workflow
+        </Button>
+      </Box>
 
-        {/* Upload BPMN Section */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{ 
-            height: '100%',
+      {/* Workflow Cards Section */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
+          Your Workflows
+        </Typography>
+
+        {displayedWorkflows.length === 0 ? (
+          <Paper sx={{ 
+            p: 4, 
+            textAlign: 'center',
             background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.95)})`,
             backdropFilter: 'blur(10px)',
-            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            borderRadius: 3
           }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Typography variant="h6" fontWeight="bold">
-                  Upload BPMN
-                </Typography>
-                <Upload size={20} color={theme.palette.secondary.main} />
-              </Box>
-              <Box sx={{ display: 'flex', gap: 2, flexDirection: 'column' }}>
-                <TextField
-                  fullWidth
-                  label="Workflow Name for BPMN"
-                  value={newWorkflowName}
-                  onChange={(e) => setNewWorkflowName(e.target.value)}
-                  variant="outlined"
-                  size="small"
-                />
+            <FileText size={48} color={theme.palette.text.secondary} style={{ marginBottom: 16 }} />
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              No workflows created yet
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Create your first workflow to get started
+            </Typography>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<Plus size={16} />}
+              onClick={handleCreateWorkflow}
+              sx={{ borderRadius: 2 }}
+            >
+              Create Your First Workflow
+            </Button>
+          </Paper>
+        ) : (
+          <>
+            <Grid container spacing={3}>
+              {displayedWorkflows.map((workflow) => (
+                <Grid item xs={12} sm={6} md={4} lg={3} key={workflow.id}>
+                  <WorkflowCard
+                    workflow={workflow}
+                    onEdit={handleEditWorkflow}
+                    onRun={handleRunWorkflow}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+
+            {/* Pagination Controls */}
+            {pagination.total_pages > 1 && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 2, mt: 3 }}>
                 <Button
                   variant="outlined"
-                  component="label"
-                  startIcon={<Upload size={16} />}
-                  sx={{ borderRadius: 2 }}
+                  disabled={!pagination.has_prev}
+                  onClick={handleShowLess}
+                  startIcon={<ArrowLeft size={16} />}
                 >
-                  Choose BPMN File
-                  <input
-                    type="file"
-                    accept=".bpmn,.xml"
-                    onChange={handleFileUpload}
-                    hidden
-                  />
+                  Previous
                 </Button>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
 
-        {/* Running Instances Section */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{ 
-            height: '100%',
-            background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.95)})`,
-            backdropFilter: 'blur(10px)',
-            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`
-          }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Typography variant="h6" fontWeight="bold">
-                  Running Instances
+                <Typography variant="body2" color="text.secondary">
+                  Page {pagination.page} of {pagination.total_pages} ({pagination.total} total workflows)
                 </Typography>
-                <Activity size={20} color={theme.palette.info.main} />
-              </Box>
-              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                <TextField
-                  fullWidth
-                  label="Lookup Instance ID"
-                  value={instanceId}
-                  onChange={(e) => setInstanceId(e.target.value)}
+
+                <Button
                   variant="outlined"
-                  size="small"
-                />
-                <Button 
-                  variant="outlined"
-                  onClick={() => instanceId && getWorkflowStatus(instanceId)}
-                  disabled={!instanceId || isLoading}
-                  startIcon={<Activity size={16} />}
-                  sx={{ borderRadius: 2 }}
+                  disabled={!pagination.has_next}
+                  onClick={handleShowMore}
+                  endIcon={<ArrowRight size={16} />}
                 >
-                  View
-                </Button>
-                <Button 
-                  variant="contained"
-                  onClick={refreshRunningInstances}
-                  disabled={isLoading}
-                  sx={{ borderRadius: 2 }}
-                >
-                  Refresh
+                  Next
                 </Button>
               </Box>
-
-              {runningInstances.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">No running instances found.</Typography>
-              ) : (
-                <Grid container spacing={2}>
-                  {runningInstances.map((wf) => (
-                    <Grid item xs={12} key={wf.instance_id}>
-                      <Card variant="outlined" sx={{ borderRadius: 2 }}>
-                        <CardContent>
-                          <Grid container spacing={2} alignItems="center">
-                            <Grid item xs={12} sm={6}>
-                              <Typography variant="subtitle2" color="text.secondary">Instance</Typography>
-                              <Typography variant="body2" fontWeight="medium">{wf.instance_id}</Typography>
-                            </Grid>
-                            <Grid item xs={12} sm={3}>
-                              <Typography variant="subtitle2" color="text.secondary">Status</Typography>
-                              <Chip 
-                                label={wf.status}
-                                color={wf.status === 'completed' ? 'success' : wf.status === 'error' ? 'error' : 'primary'}
-                                size="small"
-                                variant="outlined"
-                              />
-                            </Grid>
-                            <Grid item xs={12} sm={3}>
-                              <Box sx={{ display: 'flex', gap: 1, justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
-                                <Button size="small" variant="contained" onClick={() => runWorkflow(wf.instance_id)} startIcon={<Play size={14} />}>
-                                  Run
-                                </Button>
-                                <Button size="small" color="error" variant="contained" onClick={() => stopWorkflow(wf.instance_id)} startIcon={<Square size={14} />}>
-                                  Stop
-                                </Button>
-                              </Box>
-                            </Grid>
-                          </Grid>
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                  ))}
-                </Grid>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Workflow Status Display */}
-        {selectedWorkflow && (
-          <Grid item xs={12}>
-            <Card sx={{ 
-              background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.95)})`,
-              backdropFilter: 'blur(10px)',
-              border: `1px solid ${alpha(theme.palette.divider, 0.1)}`
-            }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-                  <Typography variant="h6" fontWeight="bold">
-                    Workflow Status
-                  </Typography>
-                  <Settings size={20} color={theme.palette.primary.main} />
-                </Box>
-                
-                <Paper sx={{ 
-                  p: 2, 
-                  mb: 3,
-                  background: alpha(theme.palette.background.paper, 0.6),
-                  border: `1px solid ${alpha(theme.palette.divider, 0.1)}`
-                }}>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Instance ID
-                      </Typography>
-                      <Typography variant="body1" fontWeight="medium">
-                        {selectedWorkflow.instance_id}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Status
-                      </Typography>
-                      <Chip 
-                        label={selectedWorkflow.status}
-                        color={selectedWorkflow.status === 'completed' ? 'success' : 'primary'}
-                        variant="outlined"
-                        size="small"
-                      />
-                    </Grid>
-                  </Grid>
-                  
-                  <Divider sx={{ my: 2 }} />
-                  
-                  <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Button 
-                      variant="contained"
-                      color="success"
-                      onClick={() => runWorkflow(selectedWorkflow.instance_id)}
-                      startIcon={<Play size={16} />}
-                      sx={{ borderRadius: 2 }}
-                    >
-                      Run Workflow
-                    </Button>
-                    <Button 
-                      variant="contained"
-                      color="error"
-                      onClick={() => stopWorkflow(selectedWorkflow.instance_id)}
-                      startIcon={<Square size={16} />}
-                      sx={{ borderRadius: 2 }}
-                    >
-                      Stop Workflow
-                    </Button>
-                  </Box>
-                </Paper>
-
-                {/* Tasks Section */}
-                {tasks.length > 0 && (
-                  <Box>
-                    <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>
-                      Ready Tasks
-                    </Typography>
-                    <Grid container spacing={2}>
-                      {tasks.map((task, index) => (
-                        <Grid item xs={12} sm={6} md={4} key={index}>
-                          <Card sx={{ 
-                            background: alpha(theme.palette.background.paper, 0.4),
-                            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`
-                          }}>
-                            <CardContent>
-                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                                <Typography variant="body2" fontWeight="medium">
-                                  {task.name}
-                                </Typography>
-                                <FileText size={16} color={theme.palette.text.secondary} />
-                              </Box>
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                                ID: {task.task_id || task.id}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-                                Type: {task.type}
-                              </Typography>
-                              <Button 
-                                size="small"
-                                variant="contained"
-                                fullWidth
-                                onClick={() => completeTask(selectedWorkflow.instance_id, task.task_id || task.id)}
-                                sx={{ borderRadius: 1.5 }}
-                              >
-                                Complete Task
-                              </Button>
-                            </CardContent>
-                          </Card>
-                        </Grid>
-                      ))}
-                    </Grid>
-                  </Box>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
+            )}
+          </>
         )}
-      </Grid>
-
-      {/* Create/Edit Workflow Configuration Dialog */}
-      <Dialog
-        open={configDialogOpen}
-        onClose={() => { setConfigDialogOpen(false); loadWorkflows(); }}
-        maxWidth="lg"
-        fullWidth
-      >
-        <DialogTitle>Workflow Configuration</DialogTitle>
-        <DialogContent dividers sx={{ p: 0 }}>
-          {/* Pass token from localStorage as user prop */}
-          <WorkflowConfig user={{ token: localStorage.getItem('token') }} />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => { setConfigDialogOpen(false); loadWorkflows(); }}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      </Box>
     </Box>
-  );
+  )
 };
-
-export default WorkflowDashboard;
