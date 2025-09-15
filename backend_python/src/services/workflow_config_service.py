@@ -503,6 +503,25 @@ class WorkflowConfigService:
                     detail="Workflow configuration not found"
                 )
             
+            # Delete from Redis (spec and config entries)
+            workflow_name = existing.get("name")
+            if workflow_name:
+                try:
+                    workflow_service = WorkflowService()
+                    # For safety, don't cleanup running instances by default
+                    # Set cleanup_instances=True if you want to also stop any running workflows
+                    redis_deleted = workflow_service.delete_workflow_config_from_redis(
+                        workflow_name, 
+                        cleanup_instances=False
+                    )
+                    if redis_deleted:
+                        logger.info(f"[WORKFLOW] Successfully cleaned up Redis entries for {workflow_name}")
+                    else:
+                        logger.warning(f"[WORKFLOW] Failed to clean up Redis entries for {workflow_name}")
+                except Exception as e:
+                    logger.error(f"[WORKFLOW] Error cleaning up Redis for {workflow_name}: {e}")
+                    # Don't fail the entire operation if Redis cleanup fails
+            
             response = {
                 "id": config_id,
                 "message": "Workflow configuration deleted successfully"

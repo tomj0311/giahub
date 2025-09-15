@@ -341,6 +341,71 @@ class WorkflowService:
             logger.error(f"[WORKFLOW] Error processing BPMN file: {e}")
             raise HTTPException(status_code=400, detail=f"Invalid BPMN file: {e}")
     
+    def delete_workflow_config_from_redis(self, workflow_name: str, cleanup_instances: bool = False) -> bool:
+        """Delete workflow spec and config from Redis storage
+        
+        Args:
+            workflow_name: Name of the workflow to delete
+            cleanup_instances: If True, also delete all running instances of this workflow
+        """
+        if not self.redis:
+            logger.warning("[WORKFLOW] Redis not available, cannot delete workflow config")
+            return False
+        
+        try:
+            deleted_count = 0
+            
+            # Delete spec entry
+            if self.redis.exists(f"spec:{workflow_name}"):
+                self.redis.delete(f"spec:{workflow_name}")
+                deleted_count += 1
+                logger.info(f"[WORKFLOW] Deleted spec:{workflow_name} from Redis")
+            
+            # Delete config entry
+            if self.redis.exists(f"config:{workflow_name}"):
+                self.redis.delete(f"config:{workflow_name}")
+                deleted_count += 1
+                logger.info(f"[WORKFLOW] Deleted config:{workflow_name} from Redis")
+            
+            # Optionally clean up running instances
+            if cleanup_instances:
+                try:
+                    # Get all workflow instance keys
+                    workflow_keys = self.redis.keys("workflow:*")
+                    instances_deleted = 0
+                    
+                    for key in workflow_keys:
+                        try:
+                            workflow_data = self.redis.get(key)
+                            if workflow_data:
+                                workflow_dict = json.loads(workflow_data)
+                                # Check if this instance belongs to the deleted workflow
+                                if workflow_dict.get("workflow_name") == workflow_name:
+                                    self.redis.delete(key)
+                                    instances_deleted += 1
+                                    logger.info(f"[WORKFLOW] Deleted running instance {key}")
+                        except Exception as e:
+                            logger.warning(f"[WORKFLOW] Failed to check instance {key}: {e}")
+                            continue
+                    
+                    if instances_deleted > 0:
+                        logger.info(f"[WORKFLOW] Deleted {instances_deleted} running instances of {workflow_name}")
+                        
+                except Exception as e:
+                    logger.error(f"[WORKFLOW] Error cleaning up instances for {workflow_name}: {e}")
+            
+            # Remove from in-memory specs
+            if workflow_name in self.specs:
+                del self.specs[workflow_name]
+                logger.info(f"[WORKFLOW] Removed {workflow_name} from in-memory specs")
+            
+            logger.info(f"[WORKFLOW] Successfully deleted {deleted_count} Redis entries for workflow {workflow_name}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Failed to delete workflow config from Redis: {e}")
+            return False
+    
     def store_workflow_config(self, config_data: Dict[str, Any]) -> bool:
         """Store complete workflow configuration document to Redis"""
         if not self.redis:
