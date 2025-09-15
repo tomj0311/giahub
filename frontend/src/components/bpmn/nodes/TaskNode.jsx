@@ -34,6 +34,13 @@ const TaskNode = ({ data }) => {
 
   const taskIcon = getTaskIcon(data.taskType);
 
+  // Create style object for colors - apply to task-content instead of task-node
+  const contentStyle = {
+    backgroundColor: data.backgroundColor || undefined,
+    borderColor: data.borderColor || undefined,
+    border: data.borderColor ? `2px solid ${data.borderColor}` : undefined
+  };
+
   return (
     <div className="task-node">
       {/* Original handles for backward compatibility - main connection points */}
@@ -72,7 +79,7 @@ const TaskNode = ({ data }) => {
         isConnectable={true}
       />
       
-      <div className="task-content">
+      <div className="task-content" style={contentStyle}>
         <div className="task-type-icon">
           {taskIcon}
         </div>

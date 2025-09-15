@@ -477,6 +477,28 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
           const serializer = new XMLSerializer();
           nodeData.originalXML = serializer.serializeToString(element);
 
+          // Parse color information from BPMNShape
+          const shapeElement = Array.from(shapes).find(shape => 
+            shape.getAttribute('bpmnElement') === id
+          );
+          
+          if (shapeElement) {
+            // Look for bioc:fill (background color)
+            const backgroundColor = shapeElement.getAttribute('bioc:fill') || 
+                                  shapeElement.getAttribute('color:background-color');
+            
+            // Look for bioc:stroke or color:border-color (border color)  
+            const borderColor = shapeElement.getAttribute('bioc:stroke') ||
+                              shapeElement.getAttribute('color:border-color');
+            
+            if (backgroundColor) {
+              nodeData.backgroundColor = backgroundColor;
+            }
+            if (borderColor) {
+              nodeData.borderColor = borderColor;
+            }
+          }
+
           const node = {
             id: id,
             type: nodeType,

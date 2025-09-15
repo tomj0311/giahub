@@ -7,7 +7,9 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
     name: '',
     id: '',
     versionTag: '',
-    documentation: ''
+    documentation: '',
+    backgroundColor: '',
+    borderColor: ''
   });
   const [xmlContent, setXmlContent] = useState('');
 
@@ -18,7 +20,9 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
         name: selectedNode.data.label || '',
         id: selectedNode.id || '',
         versionTag: selectedNode.data.versionTag || '',
-        documentation: selectedNode.data.documentation || ''
+        documentation: selectedNode.data.documentation || '',
+        backgroundColor: selectedNode.style?.backgroundColor || selectedNode.data.backgroundColor || '',
+        borderColor: selectedNode.style?.borderColor || selectedNode.data.borderColor || ''
       });
       setXmlContent(getInnerXMLContent());
     } else if (selectedEdge) {
@@ -26,7 +30,9 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
         name: selectedEdge.data?.label || '',
         id: selectedEdge.id || '',
         versionTag: selectedEdge.data?.versionTag || '',
-        documentation: selectedEdge.data?.documentation || ''
+        documentation: selectedEdge.data?.documentation || '',
+        backgroundColor: selectedEdge.style?.backgroundColor || selectedEdge.data?.backgroundColor || '',
+        borderColor: selectedEdge.style?.borderColor || selectedEdge.data?.borderColor || ''
       });
       setXmlContent(getInnerXMLContent());
     } else {
@@ -35,7 +41,9 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
         name: '',
         id: '',
         versionTag: '',
-        documentation: ''
+        documentation: '',
+        backgroundColor: '',
+        borderColor: ''
       });
       setXmlContent('');
     }
@@ -77,7 +85,14 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
         data: {
           ...selectedNode.data,
           label: field === 'name' ? value : selectedNode.data.label,
+          backgroundColor: field === 'backgroundColor' ? value : selectedNode.data.backgroundColor,
+          borderColor: field === 'borderColor' ? value : selectedNode.data.borderColor,
           [field]: value
+        },
+        style: {
+          ...selectedNode.style,
+          backgroundColor: field === 'backgroundColor' ? value : selectedNode.style?.backgroundColor,
+          borderColor: field === 'borderColor' ? value : selectedNode.style?.borderColor
         }
       };
       onNodeUpdate(updatedNode);
@@ -87,7 +102,14 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
         data: {
           ...selectedEdge.data,
           label: field === 'name' ? value : selectedEdge.data?.label,
+          backgroundColor: field === 'backgroundColor' ? value : selectedEdge.data?.backgroundColor,
+          borderColor: field === 'borderColor' ? value : selectedEdge.data?.borderColor,
           [field]: value
+        },
+        style: {
+          ...selectedEdge.style,
+          backgroundColor: field === 'backgroundColor' ? value : selectedEdge.style?.backgroundColor,
+          borderColor: field === 'borderColor' ? value : selectedEdge.style?.borderColor
         }
       };
       onEdgeUpdate(updatedEdge);
@@ -243,6 +265,65 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
                     placeholder="Enter version tag"
                     disabled={readOnly}
                   />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Colors Section */}
+          <div className="accordion-section">
+            <div 
+              className={`accordion-header ${activeSection === 'colors' ? 'active' : ''}`}
+              onClick={() => toggleSection('colors')}
+            >
+              <span>Colors</span>
+              <span className="accordion-icon">
+                {activeSection === 'colors' ? '▼' : '▶'}
+              </span>
+            </div>
+            {activeSection === 'colors' && (
+              <div className="accordion-content">
+                <div className="form-group">
+                  <label htmlFor="background-color">Background Color</label>
+                  <div className="color-input-group">
+                    <input
+                      id="background-color"
+                      type="color"
+                      value={nodeData.backgroundColor || '#ffffff'}
+                      onChange={(e) => handleInputChange('backgroundColor', e.target.value)}
+                      disabled={readOnly}
+                      className="color-picker"
+                    />
+                    <input
+                      type="text"
+                      value={nodeData.backgroundColor || ''}
+                      onChange={(e) => handleInputChange('backgroundColor', e.target.value)}
+                      placeholder="#ffffff"
+                      disabled={readOnly}
+                      className="color-text"
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="border-color">Border Color</label>
+                  <div className="color-input-group">
+                    <input
+                      id="border-color"
+                      type="color"
+                      value={nodeData.borderColor || '#000000'}
+                      onChange={(e) => handleInputChange('borderColor', e.target.value)}
+                      disabled={readOnly}
+                      className="color-picker"
+                    />
+                    <input
+                      type="text"
+                      value={nodeData.borderColor || ''}
+                      onChange={(e) => handleInputChange('borderColor', e.target.value)}
+                      placeholder="#000000"
+                      disabled={readOnly}
+                      className="color-text"
+                    />
+                  </div>
                 </div>
               </div>
             )}

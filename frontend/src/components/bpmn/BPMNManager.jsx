@@ -156,6 +156,8 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
              xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
              xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
              xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+             xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0"
+             xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0"
              xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
              id="${originalDefinitionsId}"
              targetNamespace="http://example.com/bpmn"
@@ -704,6 +706,14 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
         xml += ` isHorizontal="true"`;
       }
 
+      // Add color attributes if present
+      if (node.data?.backgroundColor) {
+        xml += ` bioc:fill="${node.data.backgroundColor}"`;
+      }
+      if (node.data?.borderColor) {
+        xml += ` bioc:stroke="${node.data.borderColor}"`;
+      }
+
       xml += `><dc:Bounds x="${absoluteX}" y="${absoluteY}" width="${width}" height="${height}" />`;
 
       // Add label bounds for elements with text (but not for participants/lanes which handle labels differently)
@@ -940,13 +950,22 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
             }
           }
 
+          // Parse color information from shape
+          const backgroundColor = shape.getAttribute('bioc:fill') || 
+                                shape.getAttribute('color:background-color');
+          const borderColor = shape.getAttribute('bioc:stroke') ||
+                            shape.getAttribute('color:border-color');
+
           shapeMap[bpmnElement] = {
             x: parseFloat(bounds.getAttribute('x')) || 0,
             y: parseFloat(bounds.getAttribute('y')) || 0,
             width: parseFloat(bounds.getAttribute('width')) || 100,
             height: parseFloat(bounds.getAttribute('height')) || 60,
             shapeId: shape.getAttribute('id'), // Store original shape ID
-            labelBounds
+            labelBounds,
+            // Store color information
+            backgroundColor: backgroundColor || undefined,
+            borderColor: borderColor || undefined
           };
         }
       });
@@ -1248,7 +1267,10 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
               originalLabelBounds: shapeMap[id]?.labelBounds,
               originalAttributes,
               originalDocumentation,
-              originalNestedElements
+              originalNestedElements,
+              // Add color information from BPMN shapes
+              backgroundColor: shapeMap[id]?.backgroundColor,
+              borderColor: shapeMap[id]?.borderColor
             };
 
             const node = {
