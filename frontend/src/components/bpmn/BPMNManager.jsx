@@ -706,15 +706,159 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
         xml += ` isHorizontal="true"`;
       }
 
-      // Add color attributes if present
-      if (node.data?.backgroundColor) {
-        xml += ` bioc:fill="${node.data.backgroundColor}"`;
-      }
-      if (node.data?.borderColor) {
-        xml += ` bioc:stroke="${node.data.borderColor}"`;
+      // Add color support - prefer standard BPMN 2.0 format, fallback to bioc
+      const hasColors = node.data?.backgroundColor || node.data?.borderColor;
+      const usesBiocInOriginal = node.data?.originalXML && 
+        (node.data.originalXML.includes('bioc:fill') || node.data.originalXML.includes('bioc:stroke'));
+      
+      if (hasColors && usesBiocInOriginal) {
+        // Use bioc format if original XML had bioc attributes
+        if (node.data?.backgroundColor) {
+          xml += ` bioc:fill="${node.data.backgroundColor}"`;
+        }
+        if (node.data?.borderColor) {
+          xml += ` bioc:stroke="${node.data.borderColor}"`;
+        }
       }
 
       xml += `><dc:Bounds x="${absoluteX}" y="${absoluteY}" width="${width}" height="${height}" />`;
+
+      // Handle extension elements for diagram shapes
+      const hasOriginalExtensionElements = node.data?.originalDiagramExtensionElements;
+      const hasNewColors = hasColors && !usesBiocInOriginal;
+      
+      if (hasOriginalExtensionElements) {
+        // Use original extension elements and update colors if needed
+        let extensionElementsXML = node.data.originalDiagramExtensionElements;
+        
+        // If we have color changes, update the extension elements
+        if (hasNewColors) {
+          // Parse the original extension elements to modify colors
+          const parser = new DOMParser();
+          const tempDoc = parser.parseFromString(`<root>${extensionElementsXML}</root>`, 'text/xml');
+          const extensionElement = tempDoc.querySelector('bpmndi\\:BPMNExtensionElements, BPMNExtensionElements');
+          
+          if (extensionElement) {
+            // Update or add fillColor
+            if (node.data?.backgroundColor) {
+              const bgColor = node.data.backgroundColor;
+              let red = 0, green = 0, blue = 0;
+              
+              if (bgColor.startsWith('#')) {
+                const hex = bgColor.slice(1);
+                red = parseInt(hex.slice(0, 2), 16);
+                green = parseInt(hex.slice(2, 4), 16);
+                blue = parseInt(hex.slice(4, 6), 16);
+              } else if (bgColor.startsWith('rgb')) {
+                const match = bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+                if (match) {
+                  red = parseInt(match[1]);
+                  green = parseInt(match[2]);
+                  blue = parseInt(match[3]);
+                }
+              }
+              
+              // Remove existing fillColor and add new one
+              const existingFillColor = extensionElement.querySelector('bpmndi\\:fillColor, fillColor');
+              if (existingFillColor) {
+                existingFillColor.remove();
+              }
+              
+              const fillColorElement = tempDoc.createElementNS('http://www.omg.org/spec/BPMN/20100524/DI', 'bpmndi:fillColor');
+              fillColorElement.setAttribute('red', red.toString());
+              fillColorElement.setAttribute('green', green.toString());
+              fillColorElement.setAttribute('blue', blue.toString());
+              extensionElement.appendChild(fillColorElement);
+            }
+            
+            // Update or add strokeColor
+            if (node.data?.borderColor) {
+              const borderColor = node.data.borderColor;
+              let red = 0, green = 0, blue = 0;
+              
+              if (borderColor.startsWith('#')) {
+                const hex = borderColor.slice(1);
+                red = parseInt(hex.slice(0, 2), 16);
+                green = parseInt(hex.slice(2, 4), 16);
+                blue = parseInt(hex.slice(4, 6), 16);
+              } else if (borderColor.startsWith('rgb')) {
+                const match = borderColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+                if (match) {
+                  red = parseInt(match[1]);
+                  green = parseInt(match[2]);
+                  blue = parseInt(match[3]);
+                }
+              }
+              
+              // Remove existing strokeColor and add new one
+              const existingStrokeColor = extensionElement.querySelector('bpmndi\\:strokeColor, strokeColor');
+              if (existingStrokeColor) {
+                existingStrokeColor.remove();
+              }
+              
+              const strokeColorElement = tempDoc.createElementNS('http://www.omg.org/spec/BPMN/20100524/DI', 'bpmndi:strokeColor');
+              strokeColorElement.setAttribute('red', red.toString());
+              strokeColorElement.setAttribute('green', green.toString());
+              strokeColorElement.setAttribute('blue', blue.toString());
+              extensionElement.appendChild(strokeColorElement);
+            }
+            
+            // Serialize the updated extension elements
+            const serializer = new XMLSerializer();
+            extensionElementsXML = serializer.serializeToString(extensionElement);
+          }
+        }
+        
+        xml += extensionElementsXML;
+        
+      } else if (hasNewColors) {
+        // Create new extension elements for colors only
+        xml += `<bpmndi:BPMNExtensionElements>`;
+        
+        if (node.data?.backgroundColor) {
+          const bgColor = node.data.backgroundColor;
+          let red = 0, green = 0, blue = 0;
+          
+          if (bgColor.startsWith('#')) {
+            const hex = bgColor.slice(1);
+            red = parseInt(hex.slice(0, 2), 16);
+            green = parseInt(hex.slice(2, 4), 16);
+            blue = parseInt(hex.slice(4, 6), 16);
+          } else if (bgColor.startsWith('rgb')) {
+            const match = bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+            if (match) {
+              red = parseInt(match[1]);
+              green = parseInt(match[2]);
+              blue = parseInt(match[3]);
+            }
+          }
+          
+          xml += `<bpmndi:fillColor red="${red}" green="${green}" blue="${blue}"/>`;
+        }
+        
+        if (node.data?.borderColor) {
+          const borderColor = node.data.borderColor;
+          let red = 0, green = 0, blue = 0;
+          
+          if (borderColor.startsWith('#')) {
+            const hex = borderColor.slice(1);
+            red = parseInt(hex.slice(0, 2), 16);
+            green = parseInt(hex.slice(2, 4), 16);
+            blue = parseInt(hex.slice(4, 6), 16);
+          } else if (borderColor.startsWith('rgb')) {
+            const match = borderColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+            if (match) {
+              red = parseInt(match[1]);
+              green = parseInt(match[2]);
+              blue = parseInt(match[3]);
+            }
+          }
+          
+          xml += `<bpmndi:strokeColor red="${red}" green="${green}" blue="${blue}"/>`;
+        }
+        
+        xml += `</bpmndi:BPMNExtensionElements>`;
+      }
 
       // Add label bounds for elements with text (but not for participants/lanes which handle labels differently)
       if (node.data?.label && node.data.label.trim() &&
@@ -950,11 +1094,40 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
             }
           }
 
-          // Parse color information from shape
-          const backgroundColor = shape.getAttribute('bioc:fill') || 
-                                shape.getAttribute('color:background-color');
-          const borderColor = shape.getAttribute('bioc:stroke') ||
-                            shape.getAttribute('color:border-color');
+          // Parse color information from shape and preserve extension elements
+          let backgroundColor = shape.getAttribute('bioc:fill') || 
+                              shape.getAttribute('color:background-color');
+          let borderColor = shape.getAttribute('bioc:stroke') ||
+                          shape.getAttribute('color:border-color');
+          let originalExtensionElements = null;
+          
+          // If no bioc attributes found, check for standard BPMN 2.0 extension elements
+          if (!backgroundColor || !borderColor) {
+            const extensionElements = shape.querySelector('bpmndi\\:BPMNExtensionElements, BPMNExtensionElements');
+            if (extensionElements) {
+              // Preserve the entire extension elements for re-export
+              const serializer = new XMLSerializer();
+              originalExtensionElements = serializer.serializeToString(extensionElements);
+              
+              // Check for fillColor element
+              const fillColorElement = extensionElements.querySelector('bpmndi\\:fillColor, fillColor');
+              if (fillColorElement && !backgroundColor) {
+                const red = fillColorElement.getAttribute('red') || '0';
+                const green = fillColorElement.getAttribute('green') || '0';
+                const blue = fillColorElement.getAttribute('blue') || '0';
+                backgroundColor = `rgb(${red}, ${green}, ${blue})`;
+              }
+              
+              // Check for strokeColor element
+              const strokeColorElement = extensionElements.querySelector('bpmndi\\:strokeColor, strokeColor');
+              if (strokeColorElement && !borderColor) {
+                const red = strokeColorElement.getAttribute('red') || '0';
+                const green = strokeColorElement.getAttribute('green') || '0';
+                const blue = strokeColorElement.getAttribute('blue') || '0';
+                borderColor = `rgb(${red}, ${green}, ${blue})`;
+              }
+            }
+          }
 
           shapeMap[bpmnElement] = {
             x: parseFloat(bounds.getAttribute('x')) || 0,
@@ -965,7 +1138,9 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
             labelBounds,
             // Store color information
             backgroundColor: backgroundColor || undefined,
-            borderColor: borderColor || undefined
+            borderColor: borderColor || undefined,
+            // Store original extension elements for preservation
+            originalExtensionElements: originalExtensionElements || undefined
           };
         }
       });
@@ -1270,7 +1445,9 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
               originalNestedElements,
               // Add color information from BPMN shapes
               backgroundColor: shapeMap[id]?.backgroundColor,
-              borderColor: shapeMap[id]?.borderColor
+              borderColor: shapeMap[id]?.borderColor,
+              // Store original extension elements from diagram for preservation
+              originalDiagramExtensionElements: shapeMap[id]?.originalExtensionElements
             };
 
             const node = {

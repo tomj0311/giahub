@@ -483,13 +483,38 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
           );
           
           if (shapeElement) {
-            // Look for bioc:fill (background color)
-            const backgroundColor = shapeElement.getAttribute('bioc:fill') || 
-                                  shapeElement.getAttribute('color:background-color');
+            let backgroundColor = null;
+            let borderColor = null;
             
-            // Look for bioc:stroke or color:border-color (border color)  
-            const borderColor = shapeElement.getAttribute('bioc:stroke') ||
-                              shapeElement.getAttribute('color:border-color');
+            // First check for bioc attributes (priority format)
+            backgroundColor = shapeElement.getAttribute('bioc:fill') || 
+                            shapeElement.getAttribute('color:background-color');
+            borderColor = shapeElement.getAttribute('bioc:stroke') ||
+                        shapeElement.getAttribute('color:border-color');
+            
+            // If no bioc attributes found, check for standard BPMN 2.0 extension elements
+            if (!backgroundColor || !borderColor) {
+              const extensionElements = shapeElement.querySelector('bpmndi\\:BPMNExtensionElements, BPMNExtensionElements');
+              if (extensionElements) {
+                // Check for fillColor element
+                const fillColorElement = extensionElements.querySelector('bpmndi\\:fillColor, fillColor');
+                if (fillColorElement && !backgroundColor) {
+                  const red = fillColorElement.getAttribute('red') || '0';
+                  const green = fillColorElement.getAttribute('green') || '0';
+                  const blue = fillColorElement.getAttribute('blue') || '0';
+                  backgroundColor = `rgb(${red}, ${green}, ${blue})`;
+                }
+                
+                // Check for strokeColor element
+                const strokeColorElement = extensionElements.querySelector('bpmndi\\:strokeColor, strokeColor');
+                if (strokeColorElement && !borderColor) {
+                  const red = strokeColorElement.getAttribute('red') || '0';
+                  const green = strokeColorElement.getAttribute('green') || '0';
+                  const blue = strokeColorElement.getAttribute('blue') || '0';
+                  borderColor = `rgb(${red}, ${green}, ${blue})`;
+                }
+              }
+            }
             
             if (backgroundColor) {
               nodeData.backgroundColor = backgroundColor;
