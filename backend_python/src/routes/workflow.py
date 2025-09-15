@@ -4,6 +4,7 @@ Handles workflow execution, task completion, and BPMN file uploads.
 """
 
 from typing import Dict, Any, Optional, List
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from pydantic import BaseModel
 
@@ -71,6 +72,47 @@ async def start_workflow(
         raise
     except Exception as e:
         logger.error(f"[WORKFLOW] Error starting workflow {workflow_name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/workflows/config/{config_id}/start")
+async def start_workflow_by_config_id(
+    config_id: str,
+    request: StartWorkflowRequest,
+    service: WorkflowService = Depends(get_workflow_service),
+    current_user: dict = Depends(verify_token_middleware)
+):
+    """Start a new workflow instance using workflow configuration ID"""
+    try:
+        logger.info(f"[WORKFLOW] Starting workflow by config ID {config_id} for user {current_user.get('username', 'unknown')}")
+        
+        # Get workflow name from config ID
+        workflow_name = service.get_workflow_name_by_config_id(config_id)
+        if not workflow_name:
+            raise HTTPException(status_code=404, detail=f"Workflow configuration '{config_id}' not found")
+        
+        logger.info(f"[WORKFLOW] Config ID {config_id} maps to workflow name: {workflow_name}")
+        
+        # Add config ID and tenant info to initial data
+        initial_data = request.initial_data or {}
+        initial_data.update({
+            "config_id": config_id,
+            "tenant_id": current_user.get('tenant_id') or current_user.get('tenantId') or 'default-tenant',
+            "started_by": current_user.get('username') or current_user.get('email', 'unknown'),
+            "started_at": str(datetime.now())
+        })
+        
+        instance_id = service.start_workflow(workflow_name, initial_data)
+        
+        return {
+            "instance_id": instance_id,
+            "config_id": config_id,
+            "workflow_name": workflow_name
+        }
+    except HTTPException as e:
+        raise
+    except Exception as e:
+        logger.error(f"[WORKFLOW] Error starting workflow by config ID {config_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

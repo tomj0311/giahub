@@ -406,6 +406,43 @@ class WorkflowService:
             logger.error(f"[WORKFLOW] Failed to delete workflow config from Redis: {e}")
             return False
     
+    def get_workflow_name_by_config_id(self, config_id: str) -> Optional[str]:
+        """Get workflow name from configuration ID stored in Redis"""
+        if not self.redis:
+            logger.warning("[WORKFLOW] Redis not available, cannot get workflow name by config ID")
+            return None
+        
+        try:
+            # Check if there's a config entry with this ID
+            config_data = self.redis.get(f"config:{config_id}")
+            if config_data:
+                config_dict = json.loads(config_data)
+                workflow_name = config_dict.get("name")
+                logger.info(f"[WORKFLOW] Found workflow name '{workflow_name}' for config ID {config_id}")
+                return workflow_name
+            
+            # If not found as config:id, check all config entries for matching ID
+            config_keys = self.redis.keys("config:*")
+            for key in config_keys:
+                try:
+                    config_data = self.redis.get(key)
+                    if config_data:
+                        config_dict = json.loads(config_data)
+                        if config_dict.get("id") == config_id:
+                            workflow_name = config_dict.get("name")
+                            logger.info(f"[WORKFLOW] Found workflow name '{workflow_name}' for config ID {config_id} in key {key}")
+                            return workflow_name
+                except Exception as e:
+                    logger.warning(f"[WORKFLOW] Error checking config key {key}: {e}")
+                    continue
+            
+            logger.warning(f"[WORKFLOW] No workflow found for config ID {config_id}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Error getting workflow name by config ID {config_id}: {e}")
+            return None
+
     def store_workflow_config(self, config_data: Dict[str, Any]) -> bool:
         """Store complete workflow configuration document to Redis"""
         if not self.redis:
