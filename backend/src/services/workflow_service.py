@@ -8,8 +8,13 @@ Provides functionality for starting, running, and managing workflow instances.
 import uuid
 import json
 import os
+import sys
 from typing import Dict, Any, Optional, List
 from fastapi import HTTPException, UploadFile
+
+# Add project root to Python path to find spiffworkflow
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+sys.path.append(project_root)  # Add the project root directory to path
 from spiffworkflow.bpmn.parser import BpmnParser
 from spiffworkflow.bpmn.workflow import BpmnWorkflow
 from spiffworkflow.bpmn.serializer import BpmnWorkflowSerializer
@@ -539,3 +544,216 @@ class WorkflowService:
         except Exception as e:
             logger.error(f"[WORKFLOW] Error listing Redis workflows for tenant {tenant_id}: {e}")
             return []
+    
+    def test_workflow_with_bpmn_file(self, bpmn_file_path: str):
+        """
+        Comprehensive test function to test the workflow service with a BPMN file
+        
+        This function tests the following workflow operations in sequence:
+        1. Upload BPMN file to Redis with dummy user/tenant data
+        2. Store workflow configuration with user and tenant details
+        3. Start a workflow instance
+        4. Check workflow status
+        5. Run workflow synchronously
+        6. List all workflows for a tenant
+        
+        Args:
+            bpmn_file_path: Path to the BPMN file to test with
+        """
+        logger.info("=" * 80)
+        logger.info("[TEST] Starting workflow service test with BPMN file")
+        logger.info("=" * 80)
+        
+        # 1. Test Variables - Dummy tenant and user data
+        workflow_name = "test_workflow_1"
+        tenant_id = "test_tenant_123"
+        user_name = "test_user@example.com"
+        
+        try:
+            # 2. First check if Redis is available
+            if not self.redis:
+                logger.warning("[TEST] Redis not available - skipping test")
+                return {
+                    "success": False,
+                    "error": "Redis not available",
+                    "storage_type": "memory"
+                }
+            
+            # 3. TEST: Upload BPMN file
+            logger.info("[TEST] Step 1: Testing BPMN file upload")
+            
+            try:
+                # Read BPMN file content
+                with open(bpmn_file_path, 'rb') as bpmn_file:
+                    bpmn_content = bpmn_file.read()
+                
+                # Use a special version of upload_bpmn that accepts raw content
+                parser = BpmnParser()
+                parser.add_bpmn_xml(bpmn_content, filename=bpmn_file_path)
+                spec = parser.find_process_spec_by_name(workflow_name)
+                if not spec:
+                    # Try with the default process name from the BPMN file
+                    spec = parser.get_spec(parser.get_process_id())
+                    workflow_name = spec.name
+                
+                # Store spec in memory for immediate use
+                self.specs[workflow_name] = spec
+                
+                # Store BPMN content in Redis
+                self.redis.set(f"spec:{workflow_name}", bpmn_content.decode('utf-8'))
+                logger.info(f"[TEST] Successfully uploaded BPMN spec for {workflow_name} to Redis")
+                
+                upload_result = {"success": True, "workflow_name": workflow_name}
+                logger.info(f"[TEST] BPMN upload result: {upload_result}")
+            except Exception as e:
+                logger.error(f"[TEST] Failed to upload BPMN: {str(e)}")
+                return {"success": False, "error": f"BPMN upload failed: {str(e)}"}
+            
+            # 4. TEST: Store workflow configuration with dummy user and tenant
+            logger.info("[TEST] Step 2: Testing workflow configuration storage")
+            
+            # Create a mock workflow configuration
+            config_data = {
+                "id": str(uuid.uuid4()),
+                "name": workflow_name,
+                "description": "Test workflow configuration",
+                "category": "test",
+                "tenantId": tenant_id,
+                "userName": user_name,
+                "createdAt": datetime.now().isoformat(),
+                "updatedAt": datetime.now().isoformat(),
+                "is_active": True,
+                "version": "1.0.0",
+                "workflowFileName": os.path.basename(bpmn_file_path)
+            }
+            
+            # Store config
+            config_stored = self.store_workflow_config(config_data)
+            logger.info(f"[TEST] Workflow config storage result: {config_stored}")
+            
+            if not config_stored:
+                logger.error("[TEST] Failed to store workflow configuration")
+                return {"success": False, "error": "Failed to store workflow configuration"}
+            
+            # 5. TEST: Start workflow instance
+            logger.info("[TEST] Step 3: Testing workflow instance start")
+            
+            # Prepare initial data
+            initial_data = {
+                "tenant_id": tenant_id,
+                "user_id": "test_user_123",
+                "start_time": datetime.now().isoformat(),
+                "test_run": True,
+            }
+            
+            try:
+                instance_id = self.start_workflow(workflow_name, initial_data, ttl_hours=1)
+                logger.info(f"[TEST] Started workflow instance: {instance_id}")
+            except Exception as e:
+                logger.error(f"[TEST] Failed to start workflow: {str(e)}")
+                return {"success": False, "error": f"Workflow start failed: {str(e)}"}
+            
+            # 6. TEST: Get workflow status
+            logger.info("[TEST] Step 4: Testing workflow status retrieval")
+            
+            try:
+                status = self.get_workflow_status(instance_id)
+                logger.info(f"[TEST] Workflow status: {status}")
+            except Exception as e:
+                logger.error(f"[TEST] Failed to get workflow status: {str(e)}")
+                return {"success": False, "error": f"Status retrieval failed: {str(e)}"}
+            
+            # 7. TEST: Run workflow synchronously
+            logger.info("[TEST] Step 5: Testing workflow execution")
+            
+            try:
+                execution_result = self.run_workflow_sync(instance_id)
+                logger.info(f"[TEST] Workflow execution result: {execution_result}")
+            except Exception as e:
+                logger.error(f"[TEST] Failed to execute workflow: {str(e)}")
+                return {"success": False, "error": f"Workflow execution failed: {str(e)}"}
+            
+            # 8. TEST: Check workflow status again to verify completion
+            logger.info("[TEST] Step 6: Verifying workflow completion status")
+            
+            try:
+                final_status = self.get_workflow_status(instance_id)
+                logger.info(f"[TEST] Final workflow status: {final_status}")
+                
+                # Verify completion
+                if final_status.get("status") != "completed":
+                    logger.warning(f"[TEST] Workflow not completed. Status: {final_status.get('status')}")
+            except Exception as e:
+                logger.error(f"[TEST] Failed to get final workflow status: {str(e)}")
+            
+            # 9. TEST: List workflows by tenant
+            logger.info("[TEST] Step 7: Testing workflow listing by tenant")
+            
+            try:
+                tenant_workflows = self.list_all_redis_workflows_by_tenant(tenant_id)
+                logger.info(f"[TEST] Found {len(tenant_workflows)} workflows for tenant {tenant_id}")
+                
+                # Log workflows found
+                for wf in tenant_workflows:
+                    logger.info(f"[TEST] Found workflow: {wf.get('name')} (ID: {wf.get('id')})")
+            except Exception as e:
+                logger.error(f"[TEST] Failed to list workflows by tenant: {str(e)}")
+            
+            # 10. Return comprehensive test results
+            logger.info("=" * 80)
+            logger.info("[TEST] Workflow test completed successfully")
+            logger.info("=" * 80)
+            
+            return {
+                "success": True,
+                "workflow_name": workflow_name,
+                "instance_id": instance_id,
+                "tenant_id": tenant_id,
+                "workflow_complete": final_status.get("status") == "completed",
+                "tenant_workflows": len(tenant_workflows),
+                "test_execution_time": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"[TEST] Overall test execution failed: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {"success": False, "error": f"Test failed: {str(e)}"}
+
+
+# Add code to execute the test when this file is run directly
+if __name__ == "__main__":
+    from datetime import datetime
+    import os
+    
+    print("=" * 80)
+    print("WORKFLOW SERVICE TEST")
+    print("=" * 80)
+    
+    # Create service instance
+    service = WorkflowService()
+    
+    # Get the directory of this file
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Path to the BPMN file
+    bpmn_file_path = os.path.join(current_dir, "wf1.bpmn")
+    
+    if not os.path.exists(bpmn_file_path):
+        print(f"BPMN file not found: {bpmn_file_path}")
+        print("Available files in directory:")
+        for file in os.listdir(current_dir):
+            print(f"  - {file}")
+    else:
+        print(f"Testing with BPMN file: {bpmn_file_path}")
+        
+        # Run the test
+        result = service.test_workflow_with_bpmn_file(bpmn_file_path)
+        
+        # Print result
+        print("\nTEST RESULTS:")
+        print("-" * 80)
+        for key, value in result.items():
+            print(f"{key}: {value}")
+        print("-" * 80)
+        print("Test Complete")
