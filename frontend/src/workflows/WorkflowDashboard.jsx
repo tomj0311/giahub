@@ -14,7 +14,13 @@ import {
   Avatar,
   IconButton,
   alpha,
-  useTheme
+  useTheme,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow
 } from '@mui/material';
 import {
   Plus,
@@ -261,7 +267,7 @@ export default function WorkflowDashboard({ user }) {
         setRedisWorkflowsLoading(true)
         
         // Fetch ALL workflows from Redis for current tenant (backend gets tenant from JWT)
-        const redisUrl = `/api/workflows/redis/all`
+        const redisUrl = `/api/workflow/redis/all`  // Fixed: singular "workflow" not "workflows"
         console.log('🔍 FETCHING ALL REDIS WORKFLOWS URL:', redisUrl);
         
         const redisResult = await sharedApiService.makeRequest(
@@ -495,17 +501,85 @@ export default function WorkflowDashboard({ user }) {
             </Typography>
           </Paper>
         ) : (
-          <Grid container spacing={3}>
-            {allRedisWorkflows.map((workflow, index) => (
-              <Grid item xs={12} sm={6} md={4} lg={3} key={workflow.id || `redis-workflow-${index}`}>
-                <WorkflowCard
-                  workflow={workflow}
-                  onEdit={handleEditWorkflow}
-                  onRun={handleRunWorkflow}
-                />
-              </Grid>
-            ))}
-          </Grid>
+          <TableContainer component={Paper} variant="outlined">
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Name</TableCell>
+                  <TableCell>Category</TableCell>
+                  <TableCell>BPMN File</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell align="right">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {allRedisWorkflows.map((workflow, index) => (
+                  <TableRow 
+                    key={workflow.id || `redis-workflow-${index}`}
+                    hover
+                    sx={{ cursor: 'pointer' }}
+                    onClick={() => handleRunWorkflow(workflow)}
+                  >
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Avatar
+                          sx={{
+                            bgcolor: 'primary.main',
+                            width: 32,
+                            height: 32,
+                            fontSize: '0.75rem'
+                          }}
+                        >
+                          {workflow.name ? workflow.name.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2) : 'WF'}
+                        </Avatar>
+                        <Typography variant="body2" fontWeight="medium">
+                          {workflow.name || 'Unnamed Workflow'}
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      {workflow.category ? (
+                        <Chip
+                          label={workflow.category}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                        />
+                      ) : (
+                        '-'
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">
+                        {workflow.bpmn_filename || 'No BPMN file'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={workflow.is_active ? 'Active' : 'Inactive'}
+                        size="small"
+                        color={workflow.is_active ? 'success' : 'default'}
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell align="right">
+                      <Button
+                        size="small"
+                        variant="contained"
+                        startIcon={<Bot size={14} />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRunWorkflow(workflow);
+                        }}
+                      >
+                        Run
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
       </Box>
     </Box>

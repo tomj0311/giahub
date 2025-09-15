@@ -177,7 +177,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 					icon: 'UserPlus'
 				},
 				{
-					label: 'Tenants',
+					label: 'Organization',
 					to: '/dashboard/tenants',
 					icon: 'Building'
 				}

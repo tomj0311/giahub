@@ -213,11 +213,14 @@ async def list_all_redis_workflows_by_tenant(
     current_user: dict = Depends(verify_token_middleware)
 ):
     """NEW: List ALL workflows stored in Redis for current user's tenant"""
+    logger.info("[WORKFLOW] DEBUG: Redis /redis/all endpoint HIT!")
     try:
         # Extract tenant_id from JWT token payload
         tenant_id = current_user.get('tenant_id') or current_user.get('tenantId') or 'default-tenant'
+        logger.info(f"[WORKFLOW] DEBUG: Extracted tenant_id: {tenant_id} from user: {current_user.get('email', 'unknown')}")
         logger.info(f"[WORKFLOW] Listing ALL Redis workflows for tenant: {tenant_id} (from user: {current_user.get('email', 'unknown')})")
         workflows = service.list_all_redis_workflows_by_tenant(tenant_id)
+        logger.info(f"[WORKFLOW] DEBUG: Redis service returned {len(workflows)} workflows")
         return {
             "success": True,
             "tenant_id": tenant_id,
@@ -225,5 +228,6 @@ async def list_all_redis_workflows_by_tenant(
             "count": len(workflows)
         }
     except Exception as e:
+        logger.error(f"[WORKFLOW] DEBUG: Error in Redis endpoint: {e}")
         logger.error(f"[WORKFLOW] Error listing Redis workflows: {e}")
         raise HTTPException(status_code=500, detail=str(e))

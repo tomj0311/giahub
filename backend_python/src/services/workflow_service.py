@@ -371,18 +371,27 @@ class WorkflowService:
             all_keys = workflow_keys + config_keys
             workflows = []
             
+            # DEBUG: Log what keys we found
+            logger.info(f"[WORKFLOW] DEBUG: Found {len(workflow_keys)} workflow: keys: {workflow_keys}")
+            logger.info(f"[WORKFLOW] DEBUG: Found {len(config_keys)} config: keys: {config_keys}")
+            logger.info(f"[WORKFLOW] DEBUG: Total keys to process: {len(all_keys)}")
+            
             for key in all_keys:
                 try:
                     workflow_data = self.redis.get(key)
+                    logger.info(f"[WORKFLOW] DEBUG: Processing key {key}, data exists: {workflow_data is not None}")
                     if workflow_data:
                         workflow_dict = json.loads(workflow_data)
+                        logger.info(f"[WORKFLOW] DEBUG: Parsed data for {key}, top-level keys: {list(workflow_dict.keys())}")
                         
                         if key.startswith("config:"):
                             # Handle config keys - data is stored directly
+                            tenant_from_data = workflow_dict.get("tenantId", "unknown")
+                            logger.info(f"[WORKFLOW] DEBUG: Config key {key} has tenant: {tenant_from_data}")
                             workflow_info = {
                                 "id": workflow_dict.get("id", key.replace("config:", "")),
                                 "redis_key": key,
-                                "tenant_id": workflow_dict.get("tenantId", "unknown"),
+                                "tenant_id": tenant_from_data,
                                 "name": workflow_dict.get("name", "Unknown Workflow"),
                                 "description": workflow_dict.get("description", "No description"),
                                 "category": workflow_dict.get("category", "general"),
@@ -394,10 +403,12 @@ class WorkflowService:
                             }
                         else:
                             # Handle workflow keys - legacy format
+                            tenant_from_data = workflow_dict.get("data", {}).get("tenant_id", "unknown")
+                            logger.info(f"[WORKFLOW] DEBUG: Workflow key {key} has tenant: {tenant_from_data}")
                             workflow_info = {
                                 "id": key.replace("workflow:", ""),
                                 "redis_key": key,
-                                "tenant_id": workflow_dict.get("data", {}).get("tenant_id", "unknown"),
+                                "tenant_id": tenant_from_data,
                                 "name": workflow_dict.get("spec", {}).get("name", "Unknown Workflow"),
                                 "description": workflow_dict.get("data", {}).get("description", "No description"),
                                 "category": workflow_dict.get("data", {}).get("category", "general"),
@@ -409,8 +420,12 @@ class WorkflowService:
                             }
                         
                         # Only include workflows for the specified tenant
+                        logger.info(f"[WORKFLOW] DEBUG: Comparing tenant_id: '{workflow_info['tenant_id']}' with requested: '{tenant_id}'")
                         if workflow_info["tenant_id"] == tenant_id:
                             workflows.append(workflow_info)
+                            logger.info(f"[WORKFLOW] DEBUG: Added workflow {workflow_info['name']} to results")
+                        else:
+                            logger.info(f"[WORKFLOW] DEBUG: Skipped workflow {workflow_info['name']} - tenant mismatch")
                             
                 except Exception as e:
                     logger.error(f"[WORKFLOW] Error processing Redis workflow {key}: {e}")
