@@ -9,6 +9,7 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
     versionTag: '',
     documentation: ''
   });
+  const [xmlContent, setXmlContent] = useState('');
 
   // Update local state when selected element changes
   useEffect(() => {
@@ -19,6 +20,7 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
         versionTag: selectedNode.data.versionTag || '',
         documentation: selectedNode.data.documentation || ''
       });
+      setXmlContent(getInnerXMLContent());
     } else if (selectedEdge) {
       setNodeData({
         name: selectedEdge.data?.label || '',
@@ -26,6 +28,7 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
         versionTag: selectedEdge.data?.versionTag || '',
         documentation: selectedEdge.data?.documentation || ''
       });
+      setXmlContent(getInnerXMLContent());
     } else {
       // Reset when nothing is selected
       setNodeData({
@@ -34,8 +37,34 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
         versionTag: '',
         documentation: ''
       });
+      setXmlContent('');
     }
   }, [selectedNode, selectedEdge]);
+
+  const handleXmlChange = (value) => {
+    setXmlContent(value);
+    
+    // Update the selected element with new XML content - overwrite originalNestedElements
+    if (selectedNode && onNodeUpdate) {
+      const updatedNode = {
+        ...selectedNode,
+        data: {
+          ...selectedNode.data,
+          originalNestedElements: value
+        }
+      };
+      onNodeUpdate(updatedNode);
+    } else if (selectedEdge && onEdgeUpdate) {
+      const updatedEdge = {
+        ...selectedEdge,
+        data: {
+          ...selectedEdge.data,
+          originalNestedElements: value
+        }
+      };
+      onEdgeUpdate(updatedEdge);
+    }
+  };
 
   const handleInputChange = (field, value) => {
     const updatedData = { ...nodeData, [field]: value };
@@ -71,16 +100,16 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
 
   const getInnerXMLContent = () => {
     // Look for XML content in multiple possible locations
-    const xmlContent = selectedNode?.data?.originalXML || 
-                      selectedEdge?.data?.originalXML ||
-                      selectedNode?.data?.originalNestedElements ||
-                      selectedEdge?.data?.originalNestedElements;
+    const xmlContent = selectedNode?.data?.originalNestedElements || 
+                      selectedEdge?.data?.originalNestedElements ||
+                      selectedNode?.data?.originalXML ||
+                      selectedEdge?.data?.originalXML;
     
     console.log('🔍 PropertyPanel - selectedNode:', selectedNode);
     console.log('🔍 PropertyPanel - xmlContent:', xmlContent);
     
     if (!xmlContent) {
-      return 'No XML data available - originalXML not found in node data';
+      return 'No XML data available - originalNestedElements not found in node data';
     }
     
     // If xmlContent is empty string, show message
@@ -264,10 +293,12 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
                   <label htmlFor="element-xml">Inner XML Elements</label>
                   <textarea
                     id="element-xml"
-                    value={getInnerXMLContent()}
-                    readOnly
+                    value={xmlContent}
+                    onChange={(e) => handleXmlChange(e.target.value)}
                     rows={15}
                     style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                    placeholder="Enter XML content here..."
+                    disabled={readOnly}
                   />
                 </div>
               </div>

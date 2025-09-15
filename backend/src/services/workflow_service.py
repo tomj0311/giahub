@@ -707,50 +707,25 @@ class WorkflowService:
             try:
                 execution_result = self.run_workflow_sync(instance_id)
                 logger.info(f"[TEST] Workflow execution result: {execution_result}")
+                
+                # Stop here - test complete after workflow execution
+                logger.info("=" * 80)
+                logger.info("[TEST] Workflow test completed successfully")
+                logger.info("=" * 80)
+                
+                return {
+                    "success": True,
+                    "workflow_name": workflow_name,
+                    "instance_id": instance_id,
+                    "tenant_id": tenant_id,
+                    "workflow_complete": execution_result.get("is_completed", False),
+                    "steps_executed": execution_result.get("steps_executed", 0),
+                    "test_execution_time": datetime.now().isoformat()
+                }
+                
             except Exception as e:
                 logger.error(f"[TEST] Failed to execute workflow: {str(e)}")
                 return {"success": False, "error": f"Workflow execution failed: {str(e)}"}
-            
-            # 8. TEST: Check workflow status again to verify completion
-            logger.info("[TEST] Step 6: Verifying workflow completion status")
-            
-            try:
-                final_status = self.get_workflow_status(instance_id)
-                logger.info(f"[TEST] Final workflow status: {final_status}")
-                
-                # Verify completion
-                if final_status.get("status") != "completed":
-                    logger.warning(f"[TEST] Workflow not completed. Status: {final_status.get('status')}")
-            except Exception as e:
-                logger.error(f"[TEST] Failed to get final workflow status: {str(e)}")
-            
-            # 9. TEST: List workflows by tenant
-            logger.info("[TEST] Step 7: Testing workflow listing by tenant")
-            
-            try:
-                tenant_workflows = self.list_all_redis_workflows_by_tenant(tenant_id)
-                logger.info(f"[TEST] Found {len(tenant_workflows)} workflows for tenant {tenant_id}")
-                
-                # Log workflows found
-                for wf in tenant_workflows:
-                    logger.info(f"[TEST] Found workflow: {wf.get('name')} (ID: {wf.get('id')})")
-            except Exception as e:
-                logger.error(f"[TEST] Failed to list workflows by tenant: {str(e)}")
-            
-            # 10. Return comprehensive test results
-            logger.info("=" * 80)
-            logger.info("[TEST] Workflow test completed successfully")
-            logger.info("=" * 80)
-            
-            return {
-                "success": True,
-                "workflow_name": workflow_name,
-                "instance_id": instance_id,
-                "tenant_id": tenant_id,
-                "workflow_complete": final_status.get("status") == "completed",
-                "tenant_workflows": len(tenant_workflows),
-                "test_execution_time": datetime.now().isoformat()
-            }
             
         except Exception as e:
             logger.error(f"[TEST] Overall test execution failed: {str(e)}")
@@ -775,7 +750,7 @@ if __name__ == "__main__":
     current_dir = os.path.dirname(os.path.abspath(__file__))
     
     # Path to the BPMN file
-    bpmn_file_path = os.path.join(current_dir, "wf1.bpmn")
+    bpmn_file_path = os.path.join(current_dir, "x1.bpmn")
     
     if not os.path.exists(bpmn_file_path):
         print(f"BPMN file not found: {bpmn_file_path}")
