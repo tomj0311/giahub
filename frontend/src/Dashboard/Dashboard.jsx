@@ -530,7 +530,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 						flexGrow: 1,
 						color: theme.palette.mode === 'dark' ? '#ffffff !important' : '#000000 !important',
 						fontSize: '1.25rem'
-					}}>GiaHUB</Typography>
+					}}>GIA</Typography>
 
 					<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
 						<IconButton sx={{ color: theme.palette.mode === 'dark' ? '#ffffff !important' : '#000000 !important' }}>
