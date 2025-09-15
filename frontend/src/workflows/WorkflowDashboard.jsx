@@ -338,8 +338,15 @@ export default function WorkflowDashboard({ user }) {
   }
 
   const handleRunWorkflow = (workflow) => {
+    console.log('🚨🚨🚨 HANDLE RUN WORKFLOW CALLED 🚨🚨🚨');
+    console.log('🚨 WORKFLOW OBJECT:', workflow);
+    console.log('🚨 WORKFLOW ID:', workflow.id);
+    console.log('🚨 ABOUT TO NAVIGATE TO:', `/dashboard/workflow-execution?workflow=${workflow.id}`);
+    
     // Navigate to workflow execution page with workflow ID
-    navigate(`/dashboard/workflow-execution?workflow=${workflow.id}`)
+    navigate(`/dashboard/workflow-execution?workflow=${workflow.id}`);
+    
+    console.log('🚨 NAVIGATE CALL COMPLETED');
   }
 
   const handleCreateWorkflow = () => {
