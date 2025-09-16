@@ -167,9 +167,7 @@ export default function WorkflowDashboard({ user }) {
   const [workflows, setWorkflows] = useState([])
   const [displayedWorkflows, setDisplayedWorkflows] = useState([])
 
-  // NEW: All workflows from Redis for current tenant - SEPARATE LOGIC
-  const [allRedisWorkflows, setAllRedisWorkflows] = useState([])
-  const [redisWorkflowsLoading, setRedisWorkflowsLoading] = useState(false)
+
 
   // Pagination state
   const [pagination, setPagination] = useState({
@@ -258,59 +256,6 @@ export default function WorkflowDashboard({ user }) {
     }
 
     fetchWorkflowData()
-    
-    // NEW: Fetch ALL workflows from Redis for current tenant - SEPARATE FUNCTION
-    const fetchAllRedisWorkflows = async () => {
-      if (!isMountedRef.current) return;
-      
-      try {
-        setRedisWorkflowsLoading(true)
-        
-        // Fetch ALL workflows from Redis for current tenant (backend gets tenant from JWT)
-        const redisUrl = `/api/workflow/redis/all`  // Fixed: singular "workflow" not "workflows"
-        console.log('🔍 FETCHING ALL REDIS WORKFLOWS URL:', redisUrl);
-        
-        const redisResult = await sharedApiService.makeRequest(
-          redisUrl,
-          {
-            headers: tokenRef.current ? { 'Authorization': `Bearer ${tokenRef.current}` } : {}
-          },
-          {
-            token: tokenRef.current?.substring(0, 10)
-          }
-        );
-
-        console.log('🔍 REDIS WORKFLOWS API RESPONSE:', redisResult.success ? 'SUCCESS' : 'FAILED')
-        console.log('🔍 REDIS FULL RESPONSE:', redisResult);
-
-        if (!isMountedRef.current) {
-          console.log('🚫 Component unmounted, aborting Redis workflow data load');
-          return;
-        }
-
-        if (redisResult.success) {
-          const redisWorkflowsData = redisResult.data
-          console.log('📄 REDIS WORKFLOWS DATA:', redisWorkflowsData)
-          const redisWorkflowsList = redisWorkflowsData.workflows || []
-
-          console.log('📋 REDIS WORKFLOWS LIST:', redisWorkflowsList)
-          setAllRedisWorkflows(redisWorkflowsList)
-        } else {
-          console.log('❌ REDIS WORKFLOWS API FAILED:', redisResult.error)
-          console.log('❌ REDIS ERROR DETAILS:', redisResult)
-        }
-
-      } catch (error) {
-        console.error('Failed to fetch Redis workflow data:', error)
-        setAllRedisWorkflows([])
-      } finally {
-        if (isMountedRef.current) {
-          setRedisWorkflowsLoading(false)
-        }
-      }
-    }
-
-    fetchAllRedisWorkflows()
     
     return () => {
       console.log('UNMOUNT: WorkflowDashboard');
@@ -474,119 +419,6 @@ export default function WorkflowDashboard({ user }) {
               </Box>
             )}
           </>
-        )}
-      </Box>
-
-      {/* NEW: All Redis Workflows Section - SEPARATE SECTION */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
-          All Workflows in Redis (Tenant: {user?.tenant_id || user?.tenantId || 'default-tenant'})
-        </Typography>
-
-        {redisWorkflowsLoading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-            <CircularProgress size={32} />
-            <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
-              Loading Redis workflows...
-            </Typography>
-          </Box>
-        ) : allRedisWorkflows.length === 0 ? (
-          <Paper sx={{ 
-            p: 4, 
-            textAlign: 'center',
-            background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.95)})`,
-            backdropFilter: 'blur(10px)',
-            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-            borderRadius: 3
-          }}>
-            <Settings size={48} color={theme.palette.text.secondary} style={{ marginBottom: 16 }} />
-            <Typography variant="h6" color="text.secondary" gutterBottom>
-              No workflows found in Redis
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              No workflows stored in Redis for tenant: {user?.tenant_id || user?.tenantId || 'default-tenant'}
-            </Typography>
-          </Paper>
-        ) : (
-          <TableContainer component={Paper} variant="outlined">
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Category</TableCell>
-                  <TableCell>BPMN File</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {allRedisWorkflows.map((workflow, index) => (
-                  <TableRow 
-                    key={workflow.id || `redis-workflow-${index}`}
-                    hover
-                    sx={{ cursor: 'pointer' }}
-                    onClick={() => handleRunWorkflow(workflow)}
-                  >
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Avatar
-                          sx={{
-                            bgcolor: 'primary.main',
-                            width: 32,
-                            height: 32,
-                            fontSize: '0.75rem'
-                          }}
-                        >
-                          {workflow.name ? workflow.name.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2) : 'WF'}
-                        </Avatar>
-                        <Typography variant="body2" fontWeight="medium">
-                          {workflow.name || 'Unnamed Workflow'}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      {workflow.category ? (
-                        <Chip
-                          label={workflow.category}
-                          size="small"
-                          color="primary"
-                          variant="outlined"
-                        />
-                      ) : (
-                        '-'
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color="text.secondary">
-                        {workflow.bpmn_filename || 'No BPMN file'}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={workflow.is_active ? 'Active' : 'Inactive'}
-                        size="small"
-                        color={workflow.is_active ? 'success' : 'default'}
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      <Button
-                        size="small"
-                        variant="contained"
-                        startIcon={<Bot size={14} />}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRunWorkflow(workflow);
-                        }}
-                      >
-                        Run
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
         )}
       </Box>
     </Box>

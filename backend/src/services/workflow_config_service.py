@@ -263,39 +263,6 @@ class WorkflowConfigService:
                     detail="Failed to save workflow configuration to database"
                 )
             
-            # ALSO SAVE TO REDIS using WorkflowService
-            if bpmn_file and bpmn_file.filename:
-                try:
-                    workflow_service = WorkflowService()
-                    # Reset file pointer and upload to Redis via WorkflowService
-                    await bpmn_file.seek(0)
-                    workflow_service.upload_bpmn(bpmn_file, doc["name"])
-                    
-                    # ALSO save the complete workflow config document using the existing method
-                    doc_for_redis = doc.copy()
-                    
-                    # Convert ObjectId to string for JSON serialization
-                    if "_id" in doc_for_redis:
-                        doc_for_redis["_id"] = str(doc_for_redis["_id"])
-                    
-                    # Convert ALL datetime objects to strings for JSON serialization
-                    for key, value in doc_for_redis.items():
-                        if isinstance(value, datetime):
-                            doc_for_redis[key] = value.isoformat()
-                    
-                    doc_for_redis["id"] = result  # Add the MongoDB ID
-                    doc_for_redis["userId"] = user_id  # Add user info
-                    doc_for_redis["tenantId"] = tenant_id  # Add tenant info
-                    doc_for_redis["userName"] = user.get("name", "Unknown User")  # Add user name
-                    doc_for_redis["workflowFileName"] = bpmn_filename  # Add workflow file name
-                    
-                    # Use the existing method to store config
-                    workflow_service.store_workflow_config(doc_for_redis)
-                    
-                except Exception as e:
-                    logger.error(f"[WORKFLOW] Failed to upload to Redis via WorkflowService: {e}")
-                    # Don't fail the whole operation, just log the error
-            
             response = {
                 "id": result,
                 "name": doc["name"],
