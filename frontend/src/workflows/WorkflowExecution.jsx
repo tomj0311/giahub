@@ -28,35 +28,29 @@ import {
   InputLabel,
   Card,
   CardContent,
-  CardActions
 } from '@mui/material';
 import {
   ArrowLeft,
   Play,
   RefreshCw,
-  Settings2,
   CheckCircle2,
   List,
   Eye,
   Clock,
   CheckCircle,
-  XCircle
+  XCircle,
 } from 'lucide-react';
-import { apiCall } from '../config/api';
+import sharedApiService from '../utils/apiService';
 
-console.log('🚨🚨🚨 WORKFLOW EXECUTION MODULE LOADED 🚨🚨🚨');
 
 function WorkflowExecution({ user }) {
-  console.log('🚨🚨🚨 WORKFLOW EXECUTION COMPONENT RENDERING 🚨🚨🚨');
-  console.log('🚨 USER PROP:', user);
-  console.log('🚨 LOCATION:', window.location.href);
-  
+
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const workflowId = searchParams.get('workflow');
   const theme = useTheme();
-  
-  // Existing states
+
+  // States
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
@@ -67,11 +61,6 @@ function WorkflowExecution({ user }) {
   const [taskDataJson, setTaskDataJson] = useState('');
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [configNotFound, setConfigNotFound] = useState(false);
-  const [workflows, setWorkflows] = useState([]);
-  const [loadingWorkflows, setLoadingWorkflows] = useState(false);
-  const [startByName, setStartByName] = useState('');
-  
-  // New states for workflow instances management
   const [showInstancesList, setShowInstancesList] = useState(false);
   const [instances, setInstances] = useState([]);
   const [loadingInstances, setLoadingInstances] = useState(false);
@@ -79,43 +68,54 @@ function WorkflowExecution({ user }) {
   const [totalPages, setTotalPages] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
   const [pageSize] = useState(10);
-  
+
   console.log('🚨 WORKFLOW ID FROM URL:', workflowId);
 
   const token = useMemo(() => user?.token || localStorage.getItem('token'), [user?.token]);
-  const headers = useMemo(() => ({
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {})
-  }), [token]);
+  const headers = useMemo(
+    () => ({
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    }),
+    [token]
+  );
 
-  const loadStatus = useCallback(async (id) => {
-    if (!id) return;
-    setLoadingStatus(true);
-    setError('');
-    try {
-  const res = await apiCall(`/api/workflow/workflows/${id}`, { headers });
-      if (res.ok) {
-        const data = await res.json();
-        setStatus(data);
-        setInstanceId(id);
-        setMode('instance');
-        setConfigNotFound(false);
-      } else if (res.status === 404) {
-        // Not an instance id — likely a config id
-        setMode('config');
-        setStatus(null);
-        setConfigNotFound(false);
-      } else {
-        const txt = await res.text();
-        throw new Error(txt || `Status request failed (${res.status})`);
+  const loadStatus = useCallback(
+    async (id) => {
+      if (!id) return;
+      setLoadingStatus(true);
+      setError('');
+      try {
+        const result = await sharedApiService.makeRequest(
+          `/api/workflow/workflows/${id}`,
+          { headers },
+          { workflowId: id, token: token?.substring(0, 10) }
+        );
+        
+        if (result.success) {
+          setStatus(result.data);
+          setInstanceId(id);
+          setMode('instance');
+          setConfigNotFound(false);
+        } else {
+          // Check if this is a 404 (not an instance id — likely a config id)
+          if (result.error && result.error.includes('404')) {
+            setMode('config');
+            setStatus(null);
+            setConfigNotFound(false);
+          } else {
+            throw new Error(result.error || 'Status request failed');
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load status:', e);
+        setError(e?.message || 'Failed to load status');
+      } finally {
+        setLoadingStatus(false);
       }
-    } catch (e) {
-      console.error('Failed to load status:', e);
-      setError(e?.message || 'Failed to load status');
-    } finally {
-      setLoadingStatus(false);
-    }
-  }, [headers]);
+    },
+    [headers]
+  );
 
   useEffect(() => {
     setMode('unknown');
@@ -127,120 +127,117 @@ function WorkflowExecution({ user }) {
     }
   }, [workflowId, loadStatus]);
 
-  const loadAvailableWorkflows = useCallback(async () => {
-    if (!token) return;
-    setLoadingWorkflows(true);
-    try {
-      const res = await apiCall(`/api/workflow/redis/all`, { headers });
-      if (res.ok) {
-        const json = await res.json();
-        setWorkflows(Array.isArray(json?.workflows) ? json.workflows : []);
-      } else {
-        setWorkflows([]);
+  const loadWorkflowInstances = useCallback(
+    async (page = 1, status = '', size = pageSize) => {
+      if (!token || !workflowId) return;
+      setLoadingInstances(true);
+      try {
+        const skip = (page - 1) * size;
+        const queryParams = new URLSearchParams({
+          limit: size.toString(),
+          skip: skip.toString(),
+        });
+        if (status) queryParams.append('status', status);
+
+        const result = await sharedApiService.makeRequest(
+          `/api/workflow/workflows/${workflowId}/instances?${queryParams}`,
+          { headers },
+          { workflowId, page, status, size, token: token?.substring(0, 10) }
+        );
+        
+        if (result.success) {
+          setInstances(result.data.instances || []);
+          setTotalPages(result.data.total_pages || 1);
+          setCurrentPage(result.data.current_page || 1);
+        } else {
+          throw new Error(result.error || 'Failed to load workflow instances');
+        }
+      } catch (e) {
+        console.error('Failed to load workflow instances:', e);
+        setError(e?.message || 'Failed to load workflow instances');
+      } finally {
+        setLoadingInstances(false);
       }
-    } catch {
-      setWorkflows([]);
-    } finally {
-      setLoadingWorkflows(false);
-    }
-  }, [headers, token]);
+    },
+    [headers, token, pageSize, workflowId]
+  );
 
-  useEffect(() => {
-    // Preload available workflows for selection when needed
-    loadAvailableWorkflows();
-  }, [loadAvailableWorkflows]);
+  const startWorkflowByConfigId = useCallback(
+    async (configId) => {
+      if (!configId) return;
+      setRunning(true);
+      setResult(null);
+      setError('');
 
-  // New callback functions for workflow instances management
-  const loadWorkflowInstances = useCallback(async (page = 1, status = '', size = pageSize) => {
-    if (!token) return;
-    setLoadingInstances(true);
-    try {
-      const skip = (page - 1) * size;
-      const queryParams = new URLSearchParams({
-        limit: size.toString(),
-        skip: skip.toString()
-      });
-      if (status) queryParams.append('status', status);
-      
-      const res = await apiCall(`/api/workflow/instances?${queryParams}`, { headers });
-      if (res.ok) {
-        const data = await res.json();
-        setInstances(data.instances || []);
-        setTotalPages(data.total_pages || 1);
-        setCurrentPage(data.current_page || 1);
-      } else {
-        throw new Error('Failed to load workflow instances');
+      try {
+        // Start workflow by config ID
+        const result = await sharedApiService.makeRequest(
+          `/api/workflow/workflows/config/${configId}/start`,
+          {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ initial_data: {} }),
+          },
+          { configId, action: 'start', token: token?.substring(0, 10) }
+        );
+
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to start workflow');
+        }
+
+        const newInstanceId = result.data.instance_id;
+
+        // Update URL to point to the new instance
+        setSearchParams({ workflow: newInstanceId });
+
+        // Load status for the new instance
+        await loadStatus(newInstanceId);
+
+        setResult({
+          instanceId: newInstanceId,
+          message: 'Workflow started successfully',
+          config_id: configId,
+        });
+
+        // Refresh instances list if showing
+        if (showInstancesList) {
+          await loadWorkflowInstances(currentPage, statusFilter);
+        }
+      } catch (err) {
+        const message = err?.message || 'Unknown error starting workflow';
+        console.error('Workflow start error:', err);
+        setError(message);
+      } finally {
+        setRunning(false);
       }
-    } catch (e) {
-      console.error('Failed to load workflow instances:', e);
-      setError(e?.message || 'Failed to load workflow instances');
-    } finally {
-      setLoadingInstances(false);
-    }
-  }, [headers, token, pageSize]);
+    },
+    [headers, loadStatus, setSearchParams, showInstancesList, currentPage, statusFilter, loadWorkflowInstances]
+  );
 
-  const startWorkflowByConfigId = useCallback(async (configId) => {
-    if (!configId) return;
-    setRunning(true);
-    setResult(null);
-    setError('');
+  const handlePageChange = useCallback(
+    (event, page) => {
+      setCurrentPage(page);
+      loadWorkflowInstances(page, statusFilter);
+    },
+    [loadWorkflowInstances, statusFilter]
+  );
 
-    try {
-      // Start workflow by config ID
-      const startRes = await apiCall(`/api/workflow/workflows/config/${configId}/start`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ initial_data: {} })
-      });
+  const handleStatusFilterChange = useCallback(
+    (event) => {
+      const newStatus = event.target.value;
+      setStatusFilter(newStatus);
+      setCurrentPage(1);
+      loadWorkflowInstances(1, newStatus);
+    },
+    [loadWorkflowInstances]
+  );
 
-      const startData = await startRes.json().catch(() => ({}));
-      if (!startRes.ok) {
-        throw new Error(startData.detail || 'Failed to start workflow');
-      }
-
-      const newInstanceId = startData.instance_id;
-      
-      // Update URL to point to the new instance
-      setSearchParams({ workflow: newInstanceId });
-      
-      // Load status for the new instance
-      await loadStatus(newInstanceId);
-      
-      setResult({
-        instanceId: newInstanceId,
-        message: 'Workflow started successfully',
-        config_id: configId
-      });
-      
-      // Refresh instances list if showing
-      if (showInstancesList) {
-        await loadWorkflowInstances(currentPage, statusFilter);
-      }
-      
-    } catch (err) {
-      const message = err?.message || 'Unknown error starting workflow';
-      console.error('Workflow start error:', err);
-      setError(message);
-    } finally {
-      setRunning(false);
-    }
-  }, [headers, loadStatus, setSearchParams, showInstancesList, currentPage, statusFilter, loadWorkflowInstances]);
-
-  const handlePageChange = useCallback((event, page) => {
-    setCurrentPage(page);
-    loadWorkflowInstances(page, statusFilter);
-  }, [loadWorkflowInstances, statusFilter]);
-
-  const handleStatusFilterChange = useCallback((event) => {
-    const newStatus = event.target.value;
-    setStatusFilter(newStatus);
-    setCurrentPage(1);
-    loadWorkflowInstances(1, newStatus);
-  }, [loadWorkflowInstances]);
-
-  const viewWorkflowInstance = useCallback((instanceId) => {
-    setSearchParams({ workflow: instanceId });
-  }, [setSearchParams]);
+  const viewWorkflowInstance = useCallback(
+    (instanceId) => {
+      setSearchParams({ workflow: instanceId });
+    },
+    [setSearchParams]
+  );
 
   const formatDateTime = useCallback((dateString) => {
     if (!dateString) return 'N/A';
@@ -266,134 +263,114 @@ function WorkflowExecution({ user }) {
 
   // Load instances when showing the list
   useEffect(() => {
-    if (showInstancesList) {
+    if (showInstancesList && workflowId) {
       loadWorkflowInstances(currentPage, statusFilter);
     }
-  }, [showInstancesList, loadWorkflowInstances, currentPage, statusFilter]);
+  }, [showInstancesList, loadWorkflowInstances, currentPage, statusFilter, workflowId]);
 
-  const executeWorkflow = useCallback(async () => {
-    if (!workflowId) return;
-    setRunning(true);
-    setResult(null);
-    setError('');
+  const executeWorkflow = useCallback(
+    async () => {
+      if (!workflowId) return;
+      setRunning(true);
+      setResult(null);
+      setError('');
 
-    try {
-      let idToRun = instanceId || workflowId;
-
-      // If current mode is config, use the new startWorkflowByConfigId method
-      if (mode === 'config') {
-        await startWorkflowByConfigId(workflowId);
-        return;
-      }
-
-      const runRes = await apiCall(`/api/workflow/workflows/${idToRun}/run`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ max_steps: Number(maxSteps) || 100 })
-      });
-
-      const data = await runRes.json().catch(() => ({}));
-      if (!runRes.ok) {
-        throw new Error(data?.detail || `Run failed (status ${runRes.status})`);
-      }
-      setResult({ instanceId: idToRun, ...data });
-      // Refresh status after running
-      await loadStatus(idToRun);
-    } catch (err) {
-      const message = err?.message || 'Unknown error executing workflow';
-      console.error('Workflow execution error:', err);
-      setError(message);
-    } finally {
-      setRunning(false);
-    }
-  }, [workflowId, headers, maxSteps, mode, instanceId, loadStatus, startWorkflowByConfigId]);
-
-  const refreshStatus = useCallback(async () => {
-    const id = instanceId || workflowId;
-    if (!id) return;
-    await loadStatus(id);
-  }, [instanceId, workflowId, loadStatus]);
-
-  const completeTask = useCallback(async (taskId) => {
-    const id = instanceId || workflowId;
-    if (!id || !taskId) return;
-    setRunning(true);
-    setError('');
-    try {
-      let dataBody = undefined;
-      if (taskDataJson && taskDataJson.trim().length > 0) {
-        try {
-          dataBody = JSON.parse(taskDataJson);
-        } catch (e) {
-          throw new Error('Invalid task data JSON');
+      try {
+        // If current mode is config, use the config start endpoint
+        if (mode === 'config') {
+          await startWorkflowByConfigId(workflowId);
+          return;
         }
-      }
-      const res = await apiCall(`/api/workflow/workflows/${id}/tasks/${taskId}/complete`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ data: dataBody })
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(json?.detail || `Complete task failed (${res.status})`);
-      }
-      await loadStatus(id);
-    } catch (e) {
-      console.error('Complete task error:', e);
-      setError(e?.message || 'Task completion failed');
-    } finally {
-      setRunning(false);
-    }
-  }, [instanceId, workflowId, headers, taskDataJson, loadStatus]);
 
-  const startAndRunByName = useCallback(async () => {
-    if (!startByName) return;
-    setRunning(true);
-    setError('');
-    setResult(null);
-    try {
-      const res = await apiCall(`/api/workflow/workflows/${encodeURIComponent(startByName)}/start`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ initial_data: {} })
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        const t = j?.detail || (await res.text().catch(() => ''));
-        throw new Error(t || `Start failed (${res.status})`);
+        // For instance mode, use the run endpoint
+        let idToRun = instanceId || workflowId;
+
+        const result = await sharedApiService.makeRequest(
+          `/api/workflow/workflows/${idToRun}/run`,
+          {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ max_steps: Number(maxSteps) || 100 }),
+          },
+          { workflowId: idToRun, maxSteps, action: 'run', token: token?.substring(0, 10) }
+        );
+
+        if (!result.success) {
+          throw new Error(result.error || 'Run failed');
+        }
+        
+        setResult({ instanceId: idToRun, ...result.data });
+        // Refresh status after running
+        await loadStatus(idToRun);
+      } catch (err) {
+        const message = err?.message || 'Unknown error executing workflow';
+        console.error('Workflow execution error:', err);
+        setError(message);
+      } finally {
+        setRunning(false);
       }
-      const j = await res.json();
-      const newId = j.instance_id;
-      setInstanceId(newId);
-      setMode('instance');
-      await loadStatus(newId);
-      // Run immediately
-      const runRes = await apiCall(`/api/workflow/workflows/${newId}/run`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ max_steps: Number(maxSteps) || 100 })
-      });
-      const data = await runRes.json().catch(() => ({}));
-      if (!runRes.ok) {
-        throw new Error(data?.detail || `Run failed (status ${runRes.status})`);
+    },
+    [workflowId, headers, maxSteps, mode, instanceId, loadStatus, startWorkflowByConfigId]
+  );
+
+  const refreshStatus = useCallback(
+    async () => {
+      const id = instanceId || workflowId;
+      if (!id) return;
+      await loadStatus(id);
+    },
+    [instanceId, workflowId, loadStatus]
+  );
+
+  const completeTask = useCallback(
+    async (taskId) => {
+      const id = instanceId || workflowId;
+      if (!id || !taskId) return;
+      setRunning(true);
+      setError('');
+      try {
+        let dataBody = undefined;
+        if (taskDataJson && taskDataJson.trim().length > 0) {
+          try {
+            dataBody = JSON.parse(taskDataJson);
+          } catch (e) {
+            throw new Error('Invalid task data JSON');
+          }
+        }
+        
+        const result = await sharedApiService.makeRequest(
+          `/api/workflow/workflows/${id}/tasks/${taskId}/complete`,
+          {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ data: dataBody }),
+          },
+          { workflowId: id, taskId, action: 'complete', token: token?.substring(0, 10) }
+        );
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Complete task failed');
+        }
+        
+        await loadStatus(id);
+      } catch (e) {
+        console.error('Complete task error:', e);
+        setError(e?.message || 'Task completion failed');
+      } finally {
+        setRunning(false);
       }
-      setResult({ instanceId: newId, ...data });
-      await loadStatus(newId);
-      setConfigNotFound(false);
-    } catch (e) {
-      console.error('Start by name error:', e);
-      setError(e?.message || 'Start by name failed');
-    } finally {
-      setRunning(false);
-    }
-  }, [startByName, headers, maxSteps, loadStatus]);
-  
+    },
+    [instanceId, workflowId, headers, taskDataJson, loadStatus]
+  );
+
   return (
-    <Box sx={{ 
-      p: 3,
-      background: theme.custom?.backgroundGradient || theme.palette.background.default,
-      minHeight: '100vh'
-    }}>
+    <Box
+      sx={{
+        p: 3,
+        background: theme.custom?.backgroundGradient || theme.palette.background.default,
+        minHeight: '100vh',
+      }}
+    >
       {/* Header */}
       <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -406,7 +383,7 @@ function WorkflowExecution({ user }) {
           <Stack direction="row" spacing={1} alignItems="center">
             <Tooltip title="Toggle instances list">
               <Button
-                variant={showInstancesList ? "contained" : "outlined"}
+                variant={showInstancesList ? 'contained' : 'outlined'}
                 color="info"
                 startIcon={<List />}
                 onClick={() => setShowInstancesList(!showInstancesList)}
@@ -427,10 +404,10 @@ function WorkflowExecution({ user }) {
                   variant="contained"
                   color="primary"
                   startIcon={running ? <CircularProgress color="inherit" size={16} /> : <Play />}
-                  disabled={!workflowId || running || (status?.status === 'completed' && mode === 'instance')}
+                  disabled={!workflowId || running || (status?.is_completed && mode === 'instance')}
                   onClick={executeWorkflow}
                 >
-                  {mode === 'config' ? (running ? 'Starting…' : 'Start & Run') : (running ? 'Running…' : 'Run')}
+                  {mode === 'config' ? (running ? 'Starting…' : 'Start & Run') : running ? 'Running…' : 'Run'}
                 </Button>
               </span>
             </Tooltip>
@@ -451,28 +428,40 @@ function WorkflowExecution({ user }) {
         </Box>
       </Box>
 
-      <Box sx={{ 
-        p: 4, 
-        textAlign: 'center',
-        background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.95)})`,
-        backdropFilter: 'blur(10px)',
-        border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-        borderRadius: 3
-      }}>
+      <Box
+        sx={{
+          p: 4,
+          textAlign: 'center',
+          background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(
+            theme.palette.background.paper,
+            0.95
+          )})`,
+          backdropFilter: 'blur(10px)',
+          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+          borderRadius: 3,
+        }}
+      >
         <Stack spacing={2} alignItems="center">
           <Typography variant="h5" gutterBottom>
-            {mode === 'config' ? 'Ready to start a new instance' : mode === 'instance' ? 'Controlling existing instance' : 'Detecting ID type…'}
+            {mode === 'config'
+              ? 'Ready to start a new instance'
+              : mode === 'instance'
+              ? 'Controlling existing instance'
+              : 'Detecting ID type…'}
           </Typography>
           <Typography variant="body1">
-            ID from URL: <strong>{workflowId || 'NOT PROVIDED'}</strong>
+            Workflow ID: <strong>{workflowId || 'NOT PROVIDED'}</strong>
           </Typography>
           <Typography variant="body2" color="text.secondary">
             User token: {token ? '✅ PRESENT' : '❌ MISSING'}
           </Typography>
 
-          {mode === 'instance' && status && (
-            <Alert severity={status.status === 'completed' ? 'success' : status.status === 'error' ? 'error' : 'info'} sx={{ width: '100%', maxWidth: 900 }}>
-              Status: <strong>{status.status}</strong>
+          {mode === 'instance' && status && status.length > 0 && (
+            <Alert
+              severity={status[0].is_completed ? 'success' : status[0].status === 'error' ? 'error' : 'info'}
+              sx={{ width: '100%', maxWidth: 900 }}
+            >
+              Status: <strong>{status[0].status}</strong>
             </Alert>
           )}
 
@@ -495,49 +484,12 @@ function WorkflowExecution({ user }) {
           {mode === 'config' && configNotFound && (
             <Box sx={{ width: '100%', maxWidth: 900 }}>
               <Alert severity="warning" sx={{ mb: 2 }}>
-                Workflow configuration not found in Redis for this ID. You can start by workflow name or pick one from your tenant list below.
+                Workflow configuration not found for this ID.
               </Alert>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems="center">
-                <TextField
-                  label="Start by workflow name"
-                  placeholder="e.g. order_approval"
-                  size="small"
-                  fullWidth
-                  value={startByName}
-                  onChange={(e) => setStartByName(e.target.value)}
-                />
-                <Button variant="contained" onClick={startAndRunByName} disabled={!startByName || running}>
-                  Start & Run
-                </Button>
-              </Stack>
-
-              <Divider sx={{ my: 2 }} />
-
-              <Typography variant="subtitle1" gutterBottom>
-                Available Workflows in Tenant
-              </Typography>
-              {loadingWorkflows ? (
-                <CircularProgress size={20} />
-              ) : workflows.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">No workflows found.</Typography>
-              ) : (
-                <Stack direction="row" spacing={1} flexWrap="wrap">
-                  {workflows.map(w => (
-                    <Chip
-                      key={w.redis_key}
-                      label={`${w.name} (${w.category || 'general'})`}
-                      onClick={() => setStartByName(w.name)}
-                      sx={{ mb: 1 }}
-                      variant={startByName === w.name ? 'filled' : 'outlined'}
-                      color={w.type === 'workflow_config' ? 'primary' : 'default'}
-                    />
-                  ))}
-                </Stack>
-              )}
             </Box>
           )}
         </Stack>
-        
+
         <Button
           variant="contained"
           size="large"
@@ -560,41 +512,55 @@ function WorkflowExecution({ user }) {
             <Typography variant="body2">Instance ID: {result.instanceId}</Typography>
             <Typography variant="body2">Steps Executed: {result.steps_executed}</Typography>
             <Typography variant="body2">Completed: {String(result.is_completed)}</Typography>
-            <Typography variant="body2">Ready Tasks: {Array.isArray(result.ready_tasks) ? result.ready_tasks.join(', ') : '-'}</Typography>
+            <Typography variant="body2">Message: {result.message}</Typography>
           </Box>
         )}
 
-        {mode === 'instance' && status && (
+        {mode === 'instance' && status && status.length > 0 && (
           <>
             <Divider sx={{ my: 3 }} />
             <Box sx={{ textAlign: 'left', mx: 'auto', maxWidth: 900 }}>
               <Typography variant="h6" gutterBottom>Ready Tasks</Typography>
-              {Array.isArray(status.ready_tasks) && status.ready_tasks.length > 0 ? (
+              {status.some((instance) => Array.isArray(instance.ready_tasks) && instance.ready_tasks.length > 0) ? (
                 <Stack spacing={1}>
-                  {status.ready_tasks.map((t) => (
-                    <Box key={t.task_id} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, border: `1px solid ${alpha(theme.palette.divider, 0.2)}`, borderRadius: 1 }}>
-                      <Box>
-                        <Typography variant="subtitle2">{t.name}</Typography>
-                        <Typography variant="caption" color="text.secondary">ID: {t.task_id} • Type: {t.type} • State: {t.state}</Typography>
+                  {status.flatMap((instance) =>
+                    instance.ready_tasks.map((t) => (
+                      <Box
+                        key={t.id}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          p: 1.5,
+                          border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
+                          borderRadius: 1,
+                        }}
+                      >
+                        <Box>
+                          <Typography variant="subtitle2">{t.name}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            ID: {t.id} • State: {t.state}
+                          </Typography>
+                        </Box>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Tooltip title="Complete task with optional data">
+                            <span>
+                              <Button
+                                size="small"
+                                variant="contained"
+                                color="success"
+                                startIcon={<CheckCircle2 />}
+                                disabled={running}
+                                onClick={() => completeTask(t.id)}
+                              >
+                                Complete
+                              </Button>
+                            </span>
+                          </Tooltip>
+                        </Stack>
                       </Box>
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <Tooltip title="Complete task with optional data">
-                          <span>
-                            <Button
-                              size="small"
-                              variant="contained"
-                              color="success"
-                              startIcon={<CheckCircle2 />}
-                              disabled={running}
-                              onClick={() => completeTask(t.task_id)}
-                            >
-                              Complete
-                            </Button>
-                          </span>
-                        </Tooltip>
-                      </Stack>
-                    </Box>
-                  ))}
+                    ))
+                  )}
                   <TextField
                     label="Task Data (JSON)"
                     placeholder='{"key":"value"}'
@@ -623,11 +589,7 @@ function WorkflowExecution({ user }) {
                 <Stack direction="row" spacing={2} alignItems="center">
                   <FormControl size="small" sx={{ minWidth: 120 }}>
                     <InputLabel>Status Filter</InputLabel>
-                    <Select
-                      value={statusFilter}
-                      label="Status Filter"
-                      onChange={handleStatusFilterChange}
-                    >
+                    <Select value={statusFilter} label="Status Filter" onChange={handleStatusFilterChange}>
                       <MenuItem value="">All</MenuItem>
                       <MenuItem value="running">Running</MenuItem>
                       <MenuItem value="completed">Completed</MenuItem>
@@ -660,7 +622,6 @@ function WorkflowExecution({ user }) {
                       <TableHead>
                         <TableRow>
                           <TableCell>Instance ID</TableCell>
-                          <TableCell>Workflow Name</TableCell>
                           <TableCell>Status</TableCell>
                           <TableCell>Created</TableCell>
                           <TableCell>Updated</TableCell>
@@ -677,37 +638,38 @@ function WorkflowExecution({ user }) {
                                 {instance.instance_id.substring(0, 8)}...
                               </Typography>
                             </TableCell>
-                            <TableCell>{instance.workflow_name}</TableCell>
                             <TableCell>
                               <Stack direction="row" spacing={1} alignItems="center">
                                 {getStatusIcon(instance.status)}
-                                <Chip 
-                                  label={instance.status} 
+                                <Chip
+                                  label={instance.status}
                                   size="small"
-                                  color={instance.status === 'completed' ? 'success' : instance.status === 'error' ? 'error' : 'primary'}
+                                  color={
+                                    instance.status === 'completed'
+                                      ? 'success'
+                                      : instance.status === 'error'
+                                      ? 'error'
+                                      : 'primary'
+                                  }
                                 />
                               </Stack>
                             </TableCell>
                             <TableCell>
-                              <Typography variant="body2">
-                                {formatDateTime(instance.created_at)}
-                              </Typography>
+                              <Typography variant="body2">{formatDateTime(instance.created_at)}</Typography>
                             </TableCell>
                             <TableCell>
-                              <Typography variant="body2">
-                                {formatDateTime(instance.updated_at)}
-                              </Typography>
+                              <Typography variant="body2">{formatDateTime(instance.updated_at)}</Typography>
                             </TableCell>
                             <TableCell>
-                              <Chip 
-                                label={instance.ready_tasks_count || 0} 
-                                size="small" 
+                              <Chip
+                                label={instance.ready_tasks_count || 0}
+                                size="small"
                                 color={instance.ready_tasks_count > 0 ? 'warning' : 'default'}
                               />
                             </TableCell>
                             <TableCell>
-                              <Chip 
-                                label={instance.in_memory ? 'Yes' : 'No'} 
+                              <Chip
+                                label={instance.in_memory ? 'Yes' : 'No'}
                                 size="small"
                                 color={instance.in_memory ? 'success' : 'default'}
                               />
@@ -728,7 +690,7 @@ function WorkflowExecution({ user }) {
                       </TableBody>
                     </Table>
                   </TableContainer>
-                  
+
                   {totalPages > 1 && (
                     <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
                       <Pagination
