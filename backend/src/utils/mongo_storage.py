@@ -16,8 +16,9 @@ class MongoStorageService:
             from ..db import get_collections
             return get_collections()
         except Exception as e:
+            logger.error(f"[DB] Database not connected - call connect_db() first")
             logger.error(f"Failed to get database collections: {e}")
-            raise RuntimeError("Database connection error")
+            raise RuntimeError("DB not connected. Call connect_db() first.")
     
     @staticmethod
     def _ensure_tenant_filter(filter_dict: Dict[str, Any], tenant_id: Optional[str], collection_name: str) -> Dict[str, Any]:

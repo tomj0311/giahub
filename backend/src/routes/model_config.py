@@ -147,5 +147,3 @@ async def get_model_categories(user: dict = Depends(verify_token_middleware)):
         logger.error(f"Error getting model categories: {e}")
         raise HTTPException(status_code=500, detail="Failed to get model categories")
 
-
-# Backward-compatible alias if needed in the future (intentionally omitted to avoid route shadowing)

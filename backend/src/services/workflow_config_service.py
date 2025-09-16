@@ -378,41 +378,6 @@ class WorkflowConfigService:
                     detail="Workflow configuration not found"
                 )
             
-            # ALSO SAVE TO REDIS - always save config updates to Redis
-            try:
-                workflow_service = WorkflowService()
-                
-                # If BPMN file was updated, upload it first
-                if bpmn_file and bpmn_file.filename:
-                    workflow_name = config_data.get("name", existing.get("name", f"workflow_{config_id}"))
-                    workflow_service.upload_bpmn(bpmn_file, workflow_name)
-                
-                # ALWAYS update the complete workflow config document in Redis
-                updated_doc = existing.copy()
-                updated_doc.update(update_data)
-                
-                # Convert ObjectId to string for JSON serialization
-                if "_id" in updated_doc:
-                    updated_doc["_id"] = str(updated_doc["_id"])
-                
-                # Convert ALL datetime objects to strings for JSON serialization
-                for key, value in updated_doc.items():
-                    if isinstance(value, datetime):
-                        updated_doc[key] = value.isoformat()
-                
-                updated_doc["id"] = config_id  # Add the MongoDB ID
-                updated_doc["userId"] = user_id  # Add user info
-                updated_doc["tenantId"] = tenant_id  # Add tenant info
-                updated_doc["userName"] = user.get("name", "Unknown User")  # Add user name
-                updated_doc["workflowFileName"] = updated_doc.get("bpmn_filename", "no_file.bpmn")  # Add workflow file name
-                
-                # Use the existing method to store updated config
-                workflow_service.store_workflow_config(updated_doc)
-                    
-            except Exception as e:
-                logger.error(f"[WORKFLOW] Failed to update Redis via WorkflowService: {e}")
-                # Don't fail the whole operation, just log the error
-            
             response = {
                 "id": config_id,
                 "message": "Workflow configuration updated successfully"
@@ -469,25 +434,6 @@ class WorkflowConfigService:
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Workflow configuration not found"
                 )
-            
-            # Delete from Redis (spec and config entries)
-            workflow_name = existing.get("name")
-            if workflow_name:
-                try:
-                    workflow_service = WorkflowService()
-                    # For safety, don't cleanup running instances by default
-                    # Set cleanup_instances=True if you want to also stop any running workflows
-                    redis_deleted = workflow_service.delete_workflow_config_from_redis(
-                        workflow_name, 
-                        cleanup_instances=False
-                    )
-                    if redis_deleted:
-                        logger.info(f"[WORKFLOW] Successfully cleaned up Redis entries for {workflow_name}")
-                    else:
-                        logger.warning(f"[WORKFLOW] Failed to clean up Redis entries for {workflow_name}")
-                except Exception as e:
-                    logger.error(f"[WORKFLOW] Error cleaning up Redis for {workflow_name}: {e}")
-                    # Don't fail the entire operation if Redis cleanup fails
             
             response = {
                 "id": config_id,

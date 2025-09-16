@@ -9,8 +9,10 @@ import uuid
 import json
 import os
 import sys
+import uuid
+from datetime import datetime
 from typing import Dict, Any, Optional, List
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException, UploadFile, status
 from bson import ObjectId
 from io import BytesIO
 # Add project root to Python path to find spiffworkflow
@@ -24,10 +26,87 @@ from spiffworkflow.bpmn.specs.mixins.user_task import UserTask as BpmnUserTask
 from spiffworkflow.bpmn.specs.mixins.manual_task import ManualTask
 from lxml import etree
 from backend.src.utils.log import logger
+from backend.src.utils.mongo_storage import MongoStorageService
+from backend.src.services.file_service import FileService
+
+# Module loaded log
+logger.debug("[WORKFLOW] Service module loaded")
 
 
 class WorkflowService:
     """Service for handling BPMN workflow operations"""
+    
+    @staticmethod
+    async def validate_tenant_access(user: dict) -> str:
+        """Validate tenant access and return tenant_id"""
+        tenant_id = user.get("tenantId")
+        if not tenant_id:
+            logger.warning(f"[WORKFLOW] Missing tenant information for user: {user.get('id')}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User tenant information missing. Please re-login."
+            )
+        return tenant_id
+    
+    @classmethod
+    async def start_workflow_by_config_id_for_user(cls, config_id: str, initial_data: Dict[str, Any] = None, user: dict = None) -> str:
+        """Start a new workflow instance using configuration ID - follows working service pattern"""
+        tenant_id = await cls.validate_tenant_access(user)
+        try:
+            # Get workflow config from MongoDB using EXACT pattern from workflow_config_service
+            try:
+                object_id = ObjectId(config_id)
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid configuration ID"
+                )
+            
+            config = await MongoStorageService.find_one("workflowConfig", {"_id": object_id}, tenant_id=tenant_id)
+            
+            if not config:
+                logger.warning(f"[WORKFLOW] Workflow config not found: {config_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Workflow config '{config_id}' not found"
+                )
+            
+            # Create workflow service instance to handle the workflow operations
+            service = cls()
+            workflow_name = config.get('name')
+            bpmn_file_path = config.get('bpmn_file_path')
+            
+            if not bpmn_file_path:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"No BPMN file path in config '{config_id}'"
+                )
+            
+            # Get BPMN content from MinIO and load spec
+            from backend.src.services.file_service import FileService
+            bpmn_content = await FileService.get_file_content_from_path(bpmn_file_path)
+            if not bpmn_content:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"BPMN file not found at '{bpmn_file_path}'"
+                )
+            
+            # Parse and store the workflow spec
+            actual_workflow_name = service._parse_and_store_bpmn(bpmn_content, workflow_name)
+            
+            # Start the workflow
+            instance_id = service.start_workflow(actual_workflow_name, initial_data)
+            
+            # Save instance to MongoDB
+            await service._save_workflow_instance(instance_id, config_id, actual_workflow_name, initial_data, tenant_id)
+            
+            return instance_id
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Error starting workflow by config ID {config_id}: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
     
     def __init__(self):
         self.parser = BpmnParser()  # Use BPMN parser
@@ -35,13 +114,76 @@ class WorkflowService:
         self.specs: Dict[str, Any] = {}
         self.active_workflows: Dict[str, BpmnWorkflow] = {}  # Store active workflow instances
         self.bpmn_xml_data: Dict[str, Any] = {}  # Store original BPMN XML for form parsing
+        self._initialized = False
         
-        self._load_specs()
-    
-    def _load_specs(self):
-        """Initialize BPMN specs"""
+        # Don't load specs during init - do it lazily when needed
         logger.info("[WORKFLOW] Initializing BPMN workflow service")
         logger.info(f"[WORKFLOW] Currently have {len(self.specs)} workflow specs loaded")
+    
+    async def _ensure_initialized(self, tenant_id: str = None):
+        """Ensure the service is initialized lazily when needed"""
+        if not self._initialized:
+            try:
+                # Load workflow instances from database
+                loaded_count = await self.load_workflow_instances_from_db(tenant_id)
+                logger.info(f"[WORKFLOW] Service initialized with {loaded_count} workflow instances")
+                self._initialized = True
+            except Exception as e:
+                logger.error(f"[WORKFLOW] Error during initialization: {e}")
+                # Don't fail the entire service if database loading fails
+                self._initialized = True
+
+    async def initialize(self, tenant_id: str = None):
+        """Initialize the service and load workflow instances from database"""
+        await self._ensure_initialized(tenant_id)
+    
+
+    
+    def _parse_and_store_bpmn(self, bpmn_content: bytes, workflow_name: str) -> str:
+        """Parse BPMN content and store workflow spec"""
+        try:
+            xml_element = etree.fromstring(bpmn_content)
+            
+            # Find all processes
+            processes = xml_element.xpath('//bpmn:process | //process', 
+                                       namespaces={'bpmn': 'http://www.omg.org/spec/BPMN/20100524/MODEL'})
+            
+            # Parse with BPMN parser
+            parser = BpmnParser()
+            parser.add_bpmn_xml(xml_element, filename=f"{workflow_name}.bpmn")
+            process_ids = parser.get_process_ids()
+            
+            if not process_ids:
+                # Make processes executable and re-parse
+                for proc in processes:
+                    if proc.get('isExecutable') != 'true':
+                        proc.set('isExecutable', 'true')
+                parser = BpmnParser()
+                parser.add_bpmn_xml(xml_element, filename=f"{workflow_name}.bpmn")
+                process_ids = parser.get_process_ids()
+                
+                if not process_ids:
+                    raise ValueError("No executable processes found in BPMN file")
+            
+            logger.info(f"[WORKFLOW] Found process IDs: {process_ids}")
+            
+            # Use provided workflow name if it matches a process ID, otherwise use first process
+            actual_workflow_name = workflow_name if workflow_name in process_ids else process_ids[0]
+            
+            # Get and store spec
+            spec = parser.get_spec(actual_workflow_name)
+            self.specs[actual_workflow_name] = spec
+            self.bpmn_xml_data[actual_workflow_name] = xml_element
+            
+            logger.info(f"[WORKFLOW] Loaded workflow: {actual_workflow_name}")
+            return actual_workflow_name
+            
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Error parsing BPMN content: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid BPMN file: {str(e)}"
+            )
     
     def _xpath_with_fallback(self, element, xpath_pattern: str) -> List:
         """Helper to try XPath with and without namespace"""
@@ -246,7 +388,7 @@ class WorkflowService:
         logger.info(f"[WORKFLOW] Found {len(ready_tasks)} ready user/manual tasks for instance {instance_id}")
         return ready_tasks
     
-    def complete_user_task(self, instance_id: str, task_id: str, form_data: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def complete_user_task(self, instance_id: str, task_id: str, form_data: Dict[str, Any] = None, tenant_id: str = None) -> Dict[str, Any]:
         """Complete a user task with form data"""
         wf = self.active_workflows.get(instance_id)
         if not wf:
@@ -298,6 +440,9 @@ class WorkflowService:
         # Try to run the workflow further (automatic tasks)
         self._run_engine_steps_safely(wf, f"Completed task {task_id} and ran engine steps")
         
+        # Update instance in database
+        await self._update_workflow_instance(instance_id, tenant_id)
+        
         return {
             'task_id': task_id,
             'status': 'completed',
@@ -336,129 +481,298 @@ class WorkflowService:
             'ready_user_tasks': self.get_ready_user_tasks(instance_id)
         }
     
+    def list_tasks(self, instance_id: str) -> List[Dict[str, Any]]:
+        """List all tasks in a workflow instance"""
+        wf = self.active_workflows.get(instance_id)
+        if not wf:
+            raise HTTPException(status_code=404, detail=f"Workflow instance '{instance_id}' not found")
+        
+        tasks = []
+        for task in wf.get_tasks():
+            state_name = next((name for name in TaskState._names if getattr(TaskState, name) == task.state), f"UNKNOWN_{task.state}")
+            tasks.append({
+                'task_id': str(task.id),
+                'name': task.task_spec.name,
+                'type': type(task.task_spec).__name__,
+                'state': state_name
+            })
+        
+        return tasks
     
-# Test main method - separate from the main service
-if __name__ == "__main__":
-    def _get_workflow_config_from_mongo(workflow_id: str):
-        """Get workflow configuration from MongoDB"""
-        from pymongo import MongoClient
-        print("Connecting to MongoDB on port 8801...")
-        mongo_client = MongoClient('mongodb://localhost:8801/')
-        collection = mongo_client['giap']['workflowConfig']
-        
-        print(f"Looking for workflow config with ID: {workflow_id}")
-        workflow_config = collection.find_one({"_id": ObjectId(workflow_id)})
-        if not workflow_config:
-            raise ValueError(f"Workflow config not found for ID: {workflow_id}")
-        
-        print(f"Found workflow: {workflow_config['name']}")
-        print(f"BPMN file path: {workflow_config['bpmn_file_path']}")
-        return workflow_config
-
-    def _get_bpmn_content_from_minio(file_path: str):
-        """Download BPMN content from MinIO"""
-        from minio import Minio
-        print("Connecting to MinIO on port 8803...")
-        minio_client = Minio('localhost:8803', access_key='minio', secret_key='minio8888', secure=False)
-        
-        print(f"Downloading BPMN file from MinIO: {file_path}")
-        response = minio_client.get_object("uploads", file_path)
-        content = response.read()
-        response.close()
-        response.release_conn()
-        return content
-
-    def _setup_workflow_from_bpmn(workflow_service, bpmn_content, workflow_config):
-        """Parse BPMN and setup workflow in service"""
-        parser = BpmnParser()
-        xml_element = etree.fromstring(bpmn_content)
-        processes = xml_element.xpath('//bpmn:process | //process', namespaces={'bpmn': 'http://www.omg.org/spec/BPMN/20100524/MODEL'})
-        
-        parser.add_bpmn_xml(xml_element, filename=workflow_config['bpmn_filename'])
-        process_ids = parser.get_process_ids()
-        
-        if not process_ids:
-            # Make processes executable and re-parse
-            for proc in processes:
-                if proc.get('isExecutable') != 'true':
-                    proc.set('isExecutable', 'true')
-            parser = BpmnParser()
-            parser.add_bpmn_xml(xml_element, filename=workflow_config['bpmn_filename'])
-            process_ids = parser.get_process_ids()
-            
-            if not process_ids:
-                raise ValueError("No executable processes found")
-        
-        print(f"Found process IDs: {process_ids}")
-        workflow_name = workflow_config['name'] if workflow_config['name'] in process_ids else process_ids[0]
-        spec = parser.get_spec(workflow_name)
-        
-        workflow_service.specs[workflow_name] = spec
-        workflow_service.bpmn_xml_data[workflow_name] = xml_element
-        print(f"Loaded workflow: {workflow_name}")
-        return workflow_name
-
-    def _process_workflow_tasks(workflow_service, instance_id):
-        """Process all workflow tasks until completion"""
-        status = workflow_service.get_workflow_status(instance_id)
-        print(f"📊 Workflow status: {status['task_counts']}")
-        ready_tasks = status['ready_user_tasks']
-        
-        while ready_tasks and not status['is_completed']:
-            print(f"\n👤 Found {len(ready_tasks)} ready user/manual tasks:")
-            
-            for i, task in enumerate(ready_tasks, 1):
-                print(f"\n  {i}. {task['task_name']} (ID: {task['task_id']}) - Type: {task['task_type']}")
-                try:
-                    result = workflow_service.complete_user_task(instance_id, task['task_id'])
-                    print(f"     ✅ Task completed: {result['status']}")
-                    if result.get('workflow_complete'):
-                        print(f"     🏁 Workflow completed!")
-                        return
-                except Exception as e:
-                    print(f"     ❌ Failed to complete task: {e}")
-                    continue
-            
-            status = workflow_service.get_workflow_status(instance_id)
-            ready_tasks = status['ready_user_tasks']
-            if not ready_tasks:
-                print("     ⏸️ No more ready tasks")
-                break
-        
-        if not ready_tasks and not status['is_completed']:
-            print("❓ No user/manual tasks found - workflow may be waiting or blocked")
-        elif not ready_tasks and status['is_completed']:
-            print("✅ All tasks completed automatically!")
-        
-        # Final status
-        final_status = workflow_service.get_workflow_status(instance_id)
-        print(f"\n📋 Final workflow status:")
-        print(f"   🏁 Complete: {final_status['is_completed']}")
-        print(f"   📊 Task counts: {final_status['task_counts']}")
-        print(f"   💾 Workflow data: {final_status['workflow_data']}")
-
-    def test_workflow_from_mongo_minio():
-        """Test workflow by reading config from MongoDB and file from MinIO"""
+    def stop_workflow(self, instance_id: str):
+        """Stop and remove workflow instance"""
+        if instance_id in self.active_workflows:
+            del self.active_workflows[instance_id]
+            logger.info(f"[WORKFLOW] Stopped and removed workflow instance: {instance_id}")
+        else:
+            logger.warning(f"[WORKFLOW] Workflow instance not found in memory: {instance_id}")
+    
+    def upload_bpmn(self, file: UploadFile, workflow_name: str) -> Dict[str, Any]:
+        """Upload and parse BPMN file"""
         try:
-            workflow_id = "68c895f3620a7a8f3ff26058"
-            workflow_config = _get_workflow_config_from_mongo(workflow_id)
-            bpmn_content = _get_bpmn_content_from_minio(workflow_config['bpmn_file_path'])
+            # Read file content
+            bpmn_content = file.file.read()
             
-            workflow_service = WorkflowService()
-            workflow_name = _setup_workflow_from_bpmn(workflow_service, bpmn_content, workflow_config)
+            # Parse and store the workflow spec
+            actual_workflow_name = self._parse_and_store_bpmn(bpmn_content, workflow_name)
             
-            instance_id = workflow_service.start_workflow(workflow_name)
-            print(f"Started instance: {instance_id}")
+            return {
+                "success": True,
+                "workflow_name": actual_workflow_name
+            }
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Error uploading BPMN file: {e}")
+            return {
+                "success": False,
+                "workflow_name": workflow_name,
+                "error": str(e)
+            }
+    
+    def get_workflow_metrics(self) -> Dict[str, Any]:
+        """Get workflow service metrics and storage information"""
+        return {
+            "active_workflows_count": len(self.active_workflows),
+            "loaded_specs_count": len(self.specs),
+            "initialized": self._initialized,
+            "active_workflows": list(self.active_workflows.keys()),
+            "loaded_specs": list(self.specs.keys())
+        }
+    
+    async def get_workflow_name_by_config_id(self, config_id: str, tenant_id: str = None) -> Optional[str]:
+        """Get workflow name from config ID stored in MongoDB"""
+        try:
+            config = await MongoStorageService.find_one(
+                "workflowConfig", 
+                {"_id": ObjectId(config_id)},
+                tenant_id=tenant_id
+            )
+            if config:
+                return config.get('name')
+            return None
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Error getting workflow name for config {config_id}: {e}")
+            return None
+    
+
+    
+    async def _save_workflow_instance(self, instance_id: str, config_id: str, workflow_name: str, initial_data: Dict[str, Any] = None, tenant_id: str = None):
+        """Save workflow instance to MongoDB"""
+        try:
+            wf = self.active_workflows.get(instance_id)
+            if not wf:
+                raise ValueError(f"Workflow instance '{instance_id}' not found in memory")
             
-            print("\n🔍 Checking workflow status...")
-            _process_workflow_tasks(workflow_service, instance_id)
-            print("✅ Test completed successfully!")
+            # Serialize workflow state
+            serialized_wf = self.serializer.serialize_workflow(wf)
+            
+            instance_data = {
+                "instance_id": instance_id,
+                "config_id": config_id,
+                "workflow_name": workflow_name,
+                "status": "completed" if wf.is_completed() else "running",
+                "serialized_workflow": serialized_wf,
+                "initial_data": initial_data or {},
+                "current_data": dict(wf.data),
+                "tenantId": tenant_id,
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
+            
+            await MongoStorageService.insert_one("workflowInstances", instance_data, tenant_id)
+            logger.info(f"[WORKFLOW] Saved workflow instance '{instance_id}' to MongoDB")
             
         except Exception as e:
-            print(f"❌ Test failed: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"[WORKFLOW] Error saving workflow instance '{instance_id}': {e}")
+            # Don't raise - workflow can continue without persistence
     
-    print("🚀 Testing workflow with user/manual task handling from MinIO...")
-    test_workflow_from_mongo_minio()
+    async def _update_workflow_instance(self, instance_id: str, tenant_id: str = None):
+        """Update workflow instance in MongoDB"""
+        try:
+            wf = self.active_workflows.get(instance_id)
+            if not wf:
+                logger.warning(f"[WORKFLOW] Cannot update instance '{instance_id}' - not found in memory")
+                return
+            
+            # Serialize workflow state
+            serialized_wf = self.serializer.serialize_workflow(wf)
+            
+            update_data = {
+                "status": "completed" if wf.is_completed() else "running",
+                "serialized_workflow": serialized_wf,
+                "current_data": dict(wf.data),
+                "updated_at": datetime.utcnow()
+            }
+            
+            await MongoStorageService.update_one(
+                "workflowInstances",
+                {"instance_id": instance_id},
+                update_data,
+                tenant_id
+            )
+            logger.debug(f"[WORKFLOW] Updated workflow instance '{instance_id}' in MongoDB")
+            
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Error updating workflow instance '{instance_id}': {e}")
+            # Don't raise - workflow can continue without persistence
+    
+    async def load_workflow_instances_from_db(self, tenant_id: str = None):
+        """Load all active workflow instances from MongoDB back into memory"""
+        try:
+            # Find all active (non-completed) workflow instances
+            instances = await MongoStorageService.find_many(
+                "workflowInstances",
+                {"status": {"$ne": "completed"}},
+                tenant_id,
+                sort_field="created_at",
+                sort_order=-1
+            )
+            
+            loaded_count = 0
+            for instance in instances:
+                try:
+                    instance_id = instance["instance_id"]
+                    config_id = instance["config_id"]
+                    workflow_name = instance["workflow_name"]
+                    serialized_wf = instance.get("serialized_workflow")
+                    
+                    if not serialized_wf:
+                        logger.warning(f"[WORKFLOW] No serialized data for instance '{instance_id}', skipping")
+                        continue
+                    
+                    # Load workflow spec if not already loaded
+                    if workflow_name not in self.specs:
+                        # Get workflow config and load BPMN file
+                        try:
+                            config = await MongoStorageService.find_one("workflowConfig", {"_id": ObjectId(config_id)}, tenant_id=tenant_id)
+                            if config and config.get('bpmn_file_path'):
+                                from backend.src.services.file_service import FileService
+                                bpmn_content = await FileService.get_file_content_from_path(config['bpmn_file_path'])
+                                if bpmn_content:
+                                    self._parse_and_store_bpmn(bpmn_content, workflow_name)
+                        except Exception as e:
+                            logger.error(f"[WORKFLOW] Failed to load workflow spec for '{workflow_name}': {e}")
+                    
+                    # Deserialize workflow
+                    spec = self.specs.get(workflow_name)
+                    if not spec:
+                        logger.error(f"[WORKFLOW] Cannot load spec for workflow '{workflow_name}', skipping instance '{instance_id}'")
+                        continue
+                    
+                    wf = self.serializer.deserialize_workflow(serialized_wf, spec=spec)
+                    self.active_workflows[instance_id] = wf
+                    
+                    loaded_count += 1
+                    logger.info(f"[WORKFLOW] Loaded instance '{instance_id}' ({workflow_name}) from database")
+                    
+                except Exception as e:
+                    logger.error(f"[WORKFLOW] Error loading instance '{instance.get('instance_id', 'unknown')}': {e}")
+                    continue
+            
+            logger.info(f"[WORKFLOW] Loaded {loaded_count} workflow instances from database")
+            return loaded_count
+            
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Error loading workflow instances from database: {e}")
+            return 0
+    
+    async def get_workflow_instances(self, tenant_id: str = None, status: str = None, limit: int = 20, skip: int = 0) -> Dict[str, Any]:
+        """Get paginated list of workflow instances"""
+        try:
+            filter_dict = {}
+            if status:
+                filter_dict["status"] = status
+            
+            # Get total count
+            total_count = await MongoStorageService.count_documents("workflowInstances", filter_dict, tenant_id)
+            
+            # Get instances with pagination
+            instances = await MongoStorageService.find_many(
+                "workflowInstances",
+                filter_dict,
+                tenant_id,
+                sort_field="created_at",
+                sort_order=-1,
+                limit=limit,
+                skip=skip
+            )
+            
+            # Add runtime info for active instances
+            for instance in instances:
+                instance_id = instance["instance_id"]
+                if instance_id in self.active_workflows:
+                    wf = self.active_workflows[instance_id]
+                    instance["in_memory"] = True
+                    instance["ready_tasks_count"] = len(self.get_ready_user_tasks(instance_id))
+                else:
+                    instance["in_memory"] = False
+                    instance["ready_tasks_count"] = 0
+            
+            return {
+                "instances": instances,
+                "total_count": total_count,
+                "page_size": limit,
+                "current_page": (skip // limit) + 1 if limit > 0 else 1,
+                "total_pages": (total_count + limit - 1) // limit if limit > 0 else 1
+            }
+            
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Error getting workflow instances: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to get workflow instances: {str(e)}")
+    
+    async def run_workflow_sync(self, instance_id: str, max_steps: int = None) -> Dict[str, Any]:
+        """Run workflow synchronously with step limit"""
+        try:
+            wf = self.active_workflows.get(instance_id)
+            if not wf:
+                raise HTTPException(status_code=404, detail=f"Workflow instance '{instance_id}' not found")
+            
+            if wf.is_completed():
+                return {
+                    "message": "Workflow is already completed",
+                    "steps_executed": 0,
+                    "is_completed": True,
+                    "ready_tasks": []
+                }
+            
+            steps_executed = 0
+            max_steps = max_steps or 100
+            
+            # Execute steps
+            while not wf.is_completed() and steps_executed < max_steps:
+                ready_tasks = [task for task in wf.get_tasks(state=TaskState.READY)]
+                if not ready_tasks:
+                    break
+                
+                # Check if we have user/manual tasks that need intervention
+                user_tasks = [task for task in ready_tasks if hasattr(task.task_spec, 'manual') and task.task_spec.manual]
+                if user_tasks:
+                    logger.info(f"[WORKFLOW] Found {len(user_tasks)} user tasks requiring intervention")
+                    break
+                
+                # Run automatic tasks
+                self._run_engine_steps_safely(wf, f"Running automatic tasks (step {steps_executed + 1})")
+                steps_executed += 1
+            
+            # Update instance in database
+            await self._update_workflow_instance(instance_id)
+            
+            # Get ready user tasks
+            ready_user_tasks = self.get_ready_user_tasks(instance_id)
+            
+            return {
+                "message": f"Executed {steps_executed} steps",
+                "steps_executed": steps_executed,
+                "is_completed": wf.is_completed(),
+                "ready_tasks": [{"task_id": str(task["task_id"]), "name": task["task_name"], "type": task["task_type"], "state": "READY"} for task in ready_user_tasks]
+            }
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Error running workflow '{instance_id}': {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to run workflow: {str(e)}")
+    
+    
+    
+
 

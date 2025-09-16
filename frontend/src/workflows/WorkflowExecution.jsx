@@ -13,14 +13,34 @@ import {
   Divider,
   CircularProgress,
   Tooltip,
-  Alert
+  Alert,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Pagination,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Card,
+  CardContent,
+  CardActions
 } from '@mui/material';
 import {
   ArrowLeft,
   Play,
   RefreshCw,
   Settings2,
-  CheckCircle2
+  CheckCircle2,
+  List,
+  Eye,
+  Clock,
+  CheckCircle,
+  XCircle
 } from 'lucide-react';
 import { apiCall } from '../config/api';
 
@@ -32,9 +52,11 @@ function WorkflowExecution({ user }) {
   console.log('🚨 LOCATION:', window.location.href);
   
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const workflowId = searchParams.get('workflow');
   const theme = useTheme();
+  
+  // Existing states
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
@@ -48,6 +70,15 @@ function WorkflowExecution({ user }) {
   const [workflows, setWorkflows] = useState([]);
   const [loadingWorkflows, setLoadingWorkflows] = useState(false);
   const [startByName, setStartByName] = useState('');
+  
+  // New states for workflow instances management
+  const [showInstancesList, setShowInstancesList] = useState(false);
+  const [instances, setInstances] = useState([]);
+  const [loadingInstances, setLoadingInstances] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [pageSize] = useState(10);
   
   console.log('🚨 WORKFLOW ID FROM URL:', workflowId);
 
@@ -119,6 +150,127 @@ function WorkflowExecution({ user }) {
     loadAvailableWorkflows();
   }, [loadAvailableWorkflows]);
 
+  // New callback functions for workflow instances management
+  const loadWorkflowInstances = useCallback(async (page = 1, status = '', size = pageSize) => {
+    if (!token) return;
+    setLoadingInstances(true);
+    try {
+      const skip = (page - 1) * size;
+      const queryParams = new URLSearchParams({
+        limit: size.toString(),
+        skip: skip.toString()
+      });
+      if (status) queryParams.append('status', status);
+      
+      const res = await apiCall(`/api/workflow/instances?${queryParams}`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setInstances(data.instances || []);
+        setTotalPages(data.total_pages || 1);
+        setCurrentPage(data.current_page || 1);
+      } else {
+        throw new Error('Failed to load workflow instances');
+      }
+    } catch (e) {
+      console.error('Failed to load workflow instances:', e);
+      setError(e?.message || 'Failed to load workflow instances');
+    } finally {
+      setLoadingInstances(false);
+    }
+  }, [headers, token, pageSize]);
+
+  const startWorkflowByConfigId = useCallback(async (configId) => {
+    if (!configId) return;
+    setRunning(true);
+    setResult(null);
+    setError('');
+
+    try {
+      // Start workflow by config ID
+      const startRes = await apiCall(`/api/workflow/workflows/config/${configId}/start`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ initial_data: {} })
+      });
+
+      const startData = await startRes.json().catch(() => ({}));
+      if (!startRes.ok) {
+        throw new Error(startData.detail || 'Failed to start workflow');
+      }
+
+      const newInstanceId = startData.instance_id;
+      
+      // Update URL to point to the new instance
+      setSearchParams({ workflow: newInstanceId });
+      
+      // Load status for the new instance
+      await loadStatus(newInstanceId);
+      
+      setResult({
+        instanceId: newInstanceId,
+        message: 'Workflow started successfully',
+        config_id: configId
+      });
+      
+      // Refresh instances list if showing
+      if (showInstancesList) {
+        await loadWorkflowInstances(currentPage, statusFilter);
+      }
+      
+    } catch (err) {
+      const message = err?.message || 'Unknown error starting workflow';
+      console.error('Workflow start error:', err);
+      setError(message);
+    } finally {
+      setRunning(false);
+    }
+  }, [headers, loadStatus, setSearchParams, showInstancesList, currentPage, statusFilter, loadWorkflowInstances]);
+
+  const handlePageChange = useCallback((event, page) => {
+    setCurrentPage(page);
+    loadWorkflowInstances(page, statusFilter);
+  }, [loadWorkflowInstances, statusFilter]);
+
+  const handleStatusFilterChange = useCallback((event) => {
+    const newStatus = event.target.value;
+    setStatusFilter(newStatus);
+    setCurrentPage(1);
+    loadWorkflowInstances(1, newStatus);
+  }, [loadWorkflowInstances]);
+
+  const viewWorkflowInstance = useCallback((instanceId) => {
+    setSearchParams({ workflow: instanceId });
+  }, [setSearchParams]);
+
+  const formatDateTime = useCallback((dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleString();
+    } catch {
+      return dateString;
+    }
+  }, []);
+
+  const getStatusIcon = useCallback((status) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle color="success" size={16} />;
+      case 'running':
+        return <Clock color="primary" size={16} />;
+      case 'error':
+        return <XCircle color="error" size={16} />;
+      default:
+        return <Clock color="disabled" size={16} />;
+    }
+  }, []);
+
+  // Load instances when showing the list
+  useEffect(() => {
+    if (showInstancesList) {
+      loadWorkflowInstances(currentPage, statusFilter);
+    }
+  }, [showInstancesList, loadWorkflowInstances, currentPage, statusFilter]);
+
   const executeWorkflow = useCallback(async () => {
     if (!workflowId) return;
     setRunning(true);
@@ -128,28 +280,10 @@ function WorkflowExecution({ user }) {
     try {
       let idToRun = instanceId || workflowId;
 
-      // If current mode is config, start first
+      // If current mode is config, use the new startWorkflowByConfigId method
       if (mode === 'config') {
-        const startRes = await apiCall(`/api/workflow/workflows/config/${workflowId}/start`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ initial_data: {} })
-        });
-        if (!startRes.ok) {
-          if (startRes.status === 404) {
-            setConfigNotFound(true);
-            const txt = await startRes.text().catch(() => 'Workflow configuration not found');
-            setError(txt);
-            return; // Don't proceed to run
-          }
-          const errJson = await startRes.json().catch(() => ({}));
-          const errTxt = errJson?.detail || (await startRes.text().catch(() => ''));
-          throw new Error(errTxt || `Failed to start workflow (status ${startRes.status})`);
-        }
-        const startData = await startRes.json();
-        idToRun = startData.instance_id;
-        setInstanceId(idToRun);
-        setMode('instance');
+        await startWorkflowByConfigId(workflowId);
+        return;
       }
 
       const runRes = await apiCall(`/api/workflow/workflows/${idToRun}/run`, {
@@ -172,7 +306,7 @@ function WorkflowExecution({ user }) {
     } finally {
       setRunning(false);
     }
-  }, [workflowId, headers, maxSteps, mode, instanceId, loadStatus]);
+  }, [workflowId, headers, maxSteps, mode, instanceId, loadStatus, startWorkflowByConfigId]);
 
   const refreshStatus = useCallback(async () => {
     const id = instanceId || workflowId;
@@ -270,6 +404,16 @@ function WorkflowExecution({ user }) {
             Workflow Execution
           </Typography>
           <Stack direction="row" spacing={1} alignItems="center">
+            <Tooltip title="Toggle instances list">
+              <Button
+                variant={showInstancesList ? "contained" : "outlined"}
+                color="info"
+                startIcon={<List />}
+                onClick={() => setShowInstancesList(!showInstancesList)}
+              >
+                {showInstancesList ? 'Hide' : 'Show'} Instances
+              </Button>
+            </Tooltip>
             {mode !== 'unknown' && (
               <Chip
                 label={mode === 'config' ? 'Config ID' : 'Instance ID'}
@@ -468,6 +612,139 @@ function WorkflowExecution({ user }) {
           </>
         )}
       </Box>
+
+      {/* Workflow Instances List */}
+      {showInstancesList && (
+        <Box sx={{ mt: 3 }}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6">Workflow Instances</Typography>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <FormControl size="small" sx={{ minWidth: 120 }}>
+                    <InputLabel>Status Filter</InputLabel>
+                    <Select
+                      value={statusFilter}
+                      label="Status Filter"
+                      onChange={handleStatusFilterChange}
+                    >
+                      <MenuItem value="">All</MenuItem>
+                      <MenuItem value="running">Running</MenuItem>
+                      <MenuItem value="completed">Completed</MenuItem>
+                      <MenuItem value="error">Error</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <Button
+                    variant="outlined"
+                    startIcon={<RefreshCw />}
+                    onClick={() => loadWorkflowInstances(currentPage, statusFilter)}
+                    disabled={loadingInstances}
+                  >
+                    Refresh
+                  </Button>
+                </Stack>
+              </Box>
+
+              {loadingInstances ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                  <CircularProgress />
+                </Box>
+              ) : instances.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+                  No workflow instances found.
+                </Typography>
+              ) : (
+                <>
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Instance ID</TableCell>
+                          <TableCell>Workflow Name</TableCell>
+                          <TableCell>Status</TableCell>
+                          <TableCell>Created</TableCell>
+                          <TableCell>Updated</TableCell>
+                          <TableCell>Ready Tasks</TableCell>
+                          <TableCell>In Memory</TableCell>
+                          <TableCell>Actions</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {instances.map((instance) => (
+                          <TableRow key={instance.instance_id}>
+                            <TableCell>
+                              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8em' }}>
+                                {instance.instance_id.substring(0, 8)}...
+                              </Typography>
+                            </TableCell>
+                            <TableCell>{instance.workflow_name}</TableCell>
+                            <TableCell>
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                {getStatusIcon(instance.status)}
+                                <Chip 
+                                  label={instance.status} 
+                                  size="small"
+                                  color={instance.status === 'completed' ? 'success' : instance.status === 'error' ? 'error' : 'primary'}
+                                />
+                              </Stack>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2">
+                                {formatDateTime(instance.created_at)}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2">
+                                {formatDateTime(instance.updated_at)}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Chip 
+                                label={instance.ready_tasks_count || 0} 
+                                size="small" 
+                                color={instance.ready_tasks_count > 0 ? 'warning' : 'default'}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Chip 
+                                label={instance.in_memory ? 'Yes' : 'No'} 
+                                size="small"
+                                color={instance.in_memory ? 'success' : 'default'}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<Eye />}
+                                onClick={() => viewWorkflowInstance(instance.instance_id)}
+                                disabled={workflowId === instance.instance_id}
+                              >
+                                View
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                  
+                  {totalPages > 1 && (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                      <Pagination
+                        count={totalPages}
+                        page={currentPage}
+                        onChange={handlePageChange}
+                        color="primary"
+                      />
+                    </Box>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </Box>
+      )}
     </Box>
   );
 }

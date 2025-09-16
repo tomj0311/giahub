@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from ..utils.auth import verify_token_middleware
 from ..utils.log import logger
+from ..utils.mongo_storage import MongoStorageService
 from ..services.workflow_service import WorkflowService
 
 router = APIRouter(tags=["workflows"])
@@ -51,21 +52,20 @@ class BpmnUploadResponse(BaseModel):
     workflow_name: str
 
 
-# Service dependency
-def get_workflow_service() -> WorkflowService:
-    return WorkflowService()
+# Service dependency  
+# REMOVED: No longer using dependency injection, following same pattern as other routes
 
 
 @router.post("/workflows/{workflow_name}/start")
 async def start_workflow(
     workflow_name: str,
     request: StartWorkflowRequest,
-    service: WorkflowService = Depends(get_workflow_service),
     current_user: dict = Depends(verify_token_middleware)
 ):
     """Start a new workflow instance"""
     try:
         logger.info(f"[WORKFLOW] Starting workflow {workflow_name} for user {current_user.get('username', 'unknown')}")
+        service = WorkflowService()
         instance_id = service.start_workflow(workflow_name, request.initial_data)
         return {"instance_id": instance_id}
     except HTTPException as e:
@@ -79,35 +79,28 @@ async def start_workflow(
 async def start_workflow_by_config_id(
     config_id: str,
     request: StartWorkflowRequest,
-    service: WorkflowService = Depends(get_workflow_service),
     current_user: dict = Depends(verify_token_middleware)
 ):
     """Start a new workflow instance using workflow configuration ID"""
     try:
         logger.info(f"[WORKFLOW] Starting workflow by config ID {config_id} for user {current_user.get('username', 'unknown')}")
         
-        # Get workflow name from config ID
-        workflow_name = service.get_workflow_name_by_config_id(config_id)
-        if not workflow_name:
-            raise HTTPException(status_code=404, detail=f"Workflow configuration '{config_id}' not found")
-        
-        logger.info(f"[WORKFLOW] Config ID {config_id} maps to workflow name: {workflow_name}")
-        
-        # Add config ID and tenant info to initial data
+        # Add tenant info to initial data
         initial_data = request.initial_data or {}
+        tenant_id = current_user.get('tenantId') or current_user.get('tenant_id')
         initial_data.update({
             "config_id": config_id,
-            "tenant_id": current_user.get('tenant_id') or current_user.get('tenantId') or 'default-tenant',
+            "tenant_id": tenant_id,
             "started_by": current_user.get('username') or current_user.get('email', 'unknown'),
             "started_at": str(datetime.now())
         })
         
-        instance_id = service.start_workflow(workflow_name, initial_data)
+        instance_id = await WorkflowService.start_workflow_by_config_id_for_user(config_id, initial_data, current_user)
         
         return {
             "instance_id": instance_id,
             "config_id": config_id,
-            "workflow_name": workflow_name
+            "message": "Workflow started successfully"
         }
     except HTTPException as e:
         raise
@@ -119,12 +112,12 @@ async def start_workflow_by_config_id(
 @router.get("/workflows/{instance_id}", response_model=WorkflowResponse)
 async def get_workflow_status(
     instance_id: str,
-    service: WorkflowService = Depends(get_workflow_service),
     current_user: dict = Depends(verify_token_middleware)
 ):
     """Get workflow status and ready tasks"""
     try:
         logger.debug(f"[WORKFLOW] Getting status for workflow {instance_id}")
+        service = WorkflowService()
         result = service.get_workflow_status(instance_id)
         return WorkflowResponse(**result)
     except HTTPException as e:
@@ -138,13 +131,13 @@ async def get_workflow_status(
 async def run_workflow(
     instance_id: str,
     request: RunRequest,
-    service: WorkflowService = Depends(get_workflow_service),
     current_user: dict = Depends(verify_token_middleware)
 ):
     """Run workflow synchronously"""
     try:
         logger.info(f"[WORKFLOW] Running workflow {instance_id} with max_steps={request.max_steps}")
-        result = service.run_workflow_sync(instance_id, request.max_steps)
+        service = WorkflowService()
+        result = await service.run_workflow_sync(instance_id, request.max_steps)
         return result
     except HTTPException as e:
         raise
@@ -158,13 +151,14 @@ async def complete_task(
     instance_id: str,
     task_id: str,
     request: CompleteTaskRequest,
-    service: WorkflowService = Depends(get_workflow_service),
     current_user: dict = Depends(verify_token_middleware)
 ):
     """Complete a specific task in the workflow"""
     try:
         logger.info(f"[WORKFLOW] Completing task {task_id} for workflow {instance_id}")
-        result = service.complete_task(instance_id, task_id, request.data)
+        tenant_id = current_user.get('tenantId') or current_user.get('tenant_id')
+        service = WorkflowService()
+        result = await service.complete_user_task(instance_id, task_id, request.data, tenant_id)
         return TaskResponse(**result)
     except HTTPException as e:
         raise
@@ -176,12 +170,12 @@ async def complete_task(
 @router.get("/workflows/{instance_id}/tasks", response_model=List[TaskInfo])
 async def list_tasks(
     instance_id: str,
-    service: WorkflowService = Depends(get_workflow_service),
     current_user: dict = Depends(verify_token_middleware)
 ):
     """List all tasks in a workflow instance"""
     try:
         logger.debug(f"[WORKFLOW] Listing tasks for workflow {instance_id}")
+        service = WorkflowService()
         tasks = service.list_tasks(instance_id)
         return [TaskInfo(**task) for task in tasks]
     except HTTPException as e:
@@ -194,12 +188,12 @@ async def list_tasks(
 @router.delete("/workflows/{instance_id}")
 async def stop_workflow(
     instance_id: str,
-    service: WorkflowService = Depends(get_workflow_service),
     current_user: dict = Depends(verify_token_middleware)
 ):
     """Stop and remove workflow instance"""
     try:
         logger.info(f"[WORKFLOW] Stopping workflow {instance_id}")
+        service = WorkflowService()
         service.stop_workflow(instance_id)
         return {"success": True}
     except HTTPException as e:
@@ -213,12 +207,12 @@ async def stop_workflow(
 async def upload_bpmn(
     workflow_name: str = Form(...),
     file: UploadFile = File(...),
-    service: WorkflowService = Depends(get_workflow_service),
     current_user: dict = Depends(verify_token_middleware)
 ):
     """Upload and parse BPMN file"""
     try:
         logger.info(f"[WORKFLOW] Uploading BPMN file {file.filename} for workflow {workflow_name}")
+        service = WorkflowService()
         result = service.upload_bpmn(file, workflow_name)
         return BpmnUploadResponse(**result)
     except HTTPException as e:
@@ -236,12 +230,12 @@ async def workflow_health_check():
 
 @router.get("/workflows/metrics")
 async def get_workflow_metrics(
-    service: WorkflowService = Depends(get_workflow_service),
     current_user: dict = Depends(verify_token_middleware)
 ):
     """Get workflow service metrics and storage information"""
     try:
         logger.debug("[WORKFLOW] Getting workflow metrics")
+        service = WorkflowService()
         metrics = service.get_workflow_metrics()
         return metrics
     except Exception as e:
@@ -249,27 +243,61 @@ async def get_workflow_metrics(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/redis/all")
-async def list_all_redis_workflows_by_tenant(
-    service: WorkflowService = Depends(get_workflow_service),
+@router.get("/instances")
+async def list_workflow_instances(
+    status: Optional[str] = None,
+    limit: int = 20,
+    skip: int = 0,
     current_user: dict = Depends(verify_token_middleware)
 ):
-    """NEW: List ALL workflows stored in Redis for current user's tenant"""
-    logger.info("[WORKFLOW] DEBUG: Redis /redis/all endpoint HIT!")
+    """List workflow instances with pagination"""
     try:
-        # Extract tenant_id from JWT token payload
-        tenant_id = current_user.get('tenant_id') or current_user.get('tenantId') or 'default-tenant'
-        logger.info(f"[WORKFLOW] DEBUG: Extracted tenant_id: {tenant_id} from user: {current_user.get('email', 'unknown')}")
-        logger.info(f"[WORKFLOW] Listing ALL Redis workflows for tenant: {tenant_id} (from user: {current_user.get('email', 'unknown')})")
-        workflows = service.list_all_redis_workflows_by_tenant(tenant_id)
-        logger.info(f"[WORKFLOW] DEBUG: Redis service returned {len(workflows)} workflows")
-        return {
-            "success": True,
-            "tenant_id": tenant_id,
-            "workflows": workflows,
-            "count": len(workflows)
-        }
+        tenant_id = current_user.get('tenantId') or current_user.get('tenant_id')
+        logger.info(f"[WORKFLOW] Listing workflow instances for tenant: {tenant_id}, status: {status}, limit: {limit}, skip: {skip}")
+        
+        service = WorkflowService()
+        result = await service.get_workflow_instances(tenant_id, status, limit, skip)
+        return result
+    except HTTPException as e:
+        raise
     except Exception as e:
-        logger.error(f"[WORKFLOW] DEBUG: Error in Redis endpoint: {e}")
-        logger.error(f"[WORKFLOW] Error listing Redis workflows: {e}")
+        logger.error(f"[WORKFLOW] Error listing workflow instances: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/instances/{instance_id}")
+async def get_workflow_instance_details(
+    instance_id: str,
+    current_user: dict = Depends(verify_token_middleware)
+):
+    """Get detailed information about a specific workflow instance"""
+    try:
+        tenant_id = current_user.get('tenantId') or current_user.get('tenant_id')
+        logger.info(f"[WORKFLOW] Getting instance details for: {instance_id}")
+        
+        # First check if instance exists in database
+        instance = await MongoStorageService.find_one(
+            "workflowInstances",
+            {"instance_id": instance_id},
+            tenant_id
+        )
+        
+        if not instance:
+            raise HTTPException(status_code=404, detail=f"Workflow instance '{instance_id}' not found")
+        
+        # Get runtime status if instance is in memory
+        service = WorkflowService()
+        runtime_status = None
+        if instance_id in service.active_workflows:
+            runtime_status = service.get_workflow_status(instance_id)
+        
+        return {
+            "instance": instance,
+            "runtime_status": runtime_status,
+            "in_memory": instance_id in service.active_workflows
+        }
+    except HTTPException as e:
+        raise
+    except Exception as e:
+        logger.error(f"[WORKFLOW] Error getting instance details for {instance_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))

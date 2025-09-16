@@ -59,6 +59,7 @@ def get_collections():
         "conversations": database["conversations"],
         "agent_runs": database["agent_runs"],
         "workflowConfig": database["workflowConfig"],
+        "workflowInstances": database["workflowInstances"],
     }
     logger.debug(f"[DB] Retrieved {len(_collections_cache)} collections")
     return _collections_cache
@@ -199,6 +200,14 @@ async def ensure_indexes():
         await collections["workflowConfig"].create_index("type")
         await collections["workflowConfig"].create_index("created_at")
         await collections["workflowConfig"].create_index("tenantId")
+
+        logger.debug("[DB] Creating workflowInstances indexes")
+        await collections["workflowInstances"].create_index("instance_id", unique=True)
+        await collections["workflowInstances"].create_index("config_id")
+        await collections["workflowInstances"].create_index("status")
+        await collections["workflowInstances"].create_index("created_at")
+        await collections["workflowInstances"].create_index("tenantId")
+        await collections["workflowInstances"].create_index([("tenantId", 1), ("status", 1), ("created_at", -1)])
 
         logger.info("[DB] Indexes created successfully")
     except Exception as e:
