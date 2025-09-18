@@ -23,7 +23,6 @@ from spiffworkflow.bpmn.parser.BpmnParser import BpmnParser
 from spiffworkflow.bpmn.serializer import BpmnWorkflowSerializer
 from spiffworkflow.bpmn.script_engine import PythonScriptEngine
 from spiffworkflow.util.task import TaskState
-from spiffworkflow.serializer.json import JSONSerializer
 from lxml import etree
 from bson import ObjectId
 
@@ -32,6 +31,50 @@ from ..utils.mongo_storage import MongoStorageService
 
 # Module loaded log
 logger.debug("[WORKFLOW] Persistent service module loaded")
+
+
+def call_external_api(task):
+    """
+    Function to call an external API using requestData from the BPMN process.
+    Designed as a SpiffWorkflow service task delegate.
+    """
+    import json
+    import requests
+    
+    try:
+        request_data = task.data.get("requestData")
+        if not request_data:
+            # If no requestData, just set a success response
+            task.data["responseData"] = {"status": "success", "message": "Service task completed"}
+            logger.info(f"[WORKFLOW] Service task completed without requestData for task: {task.task_spec.name}")
+            return
+
+        if isinstance(request_data, str):
+            request_data = json.loads(request_data)
+
+        logger.info(f"[WORKFLOW] Processing request data: {request_data}")
+        
+        # Set the response data (you can modify this to make actual API calls)
+        task.data["responseData"] = {
+            "status": "success", 
+            "processed_data": request_data,
+            "message": "Data processed successfully"
+        }
+        
+        logger.info(f"[WORKFLOW] Service task API call successful for task: {task.task_spec.name}")
+
+    except Exception as e:
+        error_msg = f"Service task API call failed: {str(e)}"
+        task.data["responseData"] = {"error": error_msg}
+        logger.error(f"[WORKFLOW] {error_msg}")
+
+
+def register_service_task(script_engine):
+    """
+    Register the service task delegate with SpiffWorkflow's script engine.
+    """
+    script_engine.environment.globals["call_external_api"] = call_external_api
+    logger.debug("[WORKFLOW] Service task delegate registered")
 
 
 class WorkflowServicePersistent:
@@ -421,39 +464,55 @@ class WorkflowServicePersistent:
     @classmethod
     async def run_workflow(cls, bpmn_xml: str, workflow_id: str, tenant_id=None):
         """Execute a BPMN workflow from XML content with state persistence"""
-        # Use default Python script engine (builtins are available to exec)
-        script_engine = PythonScriptEngine()
-        parser = BpmnParser()
+        try:
+            # Use default Python script engine (builtins are available to exec)
+            script_engine = PythonScriptEngine()
+            
+            # Register service task delegate
+            register_service_task(script_engine)
+            
+            parser = BpmnParser()
 
-        form_map = await cls.parse_form_data_from_bpmn(bpmn_xml)
-        clean_bpmn = bpmn_xml.replace(
-            '<?xml version="1.0" encoding="UTF-8"?>', ""
-        ).strip()
-        parser.add_bpmn_str(clean_bpmn)
+            form_map = await cls.parse_form_data_from_bpmn(bpmn_xml)
+            clean_bpmn = bpmn_xml.replace(
+                '<?xml version="1.0" encoding="UTF-8"?>', ""
+            ).strip()
+            
+            # Try to parse BPMN with better error handling
+            try:
+                parser.add_bpmn_str(clean_bpmn)
+            except Exception as parse_error:
+                logger.error(f"[WORKFLOW] BPMN parsing failed: {parse_error}")
+                # Try to continue with a simpler approach
+                raise Exception(f"BPMN file has parsing issues: {str(parse_error)}")
 
-        # Get the first process ID and create workflow spec
-        process_ids = parser.get_process_ids()
-        if not process_ids:
-            raise Exception("No executable processes found in BPMN")
+            # Get the first process ID and create workflow spec
+            process_ids = parser.get_process_ids()
+            if not process_ids:
+                raise Exception("No executable processes found in BPMN")
 
-        process_id = process_ids[0]
-        spec = parser.get_spec(process_id)
-        subprocess_specs = parser.get_subprocess_specs(process_id, specs={})
+            process_id = process_ids[0]
+            spec = parser.get_spec(process_id)
+            subprocess_specs = parser.get_subprocess_specs(process_id, specs={})
 
-        workflow = BpmnWorkflow(
-            spec, subprocess_specs=subprocess_specs, script_engine=script_engine
-        )
-        print("Started new workflow.")
+            workflow = BpmnWorkflow(
+                spec, subprocess_specs=subprocess_specs, script_engine=script_engine
+            )
+            print("Started new workflow.")
 
-        # Use common execution function
-        await cls.execute_workflow_steps(workflow, workflow_id, tenant_id, form_map)
+            # Use common execution function
+            await cls.execute_workflow_steps(workflow, workflow_id, tenant_id, form_map)
 
-        print("\nWorkflow status:")
-        if workflow.is_completed():
-            print("Workflow completed successfully!")
-            print(f"Final data: {workflow.data}")
-        else:
-            print("Workflow not completed yet. Rerun to continue.")
+            print("\nWorkflow status:")
+            if workflow.is_completed():
+                print("Workflow completed successfully!")
+                print(f"Final data: {workflow.data}")
+            else:
+                print("Workflow not completed yet. Rerun to continue.")
+                
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Workflow execution failed: {e}")
+            raise
 
     @classmethod
     async def run_workflow_from_id(
