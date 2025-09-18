@@ -8,7 +8,6 @@ from pydantic import BaseModel
 from datetime import datetime
 
 from ..utils.auth import verify_token_middleware
-from ..services.workflow_service import WorkflowService
 from ..services.workflow_service_persistent import WorkflowServicePersistent
 from ..utils.log import logger
 
@@ -44,7 +43,7 @@ async def start_workflow_by_workflow_id(
         "started_at": str(datetime.now())
     })
     
-    result = await WorkflowService.run_workflow_from_id(
+    result = await WorkflowServicePersistent.run_workflow_from_id(
         workflow_id, 
         initial_data, 
         user

@@ -245,18 +245,6 @@ function WorkflowExecution({ user }) {
           </Box>
         )}
 
-        {result && (
-          <Box sx={{ mt: 3, textAlign: 'left', mx: 'auto', maxWidth: 720 }}>
-            <Typography variant="h6">Execution Result</Typography>
-            <Typography variant="body2">Message: {result.message}</Typography>
-            {result.data && (
-              <pre style={{ marginTop: 8, fontSize: '0.875rem', background: '#f5f5f5', padding: '8px', borderRadius: '4px', overflow: 'auto' }}>
-                {JSON.stringify(result.data, null, 2)}
-              </pre>
-            )}
-          </Box>
-        )}
-
         {workflowId && (
           <Box sx={{ mt: 3, textAlign: 'left', mx: 'auto', maxWidth: 720 }}>
             <Typography variant="h6">Incomplete Workflows</Typography>

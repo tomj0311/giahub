@@ -22,8 +22,8 @@
         <outgoing>Flow_2</outgoing>
         <extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
           <formData>
-            <formField id="firstName" type="string" label=" Name"/>
-            <formField id="lastName" type="string" label="Last Name"/>
+            <formField id="firstName" type="string" label=" Name" required="true"/>
+            <formField id="lastName" type="string" label="Last Name" required="true"/>
           </formData>
         </extensionElements>
       </userTask>

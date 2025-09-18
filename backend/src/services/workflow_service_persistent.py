@@ -37,17 +37,33 @@ class WorkflowServicePersistent:
     """Service for handling BPMN workflow execution and management with state persistence"""
 
     @staticmethod
-    async def save_workflow_state(workflow, workflow_id, tenant_id=None):
+    async def save_workflow_state(workflow, workflow_id, tenant_id=None, form_map=None):
         """Serialize and save workflow state to MongoDB"""
-        instance_id = str(uuid.uuid4())
+        instance_id = uuid.uuid4().hex[:6]
         
         serializer = BpmnWorkflowSerializer()
         serialized_json = serializer.serialize_json(workflow)
+        
+        # Get current user tasks and their form fields
+        user_tasks = []
+        if form_map:
+            # Get ready tasks and filter for UserTasks
+            ready_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY]
+            for task in ready_tasks:
+                if task.task_spec.__class__.__name__ == "UserTask":
+                    task_details = {
+                        "task_id": str(task.id),
+                        "task_name": task.task_spec.name,
+                        "bpmn_id": getattr(task.task_spec, "bpmn_id", None),
+                        "form_fields": WorkflowServicePersistent.handle_user_task(task, form_map)
+                    }
+                    user_tasks.append(task_details)
         
         data = {
             "workflow_id": workflow_id,
             "instance_id": instance_id,
             "serialized_data": json.loads(serialized_json),
+            "user_tasks": user_tasks,
             "created_at": datetime.now(UTC)
         }
         
@@ -104,7 +120,7 @@ class WorkflowServicePersistent:
     @staticmethod
     async def save_workflow_to_mongo(workflow_id: str, workflow, tenant_id: Optional[str] = None):
         """Save workflow to MongoDB workflow_instances collection"""
-        instance_id = str(uuid.uuid4())
+        instance_id = uuid.uuid4().hex[:6]
         
         serializer = BpmnWorkflowSerializer()
         serialized_json = serializer.serialize_json(workflow)
@@ -118,6 +134,35 @@ class WorkflowServicePersistent:
         
         await MongoStorageService.insert_one("workflow_instances", data, tenant_id)
         return instance_id
+
+    @staticmethod
+    def handle_user_task(task, form_map: Dict[str, List[Dict[str, str]]] | None = None):
+        """
+        Handle UserTask by prompting for form fields and setting task data.
+        """
+        logger.info(f"Handling user task: {task.task_spec.name}")
+        dct = {}
+        # Prefer parsed formMap (from original BPMN XML)
+        bpmn_id = getattr(task.task_spec, "bpmn_id", None)
+        fields = []
+        if form_map and bpmn_id and bpmn_id in form_map:
+            fields = form_map[bpmn_id]
+
+        if fields:
+            for field in fields:
+                label = field.get("label") or field.get("id")
+                # Store form field definition instead of prompting for input
+                dct[field.get("id") or label] = {
+                    "field_id": field.get("id"),
+                    "label": label,
+                    "type": field.get("type", str),
+                    "value": None,  # Will be filled by frontend
+                    "required": field.get("requirwed", False),
+                }
+        else:
+            logger.warning("No form metadata found for user task")
+        
+        return dct
 
     @staticmethod
     async def handle_user_input(task):
@@ -205,21 +250,16 @@ class WorkflowServicePersistent:
         spec = parser.get_spec(process_id)
         subprocess_specs = parser.get_subprocess_specs(process_id, specs={})
 
-        # Check if workflow state exists and load it, otherwise create new workflow
-        workflow = await cls.load_workflow_state(workflow_id, tenant_id)
-        if workflow:
-            print("Resumed workflow from saved state.")
-        else:
-            workflow = BpmnWorkflow(
-                spec, subprocess_specs=subprocess_specs, script_engine=script_engine
-            )
-            print("Started new workflow.")
+        workflow = BpmnWorkflow(
+            spec, subprocess_specs=subprocess_specs, script_engine=script_engine
+        )
+        print("Started new workflow.")
 
         # Process tasks step-by-step without blocking
         while not workflow.is_completed():
             # Run automatic steps (e.g., ScriptTask)
             workflow.do_engine_steps()
-            await cls.save_workflow_state(workflow, workflow_id, tenant_id)
+            await cls.save_workflow_state(workflow, workflow_id, tenant_id, form_map)
             
             # If manual input is required, stop and save state
             if workflow.manual_input_required():
