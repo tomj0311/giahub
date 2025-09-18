@@ -15,8 +15,6 @@ from bson import ObjectId
 from ..utils.log import logger
 from ..utils.mongo_storage import MongoStorageService
 from .file_service import FileService
-from .workflow_service import WorkflowService
-
 # Module loaded log
 logger.debug("[WORKFLOW] Service module loaded")
 

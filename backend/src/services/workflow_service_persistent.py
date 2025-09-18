@@ -47,10 +47,10 @@ class WorkflowServicePersistent:
         # Get current user tasks and their form fields
         user_tasks = []
         if form_map:
-            # Get ready tasks and filter for UserTasks
+            # Get ready tasks and filter for UserTasks and ManualTasks
             ready_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY]
             for task in ready_tasks:
-                if task.task_spec.__class__.__name__ == "UserTask":
+                if task.task_spec.__class__.__name__ in ["UserTask", "ManualTask"]:
                     task_details = {
                         "task_id": str(task.id),
                         "task_name": task.task_spec.name,
@@ -63,7 +63,7 @@ class WorkflowServicePersistent:
             "workflow_id": workflow_id,
             "instance_id": instance_id,
             "serialized_data": json.loads(serialized_json),
-            "user_tasks": user_tasks,
+            "user_task": user_tasks,
             "created_at": datetime.now(UTC)
         }
         
@@ -138,11 +138,24 @@ class WorkflowServicePersistent:
     @staticmethod
     def handle_user_task(task, form_map: Dict[str, List[Dict[str, str]]] | None = None):
         """
-        Handle UserTask by prompting for form fields and setting task data.
+        Handle UserTask by prompting for form fields and ManualTask with simple confirmation.
         """
         logger.info(f"Handling user task: {task.task_spec.name}")
         dct = {}
-        # Prefer parsed formMap (from original BPMN XML)
+        
+        # Handle ManualTask - just needs confirmation
+        if task.task_spec.__class__.__name__ == "ManualTask":
+            return {
+                "confirmation": {
+                    "field_id": "manual_confirmation",
+                    "label": "Confirm to proceed",
+                    "type": "boolean",
+                    "value": None,
+                    "required": True,
+                }
+            }
+        
+        # Handle UserTask with form fields
         bpmn_id = getattr(task.task_spec, "bpmn_id", None)
         fields = []
         if form_map and bpmn_id and bpmn_id in form_map:

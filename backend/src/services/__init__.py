@@ -11,7 +11,6 @@ from .tenant_service import TenantService
 from .rbac_service import RBACService
 from .email_service import send_registration_email
 from .menu_service import MenuService
-from .workflow_service import WorkflowService
 
 __all__ = [
     "AgentService",
@@ -25,5 +24,4 @@ __all__ = [
     "RBACService",
     "send_registration_email",
     "MenuService",
-    "WorkflowService"
 ]

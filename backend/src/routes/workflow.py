@@ -80,3 +80,18 @@ async def get_incomplete_workflows(
         )
 
 
+@router.put("/workflows/{workflow_id}/instances/{instance_id}/tasks/{task_id}/data")
+async def update_task_data(
+    workflow_id: str,
+    instance_id: str,
+    task_id: str,
+    new_data: Dict[str, Any],
+    user: dict = Depends(verify_token_middleware)
+):
+    """Update task data"""
+    result = await WorkflowServicePersistent.update_serialized_task_data(
+        workflow_id, instance_id, task_id, new_data
+    )
+    return {"success": result}
+
+
