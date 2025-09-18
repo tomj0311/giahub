@@ -80,6 +80,49 @@ async def get_incomplete_workflows(
         )
 
 
+@router.get("/workflows/{workflow_id}/instances/{instance_id}")
+async def get_workflow_instance(
+    workflow_id: str,
+    instance_id: str,
+    user: dict = Depends(verify_token_middleware)
+):
+    """Get specific workflow instance data"""
+    try:
+        tenant_id = await WorkflowServicePersistent.validate_tenant_access(user)
+        instance = await WorkflowServicePersistent.get_workflow_instance(
+            workflow_id, instance_id, tenant_id
+        )
+        return {"success": True, "data": instance}
+    except Exception as e:
+        logger.error(f"Error getting workflow instance: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get workflow instance: {str(e)}"
+        )
+
+
+@router.post("/workflows/{workflow_id}/instances/{instance_id}/submit-task")
+async def submit_user_task(
+    workflow_id: str,
+    instance_id: str,
+    request: CompleteTaskRequest,
+    user: dict = Depends(verify_token_middleware)
+):
+    """Submit user task data and continue workflow"""
+    try:
+        tenant_id = await WorkflowServicePersistent.validate_tenant_access(user)
+        result = await WorkflowServicePersistent.submit_user_task_and_continue(
+            workflow_id, instance_id, request.data or {}, tenant_id
+        )
+        return {"success": True, "data": result}
+    except Exception as e:
+        logger.error(f"Error submitting user task: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to submit user task: {str(e)}"
+        )
+
+
 @router.put("/workflows/{workflow_id}/instances/{instance_id}/tasks/{task_id}/data")
 async def update_task_data(
     workflow_id: str,

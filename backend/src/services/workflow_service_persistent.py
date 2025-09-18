@@ -195,6 +195,105 @@ class WorkflowServicePersistent:
             input("Press Enter to complete...")
 
     @staticmethod
+    async def get_workflow_instance(workflow_id: str, instance_id: str, tenant_id: Optional[str] = None):
+        """Get specific workflow instance by instance_id"""
+        logger.debug(f"[WORKFLOW] Getting instance {instance_id} for workflow {workflow_id}")
+        try:
+            query = {"workflow_id": workflow_id, "instance_id": instance_id}
+            instance = await MongoStorageService.find_one("workflowInstances", query, tenant_id=tenant_id)
+            
+            if not instance:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Workflow instance {instance_id} not found"
+                )
+            
+            # Convert ObjectId to string for JSON serialization
+            if "_id" in instance:
+                instance["_id"] = str(instance["_id"])
+            
+            # Convert datetime objects to ISO strings for JSON serialization
+            if "created_at" in instance:
+                if hasattr(instance["created_at"], "isoformat"):
+                    instance["created_at"] = instance["created_at"].isoformat()
+                elif isinstance(instance["created_at"], dict) and "$date" in instance["created_at"]:
+                    # Handle MongoDB $date format
+                    instance["created_at"] = instance["created_at"]["$date"]
+                    
+            if "updated_at" in instance:
+                if hasattr(instance["updated_at"], "isoformat"):
+                    instance["updated_at"] = instance["updated_at"].isoformat()
+                elif isinstance(instance["updated_at"], dict) and "$date" in instance["updated_at"]:
+                    # Handle MongoDB $date format
+                    instance["updated_at"] = instance["updated_at"]["$date"]
+            
+            return instance
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Failed to get workflow instance: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to get workflow instance: {str(e)}"
+            )
+
+    @staticmethod
+    async def submit_user_task_and_continue(workflow_id: str, instance_id: str, form_data: Dict[str, Any], tenant_id: Optional[str] = None):
+        """Submit user task data and continue workflow execution"""
+        logger.info(f"[WORKFLOW] Submitting task data for instance {instance_id}")
+        try:
+            # Get the workflow instance
+            instance = await WorkflowServicePersistent.get_workflow_instance(workflow_id, instance_id, tenant_id)
+            
+            # Deserialize the workflow
+            serializer = BpmnWorkflowSerializer()
+            serialized_json = json.dumps(instance["serialized_data"])
+            workflow = serializer.deserialize_json(serialized_json)
+            
+            # Update task data with submitted form data
+            workflow.data.update(form_data)
+            
+            # Find ready user tasks and complete them
+            ready_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY and hasattr(t.task_spec, 'manual') and t.task_spec.manual]
+            
+            for task in ready_tasks:
+                logger.info(f"[WORKFLOW] Completing task: {task.task_spec.name}")
+                task.complete()
+            
+            # Continue workflow execution
+            workflow.do_engine_steps()
+            
+            # Save updated state
+            await WorkflowServicePersistent.save_workflow_state(workflow, workflow_id, tenant_id)
+            
+            # Check if more manual input is required
+            manual_required = workflow.manual_input_required()
+            completed = workflow.is_completed()
+            
+            result = {
+                "message": "Task completed successfully",
+                "workflow_completed": completed,
+                "manual_input_required": manual_required,
+                "instance_id": instance_id
+            }
+            
+            if completed:
+                result["final_data"] = workflow.data
+                logger.info(f"[WORKFLOW] Workflow {instance_id} completed successfully")
+            elif manual_required:
+                logger.info(f"[WORKFLOW] Workflow {instance_id} requires more manual input")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Failed to submit task data: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to submit task data: {str(e)}"
+            )
+
+    @staticmethod
     async def validate_tenant_access(user: dict) -> str:
         """Validate tenant access and return tenant_id"""
         tenant_id = user.get("tenantId")
