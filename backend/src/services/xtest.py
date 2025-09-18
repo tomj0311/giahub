@@ -77,7 +77,7 @@ def format_json_string(json_text: str) -> str:
 
 def main():
     current_dir = os.path.dirname(__file__)
-    bpmn_file_path = os.path.join(current_dir, "x2.bpmn")
+    bpmn_file_path = os.path.join(current_dir, "x3.bpmn")
     
     # Load BPMN XML file
     parser = BpmnParser()
