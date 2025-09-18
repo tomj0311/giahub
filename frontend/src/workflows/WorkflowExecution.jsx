@@ -205,23 +205,40 @@ function WorkflowExecution({ user }) {
           
           setSelectedInstance(workflowData);
           
-          // Initialize form data from user_task form_fields
-          const initialFormData = {};
-          const userTaskData = workflowData.user_task;
-          if (userTaskData) {
-            let userTask;
-            if (Array.isArray(userTaskData)) {
-              userTask = userTaskData[0]; // Take first user task
-            } else {
-              userTask = userTaskData; // Use the object directly
-            }
-            
-            if (userTask && userTask.form_fields) {
-              Object.entries(userTask.form_fields).forEach(([key, field]) => {
-                initialFormData[key] = field.value || '';
-              });
-            }
+          // Find pending tasks (state 16 = READY)
+          const pendingTasks = [];
+          if (workflowData.serialized_data && workflowData.serialized_data.tasks) {
+            Object.entries(workflowData.serialized_data.tasks).forEach(([taskId, task]) => {
+              if (task.state === 16) { // READY/PENDING state
+                pendingTasks.push({ taskId, ...task });
+              }
+            });
           }
+          
+          // Initialize form data based on pending tasks
+          const initialFormData = {};
+          pendingTasks.forEach(task => {
+            if (task.task_spec && task.task_spec.includes('UserTask')) {
+              // For UserTask, find matching form fields
+              const userTaskData = workflowData.user_task;
+              if (userTaskData) {
+                const userTasks = Array.isArray(userTaskData) ? userTaskData : [userTaskData];
+                userTasks.forEach(userTask => {
+                  if (userTask.form_fields) {
+                    Object.entries(userTask.form_fields).forEach(([key, field]) => {
+                      initialFormData[key] = field.value || '';
+                    });
+                  }
+                });
+              }
+            } else {
+              // For ManualTask, add confirmation field
+              initialFormData[`confirm_${task.taskId}`] = '';
+            }
+          });
+          
+          // Store pending tasks in selected instance for rendering
+          workflowData.pendingTasks = pendingTasks;
           setFormData(initialFormData);
           setDialogOpen(true);
         }
@@ -421,51 +438,68 @@ function WorkflowExecution({ user }) {
           )}
         </DialogTitle>
         <DialogContent>
-          {console.log('🎭 Dialog render - selectedInstance:', selectedInstance)}
-          {console.log('🎭 Dialog render - user_task check:', selectedInstance?.user_task)}
-          {console.log('🎭 Dialog render - user_task length:', selectedInstance?.user_task?.length)}
-          
-          {selectedInstance && selectedInstance.user_task && (
-            Array.isArray(selectedInstance.user_task) 
-              ? selectedInstance.user_task.length > 0 
-              : Object.keys(selectedInstance.user_task).length > 0
-          ) ? (
+          {selectedInstance && selectedInstance.pendingTasks && selectedInstance.pendingTasks.length > 0 ? (
             <Box sx={{ mt: 2 }}>
-              {(Array.isArray(selectedInstance.user_task) 
-                ? selectedInstance.user_task 
-                : [selectedInstance.user_task]
-              ).map((userTask, taskIndex) => (
-                <Card key={taskIndex} sx={{ mb: 2 }}>
+              {selectedInstance.pendingTasks.map((task, taskIndex) => (
+                <Card key={task.taskId} sx={{ mb: 2 }}>
                   <CardContent>
                     <Typography variant="h6" gutterBottom>
-                      {userTask.task_name}
+                      {task.task_spec?.includes('UserTask') ? 
+                        (selectedInstance.user_task?.[0]?.task_name || task.task_spec) :
+                        task.task_spec
+                      }
                     </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Task ID: {task.taskId}
+                    </Typography>
+                    
                     <Stack spacing={2}>
-                      {Object.entries(userTask.form_fields || {}).map(([fieldId, field]) => (
-                        <Box key={fieldId}>
-                          {field.type === 'boolean' ? (
-                            <FormControlLabel
-                              control={
-                                <Checkbox
-                                  checked={formData[fieldId] || false}
-                                  onChange={(e) => handleFormChange(fieldId, e.target.checked)}
-                                />
-                              }
-                              label={field.label}
-                            />
-                          ) : (
-                            <TextField
-                              fullWidth
-                              label={field.label}
-                              value={formData[fieldId] || ''}
-                              onChange={(e) => handleFormChange(fieldId, e.target.value)}
-                              required={field.required}
-                              type={field.type === 'number' ? 'number' : 'text'}
-                              variant="outlined"
-                            />
-                          )}
-                        </Box>
-                      ))}
+                      {task.task_spec?.includes('UserTask') ? (
+                        // Render UserTask form fields
+                        selectedInstance.user_task && 
+                        (Array.isArray(selectedInstance.user_task) 
+                          ? selectedInstance.user_task 
+                          : [selectedInstance.user_task]
+                        ).map((userTask, utIndex) => (
+                          <Box key={utIndex}>
+                            {Object.entries(userTask.form_fields || {}).map(([fieldId, field]) => (
+                              <Box key={fieldId} sx={{ mb: 2 }}>
+                                {field.type === 'boolean' ? (
+                                  <FormControlLabel
+                                    control={
+                                      <Checkbox
+                                        checked={formData[fieldId] || false}
+                                        onChange={(e) => handleFormChange(fieldId, e.target.checked)}
+                                      />
+                                    }
+                                    label={field.label}
+                                  />
+                                ) : (
+                                  <TextField
+                                    fullWidth
+                                    label={field.label}
+                                    value={formData[fieldId] || ''}
+                                    onChange={(e) => handleFormChange(fieldId, e.target.value)}
+                                    required={field.required}
+                                    type={field.type === 'number' ? 'number' : 'text'}
+                                    variant="outlined"
+                                  />
+                                )}
+                              </Box>
+                            ))}
+                          </Box>
+                        ))
+                      ) : (
+                        // Render ManualTask confirmation
+                        <TextField
+                          fullWidth
+                          label={`Type "yes" to confirm and continue`}
+                          value={formData[`confirm_${task.taskId}`] || ''}
+                          onChange={(e) => handleFormChange(`confirm_${task.taskId}`, e.target.value)}
+                          variant="outlined"
+                          placeholder="Type 'yes' to proceed"
+                        />
+                      )}
                     </Stack>
                   </CardContent>
                 </Card>
@@ -473,17 +507,9 @@ function WorkflowExecution({ user }) {
             </Box>
           ) : (
             <div>
-              <Typography>No user tasks available</Typography>
+              <Typography>No pending tasks available</Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                Debug info: selectedInstance exists: {selectedInstance ? 'YES' : 'NO'}
-                {selectedInstance && (
-                  <>
-                    <br />user_task exists: {selectedInstance.user_task ? 'YES' : 'NO'}
-                    <br />user_task type: {typeof selectedInstance.user_task}
-                    <br />user_task length: {selectedInstance.user_task?.length || 'N/A'}
-                    <br />Keys in selectedInstance: {Object.keys(selectedInstance).join(', ')}
-                  </>
-                )}
+                All tasks may be completed or none are ready for execution.
               </Typography>
             </div>
           )}
