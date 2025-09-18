@@ -55,6 +55,8 @@ function WorkflowExecution({ user }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [mode, setMode] = useState('config'); // Always config since we only have start endpoint
+  const [incompleteWorkflows, setIncompleteWorkflows] = useState([]);
+  const [loadingIncomplete, setLoadingIncomplete] = useState(false);
 
   console.log('🚨 WORKFLOW ID FROM URL:', workflowId);
 
@@ -81,8 +83,38 @@ function WorkflowExecution({ user }) {
     setMode('config');
     if (workflowId) {
       loadStatus(workflowId);
+      loadIncompleteWorkflows();
     }
   }, [workflowId, loadStatus]);
+
+  const loadIncompleteWorkflows = useCallback(
+    async () => {
+      if (!workflowId || loadingIncomplete) return;
+      
+      setLoadingIncomplete(true);
+      try {
+        const result = await sharedApiService.makeRequest(
+          `/api/workflow/workflows/${workflowId}/incomplete`,
+          {
+            method: 'GET',
+            headers,
+          },
+          { workflowId, action: 'list_incomplete' }
+        );
+
+        if (result.success) {
+          const workflowsData = result.data;
+          const workflows = workflowsData.data || [];
+          setIncompleteWorkflows(workflows);
+        }
+      } catch (err) {
+        console.error('Failed to load incomplete workflows:', err);
+      } finally {
+        setLoadingIncomplete(false);
+      }
+    },
+    [workflowId, headers, loadingIncomplete]
+  );
 
   // Simplified - no instances list since endpoint doesn't exist
   const loadWorkflowInstances = useCallback(
@@ -195,9 +227,6 @@ function WorkflowExecution({ user }) {
           <Typography variant="body1">
             Workflow ID: <strong>{workflowId || 'NOT PROVIDED'}</strong>
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            User token: {token ? '✅ PRESENT' : '❌ MISSING'}
-          </Typography>
         </Stack>
 
         <Button
@@ -224,6 +253,50 @@ function WorkflowExecution({ user }) {
               <pre style={{ marginTop: 8, fontSize: '0.875rem', background: '#f5f5f5', padding: '8px', borderRadius: '4px', overflow: 'auto' }}>
                 {JSON.stringify(result.data, null, 2)}
               </pre>
+            )}
+          </Box>
+        )}
+
+        {workflowId && (
+          <Box sx={{ mt: 3, textAlign: 'left', mx: 'auto', maxWidth: 720 }}>
+            <Typography variant="h6">Incomplete Workflows</Typography>
+            {loadingIncomplete ? (
+              <CircularProgress size={20} />
+            ) : incompleteWorkflows.length > 0 ? (
+              <TableContainer component={Paper} variant="outlined" sx={{ mt: 1 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Instance ID</TableCell>
+                      <TableCell>Created</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {incompleteWorkflows.map((wf) => (
+                      <TableRow key={wf.instance_id} hover>
+                        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                          {wf.instance_id}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: '0.8rem' }}>
+                          {new Date(wf.created_at).toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            ) : (
+              <TableContainer component={Paper} variant="outlined" sx={{ mt: 1 }}>
+                <Table size="small">
+                  <TableBody>
+                    <TableRow>
+                      <TableCell colSpan={2} align="center" sx={{ py: 4 }}>
+                        <Typography color="text.secondary">No incomplete workflows</Typography>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
             )}
           </Box>
         )}

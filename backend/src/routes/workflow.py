@@ -9,6 +9,7 @@ from datetime import datetime
 
 from ..utils.auth import verify_token_middleware
 from ..services.workflow_service import WorkflowService
+from ..services.workflow_service_persistent import WorkflowServicePersistent
 from ..utils.log import logger
 
 router = APIRouter(tags=["workflows"])
@@ -55,5 +56,28 @@ async def start_workflow_by_workflow_id(
 async def workflow_health_check():
     """Health check for workflow service"""
     return {"status": "healthy", "service": "workflow"}
+
+
+@router.get("/workflows/{workflow_id}/incomplete")
+async def get_incomplete_workflows(
+    workflow_id: str,
+    user: dict = Depends(verify_token_middleware)
+):
+    """Get incomplete workflow instances for a specific workflow ID"""
+    try:
+        incomplete_workflows = await WorkflowServicePersistent.list_incomplete_workflows(workflow_id)
+        response_data = {
+            "success": True,
+            "data": incomplete_workflows,
+            "count": len(incomplete_workflows)
+        }
+        logger.debug(f"[WORKFLOW] Returning response: {response_data}")
+        return response_data
+    except Exception as e:
+        logger.error(f"Error getting incomplete workflows: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get incomplete workflows: {str(e)}"
+        )
 
 
