@@ -72,6 +72,41 @@ class WorkflowServicePersistent:
         return instance_id
 
     @staticmethod
+    async def update_workflow_instance(workflow, instance_id, tenant_id=None, form_map=None):
+        """Update existing workflow instance in MongoDB"""
+        serializer = BpmnWorkflowSerializer()
+        serialized_json = serializer.serialize_json(workflow)
+        
+        # Get current user tasks and their form fields
+        user_tasks = []
+        if form_map:
+            # Get ready tasks and filter for UserTasks and ManualTasks
+            ready_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY]
+            for task in ready_tasks:
+                if task.task_spec.__class__.__name__ in ["UserTask", "ManualTask"]:
+                    task_details = {
+                        "task_id": str(task.id),
+                        "task_name": task.task_spec.name,
+                        "bpmn_id": getattr(task.task_spec, "bpmn_id", None),
+                        "form_fields": WorkflowServicePersistent.handle_user_task(task, form_map)
+                    }
+                    user_tasks.append(task_details)
+        
+        update_data = {
+            "serialized_data": json.loads(serialized_json),
+            "user_task": user_tasks,
+            "updated_at": datetime.now(UTC)
+        }
+        
+        await MongoStorageService.update_one(
+            "workflowInstances", 
+            {"instance_id": instance_id}, 
+            update_data, 
+            tenant_id
+        )
+        print(f"Workflow instance updated in MongoDB - instance: {instance_id}")
+
+    @staticmethod
     async def load_workflow_state(workflow_id, tenant_id=None):
         """Load workflow state from MongoDB"""
         # Find the latest instance for this workflow
@@ -178,23 +213,6 @@ class WorkflowServicePersistent:
         return dct
 
     @staticmethod
-    async def handle_user_input(task):
-        """Update task.data based on user input for form fields"""
-        if hasattr(task, 'form') and task.form and task.form.fields:
-            print(f"Task: {task.task_spec.name}")
-            for field in task.form.fields:
-                # Prompt user for input based on form field label or ID
-                prompt = f"Enter {field.label or field.id}: "
-                user_input = input(prompt).strip()
-                # Update task.data with the user-provided value
-                task.data[field.id] = user_input
-                print(f"Updated task.data[{field.id}] = {user_input}")
-        else:
-            # For tasks without forms (e.g., ManualTask)
-            print(f"Task: {task.task_spec.name}")
-            input("Press Enter to complete...")
-
-    @staticmethod
     async def get_workflow_instance(workflow_id: str, instance_id: str, tenant_id: Optional[str] = None):
         """Get specific workflow instance by instance_id"""
         logger.debug(f"[WORKFLOW] Getting instance {instance_id} for workflow {workflow_id}")
@@ -258,14 +276,17 @@ class WorkflowServicePersistent:
             ready_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY and hasattr(t.task_spec, 'manual') and t.task_spec.manual]
             
             for task in ready_tasks:
+                task.data.update(form_data)
                 logger.info(f"[WORKFLOW] Completing task: {task.task_spec.name}")
                 task.complete()
             
             # Continue workflow execution
             workflow.do_engine_steps()
             
-            # Save updated state
-            await WorkflowServicePersistent.save_workflow_state(workflow, workflow_id, tenant_id)
+            # Update existing workflow instance
+            instance = await WorkflowServicePersistent.get_workflow_instance(workflow_id, instance_id, tenant_id)
+            form_map = await WorkflowServicePersistent.parse_form_data_from_bpmn("")  # Simple empty form map
+            await WorkflowServicePersistent.update_workflow_instance(workflow, instance_id, tenant_id, form_map)
             
             # Check if more manual input is required
             manual_required = workflow.manual_input_required()
