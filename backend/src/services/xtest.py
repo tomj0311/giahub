@@ -6,6 +6,7 @@ if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
 
 import json
+from typing import Dict
 from spiffworkflow import Workflow
 from spiffworkflow.bpmn.parser.BpmnParser import BpmnParser
 from spiffworkflow.bpmn import BpmnWorkflow
@@ -27,22 +28,26 @@ service_functions = {
     "Call Service": call_service
 }
 
-def read_extensions(task_name):
-    current_dir = os.path.dirname(__file__)
-    bpmn_file_path = os.path.join(current_dir, "x2.bpmn")
+def build_bpmn_map(paths) -> Dict[str, object]:
     from lxml import etree
-    with open(bpmn_file_path, 'r') as f:
-        xml_content = f.read()
-    root = etree.fromstring(xml_content.encode('utf-8'))
+    bpmn_map = {}
+    for p in paths:
+        with open(p, 'r') as f:
+            xml_content = f.read()
+        root = etree.fromstring(xml_content.encode('utf-8'))
+        bpmn_map[p] = root
+    return bpmn_map
+
+def read_extensions(task_name, bpmn_map: Dict[str, object]):
+    from lxml import etree
     nsmap = {'bpmn': 'http://www.omg.org/spec/BPMN/20100524/MODEL', 'spiffworkflow': 'http://spiffworkflow.org/bpmn/schema/1.0/core'}
-    
-    # Find task by ID or name
-    task = root.xpath(f'//bpmn:serviceTask[@id="{task_name}" or @name="{task_name}"]', namespaces=nsmap)
-    if task:
-        ext_elements = task[0].xpath('./bpmn:extensionElements', namespaces=nsmap)
-        if ext_elements:
-            ext_xml = etree.tostring(ext_elements[0], pretty_print=True, encoding='unicode')
-            return ext_xml
+    # Search all loaded BPMN documents for a matching serviceTask
+    for _, root in bpmn_map.items():
+        task = root.xpath(f'//bpmn:serviceTask[@id="{task_name}" or @name="{task_name}"]', namespaces=nsmap)
+        if task:
+            ext_elements = task[0].xpath('.//bpmn:extensionElements', namespaces=nsmap)
+            if ext_elements:
+                return etree.tostring(ext_elements[0], pretty_print=True, encoding='unicode')
     return None
 
 def extract_json_from_extensions(xml_text: str) -> str:
@@ -78,6 +83,8 @@ def format_json_string(json_text: str) -> str:
 def main():
     current_dir = os.path.dirname(__file__)
     bpmn_file_path = os.path.join(current_dir, "x3.bpmn")
+    # Build a reusable BPMN map (supporting future multi-file scenarios)
+    bpmn_map = build_bpmn_map([bpmn_file_path])
     
     # Load BPMN XML file
     parser = BpmnParser()
@@ -116,7 +123,7 @@ def main():
                 
             # Handle service tasks    
             elif task_type in ["BpmnServiceTask", "ServiceTask"]:
-                extensions = read_extensions(task_name)
+                extensions = read_extensions(task_name, bpmn_map)
                 json_only = extract_json_from_extensions(extensions)
                 print(format_json_string(json_only))
                 task.complete()

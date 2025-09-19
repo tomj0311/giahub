@@ -74,24 +74,30 @@ class BpmnTaskSpec(TaskSpec):
 
         # If an IO spec was given, require all inputs are present, and remove all other inputs.
         if self.io_specification is not None and len(self.io_specification.data_inputs) > 0:
-            data = {}
-            for var in self.io_specification.data_inputs:
-                if not var.exists(my_task):
-                    raise WorkflowDataException("Missing data input", task=my_task, data_input=var)
-                data[var.bpmn_id] = var.get(my_task)
-            my_task.data = data
+            # Only enforce IO inputs if any expected input is present.
+            present = [var for var in self.io_specification.data_inputs if var.exists(my_task)]
+            if len(present) > 0:
+                data = {}
+                for var in self.io_specification.data_inputs:
+                    if not var.exists(my_task):
+                        raise WorkflowDataException("Missing data input", task=my_task, data_input=var)
+                    data[var.bpmn_id] = var.get(my_task)
+                my_task.data = data
 
         return True
 
     def _on_complete_hook(self, my_task):
 
         if self.io_specification is not None and len(self.io_specification.data_outputs) > 0:
-            data = {}
-            for var in self.io_specification.data_outputs:
-                if not var.exists(my_task):
-                    raise WorkflowDataException("Missing data ouput", task=my_task, data_output=var)
-                data[var.bpmn_id] = var.get(my_task)
-            my_task.data = data
+            # Only enforce IO outputs if any expected output is present.
+            present = [var for var in self.io_specification.data_outputs if var.exists(my_task)]
+            if len(present) > 0:
+                data = {}
+                for var in self.io_specification.data_outputs:
+                    if not var.exists(my_task):
+                        raise WorkflowDataException("Missing data ouput", task=my_task, data_output=var)
+                    data[var.bpmn_id] = var.get(my_task)
+                my_task.data = data
 
         for obj in self.data_output_associations:
             obj.set(my_task)

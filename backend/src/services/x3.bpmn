@@ -1,1 +1,114 @@
-<?xml version="1.0" encoding="UTF-8"?>\n  <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"\n    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n    xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"\n    xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"\n    xmlns:di="http://www.omg.org/spec/DD/20100524/DI"\n    xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0"\n    xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0"\n    xmlns:camunda="http://camunda.org/schema/1.0/bpmn"\n    id="Definitions_1"\n    targetNamespace="http://example.com/bpmn"\n    xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL http://www.omg.org/spec/BPMN/2.0/20100501/BPMN20.xsd">\n    <process id="Process_Simple" isExecutable="true">\n      <startEvent id="StartEvent_1" name="Start">\n        <outgoing>SequenceFlow_1</outgoing>\n      </startEvent>\n      <endEvent id="EndEvent_1" name="End">\n        <incoming>SequenceFlow_3</incoming>\n      </endEvent>\n      <serviceTask id="ServiceTask_1" name="Call Service" implementation="##WebService">\n        <incoming>SequenceFlow_1</incoming>\n        <outgoing>SequenceFlow_2</outgoing>\n        <ioSpecification xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">\n          <dataInput id="DataInput_1" name="inputJson"/>\n          <dataOutput id="DataOutput_1" name="result"/>\n          <inputSet>\n            <dataInputRefs>DataInput_1</dataInputRefs>\n          </inputSet>\n          <outputSet>\n            <dataOutputRefs>DataOutput_1</dataOutputRefs>\n          </outputSet>\n        </ioSpecification>\n        <dataInputAssociation xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">\n          <sourceRef>inputJson</sourceRef>\n          <targetRef>DataInput_1</targetRef>\n          <assignment>\n            <from>{"name": "${name}", "email": "${email}"}</from>\n            <to>inputJson</to>\n          </assignment>\n        </dataInputAssociation>\n        <dataOutputAssociation xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">\n          <sourceRef>DataOutput_1</sourceRef>\n          <targetRef>result</targetRef>\n        </dataOutputAssociation>\n      </serviceTask>\n      <scriptTask id="ScriptTask_1" name="Print Output" scriptFormat="javascript">\n        <incoming>SequenceFlow_2</incoming>\n        <outgoing>SequenceFlow_3</outgoing>\n        <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">print(\'Service output: \' + result);</script>\n      </scriptTask>\n      <sequenceFlow id="SequenceFlow_1" sourceRef="StartEvent_1" targetRef="ServiceTask_1" />\n      <sequenceFlow id="SequenceFlow_2" sourceRef="ServiceTask_1" targetRef="ScriptTask_1" />\n      <sequenceFlow id="SequenceFlow_3" sourceRef="ScriptTask_1" targetRef="EndEvent_1" />\n    </process>\n    <bpmndi:BPMNDiagram id="BPMNDiagram_1">\n      <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_Simple">\n        <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">\n          <dc:Bounds x="-113" y="68" width="36" height="36" />\n          <bpmndi:BPMNLabel>\n            <dc:Bounds x="-113" y="109" width="36" height="40" />\n          </bpmndi:BPMNLabel>\n        </bpmndi:BPMNShape>\n        <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1">\n          <dc:Bounds x="342.5" y="180.5" width="36" height="36" />\n          <bpmndi:BPMNLabel>\n            <dc:Bounds x="342.5" y="221.5" width="36" height="40" />\n          </bpmndi:BPMNLabel>\n        </bpmndi:BPMNShape>\n        <bpmndi:BPMNShape id="ServiceTask_1_di" bpmnElement="ServiceTask_1">\n          <dc:Bounds x="34" y="48.5" width="100" height="80" />\n          <bpmndi:BPMNLabel>\n            <dc:Bounds x="34" y="133.5" width="100" height="40" />\n          </bpmndi:BPMNLabel>\n        </bpmndi:BPMNShape>\n        <bpmndi:BPMNShape id="ScriptTask_1_di" bpmnElement="ScriptTask_1">\n          <dc:Bounds x="235.5" y="13.5" width="100" height="80" />\n          <bpmndi:BPMNLabel>\n            <dc:Bounds x="235.5" y="98.5" width="100" height="40" />\n          </bpmndi:BPMNLabel>\n        </bpmndi:BPMNShape>\n        <bpmndi:BPMNEdge id="SequenceFlow_1_di" bpmnElement="SequenceFlow_1">\n          <di:waypoint x="-77" y="86" />\n          <di:waypoint x="34" y="89" />\n        </bpmndi:BPMNEdge>\n        <bpmndi:BPMNEdge id="SequenceFlow_2_di" bpmnElement="SequenceFlow_2">\n          <di:waypoint x="134" y="89" />\n          <di:waypoint x="236" y="54" />\n        </bpmndi:BPMNEdge>\n        <bpmndi:BPMNEdge id="SequenceFlow_3_di" bpmnElement="SequenceFlow_3">\n          <di:waypoint x="336" y="54" />\n          <di:waypoint x="343" y="199" />\n        </bpmndi:BPMNEdge>\n      </bpmndi:BPMNPlane>\n    </bpmndi:BPMNDiagram>\n  </definitions>
+<?xml version="1.0" encoding="UTF-8"?>  
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"   
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"   
+             xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"   
+             xmlns:di="http://www.omg.org/spec/DD/20100524/DI"   
+             id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">  
+  <process id="MyProcess" isExecutable="true">  
+    <!-- Start Event -->  
+    <startEvent id="StartEvent_1" name="Start">  
+      <outgoing>Flow_1</outgoing>  
+    </startEvent>  
+  
+    <!-- Sequence Flow from Start to Service Task -->  
+    <sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="ServiceTask_1" />  
+  
+    <!-- Service Task with ioSpecification and JSON in extensionElements -->  
+    <serviceTask id="ServiceTask_1" name="Invoke API">  
+      <ioSpecification>  
+        <dataInput id="Input_1" name="requestPayload">  
+          <extensionElements>  
+            <!-- JSON as reference or metadata; not standard for execution -->  
+            <custom:jsonPayload xmlns:custom="http://example.com/custom">  
+              <![CDATA[{  
+                "operation": "getData",  
+                "parameters": {  
+                    "id": "12345",  
+                    "type": "customer",  
+                    "details": {  
+                    "name": "John Doe",  
+                    "email": "john.doe@example.com"  
+                    }  
+                }  
+                }]]>  
+            </custom:jsonPayload>  
+          </extensionElements>  
+        </dataInput>  
+        <inputSet>  
+          <dataInputRefs>Input_1</dataInputRefs>  
+        </inputSet>  
+        <dataOutput id="Output_1" name="responseData" />  
+        <outputSet>  
+          <dataOutputRefs>Output_1</dataOutputRefs>  
+        </outputSet>  
+      </ioSpecification>  
+      <dataInputAssociation>  
+        <sourceRef>Input_1</sourceRef>  
+        <targetRef>ServiceTask_1</targetRef>  
+      </dataInputAssociation>  
+      <dataOutputAssociation>  
+        <sourceRef>ServiceTask_1</sourceRef>  
+        <targetRef>Output_1</targetRef>  
+      </dataOutputAssociation>  
+      <outgoing>Flow_2</outgoing>  
+    </serviceTask>  
+  
+    <!-- Sequence Flow from Service Task to Script Task -->  
+    <sequenceFlow id="Flow_2" sourceRef="ServiceTask_1" targetRef="ScriptTask_1" />  
+  
+    <!-- Script Task with Python Script -->  
+    <scriptTask id="ScriptTask_1" name="Process Data with Python" scriptFormat="python">  
+      <script>  
+        <![CDATA[  
+          # Python script to process data  
+          print("Processing data...")  
+          input_data = context.get_variable("inputData")  
+          if input_data:  
+              result = (input_data.upper() if isinstance(input_data, str) else str(input_data))  
+              context.set_variable("processedData", result)  
+          else:  
+              context.set_variable("processedData", "No input data provided")  
+        ]]>  
+      </script>  
+      <outgoing>Flow_3</outgoing>  
+    </scriptTask>  
+  
+    <!-- Sequence Flow from Script Task to End Event -->  
+    <sequenceFlow id="Flow_3" sourceRef="ScriptTask_1" targetRef="EndEvent_1" />  
+  
+    <!-- End Event -->  
+    <endEvent id="EndEvent_1" name="End">  
+      <incoming>Flow_3</incoming>  
+    </endEvent>  
+  </process>  
+  
+  <!-- BPMN Diagram Information (Optional Layout Info) -->  
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">  
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="MyProcess">  
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1" isMarkerVisible="true">  
+        <dc:Bounds x="150" y="100" width="36" height="36" />  
+      </bpmndi:BPMNShape>  
+      <bpmndi:BPMNShape id="ServiceTask_1_di" bpmnElement="ServiceTask_1">  
+        <dc:Bounds x="250" y="80" width="100" height="80" />  
+      </bpmndi:BPMNShape>  
+      <bpmndi:BPMNShape id="ScriptTask_1_di" bpmnElement="ScriptTask_1">  
+        <dc:Bounds x="400" y="80" width="100" height="80" />  
+      </bpmndi:BPMNShape>  
+      <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1" isMarkerVisible="true">  
+        <dc:Bounds x="550" y="100" width="36" height="36" />  
+      </bpmndi:BPMNShape>  
+      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1">  
+        <di:waypoint x="186" y="118" />  
+        <di:waypoint x="250" y="120" />  
+      </bpmndi:BPMNEdge>  
+      <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2">  
+        <di:waypoint x="350" y="120" />  
+        <di:waypoint x="400" y="120" />  
+      </bpmndi:BPMNEdge>  
+      <bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3">  
+        <di:waypoint x="500" y="120" />  
+        <di:waypoint x="550" y="118" />  
+      </bpmndi:BPMNEdge>  
+    </bpmndi:BPMNPlane>  
+  </bpmndi:BPMNDiagram>  
+</definitions>  

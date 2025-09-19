@@ -43,7 +43,7 @@ async def start_workflow_by_workflow_id(
         "started_at": str(datetime.now())
     })
     
-    result = await WorkflowServicePersistent.run_workflow_from_id(
+    result = await WorkflowServicePersistent.run_workflow(
         workflow_id, 
         initial_data, 
         user

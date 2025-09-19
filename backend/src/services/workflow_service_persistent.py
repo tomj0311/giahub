@@ -83,79 +83,84 @@ class WorkflowServicePersistent:
     @staticmethod
     async def save_workflow_state(workflow, workflow_id, tenant_id=None, form_map=None):
         """Serialize and save workflow state to MongoDB"""
-        instance_id = uuid.uuid4().hex[:6]
+        logger.debug(
+            f"[WORKFLOW] Saving workflow state for workflow_id='{workflow_id}' (tenant='{tenant_id}')"
+        )
+        try:
+            instance_id = uuid.uuid4().hex[:6]
 
-        serializer = BpmnWorkflowSerializer()
-        serialized_json = serializer.serialize_json(workflow)
+            serializer = BpmnWorkflowSerializer()
+            serialized_json = serializer.serialize_json(workflow)
+            logger.debug(
+                f"[WORKFLOW] Workflow serialized (chars={len(serialized_json)}) for instance='{instance_id}'"
+            )
 
-        # Get current user tasks and their form fields
-        user_tasks = []
-        if form_map:
-            # Get ready tasks and filter for UserTasks and ManualTasks
-            ready_tasks = [
-                t for t in workflow.get_tasks() if t.state == TaskState.READY
-            ]
-            for task in ready_tasks:
-                if task.task_spec.__class__.__name__ in ["UserTask", "ManualTask"]:
-                    task_details = {
-                        "task_id": str(task.id),
-                        "task_name": task.task_spec.name,
-                        "bpmn_id": getattr(task.task_spec, "bpmn_id", None),
-                        "form_fields": WorkflowServicePersistent.handle_user_task(
-                            task, form_map
-                        ),
-                    }
-                    user_tasks.append(task_details)
+            # Get current user tasks and their form fields
+            user_tasks = []
 
-        data = {
-            "workflow_id": workflow_id,
-            "instance_id": instance_id,
-            "serialized_data": json.loads(serialized_json),
-            "user_task": user_tasks,
-            "created_at": datetime.now(UTC),
-        }
+            data = {
+                "workflow_id": workflow_id,
+                "instance_id": instance_id,
+                "serialized_data": json.loads(serialized_json),
+                "user_task": user_tasks,
+                "created_at": datetime.now(UTC),
+            }
 
-        await MongoStorageService.insert_one("workflowInstances", data, tenant_id)
-        print(f"Workflow state saved to MongoDB - instance: {instance_id}")
-        return instance_id
+            await MongoStorageService.insert_one("workflowInstances", data, tenant_id)
+            logger.info(
+                f"[WORKFLOW] Workflow state saved to MongoDB - instance: {instance_id}"
+            )
+            return instance_id
+
+        except HTTPException:
+            # Pass through HTTP exceptions untouched after logging
+            logger.error(
+                f"[WORKFLOW] Failed to save workflow state for workflow_id='{workflow_id}'",
+                exc_info=True,
+            )
+            raise
+        except Exception as e:
+            logger.error(
+                f"[WORKFLOW] Error saving workflow state for workflow_id='{workflow_id}': {e}",
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to save workflow state: {str(e)}",
+            )
 
     @staticmethod
     async def update_workflow_instance(
-        workflow, instance_id, tenant_id=None, form_map=None
+        workflow, instance_id, tenant_id=None
     ):
         """Update existing workflow instance in MongoDB"""
-        serializer = BpmnWorkflowSerializer()
-        serialized_json = serializer.serialize_json(workflow)
+        try:
+            serializer = BpmnWorkflowSerializer()
+            serialized_json = serializer.serialize_json(workflow)
 
-        # Get current user tasks and their form fields
-        user_tasks = []
-        if form_map:
-            # Get ready tasks and filter for UserTasks and ManualTasks
-            ready_tasks = [
-                t for t in workflow.get_tasks() if t.state == TaskState.READY
-            ]
-            for task in ready_tasks:
-                if task.task_spec.__class__.__name__ in ["UserTask", "ManualTask"]:
-                    task_details = {
-                        "task_id": str(task.id),
-                        "task_name": task.task_spec.name,
-                        "bpmn_id": getattr(task.task_spec, "bpmn_id", None),
-                        "form_fields": WorkflowServicePersistent.handle_user_task(
-                            task, form_map
-                        ),
-                    }
-                    user_tasks.append(task_details)
+            user_tasks = []
 
-        update_data = {
-            "serialized_data": json.loads(serialized_json),
-            "user_task": user_tasks,
-            "updated_at": datetime.now(UTC),
-        }
+            update_data = {
+                "serialized_data": json.loads(serialized_json),
+                "user_task": user_tasks,
+                "updated_at": datetime.now(UTC),
+            }
 
-        await MongoStorageService.update_one(
-            "workflowInstances", {"instance_id": instance_id}, update_data, tenant_id
-        )
-        print(f"Workflow instance updated in MongoDB - instance: {instance_id}")
+            await MongoStorageService.update_one(
+                "workflowInstances", {"instance_id": instance_id}, update_data, tenant_id
+            )
+            logger.info(
+                f"[WORKFLOW] Workflow instance updated in MongoDB - instance: {instance_id}"
+            )
+        except Exception as e:
+            logger.error(
+                f"[WORKFLOW] Failed to update workflow instance '{instance_id}': {e}",
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to update workflow instance: {str(e)}",
+            )
 
     @staticmethod
     async def load_workflow_state(workflow_id, tenant_id=None):
@@ -210,20 +215,33 @@ class WorkflowServicePersistent:
         workflow_id: str, workflow, tenant_id: Optional[str] = None
     ):
         """Save workflow to MongoDB workflow_instances collection"""
-        instance_id = uuid.uuid4().hex[:6]
+        try:
+            instance_id = uuid.uuid4().hex[:6]
 
-        serializer = BpmnWorkflowSerializer()
-        serialized_json = serializer.serialize_json(workflow)
+            serializer = BpmnWorkflowSerializer()
+            serialized_json = serializer.serialize_json(workflow)
 
-        data = {
-            "workflow_id": workflow_id,
-            "instance_id": instance_id,
-            "serialized_data": json.loads(serialized_json),
-            "created_at": datetime.utcnow(),
-        }
+            data = {
+                "workflow_id": workflow_id,
+                "instance_id": instance_id,
+                "serialized_data": json.loads(serialized_json),
+                "created_at": datetime.utcnow(),
+            }
 
-        await MongoStorageService.insert_one("workflow_instances", data, tenant_id)
-        return instance_id
+            await MongoStorageService.insert_one("workflow_instances", data, tenant_id)
+            logger.info(
+                f"[WORKFLOW] Saved workflow to 'workflow_instances' - instance: {instance_id}"
+            )
+            return instance_id
+        except Exception as e:
+            logger.error(
+                f"[WORKFLOW] Failed to save workflow '{workflow_id}' to MongoDB: {e}",
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to save workflow to MongoDB: {str(e)}",
+            )
 
     @staticmethod
     def handle_user_task(task, form_map: Dict[str, List[Dict[str, str]]] | None = None):
@@ -338,7 +356,7 @@ class WorkflowServicePersistent:
         return tenant_id
 
     @staticmethod
-    async def parse_form_data_from_bpmn(
+    async def parse_bpmn(
         bpmn_xml: str,
     ) -> Dict[str, List[Dict[str, str]]]:
         """Extract simple formData/formField definitions by BPMN node id.
@@ -347,59 +365,89 @@ class WorkflowServicePersistent:
         - Returns mapping: node_id -> list of {id,label,type} dicts.
         """
         try:
-            root = etree.fromstring(bpmn_xml.encode("utf-8"))
+            bpmn_map = {"root": etree.fromstring(bpmn_xml.encode("utf-8"))}
+            return bpmn_map
+        
         except Exception:
             return {}
 
-        def findall_any_ns(node, local):
-            return node.xpath(f'.//*[local-name()="{local}"]')
-
-        forms: Dict[str, List[Dict[str, str]]] = {}
-
-        # Look for any task (userTask/manualTask) with nested formData
-        task_nodes = root.xpath(
-            '//*[local-name()="userTask" or local-name()="manualTask"]'
-        )
-        for t in task_nodes:
-            node_id = t.get("id")
-            if not node_id:
-                continue
-            fields: List[Dict[str, str]] = []
-            for fd in findall_any_ns(t, "formData"):
-                for ff in findall_any_ns(fd, "formField"):
-                    fields.append(
-                        {
-                            "id": ff.get("id") or "",
-                            "label": ff.get("label") or (ff.get("id") or ""),
-                            "type": ff.get("type") or "string",
-                        }
-                    )
-            if fields:
-                forms[node_id] = fields
-        return forms
+    @staticmethod
+    async def read_extensions(task_name, bpmn_map: Dict[str, object]):
+        from lxml import etree
+        nsmap = {'bpmn': 'http://www.omg.org/spec/BPMN/20100524/MODEL', 'spiffworkflow': 'http://spiffworkflow.org/bpmn/schema/1.0/core'}
+        # Search all loaded BPMN documents for a matching serviceTask
+        for _, root in bpmn_map.items():
+            task = root.xpath(f'//bpmn:serviceTask[@id="{task_name}" or @name="{task_name}"]', namespaces=nsmap)
+            if task:
+                ext_elements = task[0].xpath('.//bpmn:extensionElements', namespaces=nsmap)
+                if ext_elements:
+                    return etree.tostring(ext_elements[0], pretty_print=True, encoding='unicode')
+        return None
 
     @classmethod
-    async def execute_workflow_steps(cls, workflow, workflow_id, tenant_id, form_map, instance_id=None):
+    async def execute_workflow_steps(cls, workflow, workflow_id, tenant_id, form_data, instance_id=None, bpmn_map=None):
         """Simple function to run workflow steps with state saving"""
-        while not workflow.is_completed():
-            workflow.do_engine_steps()
-            if instance_id:
-                await cls.update_workflow_instance(workflow, instance_id, tenant_id, form_map)
-            else:
-                instance_id = await cls.save_workflow_state(workflow, workflow_id, tenant_id, form_map)
-            
-            if workflow.manual_input_required():
-                break
-        return instance_id
+        try:
+            while not workflow.is_completed():
+                # Find ready user tasks and complete them
+                ready_tasks = [
+                    t
+                    for t in workflow.get_tasks()
+                    if t.state == TaskState.READY
+                ]
 
-    @staticmethod
+                tasks = workflow.get_tasks()
+
+                for task in ready_tasks:
+                    logger.info(f"[WORKFLOW] Completing task: {task.task_spec.name}")
+
+                    task_type = type(task.task_spec).__name__
+                    logger.debug(f"[WORKFLOW] Task type: {task_type}")
+
+                    if task_type in ["UserTask", "ManualTask"]:
+                        # Update task data with provided form_data
+                        if form_data:
+                            task.data.update(form_data)
+                            task.complete()
+                        else:
+                            await cls.read_extensions(task.spec.name, bpmn_map)
+                            break
+                    else:
+                        task.complete()
+
+                    if instance_id:
+                        await cls.update_workflow_instance(workflow, instance_id, tenant_id)
+                    else:
+                        instance_id = await cls.save_workflow_state(workflow, workflow_id, tenant_id)
+
+                    logger.info(f"[WORKFLOW] Task '{task.task_spec.name}' completed")
+
+                if workflow.manual_input_required():
+                    break
+
+            return instance_id
+        
+        except Exception as e:
+            logger.error(
+                f"[WORKFLOW] Error executing workflow steps for '{workflow_id}': {e}",
+                exc_info=True,
+            )
+            raise
+
+    @classmethod
     async def submit_user_task_and_continue(
+        cls,
         workflow_id: str,
         instance_id: str,
         form_data: Dict[str, Any],
-        tenant_id: Optional[str] = None,
+        user: Dict[str, Any],
     ):
         """Submit user task data and continue workflow execution"""
+        bpmn_xml = await cls.get_bpmn_xml(workflow_id, user)
+
+        # Ensure tenant_id is available for subsequent calls
+        tenant_id = await cls.validate_tenant_access(user)
+
         logger.info(f"[WORKFLOW] Submitting task data for instance {instance_id}")
         try:
             # Get the workflow instance
@@ -415,23 +463,8 @@ class WorkflowServicePersistent:
             # Update task data with submitted form data
             workflow.data.update(form_data)
 
-            # Find ready user tasks and complete them
-            ready_tasks = [
-                t
-                for t in workflow.get_tasks()
-                if t.state == TaskState.READY
-                and hasattr(t.task_spec, "manual")
-                and t.task_spec.manual
-            ]
-
-            for task in ready_tasks:
-                task.data.update(form_data)
-                logger.info(f"[WORKFLOW] Completing task: {task.task_spec.name}")
-                task.complete()
-
             # Continue workflow execution with proper state saving
-            form_map = await WorkflowServicePersistent.parse_form_data_from_bpmn("")
-            await WorkflowServicePersistent.execute_workflow_steps(workflow, workflow_id, tenant_id, form_map, instance_id)
+            await WorkflowServicePersistent.execute_workflow_steps(workflow, workflow_id, tenant_id, form_data, instance_id)
 
             # Check if more manual input is required
             manual_required = workflow.manual_input_required()
@@ -462,9 +495,11 @@ class WorkflowServicePersistent:
             )
 
     @classmethod
-    async def run_workflow(cls, bpmn_xml: str, workflow_id: str, tenant_id=None):
+    async def run_workflow(cls, workflow_id: str, initial_data: Dict[str, Any], user: Dict[str, Any]):
         """Execute a BPMN workflow from XML content with state persistence"""
         try:
+            bpmn_xml = await cls.get_bpmn_xml(workflow_id, user)
+            tenant_id = await cls.validate_tenant_access(user)
             # Use default Python script engine (builtins are available to exec)
             script_engine = PythonScriptEngine()
             
@@ -473,7 +508,8 @@ class WorkflowServicePersistent:
             
             parser = BpmnParser()
 
-            form_map = await cls.parse_form_data_from_bpmn(bpmn_xml)
+            bpmn_map = await cls.parse_bpmn(bpmn_xml)
+            
             clean_bpmn = bpmn_xml.replace(
                 '<?xml version="1.0" encoding="UTF-8"?>', ""
             ).strip()
@@ -498,33 +534,29 @@ class WorkflowServicePersistent:
             workflow = BpmnWorkflow(
                 spec, subprocess_specs=subprocess_specs, script_engine=script_engine
             )
-            print("Started new workflow.")
+            logger.info("[WORKFLOW] Started new workflow execution")
 
             # Use common execution function
-            await cls.execute_workflow_steps(workflow, workflow_id, tenant_id, form_map)
+            await cls.execute_workflow_steps(workflow, workflow_id, tenant_id, initial_data, bpmn_map=bpmn_map)
 
-            print("\nWorkflow status:")
+            logger.info("[WORKFLOW] Workflow status:")
             if workflow.is_completed():
-                print("Workflow completed successfully!")
-                print(f"Final data: {workflow.data}")
+                logger.info("[WORKFLOW] Workflow completed successfully")
+                logger.debug(f"[WORKFLOW] Final data: {workflow.data}")
             else:
-                print("Workflow not completed yet. Rerun to continue.")
+                logger.info("[WORKFLOW] Workflow not completed yet. Rerun to continue.")
                 
         except Exception as e:
             logger.error(f"[WORKFLOW] Workflow execution failed: {e}")
             raise
 
     @classmethod
-    async def run_workflow_from_id(
+    async def get_bpmn_xml(
         cls,
         workflow_id: str,
-        initial_data: Optional[Dict[str, Any]] = None,
-        user: Optional[Dict[str, Any]] = None,
+        user: Dict[str, Any],
     ):
-        """
-        Execute a BPMN workflow by fetching from database using workflow_id with state persistence
-        """
-        logger.info(f"[WORKFLOW] Starting workflow execution for ID: {workflow_id}")
+        logger.info(f"[WORKFLOW] Starting workflow retrieval for for ID: {workflow_id}")
 
         if not user:
             logger.error(
@@ -574,73 +606,57 @@ class WorkflowServicePersistent:
             bpmn_content = await FileService.get_file_content_from_path(file_path)
             bpmn_xml = bpmn_content.decode("utf-8")
 
-            # Execute the workflow with state persistence using workflow_id
-            logger.info(
-                f"[WORKFLOW] Executing workflow for tenant: {tenant_id}, user: {user_id}"
-            )
-            await cls.run_workflow(bpmn_xml, workflow_id, tenant_id)
-            logger.info(
-                f"[WORKFLOW] Workflow execution completed successfully for ID: {workflow_id}"
-            )
-
-            return {
-                "message": "Workflow started successfully",
-                "workflow_id": workflow_id,
-                "tenant_id": tenant_id,
-            }
-
-        except HTTPException:
-            raise
+            return bpmn_xml
+        
         except Exception as e:
-            logger.error(f"[WORKFLOW] Failed to execute workflow {workflow_id}: {e}")
+            logger.error(f"[WORKFLOW] Failed retrieve workflow {workflow_id}: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to execute workflow: {str(e)}",
+                detail=f"Failed to retrieve workflow: {str(e)}",
             )
 
 
 async def async_main():
     """Async main execution - Load BPMN, resume if state exists, update task.data, save state"""
     from backend.src.db import init_database
+    try:
+        await init_database()
 
-    # Initialize DB connection before anything else
-    await init_database()
+        arg = "68c895f3620a7a8f3ff26058"
 
-    # Accept workflow_id or BPMN file path as first CLI argument
-    arg = "68c895f3620a7a8f3ff26058"
+        if arg and len(arg) == 24:
+            user = {
+                "id": "tCde9FYTsP3PoRhzME00tQ",
+                "role": "user",
+                "tenantId": "e3016c53-4a91-485a-bda9-417be6e13c62",
+                "email": "tj7apple@gmail.com",
+                "exp": 1758142124,
+            }
+            await WorkflowServicePersistent.run_workflow_from_id(arg, user=user)
+        else:
+            bpmn_file = arg or "process.bpmn"
 
-    if arg and len(arg) == 24:  # MongoDB ObjectId is 24 chars
-        # Assume it's a workflow_id
-        # Use following information for user
-        user = {
-            "id": "tCde9FYTsP3PoRhzME00tQ",
-            "role": "user",
-            "tenantId": "e3016c53-4a91-485a-bda9-417be6e13c62",
-            "email": "tj7apple@gmail.com",
-            "exp": 1758142124,
-        }
-        await WorkflowServicePersistent.run_workflow_from_id(arg, user=user)
-    else:
-        # Assume it's a BPMN file path
-        bpmn_file = arg or "process.bpmn"  # Default to 'process.bpmn'
+            if not os.path.exists(bpmn_file):
+                logger.error(f"[WORKFLOW] BPMN file not found: {bpmn_file}")
+                return
 
-        if not os.path.exists(bpmn_file):
-            print(f"BPMN file not found: {bpmn_file}")
-            return
+            with open(bpmn_file, "r") as f:
+                bpmn_xml = f.read()
 
-        with open(bpmn_file, "r") as f:
-            bpmn_xml = f.read()
-
-        await WorkflowServicePersistent.run_workflow(
-            bpmn_xml, "test_workflow", "default"
-        )
+            await WorkflowServicePersistent.run_workflow(
+                bpmn_xml, "test_workflow", "default"
+            )
+    except Exception as e:
+        logger.error(f"[WORKFLOW] async_main failed: {e}", exc_info=True)
 
 
 def main():
     """Main execution wrapper"""
     import asyncio
-
-    asyncio.run(async_main())
+    try:
+        asyncio.run(async_main())
+    except Exception as e:
+        logger.error(f"[WORKFLOW] Main execution failed: {e}")
 
 
 if __name__ == "__main__":
