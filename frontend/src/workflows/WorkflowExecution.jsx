@@ -219,16 +219,11 @@ function WorkflowExecution({ user }) {
           const initialFormData = {};
           pendingTasks.forEach(task => {
             if (task.task_spec && task.task_spec.includes('UserTask')) {
-              // For UserTask, find matching form fields
-              const userTaskData = workflowData.user_task;
-              if (userTaskData) {
-                const userTasks = Array.isArray(userTaskData) ? userTaskData : [userTaskData];
-                userTasks.forEach(userTask => {
-                  if (userTask.form_fields) {
-                    Object.entries(userTask.form_fields).forEach(([key, field]) => {
-                      initialFormData[key] = field.value || '';
-                    });
-                  }
+              // For UserTask, find matching form fields in the workflow data
+              const taskFormData = workflowData[task.task_spec];
+              if (taskFormData) {
+                Object.entries(taskFormData).forEach(([key, field]) => {
+                  initialFormData[key] = field.value || '';
                 });
               }
             } else {
@@ -263,12 +258,25 @@ function WorkflowExecution({ user }) {
       
       setSubmittingTask(true);
       try {
+        // Find the pending UserTask to get its task_spec
+        const pendingUserTasks = selectedInstance.pendingTasks?.filter(task => 
+          task.task_spec?.includes('UserTask')
+        ) || [];
+        
+        // Create submission data with task ID and form data
+        const submissionData = {
+          data: formData,
+          ...(pendingUserTasks.length > 0 && {
+            task_id: pendingUserTasks[0].task_spec // e.g., "UserTask_3"
+          })
+        };
+        
         const result = await sharedApiService.makeRequest(
           `/api/workflow/workflows/${workflowId}/instances/${selectedInstance.instance_id}/submit-task`,
           {
             method: 'POST',
             headers,
-            body: JSON.stringify({ data: formData }),
+            body: JSON.stringify(submissionData),
           },
           { workflowId, instanceId: selectedInstance.instance_id, action: 'submit_task' }
         );
@@ -455,38 +463,31 @@ function WorkflowExecution({ user }) {
                     
                     <Stack spacing={2}>
                       {task.task_spec?.includes('UserTask') ? (
-                        // Render UserTask form fields
-                        selectedInstance.user_task && 
-                        (Array.isArray(selectedInstance.user_task) 
-                          ? selectedInstance.user_task 
-                          : [selectedInstance.user_task]
-                        ).map((userTask, utIndex) => (
-                          <Box key={utIndex}>
-                            {Object.entries(userTask.form_fields || {}).map(([fieldId, field]) => (
-                              <Box key={fieldId} sx={{ mb: 2 }}>
-                                {field.type === 'boolean' ? (
-                                  <FormControlLabel
-                                    control={
-                                      <Checkbox
-                                        checked={formData[fieldId] || false}
-                                        onChange={(e) => handleFormChange(fieldId, e.target.checked)}
-                                      />
-                                    }
-                                    label={field.label}
+                        // Render UserTask form fields from the task-specific data
+                        selectedInstance[task.task_spec] && 
+                        Object.entries(selectedInstance[task.task_spec]).map(([fieldId, field]) => (
+                          <Box key={fieldId} sx={{ mb: 2 }}>
+                            {field.type === 'boolean' ? (
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    checked={formData[fieldId] || false}
+                                    onChange={(e) => handleFormChange(fieldId, e.target.checked)}
                                   />
-                                ) : (
-                                  <TextField
-                                    fullWidth
-                                    label={field.label}
-                                    value={formData[fieldId] || ''}
-                                    onChange={(e) => handleFormChange(fieldId, e.target.value)}
-                                    required={field.required}
-                                    type={field.type === 'number' ? 'number' : 'text'}
-                                    variant="outlined"
-                                  />
-                                )}
-                              </Box>
-                            ))}
+                                }
+                                label={field.name || fieldId}
+                              />
+                            ) : (
+                              <TextField
+                                fullWidth
+                                label={field.name || fieldId}
+                                value={formData[fieldId] || ''}
+                                onChange={(e) => handleFormChange(fieldId, e.target.value)}
+                                required={field.required}
+                                type={field.type === 'number' ? 'number' : 'text'}
+                                variant="outlined"
+                              />
+                            )}
                           </Box>
                         ))
                       ) : (
