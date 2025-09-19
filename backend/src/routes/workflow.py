@@ -14,27 +14,15 @@ from ..utils.log import logger
 router = APIRouter(tags=["workflows"])
 
 
-class StartWorkflowRequest(BaseModel):
-    initial_data: Optional[Dict[str, Any]] = None
-
-
-class RunRequest(BaseModel):
-    max_steps: Optional[int] = None
-
-
-class CompleteTaskRequest(BaseModel):
-    data: Optional[Dict[str, Any]] = None
-
-
 @router.post("/workflows/{workflow_id}/start")
 async def start_workflow_by_workflow_id(
     workflow_id: str,
-    request: StartWorkflowRequest,
+    request: dict,
     user: dict = Depends(verify_token_middleware)
 ):
     """Start a new workflow instance using workflow configuration ID"""
     # Add tenant info to initial data
-    initial_data = request.initial_data or {}
+    initial_data = request.get('initial_data', {})
     tenant_id = user.get('tenantId') or user.get('tenant_id')
     initial_data.update({
         "workflow_id": workflow_id,
@@ -105,14 +93,25 @@ async def get_workflow_instance(
 async def submit_user_task(
     workflow_id: str,
     instance_id: str,
-    request: CompleteTaskRequest,
+    request: dict,
     user: dict = Depends(verify_token_middleware)
 ):
     """Submit user task data and continue workflow"""
     try:
         tenant_id = await WorkflowServicePersistent.validate_tenant_access(user)
+        
+        # Extract task_id and task_data from request
+        task_id = request.get("task_id")
+        task_data = request.get("data", {})
+        
+        if not task_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="task_id is required in request body"
+            )
+        
         result = await WorkflowServicePersistent.submit_user_task_and_continue(
-            workflow_id, instance_id, request.data or {}, tenant_id
+            workflow_id, instance_id, task_id, task_data, user
         )
         return {"success": True, "data": result}
     except Exception as e:
