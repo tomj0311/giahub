@@ -52,68 +52,16 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
   const handleXmlChange = (value) => {
     setXmlContent(value);
     
-    // Update the selected element with new XML content - overwrite originalNestedElements
-    if (selectedNode && onNodeUpdate) {
-      const updatedNode = {
-        ...selectedNode,
-        data: {
-          ...selectedNode.data,
-          originalNestedElements: value
-        }
-      };
-      onNodeUpdate(updatedNode);
-    } else if (selectedEdge && onEdgeUpdate) {
-      const updatedEdge = {
-        ...selectedEdge,
-        data: {
-          ...selectedEdge.data,
-          originalNestedElements: value
-        }
-      };
-      onEdgeUpdate(updatedEdge);
-    }
+    // Removed onNodeUpdate/onEdgeUpdate calls to prevent excessive history updates
+    // Form changes are now local only - updates will be handled elsewhere
   };
 
   const handleInputChange = (field, value) => {
     const updatedData = { ...nodeData, [field]: value };
     setNodeData(updatedData);
 
-    // Update the selected element immediately
-    if (selectedNode && onNodeUpdate) {
-      const updatedNode = {
-        ...selectedNode,
-        data: {
-          ...selectedNode.data,
-          label: field === 'name' ? value : selectedNode.data.label,
-          backgroundColor: field === 'backgroundColor' ? value : selectedNode.data.backgroundColor,
-          borderColor: field === 'borderColor' ? value : selectedNode.data.borderColor,
-          [field]: value
-        },
-        style: {
-          ...selectedNode.style,
-          backgroundColor: field === 'backgroundColor' ? value : selectedNode.style?.backgroundColor,
-          borderColor: field === 'borderColor' ? value : selectedNode.style?.borderColor
-        }
-      };
-      onNodeUpdate(updatedNode);
-    } else if (selectedEdge && onEdgeUpdate) {
-      const updatedEdge = {
-        ...selectedEdge,
-        data: {
-          ...selectedEdge.data,
-          label: field === 'name' ? value : selectedEdge.data?.label,
-          backgroundColor: field === 'backgroundColor' ? value : selectedEdge.data?.backgroundColor,
-          borderColor: field === 'borderColor' ? value : selectedEdge.data?.borderColor,
-          [field]: value
-        },
-        style: {
-          ...selectedEdge.style,
-          backgroundColor: field === 'backgroundColor' ? value : selectedEdge.style?.backgroundColor,
-          borderColor: field === 'borderColor' ? value : selectedEdge.style?.borderColor
-        }
-      };
-      onEdgeUpdate(updatedEdge);
-    }
+    // Removed onNodeUpdate/onEdgeUpdate calls to prevent excessive history updates
+    // Form changes are now local only - updates will be handled elsewhere
   };
 
   const toggleSection = (section) => {
