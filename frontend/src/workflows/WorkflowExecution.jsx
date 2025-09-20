@@ -63,6 +63,7 @@ function WorkflowExecution({ user }) {
   const [mode, setMode] = useState('config'); // Always config since we only have start endpoint
   const [incompleteWorkflows, setIncompleteWorkflows] = useState([]);
   const [loadingIncomplete, setLoadingIncomplete] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0); // Force re-render key
   
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -100,10 +101,15 @@ function WorkflowExecution({ user }) {
   }, [workflowId, loadStatus]);
 
   const loadIncompleteWorkflows = useCallback(
-    async () => {
-      if (!workflowId || loadingIncomplete) return;
+    async (force = false) => {
+      console.log('🔍 loadIncompleteWorkflows called, force:', force, 'workflowId:', workflowId, 'loadingIncomplete:', loadingIncomplete);
+      if (!workflowId || (!force && loadingIncomplete)) {
+        console.log('🚫 Returning early from loadIncompleteWorkflows');
+        return;
+      }
       
       setLoadingIncomplete(true);
+      console.log('📡 Making API call to load incomplete workflows');
       try {
         const result = await sharedApiService.makeRequest(
           `/api/workflow/workflows/${workflowId}/incomplete`,
@@ -114,13 +120,16 @@ function WorkflowExecution({ user }) {
           { workflowId, action: 'list_incomplete' }
         );
 
+        console.log('📥 API response received:', result);
         if (result.success) {
           const workflowsData = result.data;
           const workflows = workflowsData.data || [];
+          console.log('✅ Setting incomplete workflows:', workflows);
           setIncompleteWorkflows(workflows);
+          setRefreshKey((k) => k + 1);
         }
       } catch (err) {
-        console.error('Failed to load incomplete workflows:', err);
+        console.error('❌ Failed to load incomplete workflows:', err);
       } finally {
         setLoadingIncomplete(false);
       }
@@ -159,10 +168,22 @@ function WorkflowExecution({ user }) {
           throw new Error(result.error || 'Failed to start workflow');
         }
 
-        setResult({
-          message: 'Workflow started successfully',
-          data: result.data,
+        setResult({ message: 'Workflow started successfully', data: result.data });
+
+        // Optimistically add the new instance to the list without refetching
+        const newInstance = {
+          instance_id: result.data.instance_id,
+          created_at: new Date().toISOString(),
+          workflow_id: workflowId,
+        };
+        setIncompleteWorkflows((prev) => {
+          if (!result.data.instance_id || prev.some((w) => w.instance_id === result.data.instance_id)) return prev;
+          return [newInstance, ...prev];
         });
+        setRefreshKey((k) => k + 1);
+
+        // Invalidate cache so the next manual fetch gets fresh data
+        sharedApiService.invalidateCache(`/api/workflow/workflows/${workflowId}/incomplete`);
 
       } catch (err) {
         const message = err?.message || 'Unknown error starting workflow';
@@ -172,7 +193,7 @@ function WorkflowExecution({ user }) {
         setRunning(false);
       }
     },
-    [headers]
+    [headers, workflowId, token]
   );
 
   const executeWorkflow = useCallback(
@@ -285,9 +306,24 @@ function WorkflowExecution({ user }) {
           setDialogOpen(false);
           setSelectedInstance(null);
           setFormData({});
-          
-          // Refresh incomplete workflows list
-          await loadIncompleteWorkflows();
+
+          // Optimistically update the list: remove if completed
+          const completed = !!result.data?.completed;
+          const nextTaskId = result.data?.current_task_id;
+          if (completed) {
+            setIncompleteWorkflows((prev) => prev.filter((w) => w.instance_id !== selectedInstance.instance_id));
+            setRefreshKey((k) => k + 1);
+          } else {
+            // Not completed: update list item with next task id (if we want to display later)
+            setIncompleteWorkflows((prev) => prev.map((w) => (
+              w.instance_id === selectedInstance.instance_id ? { ...w, current_task_id: nextTaskId } : w
+            )));
+            setRefreshKey((k) => k + 1);
+          }
+          // Invalidate cache so future fetches are fresh (no immediate refetch here)
+          sharedApiService.invalidateCache(`/api/workflow/workflows/${workflowId}/incomplete`);
+          // Also invalidate the specific instance cache so reopening shows the next task
+          sharedApiService.invalidateCache(`/api/workflow/workflows/${workflowId}/instances/${selectedInstance.instance_id}`);
           
           // Show success message
           setResult({
@@ -302,7 +338,7 @@ function WorkflowExecution({ user }) {
         setSubmittingTask(false);
       }
     },
-    [selectedInstance, formData, workflowId, headers, loadIncompleteWorkflows]
+    [selectedInstance, formData, workflowId, headers]
   );
 
   const handleCloseDialog = useCallback(() => {
@@ -390,7 +426,7 @@ function WorkflowExecution({ user }) {
             {loadingIncomplete ? (
               <CircularProgress size={20} />
             ) : incompleteWorkflows.length > 0 ? (
-              <TableContainer component={Paper} variant="outlined" sx={{ mt: 1 }}>
+              <TableContainer component={Paper} variant="outlined" sx={{ mt: 1 }} key={refreshKey}>
                 <Table size="small">
                   <TableHead>
                     <TableRow>

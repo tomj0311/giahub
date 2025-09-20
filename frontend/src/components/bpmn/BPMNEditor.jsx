@@ -358,7 +358,8 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
       // Check for parsing errors
       const parseError = xmlDoc.querySelector('parsererror');
       if (parseError) {
-        throw new Error('Invalid XML format: ' + parseError.textContent);
+        const errorDetails = parseError.textContent || parseError.innerText || 'Unknown parsing error';
+        throw new Error('Invalid XML format: ' + errorDetails);
       }
 
       const nodes = [];
@@ -536,9 +537,24 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
           nodeCounter++;
         });
 
-        // Parse sequence flows
-        const flows = xmlDoc.querySelectorAll('sequenceFlow');
+        // Parse sequence flows - handle namespace issues
+        let flows = xmlDoc.querySelectorAll('sequenceFlow');
+        if (flows.length === 0) {
+          // Try with namespace prefix
+          flows = xmlDoc.querySelectorAll('bpmn\\:sequenceFlow');
+        }
+        if (flows.length === 0) {
+          // Fallback: find all elements with sequenceFlow tag name
+          const allElements = xmlDoc.getElementsByTagName('*');
+          flows = Array.from(allElements).filter(el => 
+            el.tagName === 'sequenceFlow' || el.tagName.endsWith(':sequenceFlow')
+          );
+        }
         console.log('🔗 Found sequence flows:', flows.length);
+        
+        if (flows.length > 0) {
+          console.log('🔗 First flow example:', flows[0]);
+        }
         
         flows.forEach(flow => {
           const id = flow.getAttribute('id');
@@ -549,6 +565,8 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
           if (sourceRef && targetRef) {
             console.log('➕ Adding edge:', { id, source: sourceRef, target: targetRef });
             const serializer = new XMLSerializer();
+            const originalXML = serializer.serializeToString(flow);
+            
             edges.push({
               id: id,
               source: sourceRef,
@@ -557,7 +575,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
               type: 'smoothstep',
               markerEnd: { type: MarkerType.ArrowClosed },
               data: {
-                originalXML: serializer.serializeToString(flow)
+                originalXML: originalXML
               }
             });
           }
@@ -807,7 +825,10 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
       const newEdge = {
         ...params,
         type: 'smoothstep',
-        data: isMessageFlow ? { isMessageFlow: true } : {},
+        data: {
+          ...(isMessageFlow ? { isMessageFlow: true } : {}),
+          originalXML: `<sequenceFlow id="${params.id || 'generated'}" sourceRef="${params.source}" targetRef="${params.target}" />`
+        },
       };
       
       setEdges((eds) => {
@@ -1317,6 +1338,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
             isOpen={isPropertyPanelOpen}
             onToggle={handlePropertyPanelToggle}
             readOnly={readOnly}
+            edges={edges}
           />
         )}
       </div>

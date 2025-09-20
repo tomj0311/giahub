@@ -1063,7 +1063,8 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
       // Check for parsing errors
       const parseError = xmlDoc.querySelector('parsererror');
       if (parseError) {
-        throw new Error('Invalid XML format');
+        const errorDetails = parseError.textContent || parseError.innerText || 'Unknown parsing error';
+        throw new Error('Invalid XML format: ' + errorDetails);
       }
 
       const nodes = [];
@@ -1718,7 +1719,9 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
           onImportBPMN(importedNodes, importedEdges);
         }
       } catch (error) {
-        alert('Error importing BPMN file: ' + error.message);
+        console.error('BPMN Import Error:', error);
+        const fullErrorMessage = `Failed to parse BPMN file: ${error.message}`;
+        alert(fullErrorMessage);
       }
     };
 
@@ -1751,7 +1754,9 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
         setShowPasteArea(false);
       }
     } catch (error) {
-      alert('Error parsing BPMN XML: ' + error.message);
+      console.error('BPMN Paste Error:', error);
+      const fullErrorMessage = `Failed to parse BPMN XML: ${error.message}`;
+      alert(fullErrorMessage);
     }
   };
 

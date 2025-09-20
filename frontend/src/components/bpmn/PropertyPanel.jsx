@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './PropertyPanel.css';
 
-const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate, isOpen, onToggle, readOnly }) => {
+const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate, isOpen, onToggle, readOnly, edges }) => {
   const [activeSection, setActiveSection] = useState('general');
   const [nodeData, setNodeData] = useState({
     name: '',
@@ -120,7 +120,61 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
     setActiveSection(activeSection === section ? '' : section);
   };
 
+  const getGatewaySequenceFlows = () => {
+    if (!selectedNode || !edges) {
+      return 'No gateway or edges data available';
+    }
+
+    const gatewayId = selectedNode.id;
+    const relatedEdges = edges.filter(edge => 
+      edge.source === gatewayId || edge.target === gatewayId
+    );
+
+    if (relatedEdges.length === 0) {
+      return 'No sequence flows found for this gateway';
+    }
+
+    const sequenceFlowsXML = relatedEdges.map(edge => {
+      // Check for originalNestedElements (from BPMNManager import)
+      if (edge.data?.originalNestedElements) {
+        const id = edge.id;
+        const sourceRef = edge.source;
+        const targetRef = edge.target;
+        const name = edge.label || '';
+        
+        // Construct complete sequenceFlow XML
+        let xml = `<sequenceFlow id="${id}" sourceRef="${sourceRef}" targetRef="${targetRef}"`;
+        if (name) {
+          xml += ` name="${name}"`;
+        }
+        xml += '>';
+        
+        if (edge.data.originalNestedElements) {
+          xml += '\n  ' + edge.data.originalNestedElements;
+        }
+        
+        xml += '\n</sequenceFlow>';
+        return xml;
+      }
+      
+      // Fallback to originalXML if available
+      if (edge.data?.originalXML) {
+        return edge.data.originalXML;
+      }
+      
+      // Last resort: basic XML
+      return `<sequenceFlow id="${edge.id}" sourceRef="${edge.source}" targetRef="${edge.target}" />`;
+    });
+
+    return sequenceFlowsXML.join('\n\n');
+  };
+
   const getInnerXMLContent = () => {
+    // Special handling for gateways - show related sequence flows
+    if (selectedNode && selectedNode.type && selectedNode.type.includes('gateway')) {
+      return getGatewaySequenceFlows();
+    }
+    
     // Look for XML content in multiple possible locations
     const xmlContent = selectedNode?.data?.originalNestedElements || 
                       selectedEdge?.data?.originalNestedElements ||

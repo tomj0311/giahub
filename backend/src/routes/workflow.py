@@ -6,12 +6,18 @@ from fastapi import APIRouter, Depends, status, Query, HTTPException
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
 from datetime import datetime
+import time
+import os
 
 from ..utils.auth import verify_token_middleware
 from ..services.workflow_service_persistent import WorkflowServicePersistent
 from ..utils.log import logger
 
 router = APIRouter(tags=["workflows"])
+
+# Lightweight in-memory cache to coalesce near-simultaneous requests
+_INCOMPLETE_CACHE = {}
+_INCOMPLETE_CACHE_TTL = float(os.getenv("INCOMPLETE_CACHE_TTL", "0.5"))  # seconds
 
 
 @router.post("/workflows/{workflow_id}/start")
@@ -52,12 +58,19 @@ async def get_incomplete_workflows(
 ):
     """Get incomplete workflow instances for a specific workflow ID"""
     try:
+        now = time.time()
+        cached = _INCOMPLETE_CACHE.get(workflow_id)
+        if cached and (now - cached["ts"]) < _INCOMPLETE_CACHE_TTL:
+            logger.debug(f"[WORKFLOW] Returning cached response for incomplete list: workflow_id={workflow_id}")
+            return cached["data"]
+
         incomplete_workflows = await WorkflowServicePersistent.list_incomplete_workflows(workflow_id)
         response_data = {
             "success": True,
             "data": incomplete_workflows,
             "count": len(incomplete_workflows)
         }
+        _INCOMPLETE_CACHE[workflow_id] = {"ts": now, "data": response_data}
         logger.debug(f"[WORKFLOW] Returning response: {response_data}")
         return response_data
     except Exception as e:
