@@ -609,7 +609,29 @@ class WorkflowServicePersistent:
                 
                 logger.debug(f"[WORKFLOW] Before step {step_count}: Ready={len(ready_tasks)}, Started={len(started_tasks)}, Completed={len(completed_tasks)}")
                 
-                # Execute workflow engine steps with error handling
+                # Check for ScriptTasks in READY state and handle them separately
+                ready_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY]
+                script_tasks_handled = False
+                
+                for task in ready_tasks:
+                    task_type = type(task.task_spec).__name__
+                    if task_type == "ScriptTask":
+                        logger.info(f"[WORKFLOW] Handling ScriptTask separately: {task.task_spec.bpmn_id}")
+                        try:
+                            await cls.handle_script_task(task)
+                            script_tasks_handled = True
+                            break  # Process one script task at a time
+                        except Exception as script_error:
+                            logger.error(f"[WORKFLOW] ScriptTask {task.task_spec.bpmn_id} failed: {script_error}")
+                            await cls.update_workflow_instance(workflow, instance_id, tenant_id)
+                            raise HTTPException(status_code=500, detail=f"ScriptTask failed: {str(script_error)}")
+                
+                # If we handled a script task, skip do_engine_steps and continue to next iteration
+                if script_tasks_handled:
+                    await cls.update_workflow_instance(workflow, instance_id, tenant_id)
+                    continue
+                
+                # Execute workflow engine steps with error handling (for non-script tasks)
                 try:
                     workflow.do_engine_steps()
                 except Exception as engine_error:
@@ -663,20 +685,6 @@ class WorkflowServicePersistent:
                                 await cls.update_workflow_instance(workflow, instance_id, tenant_id)
                                 # STOP the workflow - don't continue!
                                 raise HTTPException(status_code=500, detail=f"ServiceTask failed: {str(service_error)}")
-                        elif task_type == "ScriptTask":
-                            # Handle ScriptTask in READY state
-                            try:
-                                # For ScriptTask, just execute the script
-                                task.run()
-                                await cls.update_workflow_instance(workflow, instance_id, tenant_id)
-                                continue  # Continue processing after handling script task
-                            except Exception as script_error:
-                                logger.error(f"[WORKFLOW] ScriptTask {task.task_spec.bpmn_id} failed: {script_error}")
-                                task.data["error"] = str(script_error)
-                                task.error()
-                                await cls.update_workflow_instance(workflow, instance_id, tenant_id)
-                                # STOP the workflow - don't continue!
-                                raise HTTPException(status_code=500, detail=f"ScriptTask failed: {str(script_error)}")
                 
                 # Check for ServiceTask in STARTED state
                 started_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.STARTED]
@@ -769,6 +777,86 @@ class WorkflowServicePersistent:
             task.data["error"] = str(e)
             task.error()
             # Re-raise to stop workflow execution
+            raise
+
+    @classmethod
+    async def handle_script_task(cls, task):
+        """
+        Handle ScriptTask by executing Python code in an isolated environment
+        and updating task.data with output variables
+        """
+        try:
+            bpmn_id = task.task_spec.bpmn_id
+            logger.info(f"[WORKFLOW] Handling ScriptTask: {bpmn_id}")
+            
+            # Get the script content from the task specification
+            script_content = getattr(task.task_spec, 'script', None)
+            if not script_content:
+                logger.warning(f"[WORKFLOW] ScriptTask {bpmn_id} has no script content")
+                task.complete()
+                return
+            
+            logger.debug(f"[WORKFLOW] Executing script for {bpmn_id}: {script_content}")
+            
+            # Normalize script content - remove leading whitespace to avoid indentation errors
+            import textwrap
+            script_content = textwrap.dedent(script_content).strip()
+            
+            # Create isolated execution environment
+            # Start with current task data as input variables
+            script_globals = {
+                '__builtins__': __builtins__,
+                # Add basic Python modules that might be needed
+                'json': __import__('json'),
+                'datetime': __import__('datetime'),
+                'math': __import__('math'),
+                're': __import__('re'),
+            }
+            
+            # Add task data as input variables
+            script_locals = dict(task.data) if task.data else {}
+            
+            # Execute the script in isolated environment
+            try:
+                exec(script_content, script_globals, script_locals)
+                
+                # Extract output variables (exclude built-in variables and input data)
+                output_vars = {}
+                original_keys = set(task.data.keys()) if task.data else set()
+                
+                for key, value in script_locals.items():
+                    # Skip private variables, functions, and modules
+                    if (not key.startswith('_') and 
+                        not callable(value) and 
+                        not hasattr(value, '__module__') and
+                        (key not in original_keys or task.data.get(key) != value)):
+                        
+                        # Only include serializable values
+                        try:
+                            json.dumps(value)  # Test if value is JSON serializable
+                            output_vars[key] = value
+                        except (TypeError, ValueError):
+                            logger.warning(f"[WORKFLOW] Skipping non-serializable variable '{key}' from script output")
+                
+                # Update task data with output variables
+                task.data.update(output_vars)
+                
+                logger.info(f"[WORKFLOW] ScriptTask {bpmn_id} executed successfully. Output variables: {list(output_vars.keys())}")
+                logger.debug(f"[WORKFLOW] ScriptTask {bpmn_id} output values: {output_vars}")
+                
+                # Mark task as completed
+                task.complete()
+                
+            except Exception as script_error:
+                logger.error(f"[WORKFLOW] Script execution failed for {bpmn_id}: {script_error}")
+                task.data["error"] = f"Script execution failed: {str(script_error)}"
+                task.error()
+                raise Exception(f"ScriptTask {bpmn_id} failed: {str(script_error)}")
+                
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Error handling ScriptTask {task.task_spec.bpmn_id}: {e}")
+            task.data["error"] = str(e)
+            task.error()
             raise
 
     @classmethod

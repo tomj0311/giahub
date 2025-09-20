@@ -128,7 +128,7 @@ async def submit_user_task(
         )
         return {"success": True, "data": result}
     except Exception as e:
-        logger.error(f"Error submitting user task: {e}")
+        logger.error(f"Error executing task: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to submit user task: {str(e)}"
