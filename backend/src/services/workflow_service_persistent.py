@@ -52,8 +52,9 @@ def call_external_api(params):
 
     except Exception as e:
         error_msg = f"Service task API call failed: {str(e)}"
-        params.data["responseData"] = {"error": error_msg}
         logger.error(f"[WORKFLOW] {error_msg}")
+        # Re-raise the exception so calling code can handle it properly
+        raise
 
 
 def register_service_task(script_engine):
@@ -507,7 +508,18 @@ class WorkflowServicePersistent:
                 
                 logger.debug(f"[WORKFLOW] Before step {step_count}: Ready={len(ready_tasks)}, Started={len(started_tasks)}, Completed={len(completed_tasks)}")
                 
-                workflow.do_engine_steps()
+                # Execute workflow engine steps with error handling
+                try:
+                    workflow.do_engine_steps()
+                except Exception as engine_error:
+                    logger.error(f"[WORKFLOW] Engine step {step_count} failed: {engine_error}")
+                    # Mark any ready tasks as errored if engine step fails
+                    for task in workflow.get_tasks():
+                        if task.state == TaskState.READY:
+                            task.data["error"] = f"Engine step failed: {str(engine_error)}"
+                            task.error()
+                    await cls.update_workflow_instance(workflow, instance_id, tenant_id)
+                    raise HTTPException(status_code=500, detail=f"Workflow engine error: {str(engine_error)}")
                 
                 # Log task data after engine steps
                 for task in workflow.get_tasks():
@@ -539,9 +551,17 @@ class WorkflowServicePersistent:
                         
                         elif task_type == "ServiceTask":
                             # Handle ServiceTask in READY state
-                            await cls.handle_service_task(task, bpmn_map)
-                            await cls.update_workflow_instance(workflow, instance_id, tenant_id)
-                            continue  # Continue processing after handling service task
+                            try:
+                                await cls.handle_service_task(task, bpmn_map)
+                                await cls.update_workflow_instance(workflow, instance_id, tenant_id)
+                                continue  # Continue processing after handling service task
+                            except Exception as service_error:
+                                logger.error(f"[WORKFLOW] ServiceTask {task.task_spec.bpmn_id} failed: {service_error}")
+                                task.data["error"] = str(service_error)
+                                task.error()
+                                await cls.update_workflow_instance(workflow, instance_id, tenant_id)
+                                # Continue with workflow even if service task fails
+                                continue
                 
                 # Check for ServiceTask in STARTED state
                 started_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.STARTED]
@@ -549,9 +569,16 @@ class WorkflowServicePersistent:
                     task_type = type(task.task_spec).__name__
                     if task_type == "ServiceTask":
                         logger.info(f"[WORKFLOW] Handling ServiceTask in STARTED state: {task.task_spec.bpmn_id}")
-                        await cls.handle_service_task(task, bpmn_map)
-                        await cls.update_workflow_instance(workflow, instance_id, tenant_id)
-                        break  # Process one service task at a time
+                        try:
+                            await cls.handle_service_task(task, bpmn_map)
+                            await cls.update_workflow_instance(workflow, instance_id, tenant_id)
+                            break  # Process one service task at a time
+                        except Exception as service_error:
+                            logger.error(f"[WORKFLOW] ServiceTask {task.task_spec.bpmn_id} failed in STARTED state: {service_error}")
+                            task.data["error"] = str(service_error)
+                            task.error()
+                            await cls.update_workflow_instance(workflow, instance_id, tenant_id)
+                            break  # Stop processing after error
             
             # Final MongoDB update
             await cls.update_workflow_instance(workflow, instance_id, tenant_id)
@@ -588,7 +615,17 @@ class WorkflowServicePersistent:
             io_spec = await cls.read_io_specification_full(bpmn_id, bpmn_map)
             
             # Call external API with parameters
-            response = json.loads(call_external_api(io_spec.get('inputs', '{}')))
+            try:
+                response_data = call_external_api(io_spec.get('inputs', '{}'))
+                if response_data is None:
+                    raise ValueError("External API returned None")
+                
+                response = json.loads(response_data)
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.error(f"[WORKFLOW] Failed to parse API response for ServiceTask {bpmn_id}: {e}")
+                task.data["error"] = f"Invalid API response: {str(e)}"
+                task.error()
+                return
             
             # Handle the response based on io specification outputs
             if response:
@@ -599,8 +636,12 @@ class WorkflowServicePersistent:
                 await cls.map_outputs_to_task(task, io_spec.get('outputs', {}), response)
                 
                 task.complete()
-            
-            logger.info(f"[WORKFLOW] ServiceTask {bpmn_id} completed")
+                logger.info(f"[WORKFLOW] ServiceTask {bpmn_id} completed successfully")
+            else:
+                # Empty response - treat as error
+                logger.warning(f"[WORKFLOW] ServiceTask {bpmn_id} received empty response")
+                task.data["error"] = "Empty response from external API"
+                task.error()
             
         except Exception as e:
             logger.error(f"[WORKFLOW] Error handling ServiceTask {task.task_spec.bpmn_id}: {e}")
@@ -735,14 +776,24 @@ class WorkflowServicePersistent:
                 raise HTTPException(status_code=400, detail=f"Expected task {task_id}, got {current_task.task_spec.bpmn_id}")
             
             # Update task data - THIS IS THE CRITICAL POINT
-            current_task.data.update(task_data)
-            workflow.data.update(task_data)  # Also update workflow global data
-            
-           # Save form data to MongoDB
-            await cls.update_bpmn_task_form_data(instance_id, task_id, json.dumps(task_data), tenant_id)
-            
-            # Complete the task
-            current_task.complete()
+            try:
+                current_task.data.update(task_data)
+                workflow.data.update(task_data)  # Also update workflow global data
+                
+                # Save form data to MongoDB
+                await cls.update_bpmn_task_form_data(instance_id, task_id, json.dumps(task_data), tenant_id)
+                
+                # Complete the task
+                current_task.complete()
+                logger.info(f"[WORKFLOW] Task {task_id} completed successfully")
+                
+            except Exception as task_error:
+                logger.error(f"[WORKFLOW] Error completing task {task_id}: {task_error}")
+                current_task.data["error"] = str(task_error)
+                current_task.error()
+                # Update MongoDB with error state
+                await cls.update_workflow_instance(workflow, instance_id, tenant_id)
+                raise HTTPException(status_code=500, detail=f"Task completion failed: {str(task_error)}")
             
             # Serialize and check what gets serialized
             test_serializer = BpmnWorkflowSerializer()
