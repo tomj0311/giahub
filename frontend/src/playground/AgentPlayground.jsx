@@ -1175,6 +1175,7 @@ const ChatInputBar = React.memo(function ChatInputBar({
   containerEl
 }) {
   const containerRef = useRef(null)
+  const inputRef = useRef(null)
   const [alignedStyle, setAlignedStyle] = useState({ left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 650 })
   
   // Dragging state
@@ -1268,6 +1269,17 @@ const ChatInputBar = React.memo(function ChatInputBar({
     }
   }, [isDragging, handleMouseMove, handleMouseUp])
 
+  // Restore focus to input after streaming completes
+  useEffect(() => {
+    if (!running && inputRef.current) {
+      // Small delay to ensure DOM is stable after streaming
+      const timer = setTimeout(() => {
+        inputRef.current?.focus()
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [running])
+
   // Double-click to reset position
   const handleDoubleClick = () => {
     setPosition({ x: null, y: null })
@@ -1312,6 +1324,7 @@ const ChatInputBar = React.memo(function ChatInputBar({
     >
       <Box sx={{ position: 'relative' }}>
         <TextField
+          inputRef={inputRef}
           placeholder={!selected ? 'Select an agent first' : (stagedFiles.length ? `Type your message... (${stagedFiles.length} file(s) ready)` : 'Type your message...')}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
@@ -1330,6 +1343,7 @@ const ChatInputBar = React.memo(function ChatInputBar({
           maxRows={4}
           disabled={!selected || running}
           size="small"
+          autoFocus
           sx={{ 
             '& .MuiInputBase-root': { 
               pr: running ? 14 : 8, 
