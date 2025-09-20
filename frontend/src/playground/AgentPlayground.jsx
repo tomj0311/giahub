@@ -892,7 +892,14 @@ export default function AgentPlayground({ user }) {
                       <>
                         {/* Always show the original content including XML */}
                         {bpmnData.contentWithoutBPMN && (
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          <ReactMarkdown 
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              a: ({ node, ...props }) => (
+                                <a {...props} target="_blank" rel="noopener noreferrer" />
+                              )
+                            }}
+                          >
                             {bpmnData.contentWithoutBPMN}
                           </ReactMarkdown>
                         )}
@@ -954,7 +961,14 @@ export default function AgentPlayground({ user }) {
                         
                         {/* Fallback if no content */}
                         {!bpmnData.contentWithoutBPMN && !bpmnData.hasBPMN && (
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          <ReactMarkdown 
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              a: ({ node, ...props }) => (
+                                <a {...props} target="_blank" rel="noopener noreferrer" />
+                              )
+                            }}
+                          >
                             {m.content && m.content.length ? m.content : '...'}
                           </ReactMarkdown>
                         )}
