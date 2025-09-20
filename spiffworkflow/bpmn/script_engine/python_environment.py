@@ -42,6 +42,8 @@ class TaskDataEnvironment(BasePythonScriptEngineEnvironment):
         self._prepare_context(context)
         my_globals.update(external_context or {})
         my_globals.update(context)
+        # Normalize whitespace to handle expressions with newlines and indentation
+        expression = ' '.join(expression.split())
         return eval(expression, my_globals)
 
     def execute(self, script, context, external_context=None):
