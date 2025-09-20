@@ -226,35 +226,95 @@ function WorkflowExecution({ user }) {
           
           setSelectedInstance(workflowData);
           
-          // Find pending tasks (state 16 = READY)
+          // Find pending and error tasks (state 16 = READY, state 128 = ERROR)
           const pendingTasks = [];
+          const errorTasks = [];
           if (workflowData.serialized_data && workflowData.serialized_data.tasks) {
             Object.entries(workflowData.serialized_data.tasks).forEach(([taskId, task]) => {
               if (task.state === 16) { // READY/PENDING state
-                pendingTasks.push({ taskId, ...task });
+                pendingTasks.push({ taskId, ...task, taskType: 'pending' });
+              } else if (task.state === 128) { // ERROR state
+                errorTasks.push({ taskId, ...task, taskType: 'error' });
               }
             });
           }
           
-          // Initialize form data based on pending tasks
-          const initialFormData = {};
-          pendingTasks.forEach(task => {
-            if (task.task_spec && task.task_spec.includes('UserTask')) {
-              // For UserTask, find matching form fields in the workflow data
-              const taskFormData = workflowData[task.task_spec];
-              if (taskFormData) {
-                Object.entries(taskFormData).forEach(([key, field]) => {
-                  initialFormData[key] = field.value || '';
+          // Combine pending and error tasks for display
+          const allActionableTasks = [...pendingTasks, ...errorTasks];
+          console.log('🔍 Pending tasks found:', pendingTasks);
+          console.log('🔍 Error tasks found:', errorTasks);
+          console.log('🔍 All actionable tasks:', allActionableTasks);
+          
+          // Check for direct task data (Task_1, Task_2, etc.) and add to actionable if not already present
+          Object.keys(workflowData).forEach(key => {
+            if (key.startsWith('Task_') && workflowData[key]?.formField) {
+              console.log(`🔍 Found form field data in ${key}:`, workflowData[key]);
+              // Add this as a pending task if not already in the list
+              const existingTask = allActionableTasks.find(t => t.task_spec === key);
+              if (!existingTask) {
+                allActionableTasks.push({
+                  taskId: `${key}_direct`,
+                  task_spec: key,
+                  state: 16, // Mark as ready
+                  typename: 'UserTask', // Explicitly mark as UserTask
+                  taskType: 'pending'
+                });
+                console.log(`🔍 Added ${key} as pending task`);
+              }
+            }
+          });
+          
+          // Helper to extract field entries for a given task spec from stored instance data
+          const getFieldEntries = (instanceObj, taskSpec) => {
+            const obj = instanceObj?.[taskSpec];
+            if (!obj) return [];
+            // Support both legacy shape ({formField, formData}) and direct mapping
+            if (obj.formField || obj.formData) {
+              const entries = [];
+              if (obj.formField) {
+                // Handle both array and single object formats
+                const formFields = Array.isArray(obj.formField) ? obj.formField : [obj.formField];
+                formFields.forEach(f => {
+                  if (f?.id) {
+                    entries.push([
+                      f.id,
+                      {
+                        name: f.label || f.id,
+                        type: f.type || 'string',
+                        required: f.required === 'true' || f.required === true,
+                      },
+                    ]);
+                  }
                 });
               }
+              if (obj.formData && typeof obj.formData === 'object') {
+                Object.entries(obj.formData).forEach(([k, v]) => {
+                  if (v && typeof v === 'object') entries.push([k, v]);
+                });
+              }
+              return entries;
+            }
+            return Object.entries(obj);
+          };
+
+          // Initialize form data based on actionable tasks using BPMN spec to detect UserTask
+          const initialFormData = {};
+          allActionableTasks.forEach((task) => {
+            const spec = workflowData.serialized_data?.spec?.task_specs?.[task.task_spec];
+            const hasFormField = workflowData[task.task_spec]?.formField;
+            const isUserTask = spec?.typename === 'UserTask' || spec?.manual === true || hasFormField;
+            if (isUserTask) {
+              const entries = getFieldEntries(workflowData, task.task_spec);
+              entries.forEach(([key, field]) => {
+                initialFormData[key] = field?.value || '';
+              });
             } else {
-              // For ManualTask, add confirmation field
               initialFormData[`confirm_${task.taskId}`] = '';
             }
           });
           
-          // Store pending tasks in selected instance for rendering
-          workflowData.pendingTasks = pendingTasks;
+          // Store actionable tasks in selected instance for rendering
+          workflowData.pendingTasks = allActionableTasks;
           setFormData(initialFormData);
           setDialogOpen(true);
         }
@@ -279,10 +339,12 @@ function WorkflowExecution({ user }) {
       
       setSubmittingTask(true);
       try {
-        // Find the pending UserTask to get its task_spec
-        const pendingUserTasks = selectedInstance.pendingTasks?.filter(task => 
-          task.task_spec?.includes('UserTask')
-        ) || [];
+        // Find the pending UserTask using BPMN spec typename or form field presence
+        const pendingUserTasks = (selectedInstance.pendingTasks || []).filter((task) => {
+          const spec = selectedInstance.serialized_data?.spec?.task_specs?.[task.task_spec];
+          const hasFormField = selectedInstance[task.task_spec]?.formField;
+          return spec?.typename === 'UserTask' || hasFormField;
+        });
         
         // Create submission data with task ID and form data
         const submissionData = {
@@ -485,58 +547,161 @@ function WorkflowExecution({ user }) {
           {selectedInstance && selectedInstance.pendingTasks && selectedInstance.pendingTasks.length > 0 ? (
             <Box sx={{ mt: 2 }}>
               {selectedInstance.pendingTasks.map((task, taskIndex) => (
-                <Card key={task.taskId} sx={{ mb: 2 }}>
+                <Card 
+                  key={task.taskId} 
+                  sx={{ 
+                    mb: 2,
+                    border: task.taskType === 'error' ? '2px solid' : '1px solid',
+                    borderColor: task.taskType === 'error' ? theme.palette.error.main : theme.palette.divider,
+                    backgroundColor: task.taskType === 'error' ? alpha(theme.palette.error.main, 0.05) : 'inherit'
+                  }}
+                >
                   <CardContent>
-                    <Typography variant="h6" gutterBottom>
-                      {task.task_spec?.includes('UserTask') ? 
-                        (selectedInstance.user_task?.[0]?.task_name || task.task_spec) :
-                        task.task_spec
-                      }
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      Task ID: {task.taskId}
-                    </Typography>
-                    
-                    <Stack spacing={2}>
-                      {task.task_spec?.includes('UserTask') ? (
-                        // Render UserTask form fields from the task-specific data
-                        selectedInstance[task.task_spec] && 
-                        Object.entries(selectedInstance[task.task_spec]).map(([fieldId, field]) => (
-                          <Box key={fieldId} sx={{ mb: 2 }}>
-                            {field.type === 'boolean' ? (
-                              <FormControlLabel
-                                control={
-                                  <Checkbox
-                                    checked={formData[fieldId] || false}
-                                    onChange={(e) => handleFormChange(fieldId, e.target.checked)}
-                                  />
-                                }
-                                label={field.name || fieldId}
-                              />
-                            ) : (
-                              <TextField
-                                fullWidth
-                                label={field.name || fieldId}
-                                value={formData[fieldId] || ''}
-                                onChange={(e) => handleFormChange(fieldId, e.target.value)}
-                                required={field.required}
-                                type={field.type === 'number' ? 'number' : 'text'}
-                                variant="outlined"
-                              />
-                            )}
-                          </Box>
-                        ))
-                      ) : (
-                        // Render ManualTask confirmation
-                        <TextField
-                          fullWidth
-                          label={`Type "yes" to confirm and continue`}
-                          value={formData[`confirm_${task.taskId}`] || ''}
-                          onChange={(e) => handleFormChange(`confirm_${task.taskId}`, e.target.value)}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                      <Typography variant="h6">
+                        {
+                          (() => {
+                            const spec = selectedInstance.serialized_data?.spec?.task_specs?.[task.task_spec];
+                            const title = spec?.bpmn_name || spec?.name || task.task_spec;
+                            return title;
+                          })()
+                        }
+                      </Typography>
+                      {task.taskType === 'error' && (
+                        <Chip 
+                          icon={<XCircle size={16} />} 
+                          label="ERROR" 
+                          color="error" 
+                          size="small"
                           variant="outlined"
-                          placeholder="Type 'yes' to proceed"
                         />
                       )}
+                      {task.taskType === 'pending' && (
+                        <Chip 
+                          icon={<Clock size={16} />} 
+                          label="PENDING" 
+                          color="primary" 
+                          size="small"
+                          variant="outlined"
+                        />
+                      )}
+                    </Box>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Task ID: {task.taskId} | State: {task.state} | Type: {task.taskType}
+                    </Typography>
+                    
+                    {task.taskType === 'error' && (
+                      <Alert severity="error" sx={{ mb: 2 }}>
+                        <Typography variant="body2">
+                          This task encountered an error (state: {task.state}). 
+                          {task.data && typeof task.data === 'object' && (
+                            <Box sx={{ mt: 1 }}>
+                              <strong>Error details:</strong>
+                              <pre style={{ fontSize: '0.75rem', marginTop: '4px' }}>
+                                {JSON.stringify(task.data, null, 2)}
+                              </pre>
+                            </Box>
+                          )}
+                        </Typography>
+                      </Alert>
+                    )}
+                    
+                    <Stack spacing={2}>
+                      {(() => {
+                        const spec = selectedInstance.serialized_data?.spec?.task_specs?.[task.task_spec];
+                        const hasFormField = selectedInstance[task.task_spec]?.formField;
+                        const isUserTask = spec?.typename === 'UserTask' || hasFormField;
+                        const isManualTask = spec?.typename === 'ManualTask' || spec?.manual === true;
+                        
+                        if (task.taskType === 'error') {
+                          return (
+                            <Typography variant="body2" color="text.secondary">
+                              Error task cannot be executed. Check error details above.
+                            </Typography>
+                          );
+                        }
+                        
+                        if (isUserTask) {
+                          // Build field entries supporting both legacy and new shapes
+                          const obj = selectedInstance?.[task.task_spec];
+                          const entries = (() => {
+                            if (!obj) return [];
+                            if (obj.formField || obj.formData) {
+                              const e = [];
+                              if (obj.formField) {
+                                // Handle both array and single object formats
+                                const formFields = Array.isArray(obj.formField) ? obj.formField : [obj.formField];
+                                formFields.forEach(f => {
+                                  if (f?.id) {
+                                    e.push([
+                                      f.id,
+                                      {
+                                        name: f.label || f.id,
+                                        type: f.type || 'string',
+                                        required: f.required === 'true' || f.required === true,
+                                      },
+                                    ]);
+                                  }
+                                });
+                              }
+                              if (obj.formData && typeof obj.formData === 'object') {
+                                Object.entries(obj.formData).forEach(([k, v]) => {
+                                  if (v && typeof v === 'object') e.push([k, v]);
+                                });
+                              }
+                              return e;
+                            }
+                            return Object.entries(obj);
+                          })();
+
+                          return entries.map(([fieldId, field]) => (
+                            <Box key={fieldId} sx={{ mb: 2 }}>
+                              {field.type === 'boolean' ? (
+                                <FormControlLabel
+                                  control={
+                                    <Checkbox
+                                      checked={formData[fieldId] || false}
+                                      onChange={(e) => handleFormChange(fieldId, e.target.checked)}
+                                    />
+                                  }
+                                  label={field.name || fieldId}
+                                />
+                              ) : (
+                                <TextField
+                                  fullWidth
+                                  label={field.name || fieldId}
+                                  value={formData[fieldId] || ''}
+                                  onChange={(e) => handleFormChange(fieldId, e.target.value)}
+                                  required={field.required}
+                                  type={field.type === 'number' ? 'number' : 'text'}
+                                  variant="outlined"
+                                />
+                              )}
+                            </Box>
+                          ));
+                        }
+                        
+                        if (isManualTask) {
+                          // ManualTask confirmation
+                          return (
+                            <TextField
+                              fullWidth
+                              label={`Type "yes" to confirm and continue`}
+                              value={formData[`confirm_${task.taskId}`] || ''}
+                              onChange={(e) => handleFormChange(`confirm_${task.taskId}`, e.target.value)}
+                              variant="outlined"
+                              placeholder="Type 'yes' to proceed"
+                            />
+                          );
+                        }
+                        
+                        // Unknown task type
+                        return (
+                          <Typography variant="body2" color="text.secondary">
+                            Task type: {spec?.typename || 'Unknown'}
+                          </Typography>
+                        );
+                      })()}
                     </Stack>
                   </CardContent>
                 </Card>
@@ -544,9 +709,9 @@ function WorkflowExecution({ user }) {
             </Box>
           ) : (
             <div>
-              <Typography>No pending tasks available</Typography>
+              <Typography>No actionable tasks available</Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                All tasks may be completed or none are ready for execution.
+                All tasks may be completed, none are ready for execution, or check for error tasks.
               </Typography>
             </div>
           )}

@@ -39,12 +39,17 @@ def call_external_api(params):
     Function to call an external API using requestData from the BPMN process.
     Designed as a SpiffWorkflow service task delegate.
     """
-    import json
-    
     try:
+        # Return the params directly as a dictionary, not as JSON string
         request_data = {}
         if params:
-            request_data = json.dumps(params)
+            # If params is already a dict, use it directly
+            if isinstance(params, dict):
+                request_data = params
+            else:
+                # If params is a string, try to parse it
+                import json
+                request_data = json.loads(params) if isinstance(params, str) else {}
 
         time.sleep(5)  # Simulate network delay
 
@@ -425,56 +430,95 @@ class WorkflowServicePersistent:
                 if ext_elements:
                     logger.debug(f"[WORKFLOW] Found extension elements")
                     form_data = {}
+                    form_fields = []
                     
-                    # Extract custom form data
-                    form_data_elements = ext_elements[0].xpath('.//custom:formData', namespaces=nsmap)
+                    # Search for formData elements regardless of namespace (bpmn:formData, custom:formData, formData, etc.)
+                    form_data_elements = ext_elements[0].xpath('.//*[local-name()="formData"]')
+                    
                     if form_data_elements:
-                        # Extract custom form fields
+                        logger.debug(f"[WORKFLOW] Found {len(form_data_elements)} formData elements")
+                        # Extract form fields from formData elements
                         for form_data_elem in form_data_elements:
-                            fields = form_data_elem.xpath('.//custom:field', namespaces=nsmap)
+                            # Search for formField elements regardless of namespace
+                            fields = form_data_elem.xpath('.//*[local-name()="formField"]')
+                            logger.debug(f"[WORKFLOW] Found {len(fields)} formField elements in formData")
+                            
                             for field in fields:
                                 field_id = field.get('id')
-                                field_name = field.get('name', field_id)
+                                field_label = field.get('label', field_id)
                                 field_type = field.get('type', 'string')
+                                field_required = field.get('required', 'false')
                                 
                                 if field_id:
-                                    form_data[field_id] = {
-                                        'name': field_name,
+                                    field_data = {
+                                        'id': field_id,
+                                        'label': field_label,
                                         'type': field_type,
-                                        'id': field_id
+                                        'required': field_required
                                     }
                                     
                                     # Add any other attributes
                                     for attr, value in field.attrib.items():
-                                        if attr not in ['id', 'name', 'type']:
-                                            form_data[field_id][attr] = value
+                                        if attr not in ['id', 'label', 'type', 'required']:
+                                            field_data[attr] = value
+                                    
+                                    form_fields.append(field_data)
+                                    logger.debug(f"[WORKFLOW] Added formField: {field_data}")
                     
-                    # Extract SpiffWorkflow properties if present
-                    spiff_properties = ext_elements[0].xpath('.//spiffworkflow:properties', namespaces=nsmap)
-                    if spiff_properties:
-                        for prop in spiff_properties:
-                            property_elements = prop.xpath('.//spiffworkflow:property', namespaces=nsmap)
-                            for prop_elem in property_elements:
-                                prop_name = prop_elem.get('name')
-                                prop_value = prop_elem.get('value')
-                                if prop_name:
-                                    form_data[prop_name] = prop_value
+                    # If we found form fields, structure them properly
+                    if form_fields:
+                        form_data = {
+                            'formData': {},
+                            'formField': form_fields
+                        }
                     
-                    # Extract any other extension elements
-                    other_elements = ext_elements[0].xpath('.//*[not(self::custom:formData) and not(self::custom:field) and not(self::spiffworkflow:properties)]', namespaces=nsmap)
-                    if other_elements:
-                        for elem in other_elements:
-                            tag_name = elem.tag.split('}')[-1] if '}' in elem.tag else elem.tag
-                            if tag_name not in form_data:
-                                form_data[tag_name] = {}
+                    # Also search for direct formField elements (not inside formData)
+                    direct_form_fields = ext_elements[0].xpath('.//*[local-name()="formField"]')
+                    if direct_form_fields and not form_fields:
+                        logger.debug(f"[WORKFLOW] Found {len(direct_form_fields)} direct formField elements")
+                        for field in direct_form_fields:
+                            field_id = field.get('id')
+                            field_label = field.get('label', field_id)
+                            field_type = field.get('type', 'string')
+                            field_required = field.get('required', 'false')
                             
-                            # Add attributes
-                            for attr, value in elem.attrib.items():
-                                form_data[tag_name][attr] = value
+                            if field_id:
+                                field_data = {
+                                    'id': field_id,
+                                    'label': field_label,
+                                    'type': field_type,
+                                    'required': field_required
+                                }
+                                
+                                # Add any other attributes
+                                for attr, value in field.attrib.items():
+                                    if attr not in ['id', 'label', 'type', 'required']:
+                                        field_data[attr] = value
+                                
+                                form_fields.append(field_data)
+                                logger.debug(f"[WORKFLOW] Added direct formField: {field_data}")
+                        
+                        if form_fields:
+                            form_data = {
+                                'formData': {},
+                                'formField': form_fields
+                            }
+                    
+                    # Extract SpiffWorkflow properties if present (keep this for compatibility)
+                    if not form_data:
+                        spiff_properties = ext_elements[0].xpath('.//spiffworkflow:properties', namespaces=nsmap)
+                        if spiff_properties:
+                            properties_data = {}
+                            for prop in spiff_properties:
+                                property_elements = prop.xpath('.//spiffworkflow:property', namespaces=nsmap)
+                                for prop_elem in property_elements:
+                                    prop_name = prop_elem.get('name')
+                                    prop_value = prop_elem.get('value')
+                                    if prop_name:
+                                        properties_data[prop_name] = prop_value
                             
-                            # Add text content if any
-                            if elem.text and elem.text.strip():
-                                form_data[tag_name]['text'] = elem.text.strip()
+                            if properties_data:
+                                form_data = properties_data
                     
                     logger.debug(f"[WORKFLOW] Extracted form data: {form_data}")
                     return json.dumps(form_data, indent=2) if form_data else "{}"
@@ -560,8 +604,8 @@ class WorkflowServicePersistent:
                                 task.data["error"] = str(service_error)
                                 task.error()
                                 await cls.update_workflow_instance(workflow, instance_id, tenant_id)
-                                # Continue with workflow even if service task fails
-                                continue
+                                # STOP the workflow - don't continue!
+                                raise HTTPException(status_code=500, detail=f"ServiceTask failed: {str(service_error)}")
                 
                 # Check for ServiceTask in STARTED state
                 started_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.STARTED]
@@ -578,7 +622,8 @@ class WorkflowServicePersistent:
                             task.data["error"] = str(service_error)
                             task.error()
                             await cls.update_workflow_instance(workflow, instance_id, tenant_id)
-                            break  # Stop processing after error
+                            # STOP the workflow - don't continue!
+                            raise HTTPException(status_code=500, detail=f"ServiceTask failed: {str(service_error)}")
             
             # Final MongoDB update
             await cls.update_workflow_instance(workflow, instance_id, tenant_id)
@@ -616,16 +661,18 @@ class WorkflowServicePersistent:
             
             # Call external API with parameters
             try:
-                response_data = call_external_api(io_spec.get('inputs', '{}'))
+                response_data = call_external_api(io_spec.get('inputs', {}))
                 if response_data is None:
                     raise ValueError("External API returned None")
                 
-                response = json.loads(response_data)
-            except (json.JSONDecodeError, ValueError) as e:
-                logger.error(f"[WORKFLOW] Failed to parse API response for ServiceTask {bpmn_id}: {e}")
-                task.data["error"] = f"Invalid API response: {str(e)}"
+                # response_data is already a dictionary, no need to parse JSON
+                response = response_data
+            except Exception as e:
+                logger.error(f"[WORKFLOW] Failed to call external API for ServiceTask {bpmn_id}: {e}")
+                task.data["error"] = f"API call failed: {str(e)}"
                 task.error()
-                return
+                # Don't return - raise exception to stop workflow
+                raise Exception(f"ServiceTask {bpmn_id} failed: {str(e)}")
             
             # Handle the response based on io specification outputs
             if response:
@@ -642,12 +689,16 @@ class WorkflowServicePersistent:
                 logger.warning(f"[WORKFLOW] ServiceTask {bpmn_id} received empty response")
                 task.data["error"] = "Empty response from external API"
                 task.error()
+                # Don't return - raise exception to stop workflow
+                raise Exception(f"ServiceTask {bpmn_id} failed: Empty response from external API")
             
         except Exception as e:
             logger.error(f"[WORKFLOW] Error handling ServiceTask {task.task_spec.bpmn_id}: {e}")
             # Set error in task data
             task.data["error"] = str(e)
             task.error()
+            # Re-raise to stop workflow execution
+            raise
 
     @classmethod
     async def read_io_specification_full(cls, bpmn_id, bpmn_map):
