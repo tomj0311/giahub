@@ -51,17 +51,114 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
 
   const handleXmlChange = (value) => {
     setXmlContent(value);
-    
-    // Removed onNodeUpdate/onEdgeUpdate calls to prevent excessive history updates
-    // Form changes are now local only - updates will be handled elsewhere
+    // Changes are now stored locally until Save button is clicked
   };
 
   const handleInputChange = (field, value) => {
     const updatedData = { ...nodeData, [field]: value };
     setNodeData(updatedData);
+    // Changes are now stored locally until Save button is clicked
+  };
 
-    // Removed onNodeUpdate/onEdgeUpdate calls to prevent excessive history updates
-    // Form changes are now local only - updates will be handled elsewhere
+  const handleSave = () => {
+    console.log('🔥 SAVE BUTTON CLICKED!');
+    console.log('📝 Current xmlContent:', xmlContent);
+    console.log('🎯 Selected Node:', selectedNode);
+    console.log('🔗 Selected Edge:', selectedEdge);
+    
+    // For gateway nodes, ALWAYS update the related sequence flows, not the gateway itself
+    if (selectedNode && selectedNode.type && selectedNode.type.includes('gateway')) {
+      console.log('🚪 GATEWAY DETECTED - Processing multiple flows');
+      // Update all related edges
+      const gatewayId = selectedNode.id;
+      const relatedEdges = edges.filter(edge => 
+        edge.source === gatewayId || edge.target === gatewayId
+      );
+      
+      console.log('🔍 Related edges found:', relatedEdges.length);
+      
+      // Parse the XML content to extract individual sequence flows
+      const parser = new DOMParser();
+      const tempDoc = parser.parseFromString(`<root>${xmlContent}</root>`, 'text/xml');
+      const sequenceFlows = tempDoc.querySelectorAll('sequenceFlow');
+      
+      console.log('📋 Parsed sequence flows:', sequenceFlows.length);
+      
+      sequenceFlows.forEach(flow => {
+        const flowId = flow.getAttribute('id');
+        const relatedEdge = relatedEdges.find(edge => edge.id === flowId);
+        console.log(`🔄 Processing flow ${flowId}, found edge:`, !!relatedEdge);
+        
+        if (relatedEdge) {
+          // Extract nested elements
+          const childNodes = flow.childNodes;
+          let originalNestedElements = '';
+          for (let i = 0; i < childNodes.length; i++) {
+            const child = childNodes[i];
+            if (child.nodeType === Node.ELEMENT_NODE) {
+              originalNestedElements += child.outerHTML;
+            }
+          }
+          
+          console.log(`📦 Extracted nested elements for ${flowId}:`, originalNestedElements);
+          
+          // Update the edge with new XML
+          const updatedEdge = {
+            ...relatedEdge,
+            label: flow.getAttribute('name') || '',
+            data: {
+              ...relatedEdge.data,
+              originalNestedElements: originalNestedElements,
+              originalXML: new XMLSerializer().serializeToString(flow)
+            }
+          };
+          
+          console.log(`🚀 CALLING onEdgeUpdate for ${flowId}`);
+          onEdgeUpdate(updatedEdge);
+        }
+      });
+    } else if (selectedEdge) {
+      console.log('📄 SINGLE EDGE UPDATE');
+      // Single edge update
+      const updatedEdge = {
+        ...selectedEdge,
+        label: nodeData.name,
+        data: {
+          ...selectedEdge.data,
+          label: nodeData.name,
+          documentation: nodeData.documentation,
+          versionTag: nodeData.versionTag,
+          originalNestedElements: xmlContent,
+          originalXML: xmlContent
+        }
+      };
+      console.log('🚀 CALLING onEdgeUpdate for single edge');
+      onEdgeUpdate(updatedEdge);
+    } else if (selectedNode) {
+      console.log('💾 SAVING NODE CHANGES...');
+      // Update node (for non-gateway nodes)
+      const updatedNode = {
+        ...selectedNode,
+        data: {
+          ...selectedNode.data,
+          label: nodeData.name,
+          documentation: nodeData.documentation,
+          versionTag: nodeData.versionTag,
+          backgroundColor: nodeData.backgroundColor,
+          borderColor: nodeData.borderColor,
+          originalNestedElements: xmlContent
+        },
+        style: {
+          ...selectedNode.style,
+          backgroundColor: nodeData.backgroundColor || selectedNode.style?.backgroundColor,
+          borderColor: nodeData.borderColor || selectedNode.style?.borderColor
+        }
+      };
+      console.log('🚀 CALLING onNodeUpdate');
+      onNodeUpdate(updatedNode);
+    }
+    
+    console.log('✅ SAVE FUNCTION COMPLETED');
   };
 
   const toggleSection = (section) => {
@@ -211,9 +308,16 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
     <div className={`property-panel ${isOpen ? 'open' : ''}`}>
       <div className="property-panel-header">
         <h3>Properties</h3>
-        <button className="panel-toggle-btn" onClick={onToggle}>
-          {isOpen ? '→' : '←'}
-        </button>
+        <div className="header-buttons">
+          {!readOnly && (selectedNode || selectedEdge) && (
+            <button className="save-btn" onClick={handleSave}>
+              Save
+            </button>
+          )}
+          <button className="panel-toggle-btn" onClick={onToggle}>
+            {isOpen ? '→' : '←'}
+          </button>
+        </div>
       </div>
 
       {(selectedNode || selectedEdge) && (
@@ -383,6 +487,11 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
                     placeholder="Enter XML content here..."
                     disabled={readOnly}
                   />
+                  {!readOnly && (
+                    <button className="save-xml-btn" onClick={handleSave}>
+                      SAVE CHANGES
+                    </button>
+                  )}
                 </div>
               </div>
             )}

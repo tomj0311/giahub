@@ -33,6 +33,55 @@
   color: var(--text-primary);
 }
 
+.header-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.save-btn {
+  background: #4f46e5;
+  border: 1px solid #4338ca;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+}
+
+.save-btn:hover {
+  background: #4338ca;
+}
+
+.save-btn:active {
+  background: #3730a3;
+}
+
+.save-xml-btn {
+  background: #dc2626;
+  border: 1px solid #b91c1c;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  margin-top: 10px;
+  width: 100%;
+  transition: background-color 0.2s ease;
+  text-transform: uppercase;
+}
+
+.save-xml-btn:hover {
+  background: #b91c1c;
+}
+
+.save-xml-btn:active {
+  background: #991b1b;
+}
+
 .panel-toggle-btn {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
