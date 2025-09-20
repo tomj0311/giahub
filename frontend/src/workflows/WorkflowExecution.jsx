@@ -45,6 +45,7 @@ import {
   Clock,
   CheckCircle,
   XCircle,
+  Trash2,
 } from 'lucide-react';
 import sharedApiService from '../utils/apiService';
 
@@ -64,6 +65,7 @@ function WorkflowExecution({ user }) {
   const [incompleteWorkflows, setIncompleteWorkflows] = useState([]);
   const [loadingIncomplete, setLoadingIncomplete] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0); // Force re-render key
+  const [deleting, setDeleting] = useState(new Set()); // Track which instances are being deleted
   
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -409,6 +411,50 @@ function WorkflowExecution({ user }) {
     setFormData({});
   }, []);
 
+  const handleDeleteInstance = useCallback(
+    async (instanceId, event) => {
+      event.stopPropagation(); // Prevent row click
+      
+      if (!confirm('Are you sure you want to delete this workflow instance?')) {
+        return;
+      }
+
+      setDeleting(prev => new Set(prev).add(instanceId));
+      
+      try {
+        const result = await sharedApiService.makeRequest(
+          `/api/workflow/workflows/${workflowId}/instances/${instanceId}`,
+          {
+            method: 'DELETE',
+            headers,
+          },
+          { workflowId, instanceId, action: 'delete_instance' }
+        );
+
+        if (result.success) {
+          // Remove from local list
+          setIncompleteWorkflows(prev => prev.filter(w => w.instance_id !== instanceId));
+          setRefreshKey(k => k + 1);
+          
+          // Invalidate cache
+          sharedApiService.invalidateCache(`/api/workflow/workflows/${workflowId}/incomplete`);
+        } else {
+          throw new Error(result.error || 'Failed to delete instance');
+        }
+      } catch (err) {
+        console.error('Failed to delete instance:', err);
+        setError(`Failed to delete instance: ${err.message}`);
+      } finally {
+        setDeleting(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(instanceId);
+          return newSet;
+        });
+      }
+    },
+    [workflowId, headers]
+  );
+
   return (
     <Box
       sx={{
@@ -494,6 +540,7 @@ function WorkflowExecution({ user }) {
                     <TableRow>
                       <TableCell>Instance ID</TableCell>
                       <TableCell>Created</TableCell>
+                      <TableCell width="60">Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -510,6 +557,21 @@ function WorkflowExecution({ user }) {
                         <TableCell sx={{ fontSize: '0.8rem' }}>
                           {new Date(wf.created_at).toLocaleString()}
                         </TableCell>
+                        <TableCell>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            disabled={deleting.has(wf.instance_id)}
+                            onClick={(e) => handleDeleteInstance(wf.instance_id, e)}
+                            title="Delete instance"
+                          >
+                            {deleting.has(wf.instance_id) ? (
+                              <CircularProgress size={16} />
+                            ) : (
+                              <Trash2 size={16} />
+                            )}
+                          </IconButton>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -520,7 +582,7 @@ function WorkflowExecution({ user }) {
                 <Table size="small">
                   <TableBody>
                     <TableRow>
-                      <TableCell colSpan={2} align="center" sx={{ py: 4 }}>
+                      <TableCell colSpan={3} align="center" sx={{ py: 4 }}>
                         <Typography color="text.secondary">No incomplete workflows</Typography>
                       </TableCell>
                     </TableRow>

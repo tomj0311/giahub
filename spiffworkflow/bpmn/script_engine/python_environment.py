@@ -18,6 +18,7 @@
 # 02110-1301  USA
 
 import copy
+import textwrap
 
 
 class BasePythonScriptEngineEnvironment:
@@ -50,7 +51,9 @@ class TaskDataEnvironment(BasePythonScriptEngineEnvironment):
         my_globals.update(external_context or {})
         context.update(my_globals)
         try:
-            exec(script, context)
+            # Remove common leading whitespace to handle indented scripts
+            cleaned_script = textwrap.dedent(script).strip()
+            exec(cleaned_script, context)
         finally:
             self._remove_globals_and_functions_from_context(context, external_context)
         return True

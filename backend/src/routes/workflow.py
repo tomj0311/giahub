@@ -135,6 +135,32 @@ async def submit_user_task(
         )
 
 
+@router.delete("/workflows/{workflow_id}/instances/{instance_id}")
+async def delete_workflow_instance(
+    workflow_id: str,
+    instance_id: str,
+    user: dict = Depends(verify_token_middleware)
+):
+    """Delete a workflow instance from MongoDB"""
+    try:
+        tenant_id = await WorkflowServicePersistent.validate_tenant_access(user)
+        result = await WorkflowServicePersistent.delete_workflow_instance(
+            workflow_id, instance_id, tenant_id
+        )
+        
+        # Clear cache to force refresh
+        if workflow_id in _INCOMPLETE_CACHE:
+            del _INCOMPLETE_CACHE[workflow_id]
+            
+        return {"success": True, "message": "Workflow instance deleted successfully"}
+    except Exception as e:
+        logger.error(f"Error deleting workflow instance: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete workflow instance: {str(e)}"
+        )
+
+
 @router.put("/workflows/{workflow_id}/instances/{instance_id}/tasks/{task_id}/data")
 async def update_task_data(
     workflow_id: str,

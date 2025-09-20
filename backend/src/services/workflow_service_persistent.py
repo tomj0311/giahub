@@ -40,7 +40,7 @@ def call_external_api(params):
     Designed as a SpiffWorkflow service task delegate.
     """
     try:
-        # Return the params directly as a dictionary, not as JSON string
+        # Parse incoming params
         request_data = {}
         if params:
             # If params is already a dict, use it directly
@@ -53,7 +53,32 @@ def call_external_api(params):
 
         time.sleep(5)  # Simulate network delay
 
-        return request_data
+        # Return a sample JSON response instead of just echoing the input
+        sample_response = {
+            "status": "success",
+            "data": {
+                "id": f"api_response_{uuid.uuid4().hex[:8]}",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "processed_request": request_data,
+                "result": {
+                    "message": "External API call completed successfully",
+                    "code": 200,
+                    "details": {
+                        "processing_time_ms": 5000,
+                        "server": "external-api-server-01",
+                        "version": "1.0.0"
+                    }
+                }
+            },
+            "metadata": {
+                "request_id": f"req_{uuid.uuid4().hex[:12]}",
+                "api_version": "v1",
+                "response_format": "json"
+            }
+        }
+
+        logger.info(f"[WORKFLOW] External API call completed with sample response: {sample_response['data']['id']}")
+        return sample_response
 
     except Exception as e:
         error_msg = f"Service task API call failed: {str(e)}"
@@ -377,6 +402,38 @@ class WorkflowServicePersistent:
             )
 
     @staticmethod
+    async def delete_workflow_instance(
+        workflow_id: str, instance_id: str, tenant_id: Optional[str] = None
+    ):
+        """Delete specific workflow instance by instance_id"""
+        logger.debug(
+            f"[WORKFLOW] Deleting instance {instance_id} for workflow {workflow_id}"
+        )
+        try:
+            query = {"workflow_id": workflow_id, "instance_id": instance_id}
+            success = await MongoStorageService.delete_one(
+                "workflowInstances", query, tenant_id=tenant_id
+            )
+
+            if not success:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Workflow instance {instance_id} not found",
+                )
+
+            logger.info(f"[WORKFLOW] Successfully deleted workflow instance: {instance_id}")
+            return True
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Failed to delete workflow instance: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to delete workflow instance: {str(e)}",
+            )
+
+    @staticmethod
     async def validate_tenant_access(user: dict) -> str:
         """Validate tenant access and return tenant_id"""
         tenant_id = user.get("tenantId")
@@ -606,6 +663,20 @@ class WorkflowServicePersistent:
                                 await cls.update_workflow_instance(workflow, instance_id, tenant_id)
                                 # STOP the workflow - don't continue!
                                 raise HTTPException(status_code=500, detail=f"ServiceTask failed: {str(service_error)}")
+                        elif task_type == "ScriptTask":
+                            # Handle ScriptTask in READY state
+                            try:
+                                # For ScriptTask, just execute the script
+                                task.run()
+                                await cls.update_workflow_instance(workflow, instance_id, tenant_id)
+                                continue  # Continue processing after handling script task
+                            except Exception as script_error:
+                                logger.error(f"[WORKFLOW] ScriptTask {task.task_spec.bpmn_id} failed: {script_error}")
+                                task.data["error"] = str(script_error)
+                                task.error()
+                                await cls.update_workflow_instance(workflow, instance_id, tenant_id)
+                                # STOP the workflow - don't continue!
+                                raise HTTPException(status_code=500, detail=f"ScriptTask failed: {str(script_error)}")
                 
                 # Check for ServiceTask in STARTED state
                 started_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.STARTED]
