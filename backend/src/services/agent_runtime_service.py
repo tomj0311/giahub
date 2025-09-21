@@ -333,8 +333,7 @@ class AgentRuntimeService:
                 "add_context": True,
                 "add_references": True,
                 "resolve_context": True,
-                "add_history_to_messages": history_config.get("enabled", False),
-                "num_history_responses": history_config.get("num", 3),
+                "add_history_to_messages": False,
             }
             
             # Use conv_id directly

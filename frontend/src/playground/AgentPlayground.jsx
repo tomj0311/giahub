@@ -412,6 +412,23 @@ export default function AgentPlayground({ user }) {
     }
   }, [abortController])
 
+  // Helper function to format chat history as plain text
+  const formatHistoryAsText = (messages, numMessages) => {
+    if (!messages || messages.length === 0 || !numMessages || numMessages <= 0) {
+      return ''
+    }
+    
+    // Get the last N messages (excluding the current user message)
+    const historyMessages = messages.slice(-numMessages)
+    
+    // Format as plain text
+    const formattedHistory = historyMessages
+      .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
+      .join('\n\n')
+    
+    return formattedHistory
+  }
+
   const runAgent = useCallback(async () => {
     if (!selected || !prompt.trim()) return
     setRunning(true)
@@ -426,6 +443,27 @@ export default function AgentPlayground({ user }) {
     // Generate conversation ID with user ID format
     const convId = currentConversationId || `conv_${Date.now()}`
     if (!currentConversationId) setCurrentConversationId(convId)
+
+    // Get agent configuration to check history settings
+    let finalPrompt = userMsg.content
+    try {
+      const agentConfig = await agentService.getAgent(selected, token)
+      
+      // Check if history is enabled in agent configuration
+      if (agentConfig?.memory?.history?.enabled && agentConfig.memory.history.num > 0) {
+        const numHistoryMessages = agentConfig.memory.history.num
+        const historyText = formatHistoryAsText(messages, numHistoryMessages)
+        
+        if (historyText) {
+          // Include history in the prompt
+          finalPrompt = `Previous conversation history:\n${historyText}\n\nCurrent message:\n${userMsg.content}`
+          console.log('Including conversation history:', { numMessages: numHistoryMessages, historyLength: historyText.length })
+        }
+      }
+    } catch (e) {
+      console.error('Failed to get agent config for history:', e)
+      // Continue with original prompt if agent config fails
+    }
 
     // upload files with conversation ID as collection name
     if (stagedFiles.length) {
@@ -481,7 +519,7 @@ export default function AgentPlayground({ user }) {
       const response = await agentRuntimeService.runAgentStream(
         {
           agent_name: selected,
-          prompt: userMsg.content,
+          prompt: finalPrompt, // Use finalPrompt which includes history if enabled
           conv_id: convId
         },
         token,
