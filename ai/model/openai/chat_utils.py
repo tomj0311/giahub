@@ -256,8 +256,11 @@ def format_message(message: Message, images: Optional[List] = None, audio: Optio
     """
     formatted_message = message.to_dict()
     
-    if message.role == "system":
-        formatted_message["role"] = "developer"
+    # Keep the original system role instead of mapping to "developer"
+    # "developer" role is not supported by many APIs including Azure OpenAI
+    # Standard OpenAI API supports both "system" and "developer", but others only support standard roles
+    # if message.role == "system":
+    #     formatted_message["role"] = "developer"
 
     if message.role == "user" and message.images is not None:
         # Handle images in user messages

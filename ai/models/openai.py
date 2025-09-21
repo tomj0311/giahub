@@ -33,7 +33,7 @@ class OpenAI(OpenAIChat):
         top_logprobs: Optional[int] = None,
         
         # Client configuration
-        base_url: Optional[str] = None,
+        base_url: str = None,
         timeout: Optional[float] = None,
         max_retries: Optional[int] = None,
         organization: Optional[str] = None,

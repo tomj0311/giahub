@@ -576,7 +576,8 @@ class OpenAIChat(Model):
         except Exception as e:
             metrics.response_timer.stop()
             logger.error(f"Error during stream processing: {e}")
-            yield ModelResponse(error=str(e))
+            # Use content parameter instead of unsupported error parameter
+            yield ModelResponse(content=f"Error: {str(e)}")
             logger.debug("---------- OpenAI Stream Response End (Error) ----------")
             return # Stop iteration on error
 
@@ -621,7 +622,8 @@ class OpenAIChat(Model):
                 yield from self.handle_post_tool_call_messages_stream(messages=messages)
             except Exception as e:
                 logger.error(f"Error during stream tool call handling: {e}")
-                yield ModelResponse(error=str(e))
+                # Use content parameter instead of unsupported error parameter
+                yield ModelResponse(content=f"Error: {str(e)}")
         else:
             logger.debug("No tool calls in assistant message from stream or run_tools is False.")
 
