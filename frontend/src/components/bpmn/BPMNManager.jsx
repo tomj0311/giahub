@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { parseBPMNXML } from '../../utils/bpmnParser';
+import { parseBPMNXML } from './utils/bpmnParser';
 import './BPMNManager.css';
 
 const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
