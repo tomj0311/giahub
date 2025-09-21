@@ -884,15 +884,16 @@ export default function AgentPlayground({ user }) {
                 {m.role}{m.streaming ? ' (streaming...)' : ''}
               </Typography>
               {m.role === 'user' ? (
-                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxWidth: '90ch' }}>
+                <Typography variant="body2" dir="auto" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxWidth: '90ch', unicodeBidi: 'plaintext' }}>
                   {m.content}
                 </Typography>
               ) : (
-                <Box sx={{
+                <Box dir="auto" sx={{
                   fontSize: 15,
                   lineHeight: 1.5,
                   maxWidth: '90ch',
                   wordBreak: 'break-word',
+                  unicodeBidi: 'plaintext',
                   '& p': { my: 0.6 },
                   '& pre': { p: 1, bgcolor: 'action.hover', borderRadius: 1, overflowX: 'auto', fontSize: 13, lineHeight: 1.4 },
                   '& code': { fontFamily: 'monospace', bgcolor: 'action.hover', px: 0.5, borderRadius: 0.5 },
@@ -1323,6 +1324,30 @@ const ChatInputBar = React.memo(function ChatInputBar({
     setPosition({ x: null, y: null })
   }
 
+  // Normalize pasted text to NFC; preserve caret and support complex scripts
+  const handlePaste = useCallback((e) => {
+    const clip = e.clipboardData || window.clipboardData
+    const text = clip?.getData('text')
+    if (!text) return
+    e.preventDefault()
+    const normalized = text.normalize ? text.normalize('NFC') : text
+    const inputEl = inputRef.current
+    const start = (inputEl && typeof inputEl.selectionStart === 'number') ? inputEl.selectionStart : prompt.length
+    const end = (inputEl && typeof inputEl.selectionEnd === 'number') ? inputEl.selectionEnd : prompt.length
+    const next = prompt.slice(0, start) + normalized + prompt.slice(end)
+    setPrompt(next)
+    // restore caret after React updates value
+    setTimeout(() => {
+      try {
+        if (inputRef.current) {
+          const pos = start + normalized.length
+          inputRef.current.selectionStart = pos
+          inputRef.current.selectionEnd = pos
+        }
+      } catch {}
+    }, 0)
+  }, [prompt, setPrompt])
+
   // Calculate final style
   const finalStyle = position.x !== null && position.y !== null ? {
     position: 'fixed',
@@ -1366,6 +1391,7 @@ const ChatInputBar = React.memo(function ChatInputBar({
           placeholder={!selected ? 'Select an agent first' : (stagedFiles.length ? `Type your message... (${stagedFiles.length} file(s) ready)` : 'Type your message...')}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
+          onPaste={handlePaste}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
@@ -1382,6 +1408,7 @@ const ChatInputBar = React.memo(function ChatInputBar({
           disabled={!selected || running}
           size="small"
           autoFocus
+          inputProps={{ dir: 'auto', style: { unicodeBidi: 'plaintext', fontFamily: 'inherit' } }}
           sx={{ 
             '& .MuiInputBase-root': { 
               pr: running ? 14 : 8, 

@@ -90,22 +90,29 @@ const MetricCard = ({ type, value, subtitle, delay = 0 }) => {
       }}
     >
         <CardContent sx={{ 
-          p: 2,
+          p: 3,
           height: '100%',
           display: 'flex',
           flexDirection: 'column'
         }}>
-          <Box display="flex" alignItems="flex-start" justifyContent="space-between" sx={{ mb: 1 }}>
+          <Box 
+            display="flex" 
+            alignItems="flex-start" 
+            justifyContent="space-between" 
+            sx={{ mb: 1, minHeight: 48 }}
+          >
             <Box flex={1} sx={{ minWidth: 0, pr: 1 }}>
               <Typography 
                 color="text.secondary" 
                 gutterBottom 
-                variant="subtitle2"
+                variant="body2"
                 sx={{ 
                   fontWeight: 'medium',
-                  textTransform: 'uppercase',
-                  fontSize: '0.7rem',
-                  mb: 1
+                  mb: 1,
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden'
                 }}
               >
                 {config.title}
@@ -115,32 +122,32 @@ const MetricCard = ({ type, value, subtitle, delay = 0 }) => {
               sx={{
                 backgroundColor: config.color,
                 color: 'white',
-                width: 40,
-                height: 40
+                width: 32,
+                height: 32,
+                alignSelf: 'flex-start'
               }}
             >
-              <Icon size={20} />
+              <Icon size={16} />
             </Avatar>
           </Box>
           <Box sx={{ flex: 1 }}>
             <Typography 
-              variant="h4" 
+              variant="h6" 
               component="div" 
               sx={{ 
                 color: config.color,
                 fontWeight: 'bold',
-                mb: subtitle ? 1 : 0,
-                fontSize: '1.4rem'
+                mb: 1,
+                lineHeight: 1.25
               }}
             >
               {value}
             </Typography>
             {subtitle && (
               <Typography 
-                variant="body2" 
+                variant="caption" 
                 sx={{ 
-                  color: 'text.secondary',
-                  fontSize: '0.75rem'
+                  color: 'text.secondary'
                 }}
               >
                 {subtitle}
@@ -187,16 +194,16 @@ const AgentPerformanceTable = ({ agents, loading }) => {
               backgroundColor: alpha(theme.palette.primary.main, 0.1),
               color: theme.palette.primary.main,
               mr: 2,
-              width: theme.spacing(5),
-              height: theme.spacing(5),
+              width: 32,
+              height: 32,
               flexShrink: 0
             }}>
-              <BarChart3 size={theme.spacing(2.5)} />
+              <BarChart3 size={16} />
             </Avatar>
             <Typography 
               variant="h6" 
               sx={{ 
-                fontWeight: theme.typography.fontWeightSemiBold,
+                fontWeight: theme.typography.fontWeightBold,
                 color: theme.palette.text.primary,
                 flex: 1,
                 minWidth: 0,
@@ -223,11 +230,9 @@ const AgentPerformanceTable = ({ agents, loading }) => {
                   <TableRow sx={{ 
                     '& .MuiTableCell-head': {
                       backgroundColor: alpha(theme.palette.primary.main, 0.05),
-                      fontWeight: theme.typography.fontWeightSemiBold,
-                      textTransform: 'uppercase',
-                      fontSize: '0.75rem',
-                      letterSpacing: '0.5px',
-                      borderBottom: `2px solid ${alpha(theme.palette.primary.main, 0.1)}`
+                      fontWeight: theme.typography.fontWeightMedium,
+                      fontSize: '0.875rem',
+                      borderBottom: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`
                     }
                   }}>
                     <TableCell>Agent Name</TableCell>
@@ -366,16 +371,16 @@ const RecentConversationsTable = ({ conversations, loading }) => {
               backgroundColor: alpha(theme.palette.secondary.main, 0.1),
               color: theme.palette.secondary.main,
               mr: 2,
-              width: theme.spacing(5),
-              height: theme.spacing(5),
+              width: 32,
+              height: 32,
               flexShrink: 0
             }}>
-              <Activity size={theme.spacing(2.5)} />
+              <Activity size={16} />
             </Avatar>
             <Typography 
               variant="h6" 
               sx={{ 
-                fontWeight: theme.typography.fontWeightSemiBold,
+                fontWeight: theme.typography.fontWeightBold,
                 color: theme.palette.text.primary,
                 flex: 1,
                 minWidth: 0,
@@ -402,11 +407,9 @@ const RecentConversationsTable = ({ conversations, loading }) => {
                   <TableRow sx={{ 
                     '& .MuiTableCell-head': {
                       backgroundColor: alpha(theme.palette.secondary.main, 0.05),
-                      fontWeight: theme.typography.fontWeightSemiBold,
-                      textTransform: 'uppercase',
-                      fontSize: '0.75rem',
-                      letterSpacing: '0.5px',
-                      borderBottom: `2px solid ${alpha(theme.palette.secondary.main, 0.1)}`
+                      fontWeight: theme.typography.fontWeightMedium,
+                      fontSize: '0.875rem',
+                      borderBottom: `1px solid ${alpha(theme.palette.secondary.main, 0.1)}`
                     }
                   }}>
                     <TableCell>Agent</TableCell>
@@ -525,22 +528,9 @@ const Analytics = () => {
         backdropFilter: 'blur(10px)'
       }}
     >
-      <CircularProgress 
-        size={theme.spacing(8)} 
-        thickness={4}
-        sx={{ 
-          color: theme.palette.primary.main,
-          mb: 2
-        }}
-      />
-      <Typography 
-        variant="h6" 
-        sx={{ 
-          color: theme.custom?.colors?.textMuted || theme.palette.text.secondary,
-          fontWeight: theme.typography.fontWeightMedium
-        }}
-      >
-        Loading Analytics...
+      <CircularProgress size={48} sx={{ mb: 2 }} />
+      <Typography variant="body1" color="text.secondary">
+        Loading analytics...
       </Typography>
     </Box>
   )
@@ -691,11 +681,11 @@ const Analytics = () => {
               backgroundColor: alpha(theme.palette.primary.main, 0.1),
               color: theme.palette.primary.main,
               mr: 2,
-              width: theme.spacing(6),
-              height: theme.spacing(6),
+              width: 32,
+              height: 32,
               flexShrink: 0
             }}>
-              <TrendingUp size={theme.spacing(3)} />
+              <TrendingUp size={16} />
             </Avatar>
             <Typography 
               variant="h4" 
@@ -705,8 +695,7 @@ const Analytics = () => {
                 flex: 1,
                 minWidth: 0,
                 whiteSpace: 'nowrap',
-                overflow: 'visible',
-                fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' }
+                overflow: 'visible'
               }}
             >
               Analytics Dashboard
@@ -717,6 +706,7 @@ const Analytics = () => {
           <Grid 
             container 
             spacing={theme.custom?.layout?.block || 3} 
+            columns={{ xs: 12, sm: 12, md: 12, lg: 15, xl: 15 }}
             sx={{ mb: theme.custom?.layout?.section || 4 }}
           >
             {metricConfigs.map((config, index) => (
@@ -725,8 +715,8 @@ const Analytics = () => {
                 xs={12} 
                 sm={6} 
                 md={4} 
-                lg={2.4} 
-                xl={2.4}
+                lg={3} 
+                xl={3}
                 key={config.type}
               >
                 <MetricCard {...config} />
