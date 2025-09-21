@@ -113,10 +113,12 @@ class MongoStorageService:
             if limit:
                 cursor = cursor.limit(limit)
             
-            # CRITICAL FIX: Don't pass None to to_list() - it ignores limit!
-            # Use length_or_none=None only when no limit is set
-            max_results = limit if limit else None
-            results = await cursor.to_list(length=max_results)
+            # CRITICAL FIX: When limit is set, use the limit value for to_list()
+            # When no limit is set, pass None to fetch all documents
+            if limit:
+                results = await cursor.to_list(length=limit)
+            else:
+                results = await cursor.to_list(length=None)
             
             return results
         except Exception as e:

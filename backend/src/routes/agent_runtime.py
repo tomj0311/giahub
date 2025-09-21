@@ -177,27 +177,18 @@ async def list_conversations(
         )
     
     try:
-        # DEBUG: Check total conversations in database (without tenant filter)
-        try:
-            from ..utils.mongo_storage import MongoStorageService
-            collections = MongoStorageService._get_collections()
-            conversations_collection = collections.get("conversations")
-            if conversations_collection is not None:
-                total_all_conversations = await conversations_collection.count_documents({})
-                total_tenant_conversations = await conversations_collection.count_documents({"tenantId": tenant_id})
-            else:
-                logger.warning(f"[AGENT_RUNTIME] DEBUG: Conversations collection not found")
-        except Exception as debug_e:
-            logger.error(f"[AGENT_RUNTIME] DEBUG query failed: {debug_e}")
+        logger.info(f"[CONVERSATIONS] Fetching conversations - page: {page}, page_size: {page_size}, tenant: {tenant_id}")
         
         # Calculate pagination
         skip = (page - 1) * page_size
+        logger.info(f"[CONVERSATIONS] Pagination - skip: {skip}, limit: {page_size}")
         
         # Get total count first for debugging
         total_count = await MongoStorageService.count_documents("conversations", {}, tenant_id=tenant_id)
+        logger.info(f"[CONVERSATIONS] Total conversations found: {total_count}")
         
         if total_count == 0:
-            logger.warning(f"[AGENT_RUNTIME] WARNING: No conversations found for tenant {tenant_id}. Check tenant ID or data.")
+            logger.warning(f"[CONVERSATIONS] No conversations found for tenant {tenant_id}")
         
         # Calculate pagination info
         total_pages = (total_count + page_size - 1) // page_size  # Ceiling division
@@ -206,7 +197,6 @@ async def list_conversations(
         
         # Determine sort order
         sort_direction = -1 if sort_order == "desc" else 1
-        
         
         # Get paginated results
         docs = await MongoStorageService.find_many(
@@ -219,8 +209,7 @@ async def list_conversations(
             limit=page_size
         )
         
-        if len(docs) == 0 and total_count > 0:
-            logger.error(f"[AGENT_RUNTIME] CRITICAL: Found {total_count} conversations but query returned 0. Pagination or filtering issue!")
+        logger.info(f"[CONVERSATIONS] Retrieved {len(docs)} conversations from database")
         
         items: List[Dict[str, Any]] = []
         for d in docs:
@@ -275,7 +264,7 @@ async def list_conversations(
             }
         }
 
-        
+        logger.info(f"[CONVERSATIONS] Returning {len(items)} conversations for page {page}")
         return result
         
     except Exception as e:
