@@ -208,53 +208,45 @@ class AgentRuntimeService:
             return AgentRuntimeService._agents[conv_id]
             
         try:
-            logger.debug(f"[AGENT_DEBUG] Building new agent from config...")
-            logger.debug(f"[AGENT_DEBUG] Agent config keys: {list(agent_config.keys())}")
+            logger.debug(f"Building new agent from config for conv_id: {conv_id}")
             
             from ai.agent.agent import Agent
             from .model_config_service import ModelConfigService
             from .tool_config_service import ToolConfigService
             from .knowledge_service import KnowledgeService
             
-            logger.debug(f"[AGENT_DEBUG] Imported Agent class: {Agent}")
-            
             # Load model configuration
             model = None
             model_ref = agent_config.get("model")
-            logger.debug(f"[AGENT_DEBUG] Model ref: {model_ref}")
             
             if model_ref:
                 try:
                     model_id = model_ref if isinstance(model_ref, str) else model_ref.get("id")
                     if model_id:
-                        logger.debug(f"[AGENT_DEBUG] Loading model config for ID: {model_id}")
+                        logger.debug(f"Loading model config for ID: {model_id}")
                         model_config = await ModelConfigService.get_model_config_by_id(model_id, user)
                         if model_config:
                             model_strategy = model_config.get("model", {}).get("strategy")
                             model_params = model_config.get("model", {}).get("params", {})
-                            logger.debug(f"[AGENT_DEBUG] Model strategy: {model_strategy}, params: {model_params}")
                             
                             if model_strategy:
                                 model_class = module_loader(model_strategy)
                                 if model_class:
-                                    logger.debug(f"[AGENT_DEBUG] Creating model instance...")
                                     model = model_class(**model_params)
-                                    logger.debug(f"[AGENT_DEBUG] Model created: {type(model)}")
+                                    logger.debug(f"Model created successfully")
                 except Exception as e:
                     logger.warning(f"Failed to load model {model_ref}: {e}")
                     import traceback
-                    logger.debug(f"[AGENT_DEBUG] Model loading traceback: {traceback.format_exc()}")
+                    logger.debug(f"Model loading traceback: {traceback.format_exc()}")
             
             # Load tools configurations
             tools = []
             tools_config = agent_config.get("tools", {})
-            logger.debug(f"[AGENT_DEBUG] Tools config: {tools_config}")
             
             if tools_config:
                 for tool_id in tools_config.keys():
                     try:
                         if tool_id:
-                            logger.debug(f"[AGENT_DEBUG] Loading tool config for ID: {tool_id}")
                             tool_config = await ToolConfigService.get_tool_config_by_id(tool_id, user)
                             if tool_config:
                                 tool_strategy = tool_config.get("tool", {}).get("strategy")
@@ -264,18 +256,18 @@ class AgentRuntimeService:
                                     if tool_class:
                                         tool_instance = tool_class(**tool_params)
                                         tools.append(tool_instance)
-                                        logger.debug(f"[AGENT_DEBUG] Tool added: {type(tool_instance)}")
+                                        logger.debug(f"Tool loaded: {type(tool_instance)}")
                     except Exception as e:
                         logger.warning(f"Failed to load tool {tool_id}: {e}")
                         import traceback
-                        logger.debug(f"[AGENT_DEBUG] Tool loading traceback: {traceback.format_exc()}")
+                        logger.debug(f"Tool loading traceback: {traceback.format_exc()}")
             
             # Load knowledge collection names and create custom retriever
             collection_names = []
             embedder_config = None
             conv_id = agent_config.get("conv_id")
             
-            logger.debug(f"[AGENT_DEBUG] Processing collections...")
+            logger.debug(f"Processing collections for conv_id: {conv_id}")
             
             # Handle collections object with multiple collection IDs
             collections_config = agent_config.get("collections", {})
@@ -287,7 +279,7 @@ class AgentRuntimeService:
                             if knowledge_config:
                                 vector_collection_name = knowledge_config.get("vector_collection")
                                 collection_names.append(vector_collection_name)
-                                logger.debug(f"[AGENT_DEBUG] Added collection: {vector_collection_name}")
+                                logger.debug(f"Added collection: {vector_collection_name}")
                                 
                     except Exception as e:
                         logger.warning(f"Failed to load knowledge collection {collection_id}: {e}")
@@ -305,7 +297,7 @@ class AgentRuntimeService:
                         embedder_class = module_loader(embedder_strategy)
                         if embedder_class:
                             embedder = embedder_class(**embedder_params)
-                            logger.debug(f"[AGENT_DEBUG] Embedder created: {type(embedder)}")
+                            logger.debug(f"Embedder created successfully")
                 except Exception as e:
                     logger.warning(f"Failed to load embedder: {e}")
             
@@ -313,14 +305,13 @@ class AgentRuntimeService:
             custom_retriever = None
             session_collection = f"{conv_id}_{agent_config.get('userId')}"
             if collection_names or conv_id:
-                logger.debug(f"[AGENT_DEBUG] Creating custom retriever...")
+                logger.debug(f"Creating custom retriever with {len(collection_names)} collections")
                 custom_retriever = _create_multi_collection_retriever(collection_names, session_collection, embedder)
-                logger.debug(f"[AGENT_DEBUG] Custom retriever created: {type(custom_retriever)}")
             
             memory_config = agent_config.get("memory", {})
             history_config = memory_config.get("history", {})
             
-            logger.debug(f"[AGENT_DEBUG] Preparing agent kwargs...")
+            logger.debug(f"Creating Agent instance...")
             
             # Use agent config as-is and add runtime-specific parameters
             kwargs = {
@@ -340,16 +331,13 @@ class AgentRuntimeService:
             if conv_id:
                 kwargs["session_id"] = conv_id
             
-            logger.debug(f"[AGENT_DEBUG] Agent kwargs keys: {list(kwargs.keys())}")
-            logger.debug(f"[AGENT_DEBUG] Creating Agent instance...")
-            
             try:
                 agent = Agent(**kwargs)
-                logger.debug(f"[AGENT_DEBUG] Agent created successfully: {type(agent)}")
+                logger.debug(f"Agent created successfully")
             except Exception as e:
-                logger.error(f"[AGENT_DEBUG] Error creating Agent: {e}")
+                logger.error(f"Error creating Agent: {e}")
                 import traceback
-                logger.error(f"[AGENT_DEBUG] Agent creation traceback: {traceback.format_exc()}")
+                logger.error(f"Agent creation traceback: {traceback.format_exc()}")
                 raise
                 
             # Cache the agent if we have a conv_id
@@ -361,22 +349,21 @@ class AgentRuntimeService:
         except Exception as e:
             logger.error(f"Failed to build agent: {e}")
             import traceback
-            logger.error(f"[AGENT_DEBUG] Build agent traceback: {traceback.format_exc()}")
+            logger.error(f"Build agent traceback: {traceback.format_exc()}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     @classmethod
     async def run_agent_stream(cls, agent: Any, prompt: str, user: Dict[str, Any], conv_id: Optional[str] = None, cancel_event: Optional[asyncio.Event] = None) -> AsyncGenerator[Dict[str, Any], None]:
         try:
-            logger.debug(f"[AGENT_DEBUG] Starting run_agent_stream with agent type: {type(agent)}")
+            logger.debug(f"Starting run_agent_stream with agent type: {type(agent)}")
             
             # Search for images to include with the agent run
-            logger.debug(f"[AGENT_DEBUG] Searching for images...")
             agent_images = await cls._search_images_for_agent(user, conv_id)
             images_for_run = []
             
             # Convert image objects to format expected by agent
             if agent_images:
-                logger.debug(f"[AGENT_DEBUG] Processing {len(agent_images)} images")
+                logger.debug(f"Processing {len(agent_images)} images")
                 for img in agent_images:
                     if img.get('base_64_image'):
                         # Use base64 data if available
@@ -391,24 +378,20 @@ class AgentRuntimeService:
                         images_for_run.append(str(img))
             
             logger.info(f"[AGENT] Starting run with {len(images_for_run)} images")
-            logger.debug(f"[AGENT_DEBUG] About to call agent.run() with prompt type: {type(prompt)}")
             
             # Run the agent with images if available
             run_kwargs = {"stream": True}
             if images_for_run:
                 run_kwargs["images"] = images_for_run
             
-            logger.debug(f"[AGENT_DEBUG] agent.run kwargs: {run_kwargs}")
-            
             # Get the streaming generator
             try:
-                logger.debug(f"[AGENT_DEBUG] Calling agent.run()...")
                 agent_generator = agent.run(prompt, **run_kwargs)
-                logger.debug(f"[AGENT_DEBUG] agent.run() returned generator: {type(agent_generator)}")
+                logger.debug(f"Agent run started successfully")
             except Exception as e:
-                logger.error(f"[AGENT_DEBUG] Error calling agent.run(): {e}")
+                logger.error(f"Error calling agent.run(): {e}")
                 import traceback
-                logger.error(f"[AGENT_DEBUG] Traceback: {traceback.format_exc()}")
+                logger.error(f"Traceback: {traceback.format_exc()}")
                 raise
             
             # Consume the generator and yield responses
@@ -417,16 +400,16 @@ class AgentRuntimeService:
             try:
                 for response in agent_generator:
                     response_count += 1
-                    logger.debug(f"[AGENT_DEBUG] Got response #{response_count}, type: {type(response)}")
+                    # Only log every 50th response to reduce verbosity
+                    if response_count % 50 == 0:
+                        logger.debug(f"[AGENT_DEBUG] Processed {response_count} responses")
                     
                     if cancel_event and cancel_event.is_set():
                         logger.info("Streaming cancelled by user.")
                         yield {"type": "cancelled", "timestamp": asyncio.get_event_loop().time()}
                         return
                     
-                    logger.debug(f"[AGENT_DEBUG] Processing response content...")
                     raw_content = getattr(response, 'content', getattr(response, 'message', str(response)))
-                    logger.debug(f"[AGENT_DEBUG] Raw content type: {type(raw_content)}, length: {len(str(raw_content))}")
                     
                     # Normalize to a JSON-serializable string so the frontend always receives text
                     if isinstance(raw_content, (dict, list)):
@@ -437,25 +420,22 @@ class AgentRuntimeService:
                     else:
                         content = str(raw_content)
                     
-                    logger.debug(f"[AGENT_DEBUG] Yielding agent_chunk...")
                     yield {"type": "agent_chunk", "payload": {"content": content}, "timestamp": asyncio.get_event_loop().time()}
                     await asyncio.sleep(0)
                     
             except Exception as e:
-                logger.error(f"[AGENT_DEBUG] Error iterating over agent generator at response #{response_count}: {e}")
+                logger.error(f"Error iterating over agent generator at response #{response_count}: {e}")
                 import traceback
-                logger.error(f"[AGENT_DEBUG] Traceback: {traceback.format_exc()}")
+                logger.error(f"Traceback: {traceback.format_exc()}")
                 raise
             
             logger.debug(f"[AGENT_DEBUG] Generator iteration completed. Total responses: {response_count}")
             
             # At this point, the generator is exhausted and agent should have final run_response with metrics
-            logger.debug(f"Agent run completed. Checking run_response: {hasattr(agent, 'run_response')}")
             if hasattr(agent, 'run_response') and agent.run_response:
-                logger.debug(f"Agent run_response metrics: {getattr(agent.run_response, 'metrics', 'No metrics')}")
-                logger.debug(f"Agent model metrics: {getattr(agent.model, 'metrics', 'No model metrics')}")
+                logger.debug(f"Agent run completed with metrics")
             else:
-                logger.debug(f"Agent has no run_response or run_response is None")
+                logger.debug(f"Agent completed with no run_response")
             
             logger.debug(f"[AGENT_DEBUG] Yielding agent_run_complete...")
             yield {"type": "agent_run_complete", "timestamp": asyncio.get_event_loop().time()}
@@ -463,7 +443,7 @@ class AgentRuntimeService:
         except Exception as e:
             logger.error(f"Error in agent run: {e}")
             import traceback
-            logger.error(f"[AGENT_DEBUG] Full traceback: {traceback.format_exc()}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             yield {"type": "error", "error": str(e), "timestamp": asyncio.get_event_loop().time()}
 
     @classmethod

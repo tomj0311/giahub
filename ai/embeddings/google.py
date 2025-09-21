@@ -21,7 +21,7 @@ class Google(GeminiEmbedder):
         # Embedding-specific parameters
         task_type: Optional[str] = "RETRIEVAL_QUERY",
         title: Optional[str] = None,
-        dimensions: Optional[int] = None,
+        dimensions: Optional[int] = 1536,
         
         # Advanced parameters
         request_params: Optional[Dict[str, Any]] = None,
