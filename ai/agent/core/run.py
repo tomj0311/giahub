@@ -32,10 +32,16 @@ def _aggregate_metrics_from_run_messages(self: "Agent", messages: List[Message])
     aggregated_metrics: Dict[str, Any] = defaultdict(list)
 
     # Use a defaultdict(list) to collect all values for each assistant message
+    logger.debug(f"[METRICS_DEBUG] Aggregating metrics from {len(messages)} messages")
     for m in messages:
+        logger.debug(f"[METRICS_DEBUG] Message role: {m.role}, has metrics: {m.metrics is not None}")
         if m.role == "assistant" and m.metrics is not None:
+            logger.debug(f"[METRICS_DEBUG] Assistant message metrics: {m.metrics}")
             for k, v in m.metrics.items():
+                logger.debug(f"[METRICS_DEBUG] Adding metric {k}={v} to aggregated_metrics")
                 aggregated_metrics[k].append(v)
+    
+    logger.debug(f"[METRICS_DEBUG] Final aggregated metrics: {dict(aggregated_metrics)}")
     return aggregated_metrics
 
 

@@ -16,7 +16,7 @@ class Google(GeminiEmbedder):
         self,
         # Core parameters
         model: str = "models/embedding-001",
-        api_key: Optional[str] = None,
+        api_key: str = None,
         
         # Embedding-specific parameters
         task_type: Optional[str] = "RETRIEVAL_QUERY",

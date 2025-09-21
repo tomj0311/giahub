@@ -17,7 +17,7 @@ class Together(TogetherEmbedder):
         self,
         # Core parameters
         model: str = "togethercomputer/m2-bert-80M-32k-retrieval",
-        api_key: Optional[str] = None,
+        api_key: str = None,
         
         # Embedding-specific parameters
         dimensions: Optional[int] = 768,

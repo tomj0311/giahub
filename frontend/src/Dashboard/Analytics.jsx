@@ -172,7 +172,7 @@ const AgentPerformanceTable = ({ agents, loading }) => {
 
   const maxConversations = Math.max(...agents.map(a => a.total_conversations), 1)
   const maxResponseTime = Math.max(...agents.map(a => parseFloat(a.avg_response_time) || 0), 1)
-  const maxTokens = Math.max(...agents.map(a => a.avg_tokens), 1)
+  const maxTokens = Math.max(...agents.map(a => a.total_tokens || a.avg_tokens), 1)
 
   return (
     <Fade in={true} timeout={theme.transitions.duration.enteringScreen + 200}>
@@ -233,7 +233,7 @@ const AgentPerformanceTable = ({ agents, loading }) => {
                     <TableCell>Agent Name</TableCell>
                     <TableCell align="right">Conversations</TableCell>
                     <TableCell align="right">Avg Response Time</TableCell>
-                    <TableCell align="right">Avg Tokens</TableCell>
+                    <TableCell align="right">Total Tokens</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -278,9 +278,9 @@ const AgentPerformanceTable = ({ agents, loading }) => {
                           >
                             <Box
                               sx={{
-                                width: `${(agent.total_conversations / maxConversations) * 100}%`,
+                                width: `${((agent.total_tokens || agent.avg_tokens) / maxTokens) * 100}%`,
                                 height: '100%',
-                                backgroundColor: getPerformanceColor(agent.total_conversations, maxConversations),
+                                backgroundColor: getPerformanceColor(agent.total_tokens || agent.avg_tokens, maxTokens),
                                 borderRadius: 'inherit'
                               }}
                             />
@@ -302,11 +302,11 @@ const AgentPerformanceTable = ({ agents, loading }) => {
                         <Typography 
                           variant="body2" 
                           sx={{ 
-                            color: getPerformanceColor(agent.avg_tokens, maxTokens),
+                            color: getPerformanceColor(agent.total_tokens || agent.avg_tokens, maxTokens),
                             fontWeight: theme.typography.fontWeightMedium
                           }}
                         >
-                          {agent.avg_tokens}
+                          {(agent.total_tokens || agent.avg_tokens)?.toLocaleString()}
                         </Typography>
                       </TableCell>
                     </TableRow>

@@ -461,6 +461,14 @@ class Gemini(Model):
         """
         assistant_message.metrics["time"] = metrics.response_timer.elapsed
         self.metrics.setdefault("response_times", []).append(metrics.response_timer.elapsed)
+        
+        # Add time_to_first_token if available
+        if metrics.time_to_first_token is not None:
+            assistant_message.metrics["time_to_first_token"] = metrics.time_to_first_token
+            self.metrics.setdefault("time_to_first_token", []).append(metrics.time_to_first_token)
+        
+        logger.debug(f"[METRICS_DEBUG] Updated model metrics: {self.metrics}")
+        logger.debug(f"[METRICS_DEBUG] Assistant message metrics: {assistant_message.metrics}")
         if usage:
             metrics.input_tokens = usage.prompt_token_count or 0
             metrics.output_tokens = usage.candidates_token_count or 0
@@ -475,9 +483,6 @@ class Gemini(Model):
             if metrics.total_tokens is not None:
                 assistant_message.metrics["total_tokens"] = metrics.total_tokens
                 self.metrics["total_tokens"] = self.metrics.get("total_tokens", 0) + metrics.total_tokens
-            if metrics.time_to_first_token is not None:
-                assistant_message.metrics["time_to_first_token"] = metrics.time_to_first_token
-                self.metrics["time_to_first_token"] = metrics.time_to_first_token
 
     def create_assistant_message(self, response: GenerateContentResponse, metrics: Metrics) -> Message:
         """
@@ -523,6 +528,10 @@ class Gemini(Model):
             content=message_data.response_content,
             parts=message_data.response_parts,
         )
+
+        # Initialize metrics dictionary if it doesn't exist
+        if not hasattr(assistant_message, 'metrics') or assistant_message.metrics is None:
+            assistant_message.metrics = {}
 
         # -*- Update assistant message if tool calls are present
         if len(message_data.response_tool_calls) > 0:
@@ -763,13 +772,21 @@ class Gemini(Model):
             parts=message_data.valid_response_parts,
             content=message_data.response_content,
         )
+        
+        # Initialize metrics dictionary if it doesn't exist
+        if not hasattr(assistant_message, 'metrics') or assistant_message.metrics is None:
+            assistant_message.metrics = {}
 
         # -*- Update assistant message if tool calls are present
         if len(message_data.response_tool_calls) > 0:
             assistant_message.tool_calls = message_data.response_tool_calls
 
         # -*- Update usage metrics
+        logger.debug(f"[GEMINI_DEBUG] Before update_usage_metrics - usage: {message_data.response_usage}")
+        logger.debug(f"[GEMINI_DEBUG] Before update_usage_metrics - metrics: {metrics.__dict__}")
         self.update_usage_metrics(assistant_message, message_data.response_usage, metrics)
+        logger.debug(f"[GEMINI_DEBUG] After update_usage_metrics - assistant_message.metrics: {assistant_message.metrics}")
+        logger.debug(f"[GEMINI_DEBUG] After update_usage_metrics - self.metrics: {self.metrics}")
 
         # -*- Add assistant message to messages
         messages.append(assistant_message)
