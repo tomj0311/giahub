@@ -807,12 +807,21 @@ export default function AgentPlayground({ user }) {
 
   // Handle edit BPMN button click
   const handleEditBPMN = (bpmnXML) => {
+    console.log('🚀 handleEditBPMN called with XML length:', bpmnXML?.length)
+    console.log('🚀 handleEditBPMN XML preview (first 500 chars):', bpmnXML?.substring(0, 500))
+    console.log('🚀 handleEditBPMN XML preview (last 500 chars):', bpmnXML?.substring(bpmnXML.length - 500))
+    
     // Navigate to dashboard/bpmn with the XML data
     navigate('/dashboard/bpmn', {
       state: {
         initialBPMN: bpmnXML,
         editMode: true
       }
+    })
+    
+    console.log('🚀 Navigation initiated with state:', {
+      initialBPMN: bpmnXML?.length ? `${bpmnXML.length} characters` : 'null/empty',
+      editMode: true
     })
   }
 
