@@ -400,8 +400,8 @@ class AgentRuntimeService:
             try:
                 for response in agent_generator:
                     response_count += 1
-                    # Only log every 50th response to reduce verbosity
-                    if response_count % 50 == 0:
+                    # Log only at significant milestones to reduce verbosity
+                    if response_count % 1000 == 0:
                         logger.debug(f"[AGENT_DEBUG] Processed {response_count} responses")
                     
                     if cancel_event and cancel_event.is_set():
