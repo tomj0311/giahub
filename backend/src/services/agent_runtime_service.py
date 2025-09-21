@@ -564,10 +564,20 @@ class AgentRuntimeService:
         agent = None
         completed = False
         try:
-            agent_doc = await AgentService.get_agent_by_name(agent_name, user)
+            # Handle the case where agent is not found
+            try:
+                agent_doc = await AgentService.get_agent_by_name(agent_name, user)
+            except HTTPException as http_ex:
+                if http_ex.status_code == 404:
+                    yield {"type": "error", "error": f"Agent '{agent_name}' not found"}
+                    return
+                else:
+                    raise http_ex
+            
             if not agent_doc:
                 yield {"type": "error", "error": f"Agent '{agent_name}' not found"}
                 return
+                
             # Use agent document as-is with minimal runtime additions
             agent_config = {
                 **agent_doc,  # Use entire agent document as-is

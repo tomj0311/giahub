@@ -134,6 +134,8 @@ class KnowledgeService:
         """Get specific knowledge configuration"""
         tenant_id = await cls.validate_tenant_access(user)
         user_id = user.get("id") or user.get("userId")
+        # Normalize name input
+        collection_name = (collection_name or "").strip()
         
         try:
             doc = await MongoStorageService.find_one(
@@ -233,10 +235,14 @@ class KnowledgeService:
         tenant_id = await cls.validate_tenant_access(user)
         user_id = user.get("id") or user.get("userId")
         
+        # Normalize name
+        collection_name = (collection_name or "").strip()
         logger.info(f"[KNOWLEDGE] Updating config '{collection_name}' for tenant: {tenant_id}")
         
         try:
             # Use config_data as-is for update
+            if "name" in config_data and isinstance(config_data["name"], str):
+                config_data["name"] = config_data["name"].strip()
             result = await MongoStorageService.update_one(
                 "knowledgeConfig",
                 {"userId": user_id, "name": collection_name},
@@ -262,6 +268,8 @@ class KnowledgeService:
         tenant_id = await cls.validate_tenant_access(user)
         user_id = user.get("id") or user.get("userId")
         
+        # Normalize name
+        name = (name or "").strip()
         logger.info(f"[KNOWLEDGE] Deleting config '{name}' for tenant: {tenant_id}")
         
         try:

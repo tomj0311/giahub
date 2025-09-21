@@ -158,6 +158,8 @@ class ModelConfigService:
     async def get_model_config(cls, config_name: str, user: dict) -> Dict[str, Any]:
         """Get specific model configuration"""
         tenant_id = await cls.validate_tenant_access(user)
+        # Normalize name
+        config_name = (config_name or "").strip()
         
         try:
             doc = await MongoStorageService.find_one("modelConfig", {
@@ -235,6 +237,8 @@ class ModelConfigService:
             
             # Accept frontend structure as-is and only add required backend fields
             record = dict(config_data)  # Preserve original structure
+            # Ensure trimmed name is persisted
+            record["name"] = name
             record.update({
                 "tenantId": tenant_id,
                 "userId": user_id,
@@ -257,12 +261,17 @@ class ModelConfigService:
     async def update_model_config(cls, config_name: str, config_data: Dict[str, Any], user: dict) -> Dict[str, str]:
         """Update existing model configuration"""
         tenant_id = await cls.validate_tenant_access(user)
+        # Normalize lookup name
+        config_name = (config_name or "").strip()
         
         logger.info(f"[MODEL] Updating model config '{config_name}' for tenant: {tenant_id}")
         
         try:
             # Accept frontend structure as-is and only add/update backend fields
             update_data = dict(config_data)  # Preserve original structure
+            # Trim name if provided
+            if "name" in update_data and isinstance(update_data["name"], str):
+                update_data["name"] = update_data["name"].strip()
             update_data["updated_at"] = datetime.utcnow()
             
             result = await MongoStorageService.update_one(
@@ -291,6 +300,8 @@ class ModelConfigService:
     async def delete_model_config(cls, config_name: str, user: dict) -> Dict[str, str]:
         """Delete model configuration"""
         tenant_id = await cls.validate_tenant_access(user)
+        # Normalize name
+        config_name = (config_name or "").strip()
         
         logger.info(f"[MODEL] Deleting model config '{config_name}' for tenant: {tenant_id}")
         
@@ -344,6 +355,8 @@ class ModelConfigService:
         try:
             # Accept frontend structure as-is and only add/update backend fields
             update_data = dict(config_data)  # Preserve original structure
+            if "name" in update_data and isinstance(update_data["name"], str):
+                update_data["name"] = update_data["name"].strip()
             update_data["updated_at"] = datetime.utcnow()
             
             result = await MongoStorageService.update_one(

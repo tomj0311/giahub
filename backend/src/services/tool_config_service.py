@@ -39,7 +39,7 @@ class ToolConfigService:
         tenant_id = await cls.validate_tenant_access(user)
         user_id = user.get("id")
         
-        name = config.get("name")
+        name = (config.get("name") or "").strip()
         if not name:
             logger.warning("[TOOL] Creation failed - name is required")
             raise HTTPException(
@@ -61,6 +61,7 @@ class ToolConfigService:
 
         # Accept frontend structure as-is and only add required backend fields
         doc = dict(config)  # Preserve original structure
+        doc["name"] = name  # ensure trimmed name persisted
         doc.update({
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow(),
@@ -178,6 +179,8 @@ class ToolConfigService:
     async def get_tool_config_by_name(cls, name: str, user: dict) -> dict:
         """Get a specific tool configuration by name"""
         tenant_id = await cls.validate_tenant_access(user)
+        # Normalize name
+        name = (name or "").strip()
         logger.info(f"[TOOL] Fetching tool config '{name}' for tenant: {tenant_id}")
         
         config = await MongoStorageService.find_one("toolConfig",
@@ -237,6 +240,8 @@ class ToolConfigService:
         
         # Accept frontend structure as-is and only add/update backend fields
         update_data = dict(updates)  # Preserve original structure
+        if "name" in update_data and isinstance(update_data["name"], str):
+            update_data["name"] = update_data["name"].strip()
         update_data["updated_at"] = datetime.utcnow()
         
         result = await MongoStorageService.update_one("toolConfig",

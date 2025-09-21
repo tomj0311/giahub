@@ -301,8 +301,21 @@ class AgentService:
         tenant_id = await cls.validate_tenant_access(user)
         logger.info(f"[AGENTS] Getting agent '{name}' for tenant: {tenant_id}")
         
+        # Trim whitespace from search term
+        trimmed_name = name.strip()
+        
         try:
-            doc = await MongoStorageService.find_one("agents", {"name": name}, tenant_id=tenant_id)
+            # First try exact match
+            doc = await MongoStorageService.find_one("agents", {"name": trimmed_name}, tenant_id=tenant_id)
+            
+            # If not found, try with regex to handle whitespace variations
+            if not doc:
+                logger.debug(f"[AGENTS] Exact match failed, trying with whitespace handling")
+                # Use regex to match with optional leading/trailing whitespace
+                import re
+                pattern = f"^\\s*{re.escape(trimmed_name)}\\s*$"
+                doc = await MongoStorageService.find_one("agents", {"name": {"$regex": pattern}}, tenant_id=tenant_id)
+            
             if not doc:
                 logger.warning(f"[AGENTS] Agent '{name}' not found for tenant: {tenant_id}")
                 raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
@@ -336,8 +349,20 @@ class AgentService:
                 "userId": user_id,
                 "updated_at": datetime.utcnow(),
             }
+            # Normalize name (trim whitespace) before saving to enforce consistency
+            record["name"] = name
 
+            # Try exact match first
             existing = await MongoStorageService.find_one("agents", {"name": name}, tenant_id=tenant_id)
+            # If not found, try whitespace-insensitive match to catch names stored with extra spaces
+            if not existing:
+                import re
+                pattern = f"^\\s*{re.escape(name)}\\s*$"
+                existing = await MongoStorageService.find_one(
+                    "agents",
+                    {"name": {"$regex": pattern}},
+                    tenant_id=tenant_id,
+                )
             if existing:
                 logger.debug(f"[AGENTS] Updating existing agent '{name}' for tenant: {tenant_id}")
                 await MongoStorageService.update_one("agents", {"_id": existing["_id"]}, {"$set": record}, tenant_id=tenant_id)

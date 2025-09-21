@@ -197,7 +197,9 @@ class WorkflowConfigService:
         """Create new workflow configuration with BPMN file"""
         tenant_id = await cls.validate_tenant_access(user)
         user_id = user.get("id")
-        logger.info(f"[WORKFLOW] Creating workflow config '{config_data.get('name')}'")
+        # Normalize name early
+        config_name = (config_data.get('name') or '').strip()
+        logger.info(f"[WORKFLOW] Creating workflow config '{config_name}'")
         
         try:
             # Validate BPMN file
@@ -207,7 +209,7 @@ class WorkflowConfigService:
             # Check if name already exists
             existing = await MongoStorageService.find_one(
                 "workflowConfig", 
-                {"name": config_data.get("name")}, 
+                {"name": config_name}, 
                 tenant_id=tenant_id
             )
             
@@ -242,6 +244,7 @@ class WorkflowConfigService:
             # Prepare document - store config as-is with metadata
             doc = {
                 **config_data,  # Store entire config as-is
+                "name": config_name,  # persist trimmed name
                 "bpmn_filename": bpmn_filename,
                 "bpmn_file_path": bpmn_file_path,
                 "type": "workflowConfig",
@@ -348,7 +351,7 @@ class WorkflowConfigService:
             
             # Update fields if provided
             if "name" in config_data and config_data["name"]:
-                update_data["name"] = config_data["name"]
+                update_data["name"] = (config_data["name"] or "").strip()
             if "category" in config_data:
                 update_data["category"] = config_data["category"]
             if "description" in config_data:
