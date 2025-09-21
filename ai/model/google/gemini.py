@@ -4,6 +4,9 @@ import json
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional, List, Iterator, Dict, Any, Union, Callable
+import base64
+import binascii
+import imghdr
 
 from ai.model.base import Model
 from ai.model.message import Message
@@ -180,19 +183,62 @@ class Gemini(Model):
                         if isinstance(image, str) and (image.startswith("http://") or image.startswith("https://")):
                             try:
                                 import httpx
-                                import base64
 
                                 image_content = httpx.get(image).content
+                                image_type = imghdr.what(None, h=image_content) or "jpeg"
+                                mime = f"image/{'jpeg' if image_type == 'jpg' else image_type}"
                                 image_data = {
-                                    "mime_type": "image/jpeg",
+                                    "mime_type": mime,
                                     "data": base64.b64encode(image_content).decode("utf-8"),
                                 }
                                 message_parts.append(image_data)  # type: ignore
                             except Exception as e:
                                 logger.warning(f"Failed to download image from {image}: {e}")
                                 continue
-                        # Case 2.2: Image is a local path
-                        # Open the image file and add it as base64 encoded data
+                        # Case 2.2: Image is a data URL (base64) -> data:image/png;base64,....
+                        elif isinstance(image, str) and image.startswith("data:"):
+                            try:
+                                header, b64data = image.split(",", 1)
+                                # Extract MIME type from header like: data:image/png;base64
+                                mime = "image/jpeg"
+                                if ";" in header:
+                                    mime_section = header[5:].split(";", 1)[0]
+                                    if mime_section:
+                                        mime = mime_section
+                                # validate base64
+                                _ = base64.b64decode(b64data, validate=True)
+                                message_parts.append({"mime_type": mime, "data": b64data})  # type: ignore
+                            except Exception as e:
+                                logger.warning(f"Failed to parse base64 data URL image: {e}")
+                                continue
+                        # Case 2.3: Image is a base64 string (no data: prefix)
+                        elif isinstance(image, str):
+                            candidate = image.strip()
+                            try:
+                                decoded = base64.b64decode(candidate, validate=True)
+                                image_type = imghdr.what(None, h=decoded) or "jpeg"
+                                mime = f"image/{'jpeg' if image_type == 'jpg' else image_type}"
+                                message_parts.append({"mime_type": mime, "data": candidate})  # type: ignore
+                            except (binascii.Error, ValueError):
+                                # Not valid base64; treat as local path below
+                                try:
+                                    import PIL.Image
+                                except ImportError:
+                                    logger.error("`PIL.Image not installed. Please install it using 'pip install pillow'`")
+                                    raise
+
+                                try:
+                                    image_path = Path(candidate)
+                                    if image_path.exists() and image_path.is_file():
+                                        image_obj = PIL.Image.open(image_path)  # type: ignore
+                                    else:
+                                        logger.error(f"Image file {image_path} does not exist.")
+                                        raise FileNotFoundError(str(image_path))
+                                    message_parts.append(image_obj)  # type: ignore
+                                except Exception as e:
+                                    logger.warning(f"Failed to load image from path: {e}")
+                                    continue
+                        # Case 2.4: Image is a local Path object
                         else:
                             try:
                                 import PIL.Image
@@ -203,18 +249,20 @@ class Gemini(Model):
                             try:
                                 image_path = image if isinstance(image, Path) else Path(image)
                                 if image_path.exists() and image_path.is_file():
-                                    image_data = PIL.Image.open(image_path)  # type: ignore
+                                    image_obj = PIL.Image.open(image_path)  # type: ignore
                                 else:
                                     logger.error(f"Image file {image_path} does not exist.")
-                                    raise
-                                message_parts.append(image_data)  # type: ignore
+                                    raise FileNotFoundError(str(image_path))
+                                message_parts.append(image_obj)  # type: ignore
                             except Exception as e:
-                                logger.warning(f"Failed to load image from {image_path}: {e}")
+                                logger.warning(f"Failed to load image : {e}")
                                 continue
                     # Case 3: Image is a bytes object
                     # Add it as base64 encoded data
                     elif isinstance(image, bytes):
-                        image_data = {"mime_type": "image/jpeg", "data": base64.b64encode(image).decode("utf-8")}
+                        image_type = imghdr.what(None, h=image) or "jpeg"
+                        mime = f"image/{'jpeg' if image_type == 'jpg' else image_type}"
+                        image_data = {"mime_type": mime, "data": base64.b64encode(image).decode("utf-8")}
                         message_parts.append(image_data)
                     else:
                         logger.warning(f"Unknown image type: {type(image)}")
