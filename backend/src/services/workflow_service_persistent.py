@@ -29,6 +29,7 @@ from bson import ObjectId
 
 from ..utils.log import logger
 from ..utils.mongo_storage import MongoStorageService
+from .workflow_bpmn_parser import EnhancedBpmnTaskParser
 
 # Module loaded log
 logger.debug("[WORKFLOW] Persistent service module loaded")
@@ -178,48 +179,6 @@ class WorkflowServicePersistent:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to update workflow instance: {str(e)}",
-            )
-
-    @classmethod
-    async def update_bpmn_task_form_data(
-        cls, instance_id, bpmn_id, form_data_json, tenant_id=None
-    ):
-        """Update BPMN task form data in MongoDB workflow instance"""
-        try:
-            import json as json_lib
-            
-            # Parse the JSON string to ensure it's valid
-            form_data = json_lib.loads(form_data_json) if isinstance(form_data_json, str) else form_data_json
-            
-            logger.debug(f"[WORKFLOW] Updating form data for task '{bpmn_id}' with data: {form_data}")
-            
-            # Create update data with bpmn_id as key
-            update_data = {
-                f"{bpmn_id}": form_data,
-                "updated_at": datetime.now(UTC),
-            }
-
-            result = await MongoStorageService.update_one(
-                "workflowInstances", 
-                {"instance_id": instance_id}, 
-                {"$set": update_data}, 
-                tenant_id
-            )
-            
-            logger.info(
-                f"[WORKFLOW] Updated form data for task '{bpmn_id}' in instance: {instance_id}, modified_count: {result.modified_count if hasattr(result, 'modified_count') else 'unknown'}"
-            )
-            
-            return result
-            
-        except Exception as e:
-            logger.error(
-                f"[WORKFLOW] Failed to update form data for task '{bpmn_id}' in instance '{instance_id}': {e}",
-                exc_info=True,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to update task form data: {str(e)}",
             )
 
     @staticmethod
@@ -464,128 +423,6 @@ class WorkflowServicePersistent:
             return {}
 
     @classmethod
-    async def read_extensions(cls, bpmn_id, bpmn_map: Dict[str, object]):
-        import json
-        from lxml import etree
-        nsmap = {
-            'bpmn': 'http://www.omg.org/spec/BPMN/20100524/MODEL', 
-            'spiffworkflow': 'http://spiffworkflow.org/bpmn/schema/1.0/core',
-            'custom': 'http://example.com/bpmn/extensions'
-        }
-        
-        logger.debug(f"[WORKFLOW] Searching for BPMN element with ID: {bpmn_id}")
-        
-        # Search all loaded BPMN documents for any element with the given ID
-        for _, root in bpmn_map.items():
-            # Search for any BPMN element with the given ID (using wildcard *)
-            element = root.xpath(f'//*[@id="{bpmn_id}"]', namespaces=nsmap)
-            
-            if element:
-                logger.debug(f"[WORKFLOW] Found BPMN element: {element[0].tag} with ID: {bpmn_id}")
-                ext_elements = element[0].xpath('.//bpmn:extensionElements', namespaces=nsmap)
-                
-                if ext_elements:
-                    logger.debug(f"[WORKFLOW] Found extension elements")
-                    form_data = {}
-                    form_fields = []
-                    
-                    # Search for formData elements regardless of namespace (bpmn:formData, custom:formData, formData, etc.)
-                    form_data_elements = ext_elements[0].xpath('.//*[local-name()="formData"]')
-                    
-                    if form_data_elements:
-                        logger.debug(f"[WORKFLOW] Found {len(form_data_elements)} formData elements")
-                        # Extract form fields from formData elements
-                        for form_data_elem in form_data_elements:
-                            # Search for formField elements regardless of namespace
-                            fields = form_data_elem.xpath('.//*[local-name()="formField"]')
-                            logger.debug(f"[WORKFLOW] Found {len(fields)} formField elements in formData")
-                            
-                            for field in fields:
-                                field_id = field.get('id')
-                                field_label = field.get('label', field_id)
-                                field_type = field.get('type', 'string')
-                                field_required = field.get('required', 'false')
-                                
-                                if field_id:
-                                    field_data = {
-                                        'id': field_id,
-                                        'label': field_label,
-                                        'type': field_type,
-                                        'required': field_required
-                                    }
-                                    
-                                    # Add any other attributes
-                                    for attr, value in field.attrib.items():
-                                        if attr not in ['id', 'label', 'type', 'required']:
-                                            field_data[attr] = value
-                                    
-                                    form_fields.append(field_data)
-                                    logger.debug(f"[WORKFLOW] Added formField: {field_data}")
-                    
-                    # If we found form fields, structure them properly
-                    if form_fields:
-                        form_data = {
-                            'formData': {},
-                            'formField': form_fields
-                        }
-                    
-                    # Also search for direct formField elements (not inside formData)
-                    direct_form_fields = ext_elements[0].xpath('.//*[local-name()="formField"]')
-                    if direct_form_fields and not form_fields:
-                        logger.debug(f"[WORKFLOW] Found {len(direct_form_fields)} direct formField elements")
-                        for field in direct_form_fields:
-                            field_id = field.get('id')
-                            field_label = field.get('label', field_id)
-                            field_type = field.get('type', 'string')
-                            field_required = field.get('required', 'false')
-                            
-                            if field_id:
-                                field_data = {
-                                    'id': field_id,
-                                    'label': field_label,
-                                    'type': field_type,
-                                    'required': field_required
-                                }
-                                
-                                # Add any other attributes
-                                for attr, value in field.attrib.items():
-                                    if attr not in ['id', 'label', 'type', 'required']:
-                                        field_data[attr] = value
-                                
-                                form_fields.append(field_data)
-                                logger.debug(f"[WORKFLOW] Added direct formField: {field_data}")
-                        
-                        if form_fields:
-                            form_data = {
-                                'formData': {},
-                                'formField': form_fields
-                            }
-                    
-                    # Extract SpiffWorkflow properties if present (keep this for compatibility)
-                    if not form_data:
-                        spiff_properties = ext_elements[0].xpath('.//spiffworkflow:properties', namespaces=nsmap)
-                        if spiff_properties:
-                            properties_data = {}
-                            for prop in spiff_properties:
-                                property_elements = prop.xpath('.//spiffworkflow:property', namespaces=nsmap)
-                                for prop_elem in property_elements:
-                                    prop_name = prop_elem.get('name')
-                                    prop_value = prop_elem.get('value')
-                                    if prop_name:
-                                        properties_data[prop_name] = prop_value
-                            
-                            if properties_data:
-                                form_data = properties_data
-                    
-                    logger.debug(f"[WORKFLOW] Extracted form data: {form_data}")
-                    return json.dumps(form_data, indent=2) if form_data else "{}"
-                else:
-                    logger.debug(f"[WORKFLOW] No extension elements found for element with ID: {bpmn_id}")
-        
-        logger.debug(f"[WORKFLOW] No BPMN element found with ID: {bpmn_id}")
-        return "{}"
-
-    @classmethod
     async def execute_workflow_steps(cls, workflow, workflow_id, tenant_id, instance_id=None, bpmn_map=None):
         """SIMPLE: Execute workflow one step at a time, always update MongoDB"""
         try:
@@ -662,12 +499,9 @@ class WorkflowServicePersistent:
                         logger.info(f"[WORKFLOW] Manual input required for {task_type}: {task.task_spec.bpmn_id}")
                         
                         if task_type in ["UserTask", "ManualTask"]:
-                            # Extract and save form data
-                            bpmn_id = task.task_spec.bpmn_id
-                            if bpmn_map:
-                                form_data = await cls.read_extensions(bpmn_id, bpmn_map)
-                                if form_data and form_data != "{}":
-                                    await cls.update_bpmn_task_form_data(instance_id, bpmn_id, form_data, tenant_id)
+                            # Extension elements are now stored in serialized data
+                            # No need for separate storage - just wait for user input
+                            logger.debug(f"[WORKFLOW] Waiting for user input for {task_type}: {task.task_spec.bpmn_id}")
                             
                             # Stop here - wait for user input
                             break
@@ -735,8 +569,14 @@ class WorkflowServicePersistent:
             bpmn_id = task.task_spec.bpmn_id
             logger.info(f"[WORKFLOW] Handling ServiceTask: {bpmn_id}")
             
-            # Read ioSpecification from BPMN XML (both inputs and outputs)
-            io_spec = await cls.read_io_specification_full(bpmn_id, bpmn_map)
+            # Get ioSpecification from preserved extensions (now in serialized data)
+            io_spec = {'inputs': {}, 'outputs': {}}
+            if hasattr(task.task_spec, 'extensions') and 'ioSpecification' in task.task_spec.extensions:
+                io_spec = task.task_spec.extensions['ioSpecification']
+                logger.debug(f"[WORKFLOW] Using ioSpecification from serialized data: {io_spec}")
+            else:
+                logger.warning(f"[WORKFLOW] No ioSpecification found in serialized data for ServiceTask {bpmn_id}")
+                # Use default empty specification
             
             # Call external API with parameters
             try:
@@ -860,49 +700,6 @@ class WorkflowServicePersistent:
             raise
 
     @classmethod
-    async def read_io_specification_full(cls, bpmn_id, bpmn_map):
-        """Read complete ioSpecification from BPMN XML including inputs and outputs"""
-        import json
-        try:
-            from lxml import etree
-            nsmap = {
-                'bpmn': 'http://www.omg.org/spec/BPMN/20100524/MODEL'
-            }
-            
-            # Search for the element with the given ID
-            for _, root in bpmn_map.items():
-                element = root.xpath(f'//*[@id="{bpmn_id}"]', namespaces=nsmap)
-                
-                if element:
-                    # Look for ioSpecification
-                    io_spec = element[0].xpath('.//bpmn:ioSpecification', namespaces=nsmap)
-                    if io_spec:
-                        result = {'inputs': {}, 'outputs': {}}
-                        
-                        # Get input parameters
-                        inputs = io_spec[0].xpath('.//bpmn:dataInput', namespaces=nsmap)
-                        for inp in inputs:
-                            param_name = inp.get('name') or inp.get('id')
-                            if param_name:
-                                result['inputs'][param_name] = inp.get('value', '')
-                        
-                        # Get output parameters
-                        outputs = io_spec[0].xpath('.//bpmn:dataOutput', namespaces=nsmap)
-                        for out in outputs:
-                            param_name = out.get('name') or out.get('id')
-                            if param_name:
-                                result['outputs'][param_name] = out.get('name', param_name)
-                        
-                        logger.debug(f"[WORKFLOW] Full IO Specification for {bpmn_id}: {result}")
-                        return result
-            
-            return {'inputs': {}, 'outputs': {}}
-            
-        except Exception as e:
-            logger.error(f"[WORKFLOW] Error reading ioSpecification for {bpmn_id}: {e}")
-            return {'inputs': {}, 'outputs': {}}
-
-    @classmethod
     async def map_outputs_to_task(cls, task, output_spec, response_data):
         """Map API response data to task outputs based on ioSpecification"""
         try:
@@ -922,18 +719,6 @@ class WorkflowServicePersistent:
                     
         except Exception as e:
             logger.error(f"[WORKFLOW] Error mapping outputs: {e}")
-
-    @classmethod
-    async def read_io_specification(cls, bpmn_id, bpmn_map):
-        """SIMPLE: Read ioSpecification from BPMN XML (DEPRECATED - use read_io_specification_full)"""
-        import json
-        try:
-            full_spec = await cls.read_io_specification_full(bpmn_id, bpmn_map)
-            return json.dumps(full_spec['inputs'], indent=2) if full_spec['inputs'] else "{}"
-            
-        except Exception as e:
-            logger.error(f"[WORKFLOW] Error reading ioSpecification for {bpmn_id}: {e}")
-            return "{}"
 
     @classmethod
     async def get_workflow_status(cls, workflow_id: str, instance_id: str, user: Dict[str, Any]):
@@ -990,8 +775,7 @@ class WorkflowServicePersistent:
                 current_task.data.update(task_data)
                 workflow.data.update(task_data)  # Also update workflow global data
                 
-                # Save form data to MongoDB
-                await cls.update_bpmn_task_form_data(instance_id, task_id, json.dumps(task_data), tenant_id)
+                # Form data is now stored in serialized workflow data, no separate storage needed
                 
                 # Complete the task
                 current_task.complete()
@@ -1049,10 +833,30 @@ class WorkflowServicePersistent:
             bpmn_xml = await cls.get_bpmn_xml(workflow_id, user)
             bpmn_map = await cls.parse_bpmn(bpmn_xml)
             
-            # Create workflow
+            # Create workflow with enhanced parser
             script_engine = PythonScriptEngine()
             register_service_task(script_engine)
+            
+            # Create enhanced parser that preserves all extension elements
             parser = BpmnParser()
+            
+            # Register our enhanced task parser for all task types
+            from spiffworkflow.bpmn.parser.util import full_tag
+            from spiffworkflow.bpmn.specs.defaults import (
+                UserTask, ManualTask, ServiceTask, ScriptTask, NoneTask
+            )
+            
+            # Override the default parsers with our enhanced ones
+            enhanced_parsers = {
+                full_tag('userTask'): (EnhancedBpmnTaskParser, UserTask),
+                full_tag('manualTask'): (EnhancedBpmnTaskParser, ManualTask),
+                full_tag('serviceTask'): (EnhancedBpmnTaskParser, ServiceTask),
+                full_tag('scriptTask'): (EnhancedBpmnTaskParser, ScriptTask),
+                full_tag('task'): (EnhancedBpmnTaskParser, NoneTask),
+            }
+            
+            # Update the parser's override classes
+            parser.OVERRIDE_PARSER_CLASSES.update(enhanced_parsers)
             
             clean_bpmn = bpmn_xml.replace('<?xml version="1.0" encoding="UTF-8"?>', "").strip()
             parser.add_bpmn_str(clean_bpmn)
@@ -1086,6 +890,54 @@ class WorkflowServicePersistent:
         except Exception as e:
             logger.error(f"[WORKFLOW] Failed to start workflow: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))
+
+    @classmethod
+    async def get_task_extensions(cls, workflow_id: str, instance_id: str, task_id: str, user: Dict[str, Any]):
+        """Get extension elements for a specific task from serialized workflow data"""
+        tenant_id = await cls.validate_tenant_access(user)
+        
+        try:
+            instance = await cls.get_workflow_instance(workflow_id, instance_id, tenant_id)
+            serializer = BpmnWorkflowSerializer()
+            workflow = serializer.deserialize_json(json.dumps(instance["serialized_data"]))
+            
+            # Find the task spec with the given task_id
+            for task_spec in workflow.spec.task_specs.values():
+                if hasattr(task_spec, 'bpmn_id') and task_spec.bpmn_id == task_id:
+                    if hasattr(task_spec, 'extensions'):
+                        return task_spec.extensions
+                    break
+            
+            # No extensions found in serialized data
+            logger.warning(f"[WORKFLOW] No extensions found for task {task_id} in serialized data")
+            return {}
+            
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Failed to get task extensions: {e}")
+            return {}
+
+    @classmethod
+    async def get_all_task_extensions(cls, workflow_id: str, instance_id: str, user: Dict[str, Any]):
+        """Get extension elements for all tasks in the workflow"""
+        tenant_id = await cls.validate_tenant_access(user)
+        
+        try:
+            instance = await cls.get_workflow_instance(workflow_id, instance_id, tenant_id)
+            serializer = BpmnWorkflowSerializer()
+            workflow = serializer.deserialize_json(json.dumps(instance["serialized_data"]))
+            
+            all_extensions = {}
+            
+            # Extract extensions from all task specs
+            for task_spec in workflow.spec.task_specs.values():
+                if hasattr(task_spec, 'bpmn_id') and hasattr(task_spec, 'extensions'):
+                    all_extensions[task_spec.bpmn_id] = task_spec.extensions
+            
+            return all_extensions
+            
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Failed to get all task extensions: {e}")
+            return {}
 
     @classmethod
     async def get_bpmn_xml(

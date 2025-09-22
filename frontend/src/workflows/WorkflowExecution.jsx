@@ -268,6 +268,29 @@ function WorkflowExecution({ user }) {
           
           // Helper to extract field entries for a given task spec from stored instance data
           const getFieldEntries = (instanceObj, taskSpec) => {
+            // First try to get form fields from task spec extensions
+            const spec = instanceObj.serialized_data?.spec?.task_specs?.[taskSpec];
+            if (spec?.extensions?.formData?.formFields) {
+              const entries = [];
+              const formFields = Array.isArray(spec.extensions.formData.formFields) 
+                ? spec.extensions.formData.formFields 
+                : [spec.extensions.formData.formFields];
+              formFields.forEach(f => {
+                if (f?.id) {
+                  entries.push([
+                    f.id,
+                    {
+                      name: f.label || f.id,
+                      type: f.type || 'string',
+                      required: f.required === 'true' || f.required === true,
+                    },
+                  ]);
+                }
+              });
+              return entries;
+            }
+            
+            // Fallback to legacy structure
             const obj = instanceObj?.[taskSpec];
             if (!obj) return [];
             // Support both legacy shape ({formField, formData}) and direct mapping
@@ -303,7 +326,7 @@ function WorkflowExecution({ user }) {
           const initialFormData = {};
           allActionableTasks.forEach((task) => {
             const spec = workflowData.serialized_data?.spec?.task_specs?.[task.task_spec];
-            const hasFormField = workflowData[task.task_spec]?.formField;
+            const hasFormField = workflowData[task.task_spec]?.formField || spec?.extensions?.formData?.formFields;
             const isUserTask = spec?.typename === 'UserTask' || spec?.manual === true || hasFormField;
             if (isUserTask) {
               const entries = getFieldEntries(workflowData, task.task_spec);
@@ -344,7 +367,7 @@ function WorkflowExecution({ user }) {
         // Find the pending UserTask using BPMN spec typename or form field presence
         const pendingUserTasks = (selectedInstance.pendingTasks || []).filter((task) => {
           const spec = selectedInstance.serialized_data?.spec?.task_specs?.[task.task_spec];
-          const hasFormField = selectedInstance[task.task_spec]?.formField;
+          const hasFormField = selectedInstance[task.task_spec]?.formField || spec?.extensions?.formData?.formFields;
           return spec?.typename === 'UserTask' || hasFormField;
         });
         
@@ -352,7 +375,7 @@ function WorkflowExecution({ user }) {
         const submissionData = {
           data: formData,
           ...(pendingUserTasks.length > 0 && {
-            task_id: pendingUserTasks[0].task_spec // e.g., "UserTask_3"
+            task_id: selectedInstance.serialized_data?.spec?.task_specs?.[pendingUserTasks[0].task_spec]?.bpmn_id || pendingUserTasks[0].task_spec
           })
         };
         
@@ -671,7 +694,7 @@ function WorkflowExecution({ user }) {
                     <Stack spacing={2}>
                       {(() => {
                         const spec = selectedInstance.serialized_data?.spec?.task_specs?.[task.task_spec];
-                        const hasFormField = selectedInstance[task.task_spec]?.formField;
+                        const hasFormField = selectedInstance[task.task_spec]?.formField || spec?.extensions?.formData?.formFields;
                         const isUserTask = spec?.typename === 'UserTask' || hasFormField;
                         const isManualTask = spec?.typename === 'ManualTask' || spec?.manual === true;
                         
@@ -684,9 +707,32 @@ function WorkflowExecution({ user }) {
                         }
                         
                         if (isUserTask) {
-                          // Build field entries supporting both legacy and new shapes
-                          const obj = selectedInstance?.[task.task_spec];
+                          // Build field entries from task spec extensions or legacy structure
+                          const spec = selectedInstance.serialized_data?.spec?.task_specs?.[task.task_spec];
                           const entries = (() => {
+                            // First try to get form fields from task spec extensions
+                            if (spec?.extensions?.formData?.formFields) {
+                              const e = [];
+                              const formFields = Array.isArray(spec.extensions.formData.formFields) 
+                                ? spec.extensions.formData.formFields 
+                                : [spec.extensions.formData.formFields];
+                              formFields.forEach(f => {
+                                if (f?.id) {
+                                  e.push([
+                                    f.id,
+                                    {
+                                      name: f.label || f.id,
+                                      type: f.type || 'string',
+                                      required: f.required === 'true' || f.required === true,
+                                    },
+                                  ]);
+                                }
+                              });
+                              return e;
+                            }
+                            
+                            // Fallback to legacy structure
+                            const obj = selectedInstance?.[task.task_spec];
                             if (!obj) return [];
                             if (obj.formField || obj.formData) {
                               const e = [];

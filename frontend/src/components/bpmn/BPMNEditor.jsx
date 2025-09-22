@@ -781,6 +781,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
 
   // Update node data from property panel
   const handleNodeUpdate = useCallback((updatedNode) => {
+    console.log('🎨 BPMNEditor - handleNodeUpdate called with:', updatedNode.data.backgroundColor, updatedNode.data.borderColor);
     setNodes((nds) => {
       const newNodes = nds.map((node) =>
         node.id === updatedNode.id ? updatedNode : node

@@ -4,7 +4,8 @@ import './BPMNNodes.css';
 
 const TaskNode = ({ data }) => {
   // Debug: log the data to verify taskType is being passed
-  console.log('TaskNode data:', data);
+  console.log('🎨 TaskNode RENDER - Full data:', data);
+  console.log('🎨 TaskNode COLORS - backgroundColor:', data.backgroundColor, 'borderColor:', data.borderColor);
   
   // Function to get the appropriate icon based on task type
   const getTaskIcon = (taskType) => {
@@ -40,6 +41,8 @@ const TaskNode = ({ data }) => {
     borderColor: data.borderColor || undefined,
     border: data.borderColor ? `2px solid ${data.borderColor}` : undefined
   };
+
+  console.log('🎨 TaskNode COMPUTED STYLE:', contentStyle);
 
   return (
     <div className="task-node">

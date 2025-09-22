@@ -81,9 +81,46 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
   };
 
   const handleInputChange = (field, value) => {
+    console.log('🎨 PropertyPanel - Color input changed:', field, '=', value);
     const updatedData = { ...nodeData, [field]: value };
     setNodeData(updatedData);
-    // Changes are now stored locally until Save button is clicked
+    console.log('🎨 PropertyPanel - Updated nodeData:', updatedData);
+    
+    // Auto-save color changes immediately (restore original behavior)
+    if ((field === 'backgroundColor' || field === 'borderColor') && (selectedNode || selectedEdge)) {
+      console.log('🎨 PropertyPanel - AUTO-SAVING color change for:', field);
+      
+      if (selectedNode) {
+        const updatedNode = {
+          ...selectedNode,
+          data: {
+            ...selectedNode.data,
+            [field]: value
+          },
+          style: {
+            ...selectedNode.style,
+            [field]: value
+          }
+        };
+        console.log('🎨 PropertyPanel - Auto-saving node color:', field, '=', value);
+        onNodeUpdate(updatedNode);
+      } else if (selectedEdge) {
+        const updatedEdge = {
+          ...selectedEdge,
+          data: {
+            ...selectedEdge.data,
+            [field]: value
+          },
+          style: {
+            ...selectedEdge.style,
+            [field]: value
+          }
+        };
+        console.log('🎨 PropertyPanel - Auto-saving edge color:', field, '=', value);
+        onEdgeUpdate(updatedEdge);
+      }
+    }
+    // Other changes are stored locally until Save button is clicked
   };
 
   const handleSave = () => {
@@ -162,6 +199,7 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
       onEdgeUpdate(updatedEdge);
     } else if (selectedNode) {
       console.log('💾 SAVING NODE CHANGES...');
+      console.log('🎨 PropertyPanel - Saving colors - backgroundColor:', nodeData.backgroundColor, 'borderColor:', nodeData.borderColor);
       // Update node (for non-gateway nodes)
       const updatedNode = {
         ...selectedNode,
@@ -180,6 +218,7 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
           borderColor: nodeData.borderColor || selectedNode.style?.borderColor
         }
       };
+      console.log('🎨 PropertyPanel - Updated node with colors:', updatedNode.data.backgroundColor, updatedNode.data.borderColor);
       console.log('🚀 CALLING onNodeUpdate');
       onNodeUpdate(updatedNode);
     }
