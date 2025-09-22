@@ -26,7 +26,7 @@ class OpenAI(OpenAIEmbedder):
         
         # Client configuration
         organization: Optional[str] = None,
-        base_url: Optional[str] = None,
+        base_url: str = None,
         
         # Advanced parameters
         request_params: Optional[Dict[str, Any]] = None,

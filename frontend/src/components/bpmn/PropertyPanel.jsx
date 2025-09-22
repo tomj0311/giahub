@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import './PropertyPanel.css';
+import './PropertyPanel.css';import XMLEditor from './XMLEditor';
 
 const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate, isOpen, onToggle, readOnly, edges }) => {
   const [activeSection, setActiveSection] = useState('general');
@@ -12,6 +12,7 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
     borderColor: ''
   });
   const [xmlContent, setXmlContent] = useState('');
+  const [isXmlEditorOpen, setIsXmlEditorOpen] = useState(false);
 
   // Update local state when selected element changes
   useEffect(() => {
@@ -52,6 +53,31 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
   const handleXmlChange = (value) => {
     setXmlContent(value);
     // Changes are now stored locally until Save button is clicked
+  };
+
+  const handleXmlUpdate = (updatedXml) => {
+    setXmlContent(updatedXml);
+    setIsXmlEditorOpen(false);
+    // Auto-save when XML is updated from dialog
+    if (selectedNode) {
+      const updatedNode = {
+        ...selectedNode,
+        data: {
+          ...selectedNode.data,
+          originalNestedElements: updatedXml
+        }
+      };
+      onNodeUpdate(updatedNode);
+    } else if (selectedEdge) {
+      const updatedEdge = {
+        ...selectedEdge,
+        data: {
+          ...selectedEdge.data,
+          originalNestedElements: updatedXml
+        }
+      };
+      onEdgeUpdate(updatedEdge);
+    }
   };
 
   const handleInputChange = (field, value) => {
@@ -180,6 +206,7 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
     }
 
     const sequenceFlowsXML = relatedEdges.map(edge => {
+
       // Check for originalNestedElements (from BPMNManager import)
       if (edge.data?.originalNestedElements) {
         const id = edge.id;
@@ -477,7 +504,25 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
             {activeSection === 'attributes' && (
               <div className="accordion-content">
                 <div className="form-group">
-                  <label htmlFor="element-xml">Inner XML Elements</label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <label htmlFor="element-xml">Inner XML Elements</label>
+                    {!readOnly && (
+                      <button 
+                        onClick={() => setIsXmlEditorOpen(true)}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: '12px',
+                          background: 'var(--accent-color)',
+                          color: 'var(--bg-primary)',
+                          border: 'none',
+                          borderRadius: '3px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Edit XML
+                      </button>
+                    )}
+                  </div>
                   <textarea
                     id="element-xml"
                     value={xmlContent}
@@ -498,6 +543,14 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
           </div>
         </div>
       )}
+      
+      <XMLEditor
+        isOpen={isXmlEditorOpen}
+        onClose={() => setIsXmlEditorOpen(false)}
+        xmlContent={xmlContent}
+        onUpdate={handleXmlUpdate}
+        elementType={selectedNode ? selectedNode.type : selectedEdge ? 'sequence flow' : 'element'}
+      />
     </div>
   );
 };
