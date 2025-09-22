@@ -1,14 +1,49 @@
 import React, { useState, useEffect } from 'react';
 
-const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType }) => {
+const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate, edges, nodeData }) => {
   const [editedXml, setEditedXml] = useState('');
-  const [position, setPosition] = useState({ x: 50, y: 50 });
+  const [position, setPosition] = useState({ x: window.innerWidth * 0.25, y: window.innerHeight * 0.2 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
-    setEditedXml(xmlContent || '');
+    const formatted = xmlContent ? formatXML(xmlContent) : '';
+    setEditedXml(formatted);
   }, [xmlContent]);
+
+  const formatXML = (xml) => {
+    if (!xml) return '';
+    
+    // Clean up the XML first
+    let formatted = xml.replace(/>\s*</g, '><');
+    
+    // Add line breaks
+    formatted = formatted.replace(/></g, '>\n<');
+    
+    // Split into lines and format
+    const lines = formatted.split('\n');
+    let indentLevel = 0;
+    
+    return lines.map(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return '';
+      
+      // Handle closing tags
+      if (trimmed.startsWith('</')) {
+        indentLevel--;
+      }
+      
+      // Create indented line
+      const indented = '  '.repeat(Math.max(0, indentLevel)) + trimmed;
+      
+      // Handle opening tags (not self-closing)
+      if (trimmed.startsWith('<') && !trimmed.startsWith('</') && !trimmed.endsWith('/>') && !trimmed.includes('</')) {
+        indentLevel++;
+      }
+      
+      return indented;
+    }).join('\n');
+  };
 
   const handleUpdate = () => {
     onUpdate(editedXml);
@@ -17,6 +52,110 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType }) => {
 
   const handleCancel = () => {
     setEditedXml(xmlContent || '');
+    onClose();
+  };
+
+  const handleSave = () => {
+    console.log('� XML EDITOR SAVE BUTTON CLICKED!');
+    console.log('�📝 Current editedXml:', editedXml);
+    console.log('🎯 Selected Node:', selectedNode);
+    console.log('🔗 Selected Edge:', selectedEdge);
+    
+    // For gateway nodes, ALWAYS update the related sequence flows, not the gateway itself
+    if (selectedNode && selectedNode.type && selectedNode.type.includes('gateway')) {
+      console.log('🚪 GATEWAY DETECTED - Processing multiple flows');
+      // Update all related edges
+      const gatewayId = selectedNode.id;
+      const relatedEdges = edges.filter(edge => 
+        edge.source === gatewayId || edge.target === gatewayId
+      );
+      
+      console.log('🔍 Related edges found:', relatedEdges.length);
+      
+      // Parse the XML content to extract individual sequence flows
+      const parser = new DOMParser();
+      const tempDoc = parser.parseFromString(`<root>${editedXml}</root>`, 'text/xml');
+      const sequenceFlows = tempDoc.querySelectorAll('sequenceFlow');
+      
+      console.log('📋 Parsed sequence flows:', sequenceFlows.length);
+      
+      sequenceFlows.forEach(flow => {
+        const flowId = flow.getAttribute('id');
+        const relatedEdge = relatedEdges.find(edge => edge.id === flowId);
+        console.log(`🔄 Processing flow ${flowId}, found edge:`, !!relatedEdge);
+        
+        if (relatedEdge) {
+          // Extract nested elements
+          const childNodes = flow.childNodes;
+          let originalNestedElements = '';
+          for (let i = 0; i < childNodes.length; i++) {
+            const child = childNodes[i];
+            if (child.nodeType === Node.ELEMENT_NODE) {
+              originalNestedElements += child.outerHTML;
+            }
+          }
+          
+          console.log(`📦 Extracted nested elements for ${flowId}:`, originalNestedElements);
+          
+          // Update the edge with new XML
+          const updatedEdge = {
+            ...relatedEdge,
+            label: flow.getAttribute('name') || '',
+            data: {
+              ...relatedEdge.data,
+              originalNestedElements: originalNestedElements,
+              originalXML: new XMLSerializer().serializeToString(flow)
+            }
+          };
+          
+          console.log(`🚀 CALLING onEdgeUpdate for ${flowId}`);
+          onEdgeUpdate(updatedEdge);
+        }
+      });
+    } else if (selectedEdge) {
+      console.log('📄 SINGLE EDGE UPDATE');
+            // Single edge update
+      const updatedEdge = {
+        ...selectedEdge,
+        label: nodeData.name,
+        data: {
+          ...selectedEdge.data,
+          label: nodeData.name,
+          documentation: nodeData.documentation,
+          versionTag: nodeData.versionTag,
+          originalNestedElements: editedXml,
+          originalXML: editedXml
+        }
+      };
+      console.log('🚀 CALLING onEdgeUpdate for single edge');
+      onEdgeUpdate(updatedEdge);
+    } else if (selectedNode) {
+      console.log('💾 SAVING NODE CHANGES...');
+      // Update node (for non-gateway nodes)
+      const updatedNode = {
+        ...selectedNode,
+        data: {
+          ...selectedNode.data,
+          label: nodeData.name,
+          documentation: nodeData.documentation,
+          versionTag: nodeData.versionTag,
+          backgroundColor: nodeData.backgroundColor,
+          borderColor: nodeData.borderColor,
+          originalNestedElements: editedXml
+        },
+        style: {
+          ...selectedNode.style,
+          backgroundColor: nodeData.backgroundColor || selectedNode.style?.backgroundColor,
+          borderColor: nodeData.borderColor || selectedNode.style?.borderColor
+        }
+      };
+      console.log('🚀 CALLING onNodeUpdate');
+      onNodeUpdate(updatedNode);
+    }
+    
+    console.log('✅ XML EDITOR SAVE FUNCTION COMPLETED');
+    
+    // Close the editor
     onClose();
   };
 
@@ -139,14 +278,16 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType }) => {
               color: 'var(--text-primary)',
               borderRadius: '4px'
             }}>Cancel</button>
-            <button onClick={handleUpdate} style={{
+            <button onClick={handleSave} style={{
               padding: '8px 16px',
               background: 'var(--accent-color)',
               color: 'var(--bg-primary)',
               border: 'none',
               cursor: 'pointer',
               borderRadius: '4px'
-            }}>Update</button>
+            }}>
+              SAVE CHANGES
+            </button>
           </div>
         </div>
       </div>

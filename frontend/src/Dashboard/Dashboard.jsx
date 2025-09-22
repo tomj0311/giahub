@@ -689,6 +689,14 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 		// This ensures /dashboard/bpmn opens in edit mode by default
 		const editMode = location.state?.editMode !== false
 
+		// Clear location state after getting the BPMN to ensure fresh load every time
+		useEffect(() => {
+			if (location.state?.initialBPMN) {
+				// Clear the state to prevent reloading the same BPMN on refresh
+				window.history.replaceState({}, document.title, location.pathname)
+			}
+		}, [location.state?.initialBPMN, location.pathname])
+
 		// Convert themeKey to BPMN theme format
 		const getBPMNTheme = () => {
 			if (themeKey === 'aurora') return 'dark'

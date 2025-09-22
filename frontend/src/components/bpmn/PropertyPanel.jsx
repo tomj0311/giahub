@@ -332,6 +332,7 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
   };
 
   return (
+    <>
     <div className={`property-panel ${isOpen ? 'open' : ''}`}>
       <div className="property-panel-header">
         <h3>Properties</h3>
@@ -543,15 +544,23 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
           </div>
         </div>
       )}
-      
-      <XMLEditor
-        isOpen={isXmlEditorOpen}
-        onClose={() => setIsXmlEditorOpen(false)}
-        xmlContent={xmlContent}
-        onUpdate={handleXmlUpdate}
-        elementType={selectedNode ? selectedNode.type : selectedEdge ? 'sequence flow' : 'element'}
-      />
     </div>
+    
+    {/* XMLEditor rendered outside the property panel container */}
+    <XMLEditor
+      isOpen={isXmlEditorOpen}
+      onClose={() => setIsXmlEditorOpen(false)}
+      xmlContent={xmlContent}
+      onUpdate={handleXmlUpdate}
+      elementType={selectedNode ? selectedNode.type : selectedEdge ? 'sequence flow' : 'element'}
+      selectedNode={selectedNode}
+      selectedEdge={selectedEdge}
+      onNodeUpdate={onNodeUpdate}
+      onEdgeUpdate={onEdgeUpdate}
+      edges={edges}
+      nodeData={nodeData}
+    />
+    </>
   );
 };
 
