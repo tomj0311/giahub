@@ -22,6 +22,7 @@ import {
 	Monitor,
 	Building,
 	HelpCircle,
+	Code,
 	// New unique icons for the reorganized menu
 	Star,
 	Gamepad2,
@@ -56,6 +57,7 @@ export const iconMap = {
 	Workflow,
 	GitBranch,
 	Monitor,
+	Code,
 	Users,
 	Shield,
 	UserPlus,

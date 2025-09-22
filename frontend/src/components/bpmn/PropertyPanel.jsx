@@ -505,37 +505,13 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
             {activeSection === 'attributes' && (
               <div className="accordion-content">
                 <div className="form-group">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <label htmlFor="element-xml">Inner XML Elements</label>
-                    {!readOnly && (
-                      <button 
-                        onClick={() => setIsXmlEditorOpen(true)}
-                        style={{
-                          padding: '4px 8px',
-                          fontSize: '12px',
-                          background: 'var(--accent-color)',
-                          color: 'var(--bg-primary)',
-                          border: 'none',
-                          borderRadius: '3px',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Edit XML
-                      </button>
-                    )}
-                  </div>
-                  <textarea
-                    id="element-xml"
-                    value={xmlContent}
-                    onChange={(e) => handleXmlChange(e.target.value)}
-                    rows={15}
-                    style={{ fontFamily: 'monospace', fontSize: '12px' }}
-                    placeholder="Enter XML content here..."
-                    disabled={readOnly}
-                  />
+                  <label htmlFor="element-xml">Inner XML Elements</label>
                   {!readOnly && (
-                    <button className="save-xml-btn" onClick={handleSave}>
-                      SAVE CHANGES
+                    <button 
+                      className="save-xml-btn"
+                      onClick={() => setIsXmlEditorOpen(true)}
+                    >
+                      Edit XML
                     </button>
                   )}
                 </div>

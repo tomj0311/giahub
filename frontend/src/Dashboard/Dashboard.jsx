@@ -53,6 +53,7 @@ const AgentPlayground = lazy(() => import('../playground/AgentPlayground'))
 const WorkflowConfig = lazy(() => import('../workflows/WorkflowConfig'))
 const WorkflowDashboard = lazy(() => import('../workflows/WorkflowDashboard'))
 const WorkflowExecution = lazy(() => import('../workflows/WorkflowExecution'))
+const DynamicComponentLoader = lazy(() => import('../workflows/DynamicComponentLoader'))
 const Analytics = lazy(() => import('./Analytics'))
 const BPMN = lazy(() => import('../components/bpmn/BPMN'))
 import RouteTransition from '../components/RouteTransition'
@@ -143,6 +144,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 					label: 'Workflows',
 					to: '/dashboard/workflows',
 					icon: 'Settings'
+				},
+				{
+					label: 'Dynamic',
+					to: '/dashboard/dynamic',
+					icon: 'Code'
 				},
 				{
 					label: 'BPMN',
@@ -745,6 +751,7 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="agent-playground" element={<AgentPlayground user={user} />} />
 				<Route path="analytics" element={<Analytics />} />
 				<Route path="workflows" element={<WorkflowConfig user={user} />} />
+				<Route path="dynamic" element={<DynamicComponentLoader user={user} />} />
 				<Route path="bpmn" element={<BPMNEditorWrapper />} />
 				<Route path="monitor" element={<WorkflowDashboard user={user} />} />
 				<Route path="workflow-execution" element={<WorkflowExecution user={user} />} />
