@@ -365,7 +365,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
           console.log('📋 Parsed nodes:', result.nodes.map(n => ({ id: n.id, type: n.type, label: n.data?.label })))
           
           setNodes(result.nodes);
-          setEdges(result.edges);
+          setEdges(updateEdgesWithArrows(result.edges));
           
           // Fit view after loading
           setTimeout(() => {
