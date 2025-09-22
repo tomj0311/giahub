@@ -1,4 +1,6 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
+import * as MUICore from '@mui/material';
+import * as MUIIcons from '@mui/icons-material';
 
 // Dynamic component loaders
 const cachedIcons = {};
@@ -12,14 +14,14 @@ const loadMuiIcon = (iconName) => {
 
   const Component = lazy(() =>
     import("@mui/icons-material").then((module) => ({ 
-      default: module[iconName] || (() => <span>Icon not found: {iconName}</span>)
+      default: module[iconName] || (() => React.createElement('span', null, `Icon not found: ${iconName}`))
     }))
   );
 
   cachedIcons[iconName] = (props) => (
-    <Suspense fallback={<span>Loading...</span>}>
-      <Component {...props} />
-    </Suspense>
+    React.createElement(Suspense, { fallback: React.createElement('span', null, 'Loading...') },
+      React.createElement(Component, props)
+    )
   );
 
   return cachedIcons[iconName];
@@ -33,39 +35,17 @@ const loadMuiComponent = (componentName) => {
 
   const Component = lazy(() =>
     import("@mui/material").then((module) => ({ 
-      default: module[componentName] || (() => <span>Component not found: {componentName}</span>)
+      default: module[componentName] || (() => React.createElement('span', null, `Component not found: ${componentName}`))
     }))
   );
 
   cachedComponents[componentName] = (props) => (
-    <Suspense fallback={<span>Loading...</span>}>
-      <Component {...props} />
-    </Suspense>
+    React.createElement(Suspense, { fallback: React.createElement('span', null, 'Loading...') },
+      React.createElement(Component, props)
+    )
   );
 
   return cachedComponents[componentName];
-};
-
-// Dynamic MUI Lab component loader
-const loadMuiLabComponent = (componentName) => {
-  const cacheKey = `lab_${componentName}`;
-  if (cachedComponents.hasOwnProperty(cacheKey)) {
-    return cachedComponents[cacheKey];
-  }
-
-  const Component = lazy(() =>
-    import("@mui/lab").then((module) => ({ 
-      default: module[componentName] || (() => <span>Lab Component not found: {componentName}</span>)
-    })).catch(() => ({ default: () => <span>MUI Lab not installed</span> }))
-  );
-
-  cachedComponents[cacheKey] = (props) => (
-    <Suspense fallback={<span>Loading...</span>}>
-      <Component {...props} />
-    </Suspense>
-  );
-
-  return cachedComponents[cacheKey];
 };
 
 // Export all components for dynamic use
@@ -75,8 +55,11 @@ export const MUIComponents = {
   useEffect,
   lazy,
   Suspense,
+  // All MUI Core components
+  ...MUICore,
+  // All MUI Icons
+  ...MUIIcons,
   // Dynamic loaders
   loadMuiIcon,
-  loadMuiComponent,
-  loadMuiLabComponent
+  loadMuiComponent
 };
