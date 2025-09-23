@@ -471,8 +471,8 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
                   multiline
                   fullWidth
                   value={cgResponse}
+                  onChange={(e) => setCgResponse(e.target.value)}
                   placeholder="Code generation response will appear here..."
-                  InputProps={{ readOnly: true }}
                   sx={{
                     '& .MuiInputBase-input': {
                       fontFamily: 'monospace',
@@ -482,6 +482,66 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
                     }
                   }}
                 />
+                <Button 
+                  onClick={() => {
+                    // Parse existing XML and add formData extension elements
+                    const parser = new DOMParser();
+                    let doc;
+                    
+                    if (editedXml.trim()) {
+                      try {
+                        doc = parser.parseFromString(editedXml, 'text/xml');
+                      } catch (e) {
+                        doc = parser.parseFromString(`<root>${editedXml}</root>`, 'text/xml');
+                      }
+                    } else {
+                      doc = parser.parseFromString('<root></root>', 'text/xml');
+                    }
+                    
+                    // Create or find extensionElements
+                    let extensionElements = doc.querySelector('extensionElements');
+                    if (!extensionElements) {
+                      extensionElements = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'extensionElements');
+                      doc.documentElement.appendChild(extensionElements);
+                    }
+                    
+                    // Add formMetadata with script containing cgResponse
+                    const formMetadata = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'formMetadata');
+                    formMetadata.setAttribute('formId', 'userInfoForm');
+                    formMetadata.setAttribute('version', '1.0');
+                    formMetadata.setAttribute('display', 'inline');
+                    
+                    const script = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'script');
+                    script.appendChild(doc.createCDATASection(cgResponse));
+                    formMetadata.appendChild(script);
+                    
+                    // Add formData
+                    const formData = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'formData');
+                    const formField = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'formField');
+                    formField.setAttribute('id', 'review_comments');
+                    formField.setAttribute('label', 'Review Comments');
+                    formField.setAttribute('type', 'string');
+                    formData.appendChild(formField);
+                    
+                    // Add fromCode
+                    const fromCode = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'fromCode');
+                    
+                    extensionElements.appendChild(formMetadata);
+                    extensionElements.appendChild(formData);
+                    extensionElements.appendChild(fromCode);
+                    
+                    // Update the XML
+                    const serializer = new XMLSerializer();
+                    const updatedXml = serializer.serializeToString(doc);
+                    setEditedXml(updatedXml);
+                    setAccordionOpen(0);
+                  }} 
+                  variant="contained"
+                  disabled={!cgResponse}
+                  sx={{ mt: 1, fontSize: '12px', alignSelf: 'flex-end' }}
+                >
+                  Update XML with FormData
+                </Button>
               </form>
             )}
           </div>
