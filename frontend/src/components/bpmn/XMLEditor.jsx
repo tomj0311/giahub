@@ -60,42 +60,51 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
   }, [token]);
 
   useEffect(() => {
-    const formatted = xmlContent ? formatXML(xmlContent) : '';
-    setEditedXml(formatted);
+    if (xmlContent) {
+      const formatted = formatXML(xmlContent);
+      setEditedXml(formatted);
+    } else {
+      setEditedXml('');
+    }
   }, [xmlContent]);
 
   const formatXML = (xml) => {
     if (!xml) return '';
     
-    // Clean up the XML first
+    // Clean up the XML first - remove extra whitespace between tags
     let formatted = xml.replace(/>\s*</g, '><');
     
-    // Add line breaks
+    // Add line breaks after each closing bracket
     formatted = formatted.replace(/></g, '>\n<');
     
-    // Split into lines and format
+    // Split into lines and format with proper indentation
     const lines = formatted.split('\n');
     let indentLevel = 0;
+    let formattedLines = [];
     
-    return lines.map(line => {
-      const trimmed = line.trim();
-      if (!trimmed) return '';
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
       
-      // Handle closing tags
-      if (trimmed.startsWith('</')) {
-        indentLevel--;
+      // Handle closing tags - decrease indent before adding line
+      if (line.startsWith('</')) {
+        indentLevel = Math.max(0, indentLevel - 1);
       }
       
       // Create indented line
-      const indented = '  '.repeat(Math.max(0, indentLevel)) + trimmed;
+      const indented = '  '.repeat(indentLevel) + line;
+      formattedLines.push(indented);
       
-      // Handle opening tags (not self-closing)
-      if (trimmed.startsWith('<') && !trimmed.startsWith('</') && !trimmed.endsWith('/>') && !trimmed.includes('</')) {
+      // Handle opening tags - increase indent after adding line
+      if (line.startsWith('<') && 
+          !line.startsWith('</') && 
+          !line.endsWith('/>') && 
+          !line.includes('</')) {
         indentLevel++;
       }
-      
-      return indented;
-    }).join('\n');
+    }
+    
+    return formattedLines.join('\n');
   };
 
   const handleUpdate = () => {
@@ -490,9 +499,11 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
                     
                     if (editedXml.trim()) {
                       try {
-                        doc = parser.parseFromString(editedXml, 'text/xml');
-                      } catch (e) {
+                        // Try to parse as complete XML document
                         doc = parser.parseFromString(`<root>${editedXml}</root>`, 'text/xml');
+                      } catch (e) {
+                        // Fallback for malformed XML
+                        doc = parser.parseFromString('<root></root>', 'text/xml');
                       }
                     } else {
                       doc = parser.parseFromString('<root></root>', 'text/xml');
@@ -505,6 +516,14 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
                       doc.documentElement.appendChild(extensionElements);
                     }
                     
+                    // Clear existing elements to avoid duplicates
+                    while (extensionElements.firstChild) {
+                      extensionElements.removeChild(extensionElements.firstChild);
+                    }
+                    
+                    // Create formData container
+                    const formData = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'formData');
+                    
                     // Add formMetadata with script containing cgResponse
                     const formMetadata = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'formMetadata');
                     formMetadata.setAttribute('formId', 'userInfoForm');
@@ -512,28 +531,62 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
                     formMetadata.setAttribute('display', 'inline');
                     
                     const script = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'script');
-                    script.appendChild(doc.createCDATASection(cgResponse));
+                    script.setAttribute('xmlns', 'http://www.omg.org/spec/BPMN/20100524/MODEL');
+                    script.appendChild(doc.createCDATASection(`\n                ${cgResponse}\n              `));
                     formMetadata.appendChild(script);
                     
-                    // Add formData
-                    const formData = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'formData');
-                    const formField = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'formField');
-                    formField.setAttribute('id', 'review_comments');
-                    formField.setAttribute('label', 'Review Comments');
-                    formField.setAttribute('type', 'string');
-                    formData.appendChild(formField);
+                    // Add formField with firstName
+                    const formFieldFirstName = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'formField');
+                    formFieldFirstName.setAttribute('id', 'firstName');
+                    formFieldFirstName.setAttribute('label', 'First Name');
+                    formFieldFirstName.setAttribute('type', 'string');
+                    formFieldFirstName.setAttribute('required', 'true');
                     
-                    // Add fromCode
-                    const fromCode = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'fromCode');
+                    const extensionElementsFirstName = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'extensionElements');
+                    const fieldConfigFirstName = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'fieldConfig');
+                    fieldConfigFirstName.setAttribute('requiredMessage', 'First name is mandatory');
+                    fieldConfigFirstName.setAttribute('maxLength', '50');
+                    extensionElementsFirstName.appendChild(fieldConfigFirstName);
+                    formFieldFirstName.appendChild(extensionElementsFirstName);
                     
-                    extensionElements.appendChild(formMetadata);
+                    // Add formField with email
+                    const formFieldEmail = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'formField');
+                    formFieldEmail.setAttribute('id', 'email');
+                    formFieldEmail.setAttribute('label', 'Email Address');
+                    formFieldEmail.setAttribute('type', 'string');
+                    
+                    const validation = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'validation');
+                    const constraint = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'constraint');
+                    constraint.setAttribute('name', 'pattern');
+                    constraint.setAttribute('value', '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}');
+                    validation.appendChild(constraint);
+                    formFieldEmail.appendChild(validation);
+                    
+                    const extensionElementsEmail = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'extensionElements');
+                    const fieldConfigEmail = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'fieldConfig');
+                    fieldConfigEmail.setAttribute('requiredMessage', 'Valid email required');
+                    fieldConfigEmail.setAttribute('category', 'contact');
+                    extensionElementsEmail.appendChild(fieldConfigEmail);
+                    formFieldEmail.appendChild(extensionElementsEmail);
+                    
+                    // Append all elements to formData
+                    formData.appendChild(formMetadata);
+                    formData.appendChild(formFieldFirstName);
+                    formData.appendChild(formFieldEmail);
+                    
+                    // Append formData to extensionElements
                     extensionElements.appendChild(formData);
-                    extensionElements.appendChild(fromCode);
                     
-                    // Update the XML
+                    // Serialize and format the XML
                     const serializer = new XMLSerializer();
-                    const updatedXml = serializer.serializeToString(doc);
-                    setEditedXml(updatedXml);
+                    let updatedXml = serializer.serializeToString(doc.documentElement);
+                    
+                    // Remove the root wrapper
+                    updatedXml = updatedXml.replace('<root>', '').replace('</root>', '');
+                    
+                    // Apply proper formatting
+                    const formattedXml = formatXML(updatedXml);
+                    setEditedXml(formattedXml);
                     setAccordionOpen(0);
                   }} 
                   variant="contained"
