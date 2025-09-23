@@ -21,43 +21,6 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
   const [selected, setSelected] = useState(null);
   const token = localStorage.getItem('token') || '';
 
-  // Load agents exactly like AgentPlayground
-  useEffect(() => {
-    const loadAgents = async () => {
-      setLoading(true);
-      try {
-        const result = await sharedApiService.makeRequest(
-          '/api/agents',
-          { headers: token ? { Authorization: `Bearer ${token}` } : {} },
-          { endpoint: 'agents', token: token?.substring(0, 10) }
-        );
-        
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to load agents');
-        }
-        
-        const agents = result.data.agents || [];
-        const groupedByCat = agents.reduce((acc, a) => {
-          const cat = a.category || '_root';
-          acc[cat] = acc[cat] || [];
-          acc[cat].push(a.name);
-          return acc;
-        }, {});
-        Object.keys(groupedByCat).forEach(k => groupedByCat[k].sort());
-        setGrouped(groupedByCat);
-        
-        // Auto-select first agent
-        if (agents.length > 0) {
-          setSelected(agents[0].name);
-        }
-      } catch (e) {
-        console.error('Failed to load agents', e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadAgents();
-  }, [token]);
 
   useEffect(() => {
     if (xmlContent) {
@@ -262,14 +225,22 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
   // Code generator: call backend exactly like AgentPlayground
   const handleCgSubmit = async (e) => {
     e.preventDefault();
-    if (!selected || !cgPrompt.trim()) return;
+    if (!cgPrompt.trim()) return;
     setCgLoading(true);
     setCgResponse('');
-    
+
+    // Hardcode agent name based on task type
+    let agentName = selected;
+    if (elementType === 'UserTask') {
+      agentName = 'JSX Component Generator';
+    } else if (elementType === 'ScriptTask') {
+      agentName = 'Python Code Generator';
+    }
+
     try {
       const response = await agentRuntimeService.runAgentStream(
         {
-          agent_name: selected,
+          agent_name: agentName,
           prompt: cgPrompt,
           conv_id: `xmleditor_${Date.now()}`
         },
