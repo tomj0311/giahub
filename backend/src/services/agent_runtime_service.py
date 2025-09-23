@@ -353,7 +353,7 @@ class AgentRuntimeService:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     @classmethod
-    async def run_agent_stream(cls, agent: Any, prompt: str, user: Dict[str, Any], conv_id: Optional[str] = None, cancel_event: Optional[asyncio.Event] = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def run_agent_stream(cls, agent: Any, prompt: str, user: Dict[str, Any], conv_id: Optional[str] = None, cancel_event: Optional[asyncio.Event] = None, stream: bool = True) -> AsyncGenerator[Dict[str, Any], None]:
         try:
             logger.debug(f"Starting run_agent_stream with agent type: {type(agent)}")
             
@@ -380,38 +380,74 @@ class AgentRuntimeService:
             logger.info(f"[AGENT] Starting run with {len(images_for_run)} images")
             
             # Run the agent with images if available
-            run_kwargs = {"stream": True}
+            run_kwargs = {"stream": stream}
             if images_for_run:
                 run_kwargs["images"] = images_for_run
             
-            # Get the streaming generator
+            # Get the streaming generator or direct response based on stream parameter
             try:
-                agent_generator = agent.run(prompt, **run_kwargs)
-                logger.debug(f"Agent run started successfully")
+                if stream:
+                    agent_generator = agent.run(prompt, **run_kwargs)
+                    logger.debug(f"Agent run started successfully with streaming")
+                else:
+                    agent_response = agent.run(prompt, **run_kwargs)
+                    logger.debug(f"Agent run started successfully without streaming")
             except Exception as e:
                 logger.error(f"Error calling agent.run(): {e}")
                 import traceback
                 logger.error(f"Traceback: {traceback.format_exc()}")
                 raise
             
-            # Consume the generator and yield responses
-            logger.debug(f"[AGENT_DEBUG] Starting to iterate over agent generator...")
-            response_count = 0
-            try:
-                for response in agent_generator:
-                    response_count += 1
-                    # Log only at significant milestones to reduce verbosity
-                    if response_count % 1000 == 0:
-                        logger.debug(f"[AGENT_DEBUG] Processed {response_count} responses")
-                    
+            if stream:
+                # Consume the generator and yield responses
+                logger.debug(f"[AGENT_DEBUG] Starting to iterate over agent generator...")
+                response_count = 0
+                try:
+                    for response in agent_generator:
+                        response_count += 1
+                        # Log only at significant milestones to reduce verbosity
+                        if response_count % 1000 == 0:
+                            logger.debug(f"[AGENT_DEBUG] Processed {response_count} responses")
+                        
+                        if cancel_event and cancel_event.is_set():
+                            logger.info("Streaming cancelled by user.")
+                            yield {"type": "cancelled", "timestamp": asyncio.get_event_loop().time()}
+                            return
+                        
+                        raw_content = getattr(response, 'content', getattr(response, 'message', str(response)))
+                        
+                        # Normalize to a JSON-serializable string so the frontend always receives text
+                        if isinstance(raw_content, (dict, list)):
+                            try:
+                                content = json.dumps(raw_content, ensure_ascii=False)
+                            except Exception:
+                                content = str(raw_content)
+                        else:
+                            content = str(raw_content)
+                        
+                        yield {"type": "agent_chunk", "payload": {"content": content}, "timestamp": asyncio.get_event_loop().time()}
+                        await asyncio.sleep(0)
+                        
+                except Exception as e:
+                    logger.error(f"Error iterating over agent generator at response #{response_count}: {e}")
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+                    raise
+                
+                logger.debug(f"[AGENT_DEBUG] Generator iteration completed. Total responses: {response_count}")
+            else:
+                # Handle non-streaming response
+                logger.debug(f"[AGENT_DEBUG] Processing non-streaming response...")
+                try:
                     if cancel_event and cancel_event.is_set():
-                        logger.info("Streaming cancelled by user.")
+                        logger.info("Non-streaming run cancelled by user.")
                         yield {"type": "cancelled", "timestamp": asyncio.get_event_loop().time()}
                         return
                     
-                    raw_content = getattr(response, 'content', getattr(response, 'message', str(response)))
+                    # Extract content from the response
+                    raw_content = getattr(agent_response, 'content', getattr(agent_response, 'message', str(agent_response)))
                     
-                    # Normalize to a JSON-serializable string so the frontend always receives text
+                    # Normalize to a JSON-serializable string
                     if isinstance(raw_content, (dict, list)):
                         try:
                             content = json.dumps(raw_content, ensure_ascii=False)
@@ -420,16 +456,14 @@ class AgentRuntimeService:
                     else:
                         content = str(raw_content)
                     
-                    yield {"type": "agent_chunk", "payload": {"content": content}, "timestamp": asyncio.get_event_loop().time()}
-                    await asyncio.sleep(0)
+                    # Yield the complete response
+                    yield {"type": "agent_response", "payload": {"content": content}, "timestamp": asyncio.get_event_loop().time()}
                     
-            except Exception as e:
-                logger.error(f"Error iterating over agent generator at response #{response_count}: {e}")
-                import traceback
-                logger.error(f"Traceback: {traceback.format_exc()}")
-                raise
-            
-            logger.debug(f"[AGENT_DEBUG] Generator iteration completed. Total responses: {response_count}")
+                except Exception as e:
+                    logger.error(f"Error processing non-streaming response: {e}")
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+                    raise
             
             # At this point, the generator is exhausted and agent should have final run_response with metrics
             if hasattr(agent, 'run_response') and agent.run_response:
@@ -560,7 +594,7 @@ class AgentRuntimeService:
             logger.error(f"Failed to log agent execution results: {e}")
 
     @classmethod
-    async def execute_agent(cls, agent_name: str, prompt: str, user: Dict[str, Any], conv_id: Optional[str] = None, cancel_event: Optional[asyncio.Event] = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute_agent(cls, agent_name: str, prompt: str, user: Dict[str, Any], conv_id: Optional[str] = None, cancel_event: Optional[asyncio.Event] = None, stream: bool = True) -> AsyncGenerator[Dict[str, Any], None]:
         agent = None
         completed = False
         try:
@@ -585,7 +619,7 @@ class AgentRuntimeService:
             if conv_id:
                 agent_config["conv_id"] = conv_id
             agent = await cls.build_agent_from_config(agent_config, user)
-            async for response in cls.run_agent_stream(agent, prompt, user, conv_id, cancel_event=cancel_event):
+            async for response in cls.run_agent_stream(agent, prompt, user, conv_id, cancel_event=cancel_event, stream=stream):
                 if response.get("type") == "agent_run_complete":
                     completed = True
                 yield response

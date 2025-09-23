@@ -148,7 +148,7 @@ class EnhancedBpmnTaskParser(SpiffTaskParser):
     
     def create_task(self):
         """
-        Create task with enhanced extensions
+        Create task with enhanced extensions - handles different task types
         """
         # Parse all extensions (including custom ones)
         extensions = self.parse_extensions()
@@ -157,16 +157,49 @@ class EnhancedBpmnTaskParser(SpiffTaskParser):
         prescript = extensions.get('preScript')
         postscript = extensions.get('postScript')
         
-        # Create the task
-        task = self.spec_class(
-            self.spec, 
-            self.bpmn_id, 
-            prescript=prescript, 
-            postscript=postscript, 
-            **self.bpmn_attributes
-        )
+        # Handle different task types that require special parameters
+        task_args = {
+            'prescript': prescript, 
+            'postscript': postscript
+        }
+        task_args.update(self.bpmn_attributes)
+        
+        # Handle ScriptTask - requires 'script' parameter
+        if self.spec_class.__name__ == 'ScriptTask':
+            script = self.get_script()
+            task = self.spec_class(
+                self.spec, 
+                self.bpmn_id, 
+                script=script,
+                **task_args
+            )
+        else:
+            # Standard task creation for other task types
+            task = self.spec_class(
+                self.spec, 
+                self.bpmn_id, 
+                **task_args
+            )
         
         # Store ALL extensions on the task spec
         task.extensions = extensions
         
         return task
+    
+    def get_script(self):
+        """
+        Gets the script content from the BPMN script element.
+        Used for ScriptTask creation.
+        """
+        try:
+            # Use xpath to find script element
+            script_elements = self.xpath('.//bpmn:script')
+            if script_elements:
+                script_text = script_elements[0].text
+                return script_text if script_text else ""
+            else:
+                # No script element found - return empty string
+                return ""
+        except Exception as e:
+            # If there's any error, return empty string rather than failing
+            return ""

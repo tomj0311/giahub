@@ -30,75 +30,71 @@ from bson import ObjectId
 from ..utils.log import logger
 from ..utils.mongo_storage import MongoStorageService
 from .workflow_bpmn_parser import EnhancedBpmnTaskParser
+from .agent_runtime_service import AgentRuntimeService
 
 # Module loaded log
 logger.debug("[WORKFLOW] Persistent service module loaded")
 
 
-def call_external_api(params):
-    """
-    Function to call an external API using requestData from the BPMN process.
-    Designed as a SpiffWorkflow service task delegate.
-    """
-    try:
-        # Parse incoming params
-        request_data = {}
-        if params:
-            # If params is already a dict, use it directly
-            if isinstance(params, dict):
-                request_data = params
-            else:
-                # If params is a string, try to parse it
-                import json
-                request_data = json.loads(params) if isinstance(params, str) else {}
-
-        time.sleep(5)  # Simulate network delay
-
-        # Return a sample JSON response instead of just echoing the input
-        sample_response = {
-            "status": "success",
-            "data": {
-                "id": f"api_response_{uuid.uuid4().hex[:8]}",
-                "timestamp": datetime.now(UTC).isoformat(),
-                "processed_request": request_data,
-                "result": {
-                    "message": "External API call completed successfully",
-                    "code": 200,
-                    "details": {
-                        "processing_time_ms": 5000,
-                        "server": "external-api-server-01",
-                        "version": "1.0.0"
-                    }
-                }
-            },
-            "metadata": {
-                "request_id": f"req_{uuid.uuid4().hex[:12]}",
-                "api_version": "v1",
-                "response_format": "json"
-            }
-        }
-
-        logger.info(f"[WORKFLOW] External API call completed with sample response: {sample_response['data']['id']}")
-        return sample_response
-
-    except Exception as e:
-        error_msg = f"Service task API call failed: {str(e)}"
-        logger.error(f"[WORKFLOW] {error_msg}")
-        # Re-raise the exception so calling code can handle it properly
-        raise
-
-
-def register_service_task(script_engine):
-    """
-    Register the service task delegate with SpiffWorkflow's script engine.
-    """
-    script_engine.environment.globals["call_external_api"] = call_external_api
-    logger.debug("[WORKFLOW] Service task delegate registered")
-
-
 class WorkflowServicePersistent:
     """Service for handling BPMN workflow execution and management with state persistence"""
+    
+    @staticmethod
+    async def call_external_api(params, user):
+        """
+        Function to call an external API using requestData from the BPMN process.
+        Designed as a SpiffWorkflow service task delegate.
+        """
+        try:
+            # Parse incoming params
+            request_data = {}
+            
+            if params:
+                # If params is already a dict, use it directly
+                if isinstance(params, dict):
+                    request_data = params
+                else:
+                    # If params is a string, try to parse it
+                    import json
+                    request_data = json.loads(params) if isinstance(params, str) else {}
 
+            # Check if this is an agent call
+            if request_data.get('serviceType') == 'agent':
+                agent_name = request_data.get('agentName', None)
+                prompt = request_data.get('prompt', None)
+                
+                # Generate a 6-digit conversation ID
+                conv_id = uuid.uuid4().hex[:6]
+                
+                # Call agent with proper parameters
+                result = ""
+                async for response in AgentRuntimeService.execute_agent(
+                    agent_name=agent_name, 
+                    prompt=prompt, 
+                    user=user, 
+                    conv_id=conv_id, 
+                    cancel_event=None, 
+                    stream=False
+                ):
+                    if response.get("type") == "error":
+                        # Handle agent error and raise exception
+                        error_msg = response.get("error", "Unknown agent error")
+                        logger.error(f"[WORKFLOW] Agent execution failed: {error_msg}")
+                        raise Exception(f"Agent execution failed: {error_msg}")
+                    elif response.get("type") == "agent_response":
+                        result = response.get("payload", {}).get("content", "")
+                        break
+                
+            logger.info(f"[WORKFLOW] External API call completed with sample response: {response}")
+            return response
+
+        except Exception as e:
+            error_msg = f"Service task API call failed: {str(e)}"
+            logger.error(f"[WORKFLOW] {error_msg}")
+            # Re-raise the exception so calling code can handle it properly
+            raise
+
+        
     @staticmethod
     async def save_workflow_state(workflow, workflow_id, tenant_id=None, form_map=None):
         """Serialize and save workflow state to MongoDB"""
@@ -423,9 +419,10 @@ class WorkflowServicePersistent:
             return {}
 
     @classmethod
-    async def execute_workflow_steps(cls, workflow, workflow_id, tenant_id, instance_id=None, bpmn_map=None):
+    async def execute_workflow_steps(cls, workflow, workflow_id, user, instance_id=None, bpmn_map=None):
         """SIMPLE: Execute workflow one step at a time, always update MongoDB"""
         try:
+            tenant_id = await cls.validate_tenant_access(user)
             logger.debug(f"[WORKFLOW] Starting workflow execution - instance_id: {instance_id}")
             
             # Create instance if new
@@ -509,7 +506,7 @@ class WorkflowServicePersistent:
                         elif task_type == "ServiceTask":
                             # Handle ServiceTask in READY state
                             try:
-                                await cls.handle_service_task(task, bpmn_map)
+                                await cls.handle_service_task(task, bpmn_map, user)
                                 await cls.update_workflow_instance(workflow, instance_id, tenant_id)
                                 continue  # Continue processing after handling service task
                             except Exception as service_error:
@@ -527,7 +524,7 @@ class WorkflowServicePersistent:
                     if task_type == "ServiceTask":
                         logger.info(f"[WORKFLOW] Handling ServiceTask in STARTED state: {task.task_spec.bpmn_id}")
                         try:
-                            await cls.handle_service_task(task, bpmn_map)
+                            await cls.handle_service_task(task, bpmn_map, user)
                             await cls.update_workflow_instance(workflow, instance_id, tenant_id)
                             break  # Process one service task at a time
                         except Exception as service_error:
@@ -563,24 +560,42 @@ class WorkflowServicePersistent:
         return None
 
     @classmethod
-    async def handle_service_task(cls, task, bpmn_map):
+    async def handle_service_task(cls, task, bpmn_map, user):
         """Handle ServiceTask by reading ioSpecification and calling external API"""
         try:
             bpmn_id = task.task_spec.bpmn_id
             logger.info(f"[WORKFLOW] Handling ServiceTask: {bpmn_id}")
             
-            # Get ioSpecification from preserved extensions (now in serialized data)
+            # Get ioSpecification from task spec's io_specification attribute
             io_spec = {'inputs': {}, 'outputs': {}}
-            if hasattr(task.task_spec, 'extensions') and 'ioSpecification' in task.task_spec.extensions:
-                io_spec = task.task_spec.extensions['ioSpecification']
-                logger.debug(f"[WORKFLOW] Using ioSpecification from serialized data: {io_spec}")
+            if hasattr(task.task_spec, 'io_specification') and task.task_spec.io_specification:
+                # Extract inputs and outputs from BpmnIoSpecification object
+                io_spec_obj = task.task_spec.io_specification
+                if hasattr(io_spec_obj, 'data_inputs'):
+                    for data_input in io_spec_obj.data_inputs:
+                        io_spec['inputs'][data_input.bpmn_id] = data_input.bpmn_name or data_input.bpmn_id
+                if hasattr(io_spec_obj, 'data_outputs'):
+                    for data_output in io_spec_obj.data_outputs:
+                        io_spec['outputs'][data_output.bpmn_id] = data_output.bpmn_name or data_output.bpmn_id
+                logger.debug(f"[WORKFLOW] Using ioSpecification from task spec: {io_spec}")
             else:
-                logger.warning(f"[WORKFLOW] No ioSpecification found in serialized data for ServiceTask {bpmn_id}")
+                logger.debug(f"[WORKFLOW] No ioSpecification found for ServiceTask {bpmn_id}")
                 # Use default empty specification
             
-            # Call external API with parameters
+            # Also get extensions for additional service task configuration
+            extensions = {}
+            if hasattr(task.task_spec, 'extensions') and task.task_spec.extensions:
+                extensions = task.task_spec.extensions
+                logger.debug(f"[WORKFLOW] Task extensions: {extensions}")
+            
+            # Call external API with parameters from both ioSpec inputs and extensions
             try:
-                response_data = call_external_api(io_spec.get('inputs', {}))
+                # Use inputs from ioSpecification, but also include extension data if needed
+                api_params = io_spec.get('inputs', {})
+                if extensions:
+                    api_params.update(extensions)
+                    
+                response_data = await cls.call_external_api(api_params, user)
                 if response_data is None:
                     raise ValueError("External API returned None")
                 
@@ -806,7 +821,7 @@ class WorkflowServicePersistent:
             # Continue workflow execution
             bpmn_xml = await cls.get_bpmn_xml(workflow_id, user)
             bpmn_map = await cls.parse_bpmn(bpmn_xml)
-            result = await cls.execute_workflow_steps(workflow, workflow_id, tenant_id, instance_id, bpmn_map)
+            result = await cls.execute_workflow_steps(workflow, workflow_id, user, instance_id, bpmn_map)
             
             return {
                 "message": "Task submitted successfully",
@@ -835,7 +850,6 @@ class WorkflowServicePersistent:
             
             # Create workflow with enhanced parser
             script_engine = PythonScriptEngine()
-            register_service_task(script_engine)
             
             # Create enhanced parser that preserves all extension elements
             parser = BpmnParser()
@@ -875,7 +889,7 @@ class WorkflowServicePersistent:
                 workflow.data.update(initial_data)
             
             # Execute workflow and save to MongoDB
-            result = await cls.execute_workflow_steps(workflow, workflow_id, tenant_id, bpmn_map=bpmn_map)
+            result = await cls.execute_workflow_steps(workflow, workflow_id, user, bpmn_map=bpmn_map)
             
             return {
                 "message": "Workflow started successfully",
