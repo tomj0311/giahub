@@ -17,10 +17,30 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
   const [cgLoading, setCgLoading] = useState(false);
   // Agent loading exactly like AgentPlayground
   const [grouped, setGrouped] = useState({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState(null);
   const token = localStorage.getItem('token') || '';
 
+  // Set hardcoded agent based on element type
+  useEffect(() => {
+    let agentName = 'Python Code Generator'; // default
+    console.log('🔍 Element type received:', elementType);
+    
+    // Use the taskType from selectedNode data if available
+    const taskType = selectedNode?.data?.taskType || elementType;
+    console.log('🔍 Task type to use:', taskType);
+    
+    if (taskType === 'userTask') {
+      agentName = 'JSX Component Generator';
+    } else if (taskType === 'scriptTask') {
+      agentName = 'Python Code Generator';
+    } else if (taskType === 'serviceTask') {
+      agentName = 'Python Code Generator';
+    }
+    
+    console.log('🎯 Selected agent:', agentName);
+    setSelected(agentName);
+  }, [elementType, selectedNode]);
 
   useEffect(() => {
     if (xmlContent) {
@@ -231,9 +251,13 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
 
     // Hardcode agent name based on task type
     let agentName = selected;
-    if (elementType === 'UserTask') {
+    const taskType = selectedNode?.data?.taskType || elementType;
+    
+    if (taskType === 'userTask') {
       agentName = 'JSX Component Generator';
-    } else if (elementType === 'ScriptTask') {
+    } else if (taskType === 'scriptTask') {
+      agentName = 'Python Code Generator';
+    } else if (taskType === 'serviceTask') {
       agentName = 'Python Code Generator';
     }
 
@@ -403,7 +427,7 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
             {accordionOpen === 1 && (
               <form onSubmit={handleCgSubmit} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <div style={{ color: 'var(--text-primary)', marginBottom: '10px' }}>
-                  Agent: {loading ? 'Loading...' : (selected || 'No agents available')}
+                  Agent: {selected || 'Python Code Generator'}
                 </div>
                 <TextField
                   label="Prompt"
