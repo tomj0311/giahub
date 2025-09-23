@@ -493,107 +493,78 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
                 />
                 <Button 
                   onClick={() => {
-                    // Parse existing XML and add formData extension elements
+                    console.log('🟡 [XML DEBUG] Update button clicked');
                     const parser = new DOMParser();
                     let doc;
-                    
-                    if (editedXml.trim()) {
-                      try {
-                        // Try to parse as complete XML document
-                        doc = parser.parseFromString(`<root>${editedXml}</root>`, 'text/xml');
-                      } catch (e) {
-                        // Fallback for malformed XML
-                        doc = parser.parseFromString('<root></root>', 'text/xml');
+                    try {
+                      doc = parser.parseFromString(`<root>${editedXml}</root>`, 'text/xml');
+                      console.log('🟢 [XML DEBUG] XML parsed');
+                    } catch (e) {
+                      console.error('🔴 [XML DEBUG] Error parsing XML:', e);
+                      return;
+                    }
+
+                    let updated = false;
+                    // 1. Try to update CDATASection node in any <script> element
+                    const scripts = doc.querySelectorAll('script');
+                    console.log('🟡 [XML DEBUG] Found', scripts.length, '<script> elements');
+                    scripts.forEach((script, idx) => {
+                      for (let i = 0; i < script.childNodes.length; i++) {
+                        const node = script.childNodes[i];
+                        if (node.nodeType === 4) { // CDATASection
+                          console.log(`🟢 [XML DEBUG] Found CDATA in <script> #${idx}, updating...`);
+                          node.data = `\n${cgResponse}\n`;
+                          updated = true;
+                        }
                       }
-                    } else {
-                      doc = parser.parseFromString('<root></root>', 'text/xml');
+                    });
+
+                    // 2. If no CDATA was updated, try to update formMetadata only if formData exists
+                    if (!updated) {
+                      let formData = doc.querySelector('formData');
+                      if (formData) {
+                        console.log('🟡 [XML DEBUG] formData found, updating/creating formMetadata');
+                        let formMetadata = formData.querySelector('formMetadata');
+                        if (!formMetadata) {
+                          formMetadata = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'formMetadata');
+                          formMetadata.setAttribute('formId', 'userInfoForm');
+                          formMetadata.setAttribute('version', '1.0');
+                          formMetadata.setAttribute('display', 'inline');
+                          formData.insertBefore(formMetadata, formData.firstChild);
+                        }
+                        let script = formMetadata.querySelector('script');
+                        if (!script) {
+                          script = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'script');
+                          script.setAttribute('xmlns', 'http://www.omg.org/spec/BPMN/20100524/MODEL');
+                          formMetadata.appendChild(script);
+                        }
+                        script.textContent = '';
+                        script.appendChild(doc.createCDATASection(`\n${cgResponse}\n`));
+                        updated = true;
+                      } else {
+                        console.log('🟠 [XML DEBUG] No formData found, not updating formMetadata');
+                      }
                     }
-                    
-                    // Create or find extensionElements
-                    let extensionElements = doc.querySelector('extensionElements');
-                    if (!extensionElements) {
-                      extensionElements = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'extensionElements');
-                      doc.documentElement.appendChild(extensionElements);
+
+                    if (!updated) {
+                      console.log('🔴 [XML DEBUG] No updates made to XML');
+                      return;
                     }
-                    
-                    // Clear existing elements to avoid duplicates
-                    while (extensionElements.firstChild) {
-                      extensionElements.removeChild(extensionElements.firstChild);
-                    }
-                    
-                    // Create formData container
-                    const formData = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'formData');
-                    
-                    // Add formMetadata with script containing cgResponse
-                    const formMetadata = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'formMetadata');
-                    formMetadata.setAttribute('formId', 'userInfoForm');
-                    formMetadata.setAttribute('version', '1.0');
-                    formMetadata.setAttribute('display', 'inline');
-                    
-                    const script = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'script');
-                    script.setAttribute('xmlns', 'http://www.omg.org/spec/BPMN/20100524/MODEL');
-                    script.appendChild(doc.createCDATASection(`\n                ${cgResponse}\n              `));
-                    formMetadata.appendChild(script);
-                    
-                    // Add formField with firstName
-                    const formFieldFirstName = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'formField');
-                    formFieldFirstName.setAttribute('id', 'firstName');
-                    formFieldFirstName.setAttribute('label', 'First Name');
-                    formFieldFirstName.setAttribute('type', 'string');
-                    formFieldFirstName.setAttribute('required', 'true');
-                    
-                    const extensionElementsFirstName = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'extensionElements');
-                    const fieldConfigFirstName = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'fieldConfig');
-                    fieldConfigFirstName.setAttribute('requiredMessage', 'First name is mandatory');
-                    fieldConfigFirstName.setAttribute('maxLength', '50');
-                    extensionElementsFirstName.appendChild(fieldConfigFirstName);
-                    formFieldFirstName.appendChild(extensionElementsFirstName);
-                    
-                    // Add formField with email
-                    const formFieldEmail = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'formField');
-                    formFieldEmail.setAttribute('id', 'email');
-                    formFieldEmail.setAttribute('label', 'Email Address');
-                    formFieldEmail.setAttribute('type', 'string');
-                    
-                    const validation = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'validation');
-                    const constraint = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'constraint');
-                    constraint.setAttribute('name', 'pattern');
-                    constraint.setAttribute('value', '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}');
-                    validation.appendChild(constraint);
-                    formFieldEmail.appendChild(validation);
-                    
-                    const extensionElementsEmail = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'extensionElements');
-                    const fieldConfigEmail = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'fieldConfig');
-                    fieldConfigEmail.setAttribute('requiredMessage', 'Valid email required');
-                    fieldConfigEmail.setAttribute('category', 'contact');
-                    extensionElementsEmail.appendChild(fieldConfigEmail);
-                    formFieldEmail.appendChild(extensionElementsEmail);
-                    
-                    // Append all elements to formData
-                    formData.appendChild(formMetadata);
-                    formData.appendChild(formFieldFirstName);
-                    formData.appendChild(formFieldEmail);
-                    
-                    // Append formData to extensionElements
-                    extensionElements.appendChild(formData);
-                    
-                    // Serialize and format the XML
+
                     const serializer = new XMLSerializer();
                     let updatedXml = serializer.serializeToString(doc.documentElement);
-                    
-                    // Remove the root wrapper
                     updatedXml = updatedXml.replace('<root>', '').replace('</root>', '');
-                    
-                    // Apply proper formatting
                     const formattedXml = formatXML(updatedXml);
                     setEditedXml(formattedXml);
+                    setCgResponse('');
                     setAccordionOpen(0);
+                    console.log('✅ [XML DEBUG] XML updated and set in editor, response cleared');
                   }} 
                   variant="contained"
                   disabled={!cgResponse}
                   sx={{ mt: 1, fontSize: '12px', alignSelf: 'flex-end' }}
                 >
-                  Update XML with FormData
+                  Update XML with Generated Code
                 </Button>
               </form>
             )}
