@@ -1,10 +1,63 @@
 import React, { useState, useEffect } from 'react';
+import { Box, Button, TextField, Typography } from '@mui/material';
+import { agentRuntimeService } from '../../services/agentRuntimeService';
+import sharedApiService from '../../utils/apiService';
+
 
 const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate, edges, nodeData }) => {
   const [editedXml, setEditedXml] = useState('');
   const [position, setPosition] = useState({ x: window.innerWidth * 0.25, y: window.innerHeight * 0.2 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  // Accordion state: 0 = XML Editor, 1 = Code Generator
+  const [accordionOpen, setAccordionOpen] = useState(0);
+  // Code generator states
+  const [cgPrompt, setCgPrompt] = useState('');
+  const [cgResponse, setCgResponse] = useState('');
+  const [cgLoading, setCgLoading] = useState(false);
+  // Agent loading exactly like AgentPlayground
+  const [grouped, setGrouped] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
+  const token = localStorage.getItem('token') || '';
+
+  // Load agents exactly like AgentPlayground
+  useEffect(() => {
+    const loadAgents = async () => {
+      setLoading(true);
+      try {
+        const result = await sharedApiService.makeRequest(
+          '/api/agents',
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+          { endpoint: 'agents', token: token?.substring(0, 10) }
+        );
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to load agents');
+        }
+        
+        const agents = result.data.agents || [];
+        const groupedByCat = agents.reduce((acc, a) => {
+          const cat = a.category || '_root';
+          acc[cat] = acc[cat] || [];
+          acc[cat].push(a.name);
+          return acc;
+        }, {});
+        Object.keys(groupedByCat).forEach(k => groupedByCat[k].sort());
+        setGrouped(groupedByCat);
+        
+        // Auto-select first agent
+        if (agents.length > 0) {
+          setSelected(agents[0].name);
+        }
+      } catch (e) {
+        console.error('Failed to load agents', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadAgents();
+  }, [token]);
 
   useEffect(() => {
     const formatted = xmlContent ? formatXML(xmlContent) : '';
@@ -191,7 +244,71 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
     }
   }, [isDragging, dragStart]);
 
+
   if (!isOpen) return null;
+
+  // Accordion panel toggler
+  const toggleAccordion = (idx) => setAccordionOpen(idx);
+
+  // Code generator: call backend exactly like AgentPlayground
+  const handleCgSubmit = async (e) => {
+    e.preventDefault();
+    if (!selected || !cgPrompt.trim()) return;
+    setCgLoading(true);
+    setCgResponse('');
+    
+    try {
+      const response = await agentRuntimeService.runAgentStream(
+        {
+          agent_name: selected,
+          prompt: cgPrompt,
+          conv_id: `xmleditor_${Date.now()}`
+        },
+        token
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body available');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const event = JSON.parse(line.slice(6));
+
+              if (event.type === 'agent_chunk' && event.payload?.content) {
+                setCgResponse(prev => prev + event.payload.content);
+              } else if (event.type === 'error' || event.error) {
+                setCgResponse('Error: ' + (event.error || event.details?.message || 'Unknown error'));
+              }
+            } catch (parseError) {
+              console.warn('Failed to parse SSE event:', line, parseError);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      setCgResponse('Error: ' + (err.message || err));
+    } finally {
+      setCgLoading(false);
+    }
+  };
 
   return (
     <div style={{
@@ -214,7 +331,7 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
         borderRadius: '8px',
         boxShadow: '0 4px 20px var(--shadow)'
       }}>
-        
+        {/* Header */}
         <div style={{
           padding: '12px 16px',
           background: 'var(--bg-secondary)',
@@ -240,54 +357,133 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
           }}>×</button>
         </div>
 
-        <div style={{ 
-          padding: '16px', 
-          height: 'calc(100% - 60px)', 
-          display: 'flex', 
-          flexDirection: 'column' 
-        }}>
-          <textarea
-            value={editedXml}
-            onChange={(e) => setEditedXml(e.target.value)}
-            style={{
-              width: '100%',
-              height: '100%',
-              fontFamily: 'monospace',
-              fontSize: '13px',
-              border: '1px solid var(--border-color)',
-              padding: '12px',
-              resize: 'none',
-              background: 'var(--bg-primary)',
-              color: 'var(--text-primary)',
-              borderRadius: '4px'
-            }}
-            placeholder="Enter XML content here..."
-          />
-          
-          <div style={{ 
-            display: 'flex', 
-            gap: '8px', 
-            marginTop: '12px', 
-            justifyContent: 'flex-end' 
-          }}>
-            <button onClick={handleCancel} style={{
-              padding: '8px 16px',
-              background: 'var(--bg-secondary)',
-              border: '1px solid var(--border-color)',
-              cursor: 'pointer',
-              color: 'var(--text-primary)',
-              borderRadius: '4px'
-            }}>Cancel</button>
-            <button onClick={handleSave} style={{
-              padding: '8px 16px',
-              background: 'var(--accent-color)',
-              color: 'var(--bg-primary)',
-              border: 'none',
-              cursor: 'pointer',
-              borderRadius: '4px'
-            }}>
-              SAVE CHANGES
-            </button>
+        {/* Accordion */}
+        <div style={{ padding: 0, height: 'calc(100% - 60px)', display: 'flex', flexDirection: 'column' }}>
+          {/* Accordion headers */}
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)' }}>
+            <button
+              onClick={() => toggleAccordion(0)}
+              style={{
+                flex: 1,
+                background: accordionOpen === 0 ? 'var(--bg-secondary)' : 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                border: 'none',
+                borderBottom: accordionOpen === 0 ? '2px solid var(--accent-color)' : 'none',
+                padding: '10px',
+                fontWeight: accordionOpen === 0 ? 'bold' : 'normal',
+                cursor: 'pointer',
+                borderRadius: '8px 8px 0 0'
+              }}
+            >XML Editor</button>
+            <button
+              onClick={() => toggleAccordion(1)}
+              style={{
+                flex: 1,
+                background: accordionOpen === 1 ? 'var(--bg-secondary)' : 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                border: 'none',
+                borderBottom: accordionOpen === 1 ? '2px solid var(--accent-color)' : 'none',
+                padding: '10px',
+                fontWeight: accordionOpen === 1 ? 'bold' : 'normal',
+                cursor: 'pointer',
+                borderRadius: '8px 8px 0 0'
+              }}
+            >Code Generator</button>
+          </div>
+
+          {/* Accordion panels */}
+          <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+            {accordionOpen === 0 && (
+              <>
+                <TextField
+                  multiline
+                  fullWidth
+                  value={editedXml}
+                  onChange={(e) => setEditedXml(e.target.value)}
+                  placeholder="Enter XML content here..."
+                  sx={{
+                    '& .MuiInputBase-input': {
+                      fontFamily: 'monospace',
+                      fontSize: '13px',
+                      height: '300px !important',
+                      overflow: 'auto !important'
+                    }
+                  }}
+                />
+                <Box sx={{ display: 'flex', gap: 1, mt: 1.5, justifyContent: 'flex-end' }}>
+                  <Button onClick={handleCancel} variant="outlined">
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSave} variant="contained">
+                    SAVE CHANGES
+                  </Button>
+                </Box>
+              </>
+            )}
+            {accordionOpen === 1 && (
+              <form onSubmit={handleCgSubmit} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <div style={{ color: 'var(--text-primary)', marginBottom: '10px' }}>
+                  Agent: {loading ? 'Loading...' : (selected || 'No agents available')}
+                </div>
+                <TextField
+                  label="Prompt"
+                  variant="outlined"
+                  fullWidth
+                  value={cgPrompt}
+                  onChange={e => setCgPrompt(e.target.value)}
+                  placeholder="Enter prompt for code generation..."
+                  disabled={cgLoading || !selected}
+                  InputProps={{
+                    endAdornment: (
+                      <Button 
+                        type="submit" 
+                        variant="contained"
+                        disabled={cgLoading || !selected}
+                        size="small"
+                        sx={{ 
+                          position: 'absolute',
+                          top: '50%',
+                          right: 8,
+                          transform: 'translateY(-50%)',
+                          minWidth: 'auto',
+                          fontSize: '12px'
+                        }}
+                      >
+                        {cgLoading ? 'Generating...' : 'Generate'}
+                      </Button>
+                    )
+                  }}
+                  sx={{ 
+                    mb: 1.25,
+                    '& .MuiInputBase-input': {
+                      fontFamily: 'monospace',
+                      fontSize: '13px',
+                      paddingRight: '120px !important'
+                    },
+                    '& .MuiInputBase-root': {
+                      position: 'relative'
+                    }
+                  }}
+                />
+                <TextField
+                  label="Response"
+                  variant="outlined"
+                  multiline
+                  fullWidth
+                  value={cgResponse}
+                  placeholder="Code generation response will appear here..."
+                  InputProps={{ readOnly: true }}
+                  sx={{
+                    '& .MuiInputBase-input': {
+                      fontFamily: 'monospace',
+                      fontSize: '13px',
+                      height: '200px !important',
+                      overflow: 'auto !important'
+                    }
+                  }}
+                />
+              </form>
+            )}
           </div>
         </div>
       </div>
