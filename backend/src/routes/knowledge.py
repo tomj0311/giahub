@@ -88,7 +88,7 @@ async def list_collections(
 async def get_collection(collection: str, user: dict = Depends(verify_token_middleware)):
     """Get collection details with files from MinIO."""
     try:
-        result = await KnowledgeService.get_knowledge_collection(user, collection)
+        result = await KnowledgeService.get_collection(collection, user)
         return result
     except Exception as e:
         logger.error(f"[KNOWLEDGE] Error retrieving collection {collection}: {str(e)}")

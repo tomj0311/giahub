@@ -244,6 +244,7 @@ export default function Home({ user }) {
   const theme = useTheme()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
+  const [paginationLoading, setPaginationLoading] = useState(false)
   const [agents, setAgents] = useState([])
   const [displayedAgents, setDisplayedAgents] = useState([])
   const [recentConversations, setRecentConversations] = useState([])
@@ -276,63 +277,83 @@ export default function Home({ user }) {
     navigate(`/dashboard/agent-playground?showHistory=true`)
   }
 
+  // Separate function to fetch agents data
+  const fetchAgentsData = async (page = 1, pageSize = 8) => {
+    if (!isMountedRef.current) return;
+    
+    // Prevent duplicate calls
+    if (isLoadingRef.current) {
+      console.log('🚫 Already loading agents data, skipping duplicate call');
+      return;
+    }
+    
+    try {
+      isLoadingRef.current = true;
+      setLoading(true)
+
+      // Fetch agents with pagination - use singleton service
+      const agentsUrl = `/api/agents?page=${page}&page_size=${pageSize}`
+      const agentsResult = await sharedApiService.makeRequest(
+        agentsUrl,
+        {
+          headers: {
+            ...(user?.token ? { 'Authorization': `Bearer ${user?.token}` } : {})
+          }
+        },
+        {
+          page: page,
+          pageSize: pageSize,
+          token: user?.token?.substring(0, 10)
+        }
+      );
+
+      console.log('🔍 AGENTS API RESPONSE:', agentsResult.success ? 'SUCCESS' : 'FAILED')
+
+      if (!isMountedRef.current) {
+        console.log('🚫 Component unmounted, aborting agents data load');
+        return;
+      }
+
+      if (agentsResult.success) {
+        const agentsData = agentsResult.data
+        console.log('📄 AGENTS DATA:', agentsData)
+        const agentsList = agentsData.agents || []
+        const paginationData = agentsData.pagination || {}
+
+        console.log('📋 AGENTS LIST:', agentsList)
+        console.log('📊 PAGINATION:', paginationData)
+
+        setAgents(agentsList)
+        setDisplayedAgents(agentsList)
+        setPagination(paginationData)
+      } else {
+        console.log('❌ AGENTS API FAILED:', agentsResult.error)
+      }
+    } catch (error) {
+      console.error('Failed to fetch agents data:', error)
+      setAgents([])
+      setDisplayedAgents([])
+    } finally {
+      if (isMountedRef.current) {
+        isLoadingRef.current = false;
+        setLoading(false)
+      }
+    }
+  }
+
+  // Initial data fetch on component mount
   useEffect(() => {
     console.log('MOUNT: Home');
     
     // Set mounted to true
     isMountedRef.current = true;
     
-    const fetchDashboardData = async () => {
+    const fetchInitialData = async () => {
       if (!isMountedRef.current) return;
       
-      // Prevent duplicate calls
-      if (isLoadingRef.current) {
-        console.log('🚫 Already loading home data, skipping duplicate call');
-        return;
-      }
-      
       try {
-        isLoadingRef.current = true;
-        setLoading(true)
-
-        // Fetch agents with pagination - use singleton service
-        const agentsUrl = `/api/agents?page=${pagination.page}&page_size=${pagination.page_size}`
-        const agentsResult = await sharedApiService.makeRequest(
-          agentsUrl,
-          {
-            headers: {
-              ...(user?.token ? { 'Authorization': `Bearer ${user?.token}` } : {})
-            }
-          },
-          {
-            page: pagination.page,
-            pageSize: pagination.page_size,
-            token: user?.token?.substring(0, 10)
-          }
-        );
-
-        console.log('🔍 AGENTS API RESPONSE:', agentsResult.success ? 'SUCCESS' : 'FAILED')
-
-        if (!isMountedRef.current) {
-          console.log('🚫 Component unmounted, aborting home data load');
-          return;
-        }
-
-        if (agentsResult.success) {
-          const agentsData = agentsResult.data
-          console.log('📄 AGENTS DATA:', agentsData)
-          const agentsList = agentsData.agents || []
-          const paginationData = agentsData.pagination || {}
-
-          console.log('📋 AGENTS LIST:', agentsList)
-          console.log('📊 PAGINATION:', paginationData)
-
-          setAgents(agentsList)
-          setDisplayedAgents(agentsList)
-          setPagination(paginationData)
-        } else {
-          console.log('❌ AGENTS API FAILED:', agentsResult.error)
-        }
+        // Fetch agents data
+        await fetchAgentsData(pagination.page, pagination.page_size)
 
         // Fetch recent conversations - Use agent runtime endpoint with pagination
         try {
@@ -391,19 +412,12 @@ export default function Home({ user }) {
 
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error)
-        setAgents([])
-        setDisplayedAgents([])
         setRecentConversations([])
         setTaskProgress([])
-      } finally {
-        if (isMountedRef.current) {
-          isLoadingRef.current = false;
-          setLoading(false)
-        }
       }
     }
 
-    fetchDashboardData()
+    fetchInitialData()
     
     return () => {
       console.log('UNMOUNT: Home');
@@ -411,17 +425,19 @@ export default function Home({ user }) {
       isMountedRef.current = false;
       isLoadingRef.current = false;
     };
-  }, []) // EMPTY DEPENDENCIES - NO BULLSHIT
+  }, []) // EMPTY DEPENDENCIES - Initial mount only
 
-  const handleShowMore = () => {
+  const handleShowMore = async () => {
     if (pagination.has_next) {
-      setPagination(prev => ({ ...prev, page: prev.page + 1 }))
+      const nextPage = pagination.page + 1
+      await fetchAgentsData(nextPage, pagination.page_size)
     }
   }
 
-  const handleShowLess = () => {
+  const handleShowLess = async () => {
     if (pagination.has_prev) {
-      setPagination(prev => ({ ...prev, page: prev.page - 1 }))
+      const prevPage = pagination.page - 1
+      await fetchAgentsData(prevPage, pagination.page_size)
     }
   }
 

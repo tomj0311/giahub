@@ -805,7 +805,12 @@ export default function KnowledgeConfig({ user }) {
               {/* File Upload */}
               <Box sx={{ border: '2px dashed', borderColor: 'grey.300', borderRadius: 2, p: 2, textAlign: 'center', mb: 2 }}>
                 <input type="file" multiple style={{ display: 'none' }} id="kc-file-upload"
-                  onChange={(e) => setPendingFiles(Array.from(e.target.files || []))}
+                  onChange={(e) => {
+                    const newFiles = Array.from(e.target.files || []);
+                    setPendingFiles(prev => [...prev, ...newFiles]);
+                    // Reset the input value to allow selecting the same files again if needed
+                    e.target.value = '';
+                  }}
                   accept=".pdf,.docx,.txt,.py,.js" />
                 <label htmlFor="kc-file-upload">
                   <Button component="span" variant="contained" size="large" disabled={saveBusy}>

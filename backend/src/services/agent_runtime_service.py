@@ -82,9 +82,14 @@ def _create_multi_collection_retriever(collection_names: list = None, conv_id: s
                         doc_dict = doc.to_dict()
                         doc_dict['source_collection'] = collection  # Track which collection
                         all_results.append(doc_dict)
+                else:
+                    logger.warning(f'retriever.collection_not_found: collection={collection} does not exist, skipping')
                         
             except Exception as e:
-                logger.error(f'retriever.collection_search_error: collection={collection}, error={str(e)}')
+                if "404" in str(e) or "not found" in str(e).lower():
+                    logger.warning(f'retriever.collection_not_found: collection={collection}, error={str(e)}')
+                else:
+                    logger.error(f'retriever.collection_search_error: collection={collection}, error={str(e)}')
                 continue
         
         # Sort by relevance score and limit results
