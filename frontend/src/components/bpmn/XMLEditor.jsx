@@ -447,11 +447,11 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
                         variant="contained"
                         disabled={cgLoading || !selected}
                         size="small"
+                        disableRipple
+                        disableElevation
                         sx={{ 
                           position: 'absolute',
-                          top: '50%',
                           right: 8,
-                          transform: 'translateY(-50%)',
                           minWidth: 'auto',
                           fontSize: '12px'
                         }}
