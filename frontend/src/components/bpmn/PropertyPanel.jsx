@@ -393,6 +393,18 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
             <span className="element-type-label">{getElementType()}</span>
           </div>
 
+          {/* Edit XML Button - Main Property Panel */}
+          {!readOnly && (
+            <div className="xml-editor-section">
+              <button 
+                className="edit-xml-btn"
+                onClick={() => setIsXmlEditorOpen(true)}
+              >
+                Edit Properties
+              </button>
+            </div>
+          )}
+
           {/* General Section */}
           <div className="accordion-section">
             <div 
@@ -545,14 +557,9 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
               <div className="accordion-content">
                 <div className="form-group">
                   <label htmlFor="element-xml">Inner XML Elements</label>
-                  {!readOnly && (
-                    <button 
-                      className="save-xml-btn"
-                      onClick={() => setIsXmlEditorOpen(true)}
-                    >
-                      Edit XML
-                    </button>
-                  )}
+                  <div className="xml-preview">
+                    <pre>{xmlContent}</pre>
+                  </div>
                 </div>
               </div>
             )}

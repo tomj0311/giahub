@@ -82,6 +82,62 @@
   background: #991b1b;
 }
 
+/* XML Editor Section Styling */
+.xml-editor-section {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+}
+
+.edit-xml-btn {
+  background: #dc2626;
+  border: 1px solid #b91c1c;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  width: 100%;
+  transition: background-color 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.edit-xml-btn:hover {
+  background: #b91c1c;
+}
+
+.edit-xml-btn:active {
+  background: #991b1b;
+}
+
+.edit-xml-btn:disabled {
+  background: #9ca3af;
+  border-color: #6b7280;
+  cursor: not-allowed;
+}
+
+/* XML Preview Styling */
+.xml-preview {
+  margin-top: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.xml-preview pre {
+  margin: 0;
+  padding: 12px;
+  font-size: 12px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
 .panel-toggle-btn {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
