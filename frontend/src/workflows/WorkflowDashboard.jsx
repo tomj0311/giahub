@@ -146,12 +146,6 @@ export default function WorkflowDashboard({ user }) {
   const theme = useTheme()
   const navigate = useNavigate()
   
-  // Add render logging to track what's causing re-renders
-  console.log('🔄 WorkflowDashboard RENDER', { 
-      userToken: user?.token?.substring(0, 10) + '...', 
-      timestamp: Date.now() 
-  });
-  
   // Use the user token from props (same pattern as other dashboard components)
   const token = user?.token;
 
@@ -180,11 +174,6 @@ export default function WorkflowDashboard({ user }) {
   })
 
   useEffect(() => {
-    console.log('MOUNT: WorkflowDashboard', 'Token:', token?.substring(0, 10) + '...', 'User:', user);
-    console.log('🔍 USER TENANT_ID:', user?.tenant_id);
-    console.log('🔍 USER TENANTID:', user?.tenantId);
-    console.log('🔍 USER ALL KEYS:', Object.keys(user || {}));
-    
     // Set mounted to true
     isMountedRef.current = true;
     
@@ -193,7 +182,6 @@ export default function WorkflowDashboard({ user }) {
       
       // Prevent duplicate calls
       if (isLoadingRef.current) {
-        console.log('🚫 Already loading workflow data, skipping duplicate call');
         return;
       }
       
@@ -218,29 +206,18 @@ export default function WorkflowDashboard({ user }) {
           }
         );
 
-        console.log('🔍 WORKFLOWS API RESPONSE:', workflowsResult.success ? 'SUCCESS' : 'FAILED')
-        console.log('🔍 FULL RESPONSE:', workflowsResult);
-
         if (!isMountedRef.current) {
-          console.log('🚫 Component unmounted, aborting workflow data load');
           return;
         }
 
         if (workflowsResult.success) {
           const workflowsData = workflowsResult.data
-          console.log('📄 WORKFLOWS DATA:', workflowsData)
           const workflowsList = workflowsData.configurations || []
           const paginationData = workflowsData.pagination || {}
-
-          console.log('📋 WORKFLOWS LIST:', workflowsList)
-          console.log('📊 PAGINATION:', paginationData)
 
           setWorkflows(workflowsList)
           setDisplayedWorkflows(workflowsList)
           setPagination(paginationData)
-        } else {
-          console.log('❌ WORKFLOWS API FAILED:', workflowsResult.error)
-          console.log('❌ ERROR DETAILS:', workflowsResult)
         }
 
       } catch (error) {
@@ -258,7 +235,6 @@ export default function WorkflowDashboard({ user }) {
     fetchWorkflowData()
     
     return () => {
-      console.log('UNMOUNT: WorkflowDashboard');
       // Set mounted to false FIRST to prevent any state updates
       isMountedRef.current = false;
       isLoadingRef.current = false;
@@ -283,15 +259,8 @@ export default function WorkflowDashboard({ user }) {
   }
 
   const handleRunWorkflow = (workflow) => {
-    console.log('🚨🚨🚨 HANDLE RUN WORKFLOW CALLED 🚨🚨🚨');
-    console.log('🚨 WORKFLOW OBJECT:', workflow);
-    console.log('🚨 WORKFLOW ID:', workflow.id);
-    console.log('🚨 ABOUT TO NAVIGATE TO:', `/dashboard/workflow-execution?workflow=${workflow.id}`);
-    
     // Navigate to workflow execution page with workflow ID
     navigate(`/dashboard/workflow-execution?workflow=${workflow.id}`);
-    
-    console.log('🚨 NAVIGATE CALL COMPLETED');
   }
 
   const handleCreateWorkflow = () => {

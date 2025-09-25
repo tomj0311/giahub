@@ -73,8 +73,6 @@ function WorkflowExecution({ user }) {
   const [formData, setFormData] = useState({});
   const [submittingTask, setSubmittingTask] = useState(false);
 
-  console.log('🚨 WORKFLOW ID FROM URL:', workflowId);
-
   const token = useMemo(() => user?.token || localStorage.getItem('token'), [user?.token]);
   const headers = useMemo(
     () => ({
@@ -104,14 +102,11 @@ function WorkflowExecution({ user }) {
 
   const loadIncompleteWorkflows = useCallback(
     async (force = false) => {
-      console.log('🔍 loadIncompleteWorkflows called, force:', force, 'workflowId:', workflowId, 'loadingIncomplete:', loadingIncomplete);
       if (!workflowId || (!force && loadingIncomplete)) {
-        console.log('🚫 Returning early from loadIncompleteWorkflows');
         return;
       }
       
       setLoadingIncomplete(true);
-      console.log('📡 Making API call to load incomplete workflows');
       try {
         const result = await sharedApiService.makeRequest(
           `/api/workflow/workflows/${workflowId}/incomplete`,
@@ -122,11 +117,9 @@ function WorkflowExecution({ user }) {
           { workflowId, action: 'list_incomplete' }
         );
 
-        console.log('📥 API response received:', result);
         if (result.success) {
           const workflowsData = result.data;
           const workflows = workflowsData.data || [];
-          console.log('✅ Setting incomplete workflows:', workflows);
           setIncompleteWorkflows(workflows);
           setRefreshKey((k) => k + 1);
         }
@@ -220,12 +213,7 @@ function WorkflowExecution({ user }) {
         );
 
         if (result.success) {
-          console.log('🔍 Instance data received:', result.data);
-          
           const workflowData = result.data.data;
-          console.log('🔍 Workflow data:', workflowData);
-          console.log('🔍 User task in workflow data:', workflowData.user_task);
-          
           setSelectedInstance(workflowData);
           
           // Find pending and error tasks (state 16 = READY, state 128 = ERROR)
@@ -243,14 +231,10 @@ function WorkflowExecution({ user }) {
           
           // Combine pending and error tasks for display
           const allActionableTasks = [...pendingTasks, ...errorTasks];
-          console.log('🔍 Pending tasks found:', pendingTasks);
-          console.log('🔍 Error tasks found:', errorTasks);
-          console.log('🔍 All actionable tasks:', allActionableTasks);
           
           // Check for direct task data (Task_1, Task_2, etc.) and add to actionable if not already present
           Object.keys(workflowData).forEach(key => {
             if (key.startsWith('Task_') && workflowData[key]?.formField) {
-              console.log(`🔍 Found form field data in ${key}:`, workflowData[key]);
               // Add this as a pending task if not already in the list
               const existingTask = allActionableTasks.find(t => t.task_spec === key);
               if (!existingTask) {
@@ -261,7 +245,6 @@ function WorkflowExecution({ user }) {
                   typename: 'UserTask', // Explicitly mark as UserTask
                   taskType: 'pending'
                 });
-                console.log(`🔍 Added ${key} as pending task`);
               }
             }
           });

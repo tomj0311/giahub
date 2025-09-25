@@ -31,12 +31,6 @@ import { useSnackbar } from '../contexts/SnackbarContext';
 import { useConfirmation } from '../contexts/ConfirmationContext';
 
 function WorkflowConfig({ user }) {
-    // Add render logging to track what's causing re-renders
-    console.log('🔄 WorkflowConfig RENDER', { 
-        userToken: user?.token?.substring(0, 10) + '...', 
-        timestamp: Date.now() 
-    });
-    
     // Use the user token from props (same pattern as other dashboard components)
     const token = user?.token;
 
@@ -80,7 +74,6 @@ function WorkflowConfig({ user }) {
         
         // Prevent duplicate calls using ref for immediate synchronous check
         if (isLoadingCategoriesRef.current) {
-            console.log('🚫 Already loading categories, skipping duplicate call');
             return;
         }
         
@@ -98,7 +91,6 @@ function WorkflowConfig({ user }) {
             
             // Check mounted state before proceeding
             if (!isMountedRef.current) {
-                console.log('🚫 Component unmounted, aborting category load');
                 return;
             }
             
@@ -123,11 +115,8 @@ function WorkflowConfig({ user }) {
         
         // Prevent duplicate calls using ref for immediate synchronous check
         if (isLoadingConfigsRef.current) {
-            console.log('🚫 Already loading configs, skipping duplicate call');
             return;
         }
-        
-        console.log('🔄 LOADING EXISTING WORKFLOW CONFIGS...');
         
         // Set loading state IMMEDIATELY in both ref and state
         isLoadingConfigsRef.current = true;
@@ -157,18 +146,14 @@ function WorkflowConfig({ user }) {
             
             // Double-check mounted state before proceeding
             if (!isMountedRef.current) {
-                console.log('🚫 Component unmounted, aborting config load');
                 return;
             }
             
-            console.log('📡 Load configs response:', result.success ? 'SUCCESS' : 'FAILED');
             if (result.success) {
                 const data = result.data;
-                console.log('📄 Configs data:', data);
                 
                 // Triple-check mounted state before state updates
                 if (!isMountedRef.current) {
-                    console.log('🚫 Component unmounted during data processing, aborting');
                     return;
                 }
                 
@@ -181,12 +166,8 @@ function WorkflowConfig({ user }) {
                         totalPages: data.pagination.total_pages
                     });
                 }
-                console.log('✅ Configs loaded successfully');
-            } else {
-                console.log('❌ Failed to load configs:', result.error);
             }
         } catch (e) {
-            console.log('💥 ERROR loading configs:', e);
             console.error('Failed to load existing configurations:', e);
         } finally {
             // Only update loading state if still mounted
@@ -194,7 +175,6 @@ function WorkflowConfig({ user }) {
                 isLoadingConfigsRef.current = false;
                 setLoadingConfigs(false);
             }
-            console.log('🏁 Load configs finished');
         }
     };
 
@@ -265,7 +245,6 @@ function WorkflowConfig({ user }) {
         loadCategories();
         
         return () => {
-            console.log('UNMOUNT: WorkflowConfig');
             // Set mounted to false FIRST to prevent any state updates
             isMountedRef.current = false;
             hasLoadedRef.current = false;
@@ -418,18 +397,14 @@ function WorkflowConfig({ user }) {
     }
 
     const openCreate = () => {
-        console.log('➕ OPENING CREATE WORKFLOW DIALOG');
         setForm({ id: null, name: '', category: '', bpmn_file: null, bpmn_filename: '' });
         setIsEditMode(false);
         setDialogOpen(true);
-        console.log('✅ Create dialog opened');
     };
 
     const openEdit = (configName) => {
-        console.log('✏️ OPENING EDIT WORKFLOW DIALOG for:', configName);
         loadExistingConfig(configName);
         setDialogOpen(true);
-        console.log('✅ Edit dialog opened');
     };
 
     return (

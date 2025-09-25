@@ -27,10 +27,6 @@ import DynamicComponent from '../components/dynamic/DynamicComponent';
 import { useSnackbar } from '../contexts/SnackbarContext';
 
 const DynamicComponentLoader = memo(function DynamicComponentLoader({ user }) {
-  console.log('🧩 DynamicComponentLoader RENDER', { 
-    userToken: user?.token?.substring(0, 10) + '...', 
-    timestamp: Date.now() 
-  });
 
   const theme = useTheme();
   const { showSuccess, showError, showWarning } = useSnackbar();
