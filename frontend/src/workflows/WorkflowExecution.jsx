@@ -67,6 +67,7 @@ function WorkflowExecution({ user }) {
   const [loadingIncomplete, setLoadingIncomplete] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0); // Force re-render key
   const [deleting, setDeleting] = useState(new Set()); // Track which instances are being deleted
+  const [selectedInstanceForBpmn, setSelectedInstanceForBpmn] = useState(null); // Track selected instance for BPMN clicks
   
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -284,7 +285,7 @@ function WorkflowExecution({ user }) {
   );
 
   const handleInstanceClick = useCallback(
-    async (instanceId) => {
+    async (instanceId, openDialog = true) => {
       try {
         const result = await sharedApiService.makeRequest(
           `/api/workflow/workflows/${workflowId}/instances/${instanceId}`,
@@ -432,7 +433,11 @@ function WorkflowExecution({ user }) {
           // Store actionable tasks in selected instance for rendering
           workflowData.pendingTasks = allActionableTasks;
           setFormData(initialFormData);
-          setDialogOpen(true);
+          
+          // Only open dialog if requested
+          if (openDialog) {
+            setDialogOpen(true);
+          }
         }
       } catch (err) {
         console.error('Failed to get instance details:', err);
@@ -528,44 +533,28 @@ function WorkflowExecution({ user }) {
     setFormData({});
     // Clear task status data when closing dialog to reset BPMN colors
     setTaskStatusData(null);
+    // Keep the selectedInstanceForBpmn so user can still click on BPMN nodes
+    // setSelectedInstanceForBpmn(null); // Uncomment if you want to clear selection on dialog close
   }, []);
 
-  // Handle BPMN node clicks - map node ID to task and find matching instance
+  // Handle BPMN node clicks - only works after selecting an instance from the list
   const handleBpmnNodeClick = useCallback(async (event, node) => {
+    
+    // Only allow BPMN node clicks if an instance has been selected from the list first
+    if (!selectedInstanceForBpmn) {
+      console.log('❌ No instance selected. User must select from the list first.');
+      setError('Please select a workflow instance from the list first, then click on the diagram nodes.');
+      setTimeout(() => setError(''), 4000); // Clear error after 4 seconds
+      return;
+    }
     
     // Get the node ID from the BPMN node
     const nodeId = node.id;
-    console.log('🔍 BPMN node clicked:', nodeId, node);
+    console.log('🔍 BPMN node clicked:', nodeId, node, 'for selected instance:', selectedInstanceForBpmn);
     
-    // If we have task status data, check if this node has a pending task
-    const nodeStatus = taskStatusData?.[nodeId];
-    if (nodeStatus && nodeStatus.state === 16) { // State 16 = READY/PENDING
-      console.log('🎯 Clicked node has pending task:', nodeId, nodeStatus);
-      
-      // Find the first incomplete workflow instance
-      // In a more sophisticated implementation, we could match the specific instance
-      // that contains this pending task, but for now we'll use the first one
-      if (incompleteWorkflows.length > 0) {
-        const firstInstance = incompleteWorkflows[0];
-        console.log('🎯 Opening dialog for first incomplete instance:', firstInstance.instance_id);
-        await handleInstanceClick(firstInstance.instance_id);
-        return;
-      }
-    }
-    
-    // If no specific task status, try to find any incomplete workflow
-    // This is a fallback for cases where taskStatusData might not be available
-    if (incompleteWorkflows.length > 0) {
-      console.log('🔍 No specific task status, trying first incomplete workflow');
-      const firstInstance = incompleteWorkflows[0];
-      await handleInstanceClick(firstInstance.instance_id);
-    } else {
-      console.log('❌ No incomplete workflows found for node:', nodeId);
-      // Show a message that this node is not actionable
-      setError(`No actionable workflows found. Start a workflow first.`);
-      setTimeout(() => setError(''), 3000); // Clear error after 3 seconds
-    }
-  }, [incompleteWorkflows, handleInstanceClick, taskStatusData]);
+    // Open the dialog for the pre-selected instance (force dialog open)
+    await handleInstanceClick(selectedInstanceForBpmn, true);
+  }, [selectedInstanceForBpmn, handleInstanceClick]);
 
   const handleDeleteInstance = useCallback(
     async (instanceId, event) => {
@@ -738,7 +727,31 @@ function WorkflowExecution({ user }) {
 
         {workflowId && (
           <Box sx={{ mt: 3, textAlign: 'left', mx: 'auto', maxWidth: 720 }}>
-            <Typography variant="h6">Incomplete Workflows</Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+              <Typography variant="h6">Incomplete Workflows</Typography>
+              {selectedInstanceForBpmn && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Chip 
+                    label={`Selected: ${selectedInstanceForBpmn.substring(0, 8)}...`}
+                    color="primary"
+                    size="small"
+                    variant="outlined"
+                  />
+                  <Button 
+                    size="small" 
+                    onClick={() => setSelectedInstanceForBpmn(null)}
+                    sx={{ minWidth: 'auto', px: 1 }}
+                  >
+                    Clear
+                  </Button>
+                </Box>
+              )}
+            </Box>
+            {selectedInstanceForBpmn && (
+              <Alert severity="info" sx={{ mb: 2, fontSize: '0.875rem' }}>
+                <strong>Instance Selected:</strong> You can now click on nodes in the workflow diagram above to open the task dialog for this instance.
+              </Alert>
+            )}
             {loadingIncomplete ? (
               <CircularProgress size={20} />
             ) : incompleteWorkflows.length > 0 ? (
@@ -746,7 +759,7 @@ function WorkflowExecution({ user }) {
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell>Instance ID</TableCell>
+                      <TableCell>Instance ID (Click to select)</TableCell>
                       <TableCell>Created</TableCell>
                       <TableCell width="60">Actions</TableCell>
                     </TableRow>
@@ -756,8 +769,21 @@ function WorkflowExecution({ user }) {
                       <TableRow 
                         key={wf.instance_id} 
                         hover 
-                        sx={{ cursor: 'pointer' }}
-                        onClick={() => handleInstanceClick(wf.instance_id)}
+                        sx={{ 
+                          cursor: 'pointer',
+                          backgroundColor: selectedInstanceForBpmn === wf.instance_id ? 
+                            alpha(theme.palette.primary.main, 0.1) : 'inherit',
+                          '&:hover': {
+                            backgroundColor: selectedInstanceForBpmn === wf.instance_id ? 
+                              alpha(theme.palette.primary.main, 0.15) : 
+                              alpha(theme.palette.action.hover, 0.04)
+                          }
+                        }}
+                        onClick={() => {
+                          setSelectedInstanceForBpmn(wf.instance_id);
+                          // Load instance data for BPMN coloring but don't open dialog
+                          handleInstanceClick(wf.instance_id, false);
+                        }}
                       >
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
                           {wf.instance_id}
