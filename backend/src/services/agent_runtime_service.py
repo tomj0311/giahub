@@ -101,19 +101,6 @@ def _create_multi_collection_retriever(collection_names: list = None, conv_id: s
     return multi_collection_retriever
 
 class AgentRuntimeService:
-    # Simple cache to store agents by session_id
-    _agents = {}
-    
-    @classmethod
-    def clear_agent_cache(cls, conv_id: Optional[str] = None):
-        """Clear agent cache for a specific conversation or all conversations"""
-        if conv_id:
-            if conv_id in cls._agents:
-                del cls._agents[conv_id]
-                logger.info(f"Cleared agent cache for conv_id: {conv_id}")
-        else:
-            cls._agents.clear()
-            logger.info("Cleared all agent cache")
     
     @classmethod
     async def _search_images_for_agent(cls, user: Dict[str, Any], conv_id: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -206,12 +193,7 @@ class AgentRuntimeService:
     
     @classmethod
     async def build_agent_from_config(cls, agent_config: Dict[str, Any], user: Dict[str, Any]) -> Any:
-        # Check if we already have this agent for this conversation
         conv_id = agent_config.get("conv_id")
-        if conv_id and conv_id in AgentRuntimeService._agents:
-            logger.info(f"Reusing existing agent for conv_id: {conv_id}")
-            return AgentRuntimeService._agents[conv_id]
-            
         try:
             logger.debug(f"Building new agent from config for conv_id: {conv_id}")
             
@@ -345,11 +327,7 @@ class AgentRuntimeService:
                 logger.error(f"Agent creation traceback: {traceback.format_exc()}")
                 raise
                 
-            # Cache the agent if we have a conv_id
-            if conv_id:
-                AgentRuntimeService._agents[conv_id] = agent
-                logger.info(f"Created and cached new agent for conv_id: {conv_id}")
-                
+            logger.info(f"Created new agent for conv_id: {conv_id}")
             return agent
         except Exception as e:
             logger.error(f"Failed to build agent: {e}")
