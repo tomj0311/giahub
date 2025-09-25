@@ -171,7 +171,7 @@ export const parseBPMNXML = (xmlString) => {
         const processRef = participant.getAttribute('processRef');
         const position = shapeMap[id] || { x: 50, y: 50 + Object.keys(participantMap).length * 280 };
         const originalAttributes = getAttributesMap(participant);
-        const documentationEls = participant.querySelectorAll('bpmn2\\:documentation, bpmn\\:documentation, documentation');
+        const documentationEls = participant.querySelectorAll('documentation');
         const originalDocumentation = Array.from(documentationEls).map(d => d.textContent || '');
 
         participantMap[processRef] = {
@@ -224,8 +224,9 @@ export const parseBPMNXML = (xmlString) => {
     processes.forEach(process => {
       const processId = process.getAttribute('id');
       const processAttributes = getAttributesMap(process);
-      const procDocEls = process.querySelectorAll('bpmn2\\:documentation, bpmn\\:documentation, documentation');
-      const processDocumentation = Array.from(procDocEls).map(d => d.textContent || '');
+      // Only get DIRECT child documentation elements, not nested ones
+      const procDocEls = Array.from(process.children).filter(child => child.tagName === 'documentation');
+      const processDocumentation = procDocEls.map(d => d.textContent || '');
       processMeta[processId] = { originalAttributes: processAttributes, originalDocumentation: processDocumentation };
       const participant = participantMap[processId];
       const participantBounds = participant?.bounds || { x: 0, y: 0, width: 910, height: 250 };
@@ -315,7 +316,7 @@ export const parseBPMNXML = (xmlString) => {
           let name = element.getAttribute('name') || '';
           let position = shapeMap[id] || { x: 100 + (nodeCounter * 50), y: 100 };
           const originalAttributes = getAttributesMap(element);
-          const docEls = element.querySelectorAll('bpmn2\\:documentation, bpmn\\:documentation, documentation');
+          const docEls = element.querySelectorAll('documentation');
           const originalDocumentation = Array.from(docEls).map(d => d.textContent || '');
           const originalNestedElements = captureNestedElements(element);
 
@@ -427,6 +428,7 @@ export const parseBPMNXML = (xmlString) => {
             originalLabelBounds: shapeMap[id]?.labelBounds,
             originalAttributes,
             originalDocumentation,
+            documentation: originalDocumentation.length > 0 ? originalDocumentation[0] : '', // Use only first documentation element
             originalNestedElements,
             // Add color information from BPMN shapes
             backgroundColor: shapeMap[id]?.backgroundColor,
@@ -459,7 +461,7 @@ export const parseBPMNXML = (xmlString) => {
         const sourceRef = element.getAttribute('sourceRef');
         const targetRef = element.getAttribute('targetRef');
         const originalAttributes = getAttributesMap(element);
-        const docEls = element.querySelectorAll('bpmn2\\:documentation, bpmn\\:documentation, documentation');
+        const docEls = element.querySelectorAll('documentation');
         const originalDocumentation = Array.from(docEls).map(d => d.textContent || '');
         const originalNestedElements = captureNestedElements(element);
 
@@ -480,6 +482,7 @@ export const parseBPMNXML = (xmlString) => {
               originalLabelBounds: edgeInfo?.labelBounds,
               originalAttributes,
               originalDocumentation,
+              documentation: originalDocumentation.length > 0 ? originalDocumentation[0] : '', // Use only first documentation element
               originalNestedElements
             }
           });
@@ -495,7 +498,7 @@ export const parseBPMNXML = (xmlString) => {
         const sourceRef = element.getAttribute('sourceRef');
         const targetRef = element.getAttribute('targetRef');
         const originalAttributes = getAttributesMap(element);
-        const docEls = element.querySelectorAll('bpmn2\\:documentation, bpmn\\:documentation, documentation');
+        const docEls = element.querySelectorAll('documentation');
         const originalDocumentation = Array.from(docEls).map(d => d.textContent || '');
 
         if (sourceRef && targetRef) {
@@ -518,7 +521,8 @@ export const parseBPMNXML = (xmlString) => {
                 originalWaypoints: edgeInfo?.waypoints,
                 originalLabelBounds: edgeInfo?.labelBounds,
                 originalAttributes,
-                originalDocumentation
+                originalDocumentation,
+                documentation: originalDocumentation.length > 0 ? originalDocumentation[0] : '' // Use only first documentation element
               }
             });
           }
@@ -534,6 +538,20 @@ export const parseBPMNXML = (xmlString) => {
         p.data.originalProcessDocumentation = meta.originalDocumentation;
       }
     });
+    
+    // For single-process workflows (no participants), attach process meta to first regular node
+    const participantNodes = nodes.filter(n => n.type === 'participant');
+    if (participantNodes.length === 0) {
+      const regularNodes = nodes.filter(n => n.type !== 'participant' && n.type !== 'lane');
+      if (regularNodes.length > 0) {
+        const firstNode = regularNodes[0];
+        const meta = processMeta[firstNode.data?.processId];
+        if (meta) {
+          firstNode.data.originalProcessAttributes = meta.originalAttributes;
+          firstNode.data.originalProcessDocumentation = meta.originalDocumentation;
+        }
+      }
+    }
 
     return { nodes, edges };
   } catch (error) {

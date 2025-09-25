@@ -268,8 +268,13 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
           // Preserve original flow attributes and documentation
           const flowAttrsMap = flow.data?.originalAttributes || {};
           const docs = [];
-          if (flow.data?.documentation) docs.push(flow.data.documentation);
-          if (Array.isArray(flow.data?.originalDocumentation)) flow.data.originalDocumentation.forEach(d => { if (d) docs.push(d); });
+          if (flow.data?.documentation && flow.data.documentation.trim() !== '') {
+            console.log(`🔹 Using edited documentation for flow ${flow.id}:`, flow.data.documentation);
+            docs.push(flow.data.documentation);
+          } else if (Array.isArray(flow.data?.originalDocumentation)) {
+            console.log(`🔸 Using original documentation for flow ${flow.id}:`, flow.data.originalDocumentation);
+            flow.data.originalDocumentation.forEach(d => { if (d) docs.push(d); });
+          }
           const flowAttrStr = buildAttributesString(flowAttrsMap, { exclude: ['id', 'name', 'sourceRef', 'targetRef'] });
           if (docs.length) {
             xml += `<sequenceFlow id="${flow.id}"${flowName ? ` name="${escapeXML(flowName)}"` : ''} sourceRef="${flow.source}" targetRef="${flow.target}"${flowAttrStr}>`;
@@ -298,7 +303,23 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
       // Preserve original isExecutable value
       const isExecutable = regularNodes.length > 0 && regularNodes[0].data?.originalIsExecutable !== undefined
         ? regularNodes[0].data.originalIsExecutable : "false";
+      
+      // Check for process-level documentation (only add once, don't duplicate)
+      const procDocs = [];
+      if (regularNodes.length > 0) {
+        const firstNode = regularNodes[0];
+        if (Array.isArray(firstNode.data?.originalProcessDocumentation)) {
+          // Only take the first process documentation to avoid duplication
+          const processDoc = firstNode.data.originalProcessDocumentation[0];
+          if (processDoc) procDocs.push(processDoc);
+        }
+      }
+      
       xml += `<process id="${processId}" isExecutable="${isExecutable}">`;
+      // Add process documentation
+      procDocs.forEach(text => {
+        xml += `<documentation>${escapeXML(text)}</documentation>`;
+      });
 
       // Add all nodes
       regularNodes.forEach(node => {
@@ -310,8 +331,13 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
         const flowName = flow.data?.label || flow.label || '';
         const flowAttrsMap = flow.data?.originalAttributes || {};
         const docs = [];
-        if (flow.data?.documentation) docs.push(flow.data.documentation);
-        if (Array.isArray(flow.data?.originalDocumentation)) flow.data.originalDocumentation.forEach(d => { if (d) docs.push(d); });
+        if (flow.data?.documentation && flow.data.documentation.trim() !== '') {
+          console.log(`🔹 Using edited documentation for flow ${flow.id}:`, flow.data.documentation);
+          docs.push(flow.data.documentation);
+        } else if (Array.isArray(flow.data?.originalDocumentation)) {
+          console.log(`🔸 Using original documentation for flow ${flow.id}:`, flow.data.originalDocumentation);
+          flow.data.originalDocumentation.forEach(d => { if (d) docs.push(d); });
+        }
         const flowAttrStr = buildAttributesString(flowAttrsMap, { exclude: ['id', 'name', 'sourceRef', 'targetRef'] });
         if (docs.length) {
           xml += `<sequenceFlow id="${flow.id}"${flowName ? ` name="${escapeXML(flowName)}"` : ''} sourceRef="${flow.source}" targetRef="${flow.target}"${flowAttrStr}>`;
@@ -361,10 +387,13 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
     const nodeId = node.id;
     const nodeName = escapeXML(node.data?.label || '');
     const originalAttrs = node.data?.originalAttributes || {};
-    // Node-level documentation: from edited data and original import
+    // Node-level documentation: use edited documentation OR original documentation, not both
     const nodeDocs = [];
-    if (node.data?.documentation) nodeDocs.push(node.data.documentation);
-    if (Array.isArray(node.data?.originalDocumentation)) node.data.originalDocumentation.forEach(d => { if (d) nodeDocs.push(d); });
+    if (node.data?.documentation && node.data.documentation.trim() !== '') {
+      nodeDocs.push(node.data.documentation);
+    } else if (Array.isArray(node.data?.originalDocumentation)) {
+      node.data.originalDocumentation.forEach(d => { if (d) nodeDocs.push(d); });
+    }
 
     // Use the original element type if available, otherwise use current node type
     const nodeType = node.data?.originalElementType ? 

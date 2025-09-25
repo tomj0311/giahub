@@ -17,6 +17,10 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
   // Update local state when selected element changes
   useEffect(() => {
     if (selectedNode) {
+      console.log(`🔍 PropertyPanel loading node ${selectedNode.id}:`, {
+        documentation: selectedNode.data.documentation,
+        originalDocumentation: selectedNode.data.originalDocumentation
+      });
       setNodeData({
         name: selectedNode.data.label || '',
         id: selectedNode.id || '',
@@ -119,6 +123,7 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
   };
 
   const handleSave = () => {
+    console.log(`💾 PropertyPanel saving:`, nodeData);
     
     // For gateway nodes, ALWAYS update the related sequence flows, not the gateway itself
     if (selectedNode && selectedNode.type && selectedNode.type.includes('gateway')) {
@@ -196,6 +201,7 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
           borderColor: nodeData.borderColor || selectedNode.style?.borderColor
         }
       };
+      console.log(`💾 Saving node ${selectedNode.id} with documentation:`, nodeData.documentation);
       onNodeUpdate(updatedNode);
     }
   };
@@ -348,7 +354,7 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
       <div className="property-panel-header">
         <h3>Properties</h3>
         <div className="header-buttons">
-          {!readOnly && (selectedNode || selectedEdge) && (
+          {(selectedNode || selectedEdge) && (
             <button className="save-btn" onClick={handleSave}>
               Save
             </button>
@@ -509,6 +515,13 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
                     rows={6}
                     disabled={readOnly}
                   />
+                  <button 
+                    className="save-btn" 
+                    onClick={handleSave}
+                    style={{marginTop: '10px', width: '100%', padding: '8px'}}
+                  >
+                    💾 Save Documentation
+                  </button>
                 </div>
               </div>
             )}
