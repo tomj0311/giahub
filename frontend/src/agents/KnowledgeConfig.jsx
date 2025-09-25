@@ -89,13 +89,12 @@ export default function KnowledgeConfig({ user }) {
     
     // Prevent duplicate calls
     if (isLoadingModelsRef.current) {
-      console.log('🚫 Already loading models, skipping duplicate call');
       return;
     }
     
     try {
       isLoadingModelsRef.current = true;
-      console.log('[KnowledgeConfig] Loading models...')
+  // removed loading models log
       
       const result = await sharedApiService.makeRequest(
         '/api/models/configs',
@@ -105,17 +104,16 @@ export default function KnowledgeConfig({ user }) {
         { token: tokenRef.current?.substring(0, 10) }
       );
       
-      console.log('[KnowledgeConfig] Models API response:', result)
+  // removed models api response log
       
       if (!isMountedRef.current) {
-        console.log('🚫 Component unmounted, aborting models load');
         return;
       }
       
       if (result.success) {
         // The response structure is { configurations: [...] } from ModelConfig
         const modelsList = result.data.configurations || []
-        console.log('[KnowledgeConfig] Processed models list:', modelsList)
+  // removed processed models list log
         setModels(Array.isArray(modelsList) ? modelsList : [])
       } else {
         console.error('[KnowledgeConfig] Failed to load models:', result.error)
@@ -140,7 +138,6 @@ export default function KnowledgeConfig({ user }) {
     
     // Prevent duplicate calls
     if (isLoadingCategoriesRef.current) {
-      console.log('🚫 Already loading categories, skipping duplicate call');
       return;
     }
     
@@ -157,7 +154,6 @@ export default function KnowledgeConfig({ user }) {
       );
       
       if (!isMountedRef.current) {
-        console.log('🚫 Component unmounted, aborting categories load');
         return;
       }
       
@@ -181,7 +177,6 @@ export default function KnowledgeConfig({ user }) {
     
     // Prevent duplicate calls
     if (isLoadingConfigsRef.current) {
-      console.log('🚫 Already loading configs, skipping duplicate call');
       return;
     }
     
@@ -209,7 +204,6 @@ export default function KnowledgeConfig({ user }) {
       );
       
       if (!isMountedRef.current) {
-        console.log('🚫 Component unmounted, aborting config load');
         return;
       }
       
@@ -217,8 +211,7 @@ export default function KnowledgeConfig({ user }) {
         const data = result.data;
         const collections = data.collections || [];
         
-        console.log('[KnowledgeConfig] Raw API response:', data);
-        console.log('[KnowledgeConfig] Collections from API:', collections);
+  // removed raw api response logs
         
         // Set pagination data
         if (data.pagination) {
@@ -260,7 +253,7 @@ export default function KnowledgeConfig({ user }) {
           }
         }
         setExistingConfigs(collectionsWithData)
-        console.log('[KnowledgeConfig] Collections loaded:', collectionsWithData)
+  // removed collections loaded log
       } else {
         console.error('[KnowledgeConfig] Failed to load collections:', result.error)
       }
@@ -292,7 +285,7 @@ export default function KnowledgeConfig({ user }) {
   useEffect(() => {
     // Load data like ToolConfig does
     const loadData = async () => {
-      console.log('🚀 KnowledgeConfig MOUNT')
+  // removed mount log
       if (!isMountedRef.current) return;
       
       try {
@@ -322,7 +315,7 @@ export default function KnowledgeConfig({ user }) {
   // Cleanup function to handle component unmount
   useEffect(() => {
     return () => {
-      console.log('UNMOUNT: KnowledgeConfig');
+  // removed unmount log
       isMountedRef.current = false;
     };
   }, []);
@@ -330,7 +323,7 @@ export default function KnowledgeConfig({ user }) {
   async function loadExistingConfig(configName) {
     const config = existingConfigs.find(c => c.name === configName)
     if (config) {
-      console.log('[KnowledgeConfig] Loading config:', config) // Keep this debug temporarily
+  // removed loading config log
       setForm({
         ...config,
         id: config.id,
@@ -351,7 +344,7 @@ export default function KnowledgeConfig({ user }) {
         
         if (result.success) {
           const files = result.data.files || [];
-          console.log('[KnowledgeConfig] Setting existing files to:', files)
+          // removed setting existing files log
           setExistingFiles(files)
         } else {
           console.error('[KnowledgeConfig] Failed to load collection files:', result.error)
@@ -576,10 +569,10 @@ export default function KnowledgeConfig({ user }) {
   const chunkIntro = null
   const embedderIntro = null
 
-  console.log('[KnowledgeConfig] Render - loading:', loading, 'existingConfigs:', existingConfigs.length, 'models:', models)
+  // removed render debug log
 
   if (loading || loadingConfigs) {
-    console.log('[KnowledgeConfig] Showing loading spinner')
+  // removed loading spinner log
     return (
       <Paper sx={{ p: 4, textAlign: 'center' }}>
         <CircularProgress />
@@ -588,7 +581,7 @@ export default function KnowledgeConfig({ user }) {
     )
   }
 
-  console.log('[KnowledgeConfig] Rendering main component')
+  // removed rendering main component log
 
   const openCreate = () => {
     setForm({ 
@@ -761,7 +754,7 @@ export default function KnowledgeConfig({ user }) {
             <Paper variant="soft" sx={{ p: 2 }}>
               <Typography variant="h6" gutterBottom>File Upload</Typography>
               
-              {console.log('[KnowledgeConfig] Render files - existingFiles.length:', existingFiles.length, 'existingFiles:', existingFiles)}
+              {/* removed inline render debug log */}
               
               {/* Existing Files */}
               {existingFiles.length > 0 && (
@@ -860,7 +853,7 @@ export default function KnowledgeConfig({ user }) {
                   <MenuItem value="">
                     <em>Select a model...</em>
                   </MenuItem>
-                  {console.log('[KnowledgeConfig] Rendering models in dropdown:', models)}
+                  {/* removed models dropdown debug log */}
                   {models.map(model => (
                     <MenuItem key={model.id || model.name} value={model.id || model.name}>
                       {model.name}

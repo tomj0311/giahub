@@ -34,11 +34,7 @@ import { apiCall } from '../config/api'
 import sharedApiService from '../utils/apiService'
 
 export default function Agent({ user }) {
-  // Add render logging to track what's causing re-renders
-  console.log('🤖 Agent RENDER', { 
-    userToken: user?.token?.substring(0, 10) + '...', 
-    timestamp: Date.now() 
-  });
+  // removed render debug log
   
   const token = user?.token
   const navigate = useNavigate()
@@ -106,7 +102,6 @@ export default function Agent({ user }) {
     
     // Prevent duplicate calls
     if (loading) {
-      console.log('🚫 Already loading agents, skipping duplicate call');
       return;
     }
     
@@ -151,7 +146,6 @@ export default function Agent({ user }) {
 
       // Check if component is still mounted
       if (!isMountedRef.current) {
-        console.log('🚫 Component unmounted, aborting agent load');
         return
       }
 
@@ -242,7 +236,7 @@ export default function Agent({ user }) {
   };
 
   useEffect(() => { 
-    console.log('MOUNT: Agent', 'Token:', token?.substring(0, 10) + '...', 'User:', user, 'Loading:', loading);
+    // removed mount log
     
     // Set mounted to true
     isMountedRef.current = true;
@@ -257,7 +251,7 @@ export default function Agent({ user }) {
     isMountedRef.current = true;
     
     return () => {
-      console.log('UNMOUNT: Agent');
+  // removed unmount log
       // Set mounted to false FIRST to prevent any state updates
       isMountedRef.current = false
       if (currentRequestRef.current) {

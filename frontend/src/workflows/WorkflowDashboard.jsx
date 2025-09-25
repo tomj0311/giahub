@@ -191,8 +191,7 @@ export default function WorkflowDashboard({ user }) {
 
         // Fetch workflows with pagination - use singleton service
         const workflowsUrl = `/api/workflows/configs?page=${pagination.page}&page_size=${pagination.page_size}`
-        console.log('🔍 FETCHING WORKFLOWS URL:', workflowsUrl);
-        console.log('🔍 WITH TOKEN:', tokenRef.current ? 'YES' : 'NO');
+  // removed verbose debugging logs
         
         const workflowsResult = await sharedApiService.makeRequest(
           workflowsUrl,

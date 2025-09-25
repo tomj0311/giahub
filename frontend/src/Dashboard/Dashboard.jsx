@@ -73,17 +73,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 	const [expandedSections, setExpandedSections] = useState({})
 	const location = useLocation()
 
-	console.log('🏠 DashboardLayout RENDER', { 
-		userToken: user?.token?.substring(0, 10) + '...', 
-		themeKey,
-		isMobile,
-		drawerOpen,
-		mobileOpen,
-		pathname: location.pathname,
-		expandedSections: Object.keys(expandedSections).length,
-		anchorEl: !!anchorEl,
-		timestamp: Date.now() 
-	});
+	// removed DashboardLayout render debug log
 
 	// Hardcoded menu items based on screenshot
 	const menuItems = [
@@ -681,11 +671,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 }
 
 export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
-	console.log('📊 Dashboard RENDER', { 
-		userToken: user?.token?.substring(0, 10) + '...', 
-		themeKey, 
-		timestamp: Date.now() 
-	});
+	// removed Dashboard render debug log
 	
 	// BPMN Editor wrapper component to handle navigation state
 	const BPMNEditorWrapper = () => {

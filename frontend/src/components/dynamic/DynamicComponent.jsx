@@ -20,7 +20,7 @@ const loadBabel = () => {
 
 // Dynamic component loader using Babel for JSX compilation
 const DynamicComponent = ({ componentCode, children }) => {
-  console.log('🔧 DynamicComponent - Input code:', componentCode);
+  // removed input code debug log
   
   const [component, setComponent] = React.useState(null);
   const [error, setError] = React.useState(null);
@@ -36,18 +36,18 @@ const DynamicComponent = ({ componentCode, children }) => {
         const componentMatch = componentCode.match(/const\s+(\w+)\s*=/);
         const componentName = componentMatch ? componentMatch[1] : 'DynamicComponent';
         
-        console.log('🔧 DynamicComponent - Component name:', componentName);
+  // removed component name debug log
 
         // Load Babel
         const Babel = await loadBabel();
-        console.log('🔧 DynamicComponent - Babel loaded');
+  // removed babel loaded log
 
         // Compile JSX to JavaScript
         const compiledCode = Babel.transform(componentCode, {
           presets: ['react']
         }).code;
 
-        console.log('🔧 DynamicComponent - Compiled code:', compiledCode);
+  // removed compiled code log
 
         // Create execution context with all MUI components and React features
         const context = {
@@ -104,7 +104,7 @@ const DynamicComponent = ({ componentCode, children }) => {
         const fn = new Function(...paramNames, compiledCode + `; return ${componentName};`);
         const ComponentConstructor = fn(...paramValues);
 
-        console.log('🔧 DynamicComponent - ComponentConstructor:', ComponentConstructor);
+  // removed component constructor log
 
         setComponent(() => ComponentConstructor);
         setLoading(false);

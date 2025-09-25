@@ -235,7 +235,7 @@ function WorkflowConfig({ user }) {
 
     // Run these functions only once on mount
     useEffect(() => {
-        console.log('MOUNT: WorkflowConfig', 'Token:', token?.substring(0, 10) + '...', 'User:', user, 'LoadingConfigs:', loadingConfigs);
+    // removed mount debug log
         
         // Set mounted to true
         isMountedRef.current = true;

@@ -148,129 +148,52 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
 
   // Save state to history
   const saveToHistory = useCallback((newNodes, newEdges) => {
-    console.log('🔄 SAVE TO HISTORY:', {
-      currentIndex: historyIndex,
-      historyLength: history.length,
-      nodeCount: newNodes.length,
-      edgeCount: newEdges.length,
-      stackTrace: new Error().stack?.split('\n').slice(1, 4).join('\n')
-    });
-    
     setHistory(prev => {
       const newHistory = prev.slice(0, historyIndex + 1);
       newHistory.push({ nodes: newNodes, edges: newEdges });
       const trimmed = newHistory.slice(-50); // Keep last 50 states
-      
-      console.log('📚 HISTORY UPDATED:', {
-        prevLength: prev.length,
-        newLength: trimmed.length,
-        addedAt: historyIndex + 1
-      });
-      
       return trimmed;
     });
-    setHistoryIndex(prev => {
-      const newIndex = Math.min(prev + 1, 49);
-      console.log('📍 HISTORY INDEX CHANGED:', prev, '->', newIndex);
-      return newIndex;
-    });
+    setHistoryIndex(prev => Math.min(prev + 1, 49));
   }, [historyIndex, history.length]);
 
   // Undo function
   const undo = useCallback(() => {
-    console.log('⏪ UNDO REQUESTED:', {
-      currentIndex: historyIndex,
-      historyLength: history.length,
-      canUndo: historyIndex > 0
-    });
-    
     if (historyIndex > 0) {
       const newIndex = historyIndex - 1;
       const prevState = history[newIndex];
-      
-      console.log('⏪ UNDO EXECUTING:', {
-        fromIndex: historyIndex,
-        toIndex: newIndex,
-        restoringNodes: prevState.nodes.length,
-        restoringEdges: prevState.edges.length
-      });
-      
-      // Set flag to prevent history saving during restore
       isUndoRedoOperation.current = true;
-      
       setNodes(prevState.nodes);
       setEdges(prevState.edges);
       setHistoryIndex(newIndex);
-      
-      // Reset flag after a delay
-      setTimeout(() => {
-        isUndoRedoOperation.current = false;
-      }, 100);
-      
-      console.log('✅ UNDO COMPLETED');
-    } else {
-      console.log('❌ UNDO BLOCKED - Already at beginning');
+      setTimeout(() => { isUndoRedoOperation.current = false; }, 100);
     }
   }, [historyIndex, history, setNodes, setEdges]);
 
   // Redo function
   const redo = useCallback(() => {
-    console.log('⏩ REDO REQUESTED:', {
-      currentIndex: historyIndex,
-      historyLength: history.length,
-      canRedo: historyIndex < history.length - 1
-    });
-    
     if (historyIndex < history.length - 1) {
       const newIndex = historyIndex + 1;
       const nextState = history[newIndex];
-      
-      console.log('⏩ REDO EXECUTING:', {
-        fromIndex: historyIndex,
-        toIndex: newIndex,
-        restoringNodes: nextState.nodes.length,
-        restoringEdges: nextState.edges.length
-      });
-      
-      // Set flag to prevent history saving during restore
       isUndoRedoOperation.current = true;
-      
       setNodes(nextState.nodes);
       setEdges(nextState.edges);
       setHistoryIndex(newIndex);
-      
-      // Reset flag after a delay
-      setTimeout(() => {
-        isUndoRedoOperation.current = false;
-      }, 100);
-      
-      console.log('✅ REDO COMPLETED');
-    } else {
-      console.log('❌ REDO BLOCKED - Already at end');
+      setTimeout(() => { isUndoRedoOperation.current = false; }, 100);
     }
   }, [historyIndex, history, setNodes, setEdges]);
 
   // Combined keyboard shortcuts for undo/redo and delete
   useEffect(() => {
     const handleKeyDown = (event) => {
-      console.log('🔑 KEY PRESSED:', {
-        key: event.key,
-        ctrlKey: event.ctrlKey,
-        metaKey: event.metaKey,
-        shiftKey: event.shiftKey,
-        readOnly: readOnly,
-        target: event.target.tagName
-      });
 
       // Handle undo/redo shortcuts
       if ((event.ctrlKey || event.metaKey) && !readOnly) {
         if ((event.key === 'z' || event.key === 'Z') && !event.shiftKey) {
-          console.log('⌨️ KEYBOARD UNDO TRIGGERED');
           event.preventDefault();
           undo();
           return;
         } else if (((event.key === 'z' || event.key === 'Z') && event.shiftKey) || (event.key === 'y' || event.key === 'Y')) {
-          console.log('⌨️ KEYBOARD REDO TRIGGERED');
           event.preventDefault();
           redo();
           return;
@@ -280,7 +203,6 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
       // Handle delete/backspace (only when focused on ReactFlow)
       if ((event.key === 'Delete' || event.key === 'Backspace') && 
           (event.target.closest('.reactflow-wrapper') || event.target.closest('.react-flow'))) {
-        console.log('🗑️ DELETE KEY TRIGGERED');
         setNodes((nds) => {
           const newNodes = nds.filter((node) => !node.selected);
           if (!readOnly && newNodes.length !== nds.length) {
@@ -353,16 +275,10 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   // Load initial BPMN if provided
   useEffect(() => {
     if (initialBPMN && reactFlowInstance) {
-      console.log('🔄 Loading initial BPMN, length:', initialBPMN?.length)
-      console.log('🔄 BPMN preview:', initialBPMN?.substring(0, 200) + '...')
-      
       try {
-        console.log('🔄 Attempting to parse BPMN XML...')
         const result = parseBPMNXML(initialBPMN);
         
         if (result && result.nodes && result.nodes.length > 0) {
-          console.log('✅ Successfully parsed BPMN - nodes:', result.nodes.length, 'edges:', result.edges.length)
-          console.log('📋 Parsed nodes:', result.nodes.map(n => ({ id: n.id, type: n.type, label: n.data?.label })))
           
           setNodes(result.nodes);
           setEdges(updateEdgesWithArrows(result.edges));
@@ -554,10 +470,8 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
       
       // Save to history if needed
       if (shouldSaveHistory && !readOnly && !isUndoRedoOperation.current) {
-        console.log('💾 SAVING TO HISTORY (from onNodesChange)');
         setTimeout(() => saveToHistory(newNodes, edges), 0);
       } else if (isUndoRedoOperation.current) {
-        console.log('🚫 SKIPPING HISTORY SAVE - Undo/Redo operation in progress');
       }
       
       return newNodes;
@@ -682,7 +596,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
         
         // Don't save to history here - let onNodesChange handle it
         // to avoid duplicate history entries
-        console.log('➕ NODE ADDED VIA DROP - Letting onNodesChange handle history');
+  // Node added via drop - history handled in onNodesChange
         
         // Check if the new node was dropped inside a participant
         const droppedInParticipant = nds.find(node => 
@@ -781,7 +695,6 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
 
   // Update node data from property panel
   const handleNodeUpdate = useCallback((updatedNode) => {
-    console.log('🎨 BPMNEditor - handleNodeUpdate called with:', updatedNode.data.backgroundColor, updatedNode.data.borderColor);
     setNodes((nds) => {
       const newNodes = nds.map((node) =>
         node.id === updatedNode.id ? updatedNode : node

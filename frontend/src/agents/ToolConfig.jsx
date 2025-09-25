@@ -76,7 +76,6 @@ function ToolConfig({ user }) {
         
         // Prevent duplicate calls
         if (isLoadingDiscoveryRef.current) {
-            console.log('🚫 Already loading components, skipping duplicate call');
             return;
         }
         
@@ -96,7 +95,6 @@ function ToolConfig({ user }) {
             );
             
             if (!isMountedRef.current) {
-                console.log('🚫 Component unmounted, aborting discovery load');
                 return;
             }
             
@@ -152,7 +150,6 @@ function ToolConfig({ user }) {
         
         // Prevent duplicate calls
         if (isLoadingCategoriesRef.current) {
-            console.log('🚫 Already loading categories, skipping duplicate call');
             return;
         }
         
@@ -169,7 +166,6 @@ function ToolConfig({ user }) {
             );
             
             if (!isMountedRef.current) {
-                console.log('🚫 Component unmounted, aborting category load');
                 return;
             }
             
@@ -191,7 +187,6 @@ function ToolConfig({ user }) {
         
         // Prevent duplicate calls
         if (isLoadingConfigsRef.current) {
-            console.log('🚫 Already loading configs, skipping duplicate call');
             return;
         }
         
@@ -221,7 +216,6 @@ function ToolConfig({ user }) {
             );
             
             if (!isMountedRef.current) {
-                console.log('🚫 Component unmounted, aborting config load');
                 return;
             }
             
@@ -269,7 +263,7 @@ function ToolConfig({ user }) {
     // Use exact same pattern as other components
     useEffect(() => {
         const loadData = async () => {
-            console.log('MOUNT: ToolConfig');
+            // removed mount log
             if (!isMountedRef.current) return;
             
             // Set mounted to true
@@ -293,7 +287,7 @@ function ToolConfig({ user }) {
         loadData();
         
         return () => {
-            console.log('UNMOUNT: ToolConfig');
+            // removed unmount log
             // Set mounted to false FIRST to prevent any state updates
             isMountedRef.current = false;
             isLoadingConfigsRef.current = false;

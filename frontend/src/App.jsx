@@ -80,7 +80,7 @@ function AppShell({ children, themeKey, setThemeKey, isAuthenticated }) {
 }
 
 export default function App() {
-  console.log('🌍 App RENDER', { timestamp: Date.now() });
+  // removed debug render log
   
   const [themeKey, setThemeKey] = useState(() => {
     const savedKey = localStorage.getItem('theme')

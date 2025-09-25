@@ -82,7 +82,6 @@ function ModelConfig({ user }) {
         
         // Prevent duplicate calls
         if (isLoadingDiscoveryRef.current) {
-            console.log('🚫 Already loading components, skipping duplicate call');
             return;
         }
         
@@ -115,7 +114,6 @@ function ModelConfig({ user }) {
             ]);
 
             if (!isMountedRef.current) {
-                console.log('🚫 Component unmounted, aborting discovery load');
                 return;
             }
 
@@ -192,11 +190,8 @@ function ModelConfig({ user }) {
         
         // Prevent duplicate calls
         if (isLoadingCategoriesRef.current) {
-            console.log('🚫 Already loading categories, skipping duplicate call');
             return;
         }
-        
-        console.log('🏷️ LOADING CATEGORIES...');
         try {
             isLoadingCategoriesRef.current = true;
             setLoadingCategories(true);
@@ -209,29 +204,28 @@ function ModelConfig({ user }) {
                 { token: tokenRef.current?.substring(0, 10) }
             );
             
-            console.log('📡 Load categories response:', result.success ? 'SUCCESS' : 'FAILED');
+            // removed categories response log
             
             if (!isMountedRef.current) {
-                console.log('🚫 Component unmounted, aborting category load');
                 return;
             }
             
             if (result.success) {
-                console.log('📄 Categories data:', result.data);
+                // removed categories data log
                 setCategories(result.data.categories || []);
-                console.log('✅ Categories loaded successfully');
+                // removed success log
             } else {
-                console.log('❌ Failed to load categories:', result.error);
+                // removed failure log
             }
         } catch (error) {
-            console.log('💥 ERROR loading categories:', error);
+            // removed error detail log
             console.error('Failed to load categories:', error);
         } finally {
             if (isMountedRef.current) {
                 isLoadingCategoriesRef.current = false;
                 setLoadingCategories(false);
             }
-            console.log('🏁 Load categories finished');
+            // removed finished log
         }
     }, []); // Empty dependencies
 
@@ -240,11 +234,8 @@ function ModelConfig({ user }) {
         
         // Prevent duplicate calls
         if (isLoadingConfigsRef.current) {
-            console.log('� Already loading configs, skipping duplicate call');
             return;
         }
-        
-        console.log('�🔄 LOADING EXISTING CONFIGS...');
         try {
             isLoadingConfigsRef.current = true;
             setLoadingConfigs(true);
@@ -270,17 +261,15 @@ function ModelConfig({ user }) {
                 }
             );
             
-            console.log('📡 Load configs response:', result.success ? 'SUCCESS' : 'FAILED');
+            // removed load configs response log
             
             if (!isMountedRef.current) {
-                console.log('🚫 Component unmounted, aborting config load');
                 return;
             }
             
             if (result.success) {
                 const data = result.data;
-                console.log('📄 Configs data:', data);
-                console.log('📄 First config embedding data:', data.configurations?.[0]?.embedding);
+                // removed configs data logs
                 
                 setExistingConfigs(data.configurations || []);
                 if (data.pagination) {
@@ -291,19 +280,19 @@ function ModelConfig({ user }) {
                         totalPages: data.pagination.total_pages
                     });
                 }
-                console.log('✅ Configs loaded successfully');
+                // removed success log
             } else {
-                console.log('❌ Failed to load configs:', result.error);
+                // removed failure log
             }
         } catch (e) {
-            console.log('💥 ERROR loading configs:', e);
+            // removed error log
             console.error('Failed to load existing configurations:', e);
         } finally {
             if (isMountedRef.current) {
                 isLoadingConfigsRef.current = false;
                 setLoadingConfigs(false);
             }
-            console.log('🏁 Load configs finished');
+            // removed finished log
         }
     }, []); // Empty dependencies
 
@@ -330,7 +319,7 @@ function ModelConfig({ user }) {
     // Use exact same pattern as other components
     useEffect(() => {
         const loadData = async () => {
-            console.log('MOUNT: ModelConfig');
+            // removed mount log
             if (!isMountedRef.current) return;
             
             // Set mounted to true
@@ -354,7 +343,7 @@ function ModelConfig({ user }) {
         loadData();
         
         return () => {
-            console.log('UNMOUNT: ModelConfig');
+            // removed unmount log
             // Set mounted to false FIRST to prevent any state updates
             isMountedRef.current = false;
             isLoadingConfigsRef.current = false;
@@ -369,11 +358,9 @@ function ModelConfig({ user }) {
     }
 
     function loadExistingConfig(configName) {
-        console.log('🔍 LOADING EXISTING CONFIG:', configName);
-        const config = existingConfigs.find(c => c.name === configName);
-        console.log('Found config:', config);
+    const config = existingConfigs.find(c => c.name === configName);
         if (config) {
-            console.log('✅ Config found, setting form...');
+            // removed config found log
             setForm({
                 ...config,
                 id: config.id,
@@ -391,30 +378,27 @@ function ModelConfig({ user }) {
             if (config.embedding?.strategy) {
                 ensureIntrospection(config.embedding.strategy, 'embedding');
             }
-            console.log('✅ Form set to edit mode');
+            // removed form edit mode log
         } else {
-            console.log('⚠️ Config not found, creating new...');
+            // removed not found log
             setForm({ id: null, name: configName, category: '', model: '', model_params: {}, embedding: '', embedding_params: {} });
             setIsEditMode(false);
-            console.log('✅ Form set to create mode');
+            // removed create mode log
         }
     }
 
     async function saveModelConfig() {
-        console.log('🚀 SAVE FUNCTION STARTED');
-        console.log('Form data:', form);
-        console.log('Token:', token ? 'Present' : 'Missing');
-        console.log('IsEditMode:', isEditMode);
+    // removed save start debug logs
         
         if (!form.name || !form.model || !form.embedding) {
-            console.log('❌ VALIDATION FAILED - Missing name, model or embedding');
+            // removed validation failed log
             showError('Name, model selection and embedding selection are required');
             return;
         }
         
-        console.log('✅ VALIDATION PASSED');
+    // removed validation passed log
         setSaveState(s => ({ ...s, loading: true }));
-        console.log('💾 Save state set to loading');
+    // removed save state log
         
         const configToSave = {
             name: form.name,
@@ -429,34 +413,33 @@ function ModelConfig({ user }) {
             },
             type: 'modelConfig'
         };
-        console.log('📦 Config to save:', configToSave);
+    // removed config to save log
         
         try {
-            console.log('🌐 Starting API call...');
+            // removed starting api call log
             let resp;
             if (isEditMode && form.id) {
-                console.log('📝 UPDATE mode - ID:', form.id);
+                // removed update mode log
                 resp = await apiCall(`/api/models/configs/${form.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
                     body: JSON.stringify(configToSave)
                 });
             } else {
-                console.log('✨ CREATE mode');
+                // removed create mode log
                 resp = await apiCall(`/api/models/configs`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
                     body: JSON.stringify(configToSave)
                 });
             }
-            console.log('📡 API response received:', resp.status, resp.ok);
+            // removed api response received log
             
             const data = await resp.json().catch(() => ({}));
-            console.log('📄 Response data:', data);
-            console.log('📄 Response data detail:', JSON.stringify(data.detail, null, 2));
+            // removed response data logs
             
             if (!resp.ok) {
-                console.log('❌ API ERROR:', data.detail || `Save failed (HTTP ${resp.status})`);
+                // removed api error log
                 
                 // Handle validation errors (422) which come as an array
                 let errorMessage = `Save failed (HTTP ${resp.status})`;
@@ -474,42 +457,42 @@ function ModelConfig({ user }) {
                     }
                 }
                 
-                console.log('📝 Formatted error message:', errorMessage);
+                // removed formatted error message log
                 showError(errorMessage);
                 setSaveState({ loading: false });
-                console.log('🔄 Save state reset to not loading');
+                // removed save state reset log
                 return;
             }
             
             const action = isEditMode ? 'updated' : 'saved';
-            console.log('✅ SUCCESS! Action:', action);
+            // removed success action log
             showSuccess(`Model configuration "${form.name}" ${action} successfully`);
             setSaveState({ loading: false });
-            console.log('🔄 Save state reset to not loading');
+            // removed save state reset log
             
             // Invalidate cache after successful save
             sharedApiService.invalidateCache('/api/models/configs');
             sharedApiService.invalidateCache('/api/models/categories');
             sharedApiService.invalidateCache('/api/models/components');
             
-            console.log('🔄 Reloading configs and categories...');
+            // removed reloading log
             if (isMountedRef.current) {
                 loadExistingConfigs();
                 loadCategories();
             }
             
-            console.log('🧹 Resetting form...');
+            // removed resetting form log
             setForm({ id: null, name: '', category: '', model: '', model_params: {}, embedding: '', embedding_params: {} });
             setIsEditMode(false);
             setDialogOpen(false);
-            console.log('✨ SAVE FUNCTION COMPLETED SUCCESSFULLY');
+            // removed save completed log
             
         } catch (e) {
-            console.log('💥 CATCH BLOCK ERROR:', e);
+            // removed catch block error log
             console.error('Full error object:', e);
             showError(e.message || 'Network error');
             setSaveState({ loading: false });
-            console.log('🔄 Save state reset to not loading (error)');
+            // removed save state reset error log
         }
     }
 
@@ -554,18 +537,18 @@ function ModelConfig({ user }) {
     }
 
     const openCreate = () => {
-        console.log('➕ OPENING CREATE DIALOG');
+    // removed opening create dialog log
         setForm({ id: null, name: '', category: '', model: '', model_params: {}, embedding: '', embedding_params: {} });
         setIsEditMode(false);
         setDialogOpen(true);
-        console.log('✅ Create dialog opened');
+    // removed create dialog opened log
     };
 
     const openEdit = (configName) => {
-        console.log('✏️ OPENING EDIT DIALOG for:', configName);
+    // removed opening edit dialog log
         loadExistingConfig(configName);
         setDialogOpen(true);
-        console.log('✅ Edit dialog opened');
+    // removed edit dialog opened log
     };
 
     const modelIntro = form.model ? introspectCache[form.model] : null;

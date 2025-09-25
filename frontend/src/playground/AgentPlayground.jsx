@@ -44,8 +44,7 @@ import sharedApiService from '../utils/apiService'
 
 // Simple function to detect and extract BPMN content
 const detectBPMN = (content) => {
-  console.log('🔍 BPMN Detection - Input content length:', content?.length || 0)
-  console.log('🔍 BPMN Detection - Content preview:', content?.substring(0, 200) + '...')
+  // Debug logs removed for production cleanliness
   
   if (!content) return { hasBPMN: false, bpmnXML: null, contentWithoutBPMN: content }
   
@@ -56,11 +55,8 @@ const detectBPMN = (content) => {
   ]
   
   for (const regex of bpmnRegexes) {
-    console.log('🔍 BPMN Detection - Testing regex:', regex.toString())
     const match = content.match(regex)
     if (match) {
-      console.log('✅ BPMN Match found! Length:', match[0].length)
-      console.log('✅ BPMN XML preview:', match[0].substring(0, 500) + '...')
       
       // Keep the original content intact, just mark that BPMN was found
       return {
@@ -70,8 +66,6 @@ const detectBPMN = (content) => {
       }
     }
   }
-  
-  console.log('❌ No BPMN pattern found')
   return { hasBPMN: false, bpmnXML: null, contentWithoutBPMN: content }
 }
 
@@ -125,18 +119,9 @@ export default function AgentPlayground({ user }) {
   })
 
   // Debug state changes
-  useEffect(() => {
-    console.log('🔄 conversations state changed:', conversations.length, conversations)
-  }, [conversations])
-
-  useEffect(() => {
-    console.log('🔄 historyPagination state changed:', historyPagination)
-  }, [historyPagination])
-
-  // Debug uploaded files state changes
-  useEffect(() => {
-    console.log('🔄 DEBUG: uploadedFiles state changed:', uploadedFiles)
-  }, [uploadedFiles])
+  useEffect(() => {}, [conversations])
+  useEffect(() => {}, [historyPagination])
+  useEffect(() => {}, [uploadedFiles])
 
   // Agent selector dialog
   const [selectorOpen, setSelectorOpen] = useState(false)
@@ -161,13 +146,7 @@ export default function AgentPlayground({ user }) {
   const [inputHeight, setInputHeight] = useState(180) // fallback default
 
   // Debug component mount
-  useEffect(() => {
-    console.log('MOUNT: AgentPlayground')
-    
-    return () => {
-      console.log('UNMOUNT: AgentPlayground');
-    };
-  }, [])
+  useEffect(() => { return () => {}; }, [])
 
   useEffect(() => {
     const loadAgents = async () => {
@@ -184,7 +163,6 @@ export default function AgentPlayground({ user }) {
         }
         
         const agents = result.data.agents || []
-        console.log('Loaded agents:', agents) // Debug log
         const groupedByCat = agents.reduce((acc, a) => {
           const cat = a.category || '_root'
           acc[cat] = acc[cat] || []
@@ -192,7 +170,6 @@ export default function AgentPlayground({ user }) {
           return acc
         }, {})
         Object.keys(groupedByCat).forEach(k => groupedByCat[k].sort())
-        console.log('Grouped agents:', groupedByCat) // Debug log
         setGrouped(groupedByCat)
       } catch (e) {
         console.error('Failed to load agents', e)
@@ -211,14 +188,10 @@ export default function AgentPlayground({ user }) {
     const showHistory = searchParams.get('showHistory')
 
     if (conversationId && token) {
-      console.log('Loading conversation from URL:', conversationId)
 
       const loadConversationFromUrl = async () => {
         try {
           const conv = await agentRuntimeService.getConversation(conversationId, token)
-          console.log('🔍 DEBUG URL: Loaded conversation data:', conv)
-          console.log('🔍 DEBUG URL: uploaded_files from conversation:', conv.uploaded_files)
-          console.log('🔍 DEBUG URL: uploaded_files array length:', (conv.uploaded_files || []).length)
           
           setSelected(conv.agent_name)
           setMessages(conv.messages || [])
@@ -231,7 +204,6 @@ export default function AgentPlayground({ user }) {
           const lastUserMsg = (conv.messages || []).filter(msg => msg.role === 'user').pop()
           setLastUserMessage(lastUserMsg ? lastUserMsg.content : '')
           
-          console.log('Successfully loaded conversation:', conv.conversation_id)
         } catch (e) {
           console.error('Failed to load conversation from URL:', e)
         }
@@ -240,11 +212,9 @@ export default function AgentPlayground({ user }) {
       loadConversationFromUrl()
     } else if (agentName && token) {
       // Auto-select agent from URL parameter
-      console.log('Auto-selecting agent from URL:', agentName)
       setSelected(agentName)
     } else if (showHistory === 'true' && token) {
       // Auto-open history dialog if requested
-      console.log('Auto-opening history dialog from URL')
       setTimeout(() => openHistory(), 500) // Small delay to ensure component is ready
     }
   }, [location.search, token])
@@ -306,11 +276,6 @@ export default function AgentPlayground({ user }) {
 
       // Get agent configuration to extract model_id
       const agentConfig = await agentService.getAgent(selected, token)
-      console.log('Retrieved agent config for knowledge collection:', {
-        name: agentConfig?.name,
-        hasModel: !!agentConfig?.model,
-        modelId: agentConfig?.model?.id
-      })
       
       // Extract model_id from agent's model configuration
       const modelId = agentConfig?.model?.id
@@ -326,7 +291,6 @@ export default function AgentPlayground({ user }) {
       
       // Store the vector collection name for later use
       setVectorCollectionName(vectorCollectionName)
-      console.log('Generated vector collection name:', vectorCollectionName)
       
       // Get current timestamp
       const currentTime = Date.now()
@@ -345,10 +309,6 @@ export default function AgentPlayground({ user }) {
         vector_collection: vectorCollectionName // Use the stored vector collection name
       }
       
-      console.log('Saving knowledge collection with payload structure:', {
-        ...payload,
-        model_id: payload.model_id
-      })
       
       // First save the collection configuration
       const res = await agentRuntimeService.saveKnowledgeCollection(payload, token)
@@ -466,7 +426,6 @@ export default function AgentPlayground({ user }) {
         if (historyText) {
           // Include history in the prompt
           finalPrompt = `Previous conversation history:\n${historyText}\n\nCurrent message:\n${userMsg.content}`
-          console.log('Including conversation history:', { numMessages: numHistoryMessages, historyLength: historyText.length })
         }
       }
     } catch (e) {
@@ -510,9 +469,6 @@ export default function AgentPlayground({ user }) {
         title: generateTitle(newMessages)
       }
       
-      console.log('💾 DEBUG SAVE: Saving conversation with payload:', savePayload)
-      console.log('💾 DEBUG SAVE: uploaded_files being saved:', currentUploadedFiles)
-      console.log('💾 DEBUG SAVE: uploaded_files array length:', currentUploadedFiles.length)
       
       await agentRuntimeService.saveConversation(savePayload, token)
     } catch (e) {
@@ -666,8 +622,7 @@ export default function AgentPlayground({ user }) {
   }, [selected, prompt, stagedFiles, uploadedFiles, messages, currentConversationId, sessionCollection, vectorCollectionName, token])
 
   const openHistory = async (page = 1) => {
-    console.log('🚀 openHistory CALLED with page:', page)
-    console.log('🚀 Current state - historyOpen:', historyOpen, 'loadingHistory:', loadingHistory)
+  // Open history invoked
 
     // Only show full loading on initial open, not on pagination
     const isInitialLoad = !historyOpen
@@ -684,9 +639,6 @@ export default function AgentPlayground({ user }) {
       const currentPage = page
       const pageSize = 5  // Fixed page size to match backend
 
-      console.log(`🔍 Requesting conversations: page=${currentPage}, size=${pageSize}`)
-      console.log(`🎫 Using token: ${token ? 'Present' : 'Missing'}`)
-      console.log(`🎫 Token value: ${token ? token.substring(0, 20) + '...' : 'NULL'}`)
 
       if (!token) {
         throw new Error('No authentication token available')
@@ -697,26 +649,14 @@ export default function AgentPlayground({ user }) {
         page_size: pageSize
       })
 
-      console.log('📥 Raw API response:', result)
-      console.log('📊 Response type:', typeof result, Array.isArray(result) ? 'Array' : 'Object')
 
       // Check if result has pagination structure
       if (result && result.conversations && result.pagination) {
-        console.log('✅ Using paginated response format - conversations:', result.conversations.length)
-        console.log('✅ Setting conversations state:', result.conversations)
-        console.log('✅ Setting pagination state:', result.pagination)
-        console.log('✅ Conversations before setState:', conversations.length)
-        setConversations(result.conversations)
-        setHistoryPagination(result.pagination)
-        console.log('✅ State update calls completed')
+  setConversations(result.conversations)
+  setHistoryPagination(result.pagination)
 
         // Verify state was actually set (note: this might show old state due to async nature)
-        setTimeout(() => {
-          console.log('✅ Conversations after setState (delayed check):', conversations.length)
-        }, 100)
       } else if (Array.isArray(result)) {
-        console.log('⚠️ Using legacy array format - length:', result.length)
-        console.log('⚠️ Array result:', result)
         setConversations(result)
         setHistoryPagination({
           page: 1,
@@ -727,8 +667,6 @@ export default function AgentPlayground({ user }) {
           has_prev: false
         })
       } else if (result && Array.isArray(result.conversations)) {
-        console.log('⚠️ Using conversations array without pagination - length:', result.conversations.length)
-        console.log('⚠️ Conversations array:', result.conversations)
         setConversations(result.conversations)
         setHistoryPagination({
           page: 1,
@@ -739,11 +677,6 @@ export default function AgentPlayground({ user }) {
           has_prev: false
         })
       } else {
-        console.log('❌ No conversations found or unexpected format')
-        console.log('❌ Result structure:', JSON.stringify(result, null, 2))
-        console.log('❌ Result type:', typeof result)
-        console.log('❌ Is result null?', result === null)
-        console.log('❌ Is result undefined?', result === undefined)
         setConversations([])
         setHistoryPagination({
           page: 1,
@@ -769,8 +702,7 @@ export default function AgentPlayground({ user }) {
         has_prev: false
       })
     } finally {
-      console.log('🏁 openHistory finally block - setting loading states to false')
-      console.log('🏁 Current conversations length:', conversations.length)
+  // History load completed
       setLoadingHistory(false)
       setLoadingPagination(false)
     }
@@ -779,9 +711,6 @@ export default function AgentPlayground({ user }) {
   const loadConversation = async (id) => {
     try {
       const conv = await agentRuntimeService.getConversation(id, token)
-      console.log('🔍 DEBUG: Loaded conversation data:', conv)
-      console.log('🔍 DEBUG: uploaded_files from conversation:', conv.uploaded_files)
-      console.log('🔍 DEBUG: uploaded_files array length:', (conv.uploaded_files || []).length)
       
       setSelected(conv.agent_name)
       setMessages(conv.messages || [])
@@ -829,9 +758,6 @@ export default function AgentPlayground({ user }) {
 
   // Handle edit BPMN button click
   const handleEditBPMN = (bpmnXML) => {
-    console.log('🚀 handleEditBPMN called with XML length:', bpmnXML?.length)
-    console.log('🚀 handleEditBPMN XML preview (first 500 chars):', bpmnXML?.substring(0, 500))
-    console.log('🚀 handleEditBPMN XML preview (last 500 chars):', bpmnXML?.substring(bpmnXML.length - 500))
     
     // Navigate to dashboard/bpmn with the XML data
     navigate('/dashboard/bpmn', {
@@ -841,10 +767,6 @@ export default function AgentPlayground({ user }) {
       }
     })
     
-    console.log('🚀 Navigation initiated with state:', {
-      initialBPMN: bpmnXML?.length ? `${bpmnXML.length} characters` : 'null/empty',
-      editMode: true
-    })
   }
 
   const renderGroupedList = () => {
@@ -955,8 +877,6 @@ export default function AgentPlayground({ user }) {
                 }}>
                   {(() => {
                     const bpmnData = detectBPMN(m.content)
-                    console.log('🎨 Rendering message - BPMN detected:', bpmnData.hasBPMN)
-                    console.log('🎨 Content length:', m.content?.length || 0)
                     
                     return (
                       <>
@@ -1022,7 +942,7 @@ export default function AgentPlayground({ user }) {
                                   console.error('🔥 BPMN Component Error:', error)
                                 }}
                                 onLoad={() => {
-                                  console.log('✅ BPMN Component Loaded Successfully')
+                                  // BPMN component loaded
                                 }}
                               />
                             </Box>

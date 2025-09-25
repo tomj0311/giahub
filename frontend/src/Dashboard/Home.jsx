@@ -283,7 +283,6 @@ export default function Home({ user }) {
     
     // Prevent duplicate calls
     if (isLoadingRef.current) {
-      console.log('🚫 Already loading agents data, skipping duplicate call');
       return;
     }
     
@@ -307,27 +306,24 @@ export default function Home({ user }) {
         }
       );
 
-      console.log('🔍 AGENTS API RESPONSE:', agentsResult.success ? 'SUCCESS' : 'FAILED')
+  // removed api response debug log
 
       if (!isMountedRef.current) {
-        console.log('🚫 Component unmounted, aborting agents data load');
+        // component unmounted during load
         return;
       }
 
       if (agentsResult.success) {
         const agentsData = agentsResult.data
-        console.log('📄 AGENTS DATA:', agentsData)
+  // removed verbose agents data log
         const agentsList = agentsData.agents || []
         const paginationData = agentsData.pagination || {}
 
-        console.log('📋 AGENTS LIST:', agentsList)
-        console.log('📊 PAGINATION:', paginationData)
+  // removed lists/pagination debug logs
 
         setAgents(agentsList)
         setDisplayedAgents(agentsList)
         setPagination(paginationData)
-      } else {
-        console.log('❌ AGENTS API FAILED:', agentsResult.error)
       }
     } catch (error) {
       console.error('Failed to fetch agents data:', error)
@@ -343,7 +339,7 @@ export default function Home({ user }) {
 
   // Initial data fetch on component mount
   useEffect(() => {
-    console.log('MOUNT: Home');
+  // removed mount log
     
     // Set mounted to true
     isMountedRef.current = true;
@@ -420,7 +416,7 @@ export default function Home({ user }) {
     fetchInitialData()
     
     return () => {
-      console.log('UNMOUNT: Home');
+  // removed unmount log
       // Set mounted to false FIRST to prevent any state updates
       isMountedRef.current = false;
       isLoadingRef.current = false;
