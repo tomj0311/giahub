@@ -163,7 +163,8 @@ async def list_conversations(
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     sort_by: str = Query("updated_at", description="Sort field"),
-    sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order")
+    sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order"),
+    agent_name: Optional[str] = Query(None, description="Filter by agent name")
 ):
     """List conversations for current tenant with pagination and sorting."""
     # CRITICAL: tenant_id is required - no fallbacks allowed
@@ -177,14 +178,19 @@ async def list_conversations(
         )
     
     try:
-        logger.info(f"[CONVERSATIONS] Fetching conversations - page: {page}, page_size: {page_size}, tenant: {tenant_id}")
+        logger.info(f"[CONVERSATIONS] Fetching conversations - page: {page}, page_size: {page_size}, tenant: {tenant_id}, agent_name: {agent_name}")
         
         # Calculate pagination
         skip = (page - 1) * page_size
         logger.info(f"[CONVERSATIONS] Pagination - skip: {skip}, limit: {page_size}")
         
+        # Build filter
+        filter_dict = {}
+        if agent_name:
+            filter_dict["agent_name"] = agent_name
+        
         # Get total count first for debugging
-        total_count = await MongoStorageService.count_documents("conversations", {}, tenant_id=tenant_id)
+        total_count = await MongoStorageService.count_documents("conversations", filter_dict, tenant_id=tenant_id)
         logger.info(f"[CONVERSATIONS] Total conversations found: {total_count}")
         
         if total_count == 0:
@@ -201,7 +207,7 @@ async def list_conversations(
         # Get paginated results
         docs = await MongoStorageService.find_many(
             "conversations", 
-            filter_dict={}, 
+            filter_dict=filter_dict, 
             tenant_id=tenant_id, 
             sort_field=sort_by,
             sort_order=sort_direction,

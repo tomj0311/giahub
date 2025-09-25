@@ -644,11 +644,15 @@ export default function AgentPlayground({ user }) {
         throw new Error('No authentication token available')
       }
 
-      const result = await agentRuntimeService.listConversations(token, {
+      console.log('🎯 Selected agent for filtering:', selected)
+      const params = {
         page: currentPage,
         page_size: pageSize,
         ...(selected && { agent_name: selected })
-      })
+      }
+      console.log('📡 API call params:', params)
+      
+      const result = await agentRuntimeService.listConversations(token, params)
 
 
       // Check if result has pagination structure
