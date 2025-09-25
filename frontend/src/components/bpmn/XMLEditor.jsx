@@ -47,9 +47,27 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
       const formatted = formatXML(xmlContent);
       setEditedXml(formatted);
     } else {
-      setEditedXml('');
+      // Initialize empty XML structure based on task type
+      const taskType = selectedNode?.data?.taskType || elementType;
+      if (taskType === 'userTask') {
+        // Initialize with basic extensionElements structure for userTask
+        const initialXml = `<extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+  <formData>
+    <formMetadata formId="userInfoForm" version="1.0" display="inline">
+      <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+        <![CDATA[
+          <!-- JSX component code will be generated here -->
+        ]]>
+      </script>
+    </formMetadata>
+  </formData>
+</extensionElements>`;
+        setEditedXml(initialXml);
+      } else {
+        setEditedXml('');
+      }
     }
-  }, [xmlContent]);
+  }, [xmlContent, elementType, selectedNode]);
 
   const formatXML = (xml) => {
     if (!xml) return '';
@@ -529,7 +547,39 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
                       updated = true;
                     }
 
-                    // 3. If no CDATA was updated, try to update formMetadata only if formData exists  
+                    // 2.5. If no updates and this is a userTask with no XML, create extensionElements structure
+                    const isUserTask = taskType === 'userTask' || (taskType === 'task' && selected === 'JSX Component Generator');
+                    if (!updated && isUserTask && doc.documentElement.children.length === 0) {
+                      console.log('🟡 [XML DEBUG] No XML elements found for userTask, creating extensionElements structure');
+                      
+                      // Create extensionElements
+                      const extensionElements = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'extensionElements');
+                      extensionElements.setAttribute('xmlns', 'http://www.omg.org/spec/BPMN/20100524/MODEL');
+                      
+                      // Create formData
+                      const formData = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'formData');
+                      
+                      // Create formMetadata
+                      const formMetadata = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'formMetadata');
+                      formMetadata.setAttribute('formId', 'userInfoForm');
+                      formMetadata.setAttribute('version', '1.0');
+                      formMetadata.setAttribute('display', 'inline');
+                      
+                      // Create script with CDATA
+                      const script = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'script');
+                      script.setAttribute('xmlns', 'http://www.omg.org/spec/BPMN/20100524/MODEL');
+                      script.appendChild(doc.createCDATASection(`\n${cgResponse}\n`));
+                      
+                      // Assemble the structure
+                      formMetadata.appendChild(script);
+                      formData.appendChild(formMetadata);
+                      extensionElements.appendChild(formData);
+                      doc.documentElement.appendChild(extensionElements);
+                      
+                      updated = true;
+                    }
+
+                    // 3. If no CDATA was updated, try to update formMetadata if formData exists  
                     if (!updated) {
                       let formData = doc.querySelector('formData');
                       if (formData) {
@@ -548,7 +598,15 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
                           script.setAttribute('xmlns', 'http://www.omg.org/spec/BPMN/20100524/MODEL');
                           formMetadata.appendChild(script);
                         }
+                        // Clear existing content and add new CDATA
                         script.textContent = '';
+                        // Remove any existing CDATA sections
+                        for (let i = script.childNodes.length - 1; i >= 0; i--) {
+                          const child = script.childNodes[i];
+                          if (child.nodeType === 4) { // CDATASection
+                            script.removeChild(child);
+                          }
+                        }
                         script.appendChild(doc.createCDATASection(`\n${cgResponse}\n`));
                         updated = true;
                       } else {
