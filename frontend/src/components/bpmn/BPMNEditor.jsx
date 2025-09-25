@@ -181,18 +181,18 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
         // Apply colors based on task state
         // State 64 = COMPLETED (light green)
         if (taskStatus.state === 64) {
-          backgroundColor = '#d4edda'; // Light green
-          borderColor = '#28a745';
+          backgroundColor = '#2b4f34ff'; // Light green
+          // borderColor = '#327542ff';
         }
         // State 16 = READY/STARTED (light amber)
         else if (taskStatus.state === 16) {
-          backgroundColor = '#fff3cd'; // Light amber
-          borderColor = '#ffc107';
+          backgroundColor = '#766226ff'; // Light amber
+          // borderColor = '#ffc107';
         }
         // State 128 = ERROR (light red)
         else if (taskStatus.state === 128) {
-          backgroundColor = '#f8d7da'; // Light red
-          borderColor = '#dc3545';
+          backgroundColor = '#762e34ff'; // Light red
+          // borderColor = '#822a33ff';
         }
         // Other states can be handled here as needed
         

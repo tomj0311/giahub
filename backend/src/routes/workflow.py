@@ -107,8 +107,6 @@ async def submit_user_task(
 ):
     """Submit user task data and continue workflow"""
     try:
-        tenant_id = await WorkflowServicePersistent.validate_tenant_access(user)
-        
         # Extract task_id and task_data from request
         task_id = request.get("task_id")
         task_data = request.get("data", {})
