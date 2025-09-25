@@ -78,6 +78,7 @@ function WorkflowExecution({ user }) {
   const [workflowConfig, setWorkflowConfig] = useState(null);
   const [bpmnData, setBpmnData] = useState(null);
   const [loadingWorkflow, setLoadingWorkflow] = useState(false);
+  const [taskStatusData, setTaskStatusData] = useState(null);
 
   const token = useMemo(() => user?.token || localStorage.getItem('token'), [user?.token]);
   const headers = useMemo(
@@ -298,6 +299,31 @@ function WorkflowExecution({ user }) {
           const workflowData = result.data.data;
           setSelectedInstance(workflowData);
           
+          // Extract task status data for BPMN coloring
+          const statusData = {};
+          if (workflowData.serialized_data && workflowData.serialized_data.tasks) {
+            Object.entries(workflowData.serialized_data.tasks).forEach(([taskId, task]) => {
+              // Map task IDs to their status for BPMN coloring
+              statusData[taskId] = {
+                state: task.state,
+                typename: task.typename,
+                task_spec: task.task_spec
+              };
+              
+              // Also map by task_spec if available for better matching
+              if (task.task_spec) {
+                statusData[task.task_spec] = {
+                  state: task.state,
+                  typename: task.typename,
+                  task_spec: task.task_spec
+                };
+              }
+            });
+          }
+          
+          // Update the BPMN viewer with task status data
+          setTaskStatusData(statusData);
+          
           // Find pending and error tasks (state 16 = READY, state 128 = ERROR)
           const pendingTasks = [];
           const errorTasks = [];
@@ -500,6 +526,8 @@ function WorkflowExecution({ user }) {
     setDialogOpen(false);
     setSelectedInstance(null);
     setFormData({});
+    // Clear task status data when closing dialog to reset BPMN colors
+    setTaskStatusData(null);
   }, []);
 
   const handleDeleteInstance = useCallback(
@@ -642,6 +670,7 @@ function WorkflowExecution({ user }) {
                 showPropertyPanel={false}
                 initialTheme={theme.palette.mode}
                 initialBPMN={bpmnData}
+                taskStatusData={taskStatusData}
                 style={{ 
                   height: '100%', 
                   width: '100%',

@@ -124,7 +124,7 @@ const initialNodes = [
   },
 ];
 
-const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPropertyPanel = true, readOnly = false, initialBPMN = null }) => {
+const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPropertyPanel = true, readOnly = false, initialBPMN = null, taskStatusData = null }) => {
   const reactFlowWrapper = useRef(null);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -156,6 +156,64 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
     });
     setHistoryIndex(prev => Math.min(prev + 1, 49));
   }, [historyIndex, history.length]);
+
+  // Function to update node colors based on task status
+  const updateNodeColors = useCallback((statusData) => {
+    if (!statusData) return;
+    
+    setNodes((currentNodes) => {
+      return currentNodes.map((node) => {
+        // Only apply colors to task nodes
+        if (!node.type?.includes('Task') && node.type !== 'task') {
+          return node;
+        }
+        
+        // Find status for this node based on task spec or node ID
+        const taskStatus = statusData[node.id] || statusData[node.data?.originalXML?.match(/id="([^"]+)"/)?.[1]];
+        
+        if (!taskStatus) {
+          return node;
+        }
+        
+        let backgroundColor = '';
+        let borderColor = '';
+        
+        // Apply colors based on task state
+        // State 64 = COMPLETED (light green)
+        if (taskStatus.state === 64) {
+          backgroundColor = '#d4edda'; // Light green
+          borderColor = '#28a745';
+        }
+        // State 16 = READY/STARTED (light amber)
+        else if (taskStatus.state === 16) {
+          backgroundColor = '#fff3cd'; // Light amber
+          borderColor = '#ffc107';
+        }
+        // State 128 = ERROR (light red)
+        else if (taskStatus.state === 128) {
+          backgroundColor = '#f8d7da'; // Light red
+          borderColor = '#dc3545';
+        }
+        // Other states can be handled here as needed
+        
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            backgroundColor,
+            borderColor
+          }
+        };
+      });
+    });
+  }, [setNodes]);
+
+  // Update node colors when taskStatusData changes
+  useEffect(() => {
+    if (taskStatusData) {
+      updateNodeColors(taskStatusData);
+    }
+  }, [taskStatusData, updateNodeColors]);
 
   // Undo function
   const undo = useCallback(() => {
@@ -1027,11 +1085,12 @@ const MemoizedBPMNEditorFlow = React.memo(BPMNEditorFlow, (prevProps, nextProps)
     prevProps.showPropertyPanel === nextProps.showPropertyPanel &&
     prevProps.readOnly === nextProps.readOnly &&
     prevProps.initialBPMN === nextProps.initialBPMN &&
-    prevProps.onToggleTheme === nextProps.onToggleTheme
+    prevProps.onToggleTheme === nextProps.onToggleTheme &&
+    prevProps.taskStatusData === nextProps.taskStatusData
   );
 });
 
-const BPMNEditor = ({ isDarkMode, onToggleTheme, showToolbox, showPropertyPanel, readOnly, initialBPMN }) => (
+const BPMNEditor = ({ isDarkMode, onToggleTheme, showToolbox, showPropertyPanel, readOnly, initialBPMN, taskStatusData }) => (
   <ReactFlowProvider>
     <MemoizedBPMNEditorFlow 
       isDarkMode={isDarkMode} 
@@ -1040,6 +1099,7 @@ const BPMNEditor = ({ isDarkMode, onToggleTheme, showToolbox, showPropertyPanel,
       showPropertyPanel={showPropertyPanel}
       readOnly={readOnly}
       initialBPMN={initialBPMN}
+      taskStatusData={taskStatusData}
     />
   </ReactFlowProvider>
 );

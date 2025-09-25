@@ -17,6 +17,7 @@ import './BPMN.css';
  * - showPropertyPanel: boolean (default: true) - Controls property panel visibility
  * - readOnly: boolean (default: false) - When true, acts as BPMNViewer
  * - initialBPMN: string - Initial BPMN XML to load
+ * - taskStatusData: object - Task status data for coloring nodes based on workflow state
  */
 function BPMN({ 
   initialTheme = 'auto', 
@@ -27,6 +28,7 @@ function BPMN({
   showPropertyPanel = true,
   readOnly = false,
   initialBPMN = null,
+  taskStatusData = null,
   ...props 
 }) {
   // Initialize theme synchronously to prevent flash
@@ -101,6 +103,7 @@ function BPMN({
         showPropertyPanel={showPropertyPanel}
         readOnly={readOnly}
         initialBPMN={initialBPMN}
+        taskStatusData={taskStatusData}
       />
     </div>
   );
