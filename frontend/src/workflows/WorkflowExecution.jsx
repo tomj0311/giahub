@@ -663,16 +663,6 @@ function WorkflowExecution({ user }) {
           </Alert>
         ) : null}
 
-        <Button
-          variant="contained"
-          size="large"
-          startIcon={<ArrowLeft />}
-          onClick={() => navigate('/dashboard/monitor')}
-          sx={{ mt: 3 }}
-        >
-          Back to Monitor Dashboard
-        </Button>
-
         {error && (
           <Box sx={{ mt: 3 }}>
             <Typography color="error">{error}</Typography>
