@@ -931,6 +931,7 @@ export default function AgentPlayground({ user }) {
                                 readOnly={true}
                                 showToolbox={false}
                                 showPropertyPanel={false}
+                                initialTheme={theme.palette.mode}
                                 initialBPMN={bpmnData.bpmnXML}
                                 style={{ 
                                   height: '100%', 
