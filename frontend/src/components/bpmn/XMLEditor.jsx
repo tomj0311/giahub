@@ -24,11 +24,9 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
   // Set hardcoded agent based on element type
   useEffect(() => {
     let agentName = 'Python Code Generator'; // default
-    console.log('🔍 Element type received:', elementType);
     
     // Use the taskType from selectedNode data if available
     const taskType = selectedNode?.data?.taskType || elementType;
-    console.log('🔍 Task type to use:', taskType);
     
     if (taskType === 'userTask') {
       agentName = 'JSX Component Generator';
@@ -38,7 +36,6 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
       agentName = 'Python Code Generator';
     }
     
-    console.log('🎯 Selected agent:', agentName);
     setSelected(agentName);
   }, [elementType, selectedNode]);
 

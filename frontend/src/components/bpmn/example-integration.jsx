@@ -8,12 +8,10 @@ function ExampleApp() {
   const [currentTheme, setCurrentTheme] = useState('auto');
 
   const handleThemeChange = (theme) => {
-    console.log('BPMN theme changed to:', theme);
     setCurrentTheme(theme);
   };
 
   const handleExportData = (bpmnXml) => {
-    console.log('Exported BPMN:', bpmnXml);
     // Handle the exported data as needed
   };
 

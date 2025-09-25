@@ -81,14 +81,11 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
   };
 
   const handleInputChange = (field, value) => {
-    console.log('🎨 PropertyPanel - Color input changed:', field, '=', value);
     const updatedData = { ...nodeData, [field]: value };
     setNodeData(updatedData);
-    console.log('🎨 PropertyPanel - Updated nodeData:', updatedData);
     
     // Auto-save color changes immediately (restore original behavior)
     if ((field === 'backgroundColor' || field === 'borderColor') && (selectedNode || selectedEdge)) {
-      console.log('🎨 PropertyPanel - AUTO-SAVING color change for:', field);
       
       if (selectedNode) {
         const updatedNode = {
@@ -102,7 +99,6 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
             [field]: value
           }
         };
-        console.log('🎨 PropertyPanel - Auto-saving node color:', field, '=', value);
         onNodeUpdate(updatedNode);
       } else if (selectedEdge) {
         const updatedEdge = {
@@ -116,7 +112,6 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
             [field]: value
           }
         };
-        console.log('🎨 PropertyPanel - Auto-saving edge color:', field, '=', value);
         onEdgeUpdate(updatedEdge);
       }
     }
@@ -124,33 +119,23 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
   };
 
   const handleSave = () => {
-    console.log('🔥 SAVE BUTTON CLICKED!');
-    console.log('📝 Current xmlContent:', xmlContent);
-    console.log('🎯 Selected Node:', selectedNode);
-    console.log('🔗 Selected Edge:', selectedEdge);
     
     // For gateway nodes, ALWAYS update the related sequence flows, not the gateway itself
     if (selectedNode && selectedNode.type && selectedNode.type.includes('gateway')) {
-      console.log('🚪 GATEWAY DETECTED - Processing multiple flows');
       // Update all related edges
       const gatewayId = selectedNode.id;
       const relatedEdges = edges.filter(edge => 
         edge.source === gatewayId || edge.target === gatewayId
       );
       
-      console.log('🔍 Related edges found:', relatedEdges.length);
-      
       // Parse the XML content to extract individual sequence flows
       const parser = new DOMParser();
       const tempDoc = parser.parseFromString(`<root>${xmlContent}</root>`, 'text/xml');
       const sequenceFlows = tempDoc.querySelectorAll('sequenceFlow');
       
-      console.log('📋 Parsed sequence flows:', sequenceFlows.length);
-      
       sequenceFlows.forEach(flow => {
         const flowId = flow.getAttribute('id');
         const relatedEdge = relatedEdges.find(edge => edge.id === flowId);
-        console.log(`🔄 Processing flow ${flowId}, found edge:`, !!relatedEdge);
         
         if (relatedEdge) {
           // Extract nested elements
@@ -163,8 +148,6 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
             }
           }
           
-          console.log(`📦 Extracted nested elements for ${flowId}:`, originalNestedElements);
-          
           // Update the edge with new XML
           const updatedEdge = {
             ...relatedEdge,
@@ -176,12 +159,10 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
             }
           };
           
-          console.log(`🚀 CALLING onEdgeUpdate for ${flowId}`);
           onEdgeUpdate(updatedEdge);
         }
       });
     } else if (selectedEdge) {
-      console.log('📄 SINGLE EDGE UPDATE');
       // Single edge update
       const updatedEdge = {
         ...selectedEdge,
@@ -195,11 +176,8 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
           originalXML: xmlContent
         }
       };
-      console.log('🚀 CALLING onEdgeUpdate for single edge');
       onEdgeUpdate(updatedEdge);
     } else if (selectedNode) {
-      console.log('💾 SAVING NODE CHANGES...');
-      console.log('🎨 PropertyPanel - Saving colors - backgroundColor:', nodeData.backgroundColor, 'borderColor:', nodeData.borderColor);
       // Update node (for non-gateway nodes)
       const updatedNode = {
         ...selectedNode,
@@ -218,12 +196,8 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
           borderColor: nodeData.borderColor || selectedNode.style?.borderColor
         }
       };
-      console.log('🎨 PropertyPanel - Updated node with colors:', updatedNode.data.backgroundColor, updatedNode.data.borderColor);
-      console.log('🚀 CALLING onNodeUpdate');
       onNodeUpdate(updatedNode);
     }
-    
-    console.log('✅ SAVE FUNCTION COMPLETED');
   };
 
   const toggleSection = (section) => {
@@ -291,9 +265,6 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
                       selectedEdge?.data?.originalNestedElements ||
                       selectedNode?.data?.originalXML ||
                       selectedEdge?.data?.originalXML;
-    
-    console.log('🔍 PropertyPanel - selectedNode:', selectedNode);
-    console.log('🔍 PropertyPanel - xmlContent:', xmlContent);
     
     if (!xmlContent) {
       return ''; // Return empty string instead of error message for XMLEditor
