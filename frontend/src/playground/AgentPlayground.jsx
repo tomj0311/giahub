@@ -133,6 +133,11 @@ export default function AgentPlayground({ user }) {
     console.log('🔄 historyPagination state changed:', historyPagination)
   }, [historyPagination])
 
+  // Debug uploaded files state changes
+  useEffect(() => {
+    console.log('🔄 DEBUG: uploadedFiles state changed:', uploadedFiles)
+  }, [uploadedFiles])
+
   // Agent selector dialog
   const [selectorOpen, setSelectorOpen] = useState(false)
 
@@ -211,6 +216,10 @@ export default function AgentPlayground({ user }) {
       const loadConversationFromUrl = async () => {
         try {
           const conv = await agentRuntimeService.getConversation(conversationId, token)
+          console.log('🔍 DEBUG URL: Loaded conversation data:', conv)
+          console.log('🔍 DEBUG URL: uploaded_files from conversation:', conv.uploaded_files)
+          console.log('🔍 DEBUG URL: uploaded_files array length:', (conv.uploaded_files || []).length)
+          
           setSelected(conv.agent_name)
           setMessages(conv.messages || [])
           setUploadedFiles(conv.uploaded_files || [])
@@ -466,6 +475,7 @@ export default function AgentPlayground({ user }) {
     }
 
     // upload files with conversation ID as collection name
+    let currentUploadedFiles = uploadedFiles
     if (stagedFiles.length) {
       try {
         // Override the collection name in uploadStagedFiles to use conversation ID
@@ -477,7 +487,9 @@ export default function AgentPlayground({ user }) {
         await saveKnowledgeCollection(collectionName, files)
         
         const names = files.map(f => f.name)
-        setUploadedFiles(prev => [...prev, ...names])
+        const newUploadedFiles = [...uploadedFiles, ...names]
+        setUploadedFiles(newUploadedFiles)
+        currentUploadedFiles = newUploadedFiles // Use updated files for conversation save
         setStagedFiles([])
         setUploading(false)
       } catch (e) {
@@ -488,15 +500,21 @@ export default function AgentPlayground({ user }) {
 
     // Save user message immediately
     try {
-      await agentRuntimeService.saveConversation({
+      const savePayload = {
         conversation_id: convId,
         agent_name: selected,
         messages: newMessages,
-        uploaded_files: uploadedFiles,
+        uploaded_files: currentUploadedFiles, // Use the current uploaded files
         conv_id: convId,
         vector_collection_name: vectorCollectionName,
         title: generateTitle(newMessages)
-      }, token)
+      }
+      
+      console.log('💾 DEBUG SAVE: Saving conversation with payload:', savePayload)
+      console.log('💾 DEBUG SAVE: uploaded_files being saved:', currentUploadedFiles)
+      console.log('💾 DEBUG SAVE: uploaded_files array length:', currentUploadedFiles.length)
+      
+      await agentRuntimeService.saveConversation(savePayload, token)
     } catch (e) {
       console.error('Failed to save user message:', e)
     }
@@ -579,7 +597,7 @@ export default function AgentPlayground({ user }) {
                       conversation_id: convId,
                       agent_name: selected,
                       messages: updated,
-                      uploaded_files: uploadedFiles,
+                      uploaded_files: currentUploadedFiles,
                       conv_id: convId,
                       vector_collection_name: vectorCollectionName,
                       title: generateTitle(updated)
@@ -602,7 +620,7 @@ export default function AgentPlayground({ user }) {
                       conversation_id: convId,
                       agent_name: selected,
                       messages: updated,
-                      uploaded_files: uploadedFiles,
+                      uploaded_files: currentUploadedFiles,
                       conv_id: convId,
                       vector_collection_name: vectorCollectionName,
                       title: generateTitle(updated)
@@ -633,7 +651,7 @@ export default function AgentPlayground({ user }) {
           conversation_id: convId,
           agent_name: selected,
           messages: updated,
-          uploaded_files: uploadedFiles,
+          uploaded_files: currentUploadedFiles,
           conv_id: convId,
           vector_collection_name: vectorCollectionName,
           title: generateTitle(updated)
@@ -761,6 +779,10 @@ export default function AgentPlayground({ user }) {
   const loadConversation = async (id) => {
     try {
       const conv = await agentRuntimeService.getConversation(id, token)
+      console.log('🔍 DEBUG: Loaded conversation data:', conv)
+      console.log('🔍 DEBUG: uploaded_files from conversation:', conv.uploaded_files)
+      console.log('🔍 DEBUG: uploaded_files array length:', (conv.uploaded_files || []).length)
+      
       setSelected(conv.agent_name)
       setMessages(conv.messages || [])
       setUploadedFiles(conv.uploaded_files || [])

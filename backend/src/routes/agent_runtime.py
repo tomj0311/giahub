@@ -299,6 +299,9 @@ async def get_conversation(conversation_id: str, user: dict = Depends(verify_tok
         "conv_id": conv_id,
         "updated_at": int((doc.get("updated_at") or datetime.utcnow()).timestamp() * 1000),
         "title": doc.get("title"),
+        "vector_collection_name": doc.get("vector_collection_name"),
+        "session_collection": doc.get("session_collection"),
+        "session_prefix": doc.get("session_prefix"),
     }
 
 
