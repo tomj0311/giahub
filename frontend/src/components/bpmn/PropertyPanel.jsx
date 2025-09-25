@@ -354,11 +354,6 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
       <div className="property-panel-header">
         <h3>Properties</h3>
         <div className="header-buttons">
-          {(selectedNode || selectedEdge) && (
-            <button className="save-btn" onClick={handleSave}>
-              Save
-            </button>
-          )}
           <button className="panel-toggle-btn" onClick={onToggle}>
             {isOpen ? '→' : '←'}
           </button>
@@ -515,13 +510,7 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
                     rows={6}
                     disabled={readOnly}
                   />
-                  <button 
-                    className="save-btn" 
-                    onClick={handleSave}
-                    style={{marginTop: '10px', width: '100%', padding: '8px'}}
-                  >
-                    💾 Save Documentation
-                  </button>
+
                 </div>
               </div>
             )}
@@ -548,6 +537,13 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Save Button at Bottom */}
+          <div className="property-panel-footer">
+            <button className="save-btn save-btn-bottom" onClick={handleSave}>
+              Save Changes
+            </button>
           </div>
         </div>
       )}

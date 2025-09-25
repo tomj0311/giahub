@@ -40,9 +40,9 @@
 }
 
 .save-btn {
-  background: #4f46e5;
-  border: 1px solid #4338ca;
-  color: white;
+  background: var(--accent-color);
+  border: 1px solid var(--accent-hover);
+  color: var(--node-bg);
   padding: 6px 12px;
   border-radius: 4px;
   cursor: pointer;
@@ -52,17 +52,18 @@
 }
 
 .save-btn:hover {
-  background: #4338ca;
+  background: var(--accent-hover);
 }
 
 .save-btn:active {
-  background: #3730a3;
+  background: var(--accent-hover);
+  opacity: 0.8;
 }
 
 .save-xml-btn {
-  background: #dc2626;
-  border: 1px solid #b91c1c;
-  color: white;
+  background: var(--danger-color);
+  border: 1px solid var(--danger-color);
+  color: var(--node-bg);
   padding: 10px 20px;
   border-radius: 6px;
   cursor: pointer;
@@ -75,11 +76,13 @@
 }
 
 .save-xml-btn:hover {
-  background: #b91c1c;
+  background: var(--danger-color);
+  opacity: 0.9;
 }
 
 .save-xml-btn:active {
-  background: #991b1b;
+  background: var(--danger-color);
+  opacity: 0.8;
 }
 
 /* XML Editor Section Styling */
@@ -90,9 +93,9 @@
 }
 
 .edit-xml-btn {
-  background: #dc2626;
-  border: 1px solid #b91c1c;
-  color: white;
+  background: var(--danger-color);
+  border: 1px solid var(--danger-color);
+  color: var(--node-bg);
   padding: 12px 24px;
   border-radius: 6px;
   cursor: pointer;
@@ -105,17 +108,20 @@
 }
 
 .edit-xml-btn:hover {
-  background: #b91c1c;
+  background: var(--danger-color);
+  opacity: 0.9;
 }
 
 .edit-xml-btn:active {
-  background: #991b1b;
+  background: var(--danger-color);
+  opacity: 0.8;
 }
 
 .edit-xml-btn:disabled {
-  background: #9ca3af;
-  border-color: #6b7280;
+  background: var(--text-secondary);
+  border-color: var(--text-secondary);
   cursor: not-allowed;
+  opacity: 0.6;
 }
 
 /* XML Preview Styling */
@@ -323,6 +329,45 @@
   background: var(--bg-secondary);
   color: var(--text-secondary);
   cursor: not-allowed;
+}
+
+/* Property Panel Footer */
+.property-panel-footer {
+  padding: 16px;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  margin-top: auto;
+}
+
+.save-btn-bottom {
+  background: var(--accent-color);
+  border: 1px solid var(--accent-hover);
+  color: var(--node-bg);
+  padding: 12px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  width: 100%;
+  transition: background-color 0.2s ease;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.save-btn-bottom:hover {
+  background: var(--accent-hover);
+}
+
+.save-btn-bottom:active {
+  background: var(--accent-hover);
+  opacity: 0.8;
+}
+
+.save-btn-bottom:disabled {
+  background: var(--text-secondary);
+  border-color: var(--text-secondary);
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 /* Responsive adjustments */
