@@ -43,7 +43,10 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
   }, [elementType, selectedNode]);
 
   useEffect(() => {
-    if (xmlContent) {
+    if (xmlContent && 
+        !xmlContent.includes('No XML data available') && 
+        !xmlContent.includes('originalNestedElements not found') &&
+        !xmlContent.includes('No inner elements found')) {
       const formatted = formatXML(xmlContent);
       setEditedXml(formatted);
     } else {
@@ -404,7 +407,7 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
                   fullWidth
                   value={editedXml}
                   onChange={(e) => setEditedXml(e.target.value)}
-                  placeholder="Enter XML content here..."
+                  placeholder={editedXml === '' ? "No XML content available. You can add custom XML elements here or use the Code Generator tab to create content." : "Enter XML content here..."}
                   sx={{
                     '& .MuiInputBase-input': {
                       fontFamily: 'monospace',
@@ -500,6 +503,10 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
                     }
 
                     let updated = false;
+                    const taskType = selectedNode?.data?.taskType || elementType;
+                    console.log('🔎 [XML DEBUG] Task type detected:', taskType);
+                    console.log('🔎 [XML DEBUG] Selected agent:', selected);
+                    
                     // 1. Try to update CDATASection node in any <script> element
                     const scripts = doc.querySelectorAll('script');
                     console.log('🟡 [XML DEBUG] Found', scripts.length, '<script> elements');
@@ -514,7 +521,18 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
                       }
                     });
 
-                    // 2. If no CDATA was updated, try to update formMetadata only if formData exists
+                    // 2. If no script elements found and task is meant for Python code, create proper script element
+                    const isScriptTask = taskType === 'scriptTask' || (taskType === 'task' && selected === 'Python Code Generator');
+                    if (!updated && isScriptTask && scripts.length === 0) {
+                      console.log('🟡 [XML DEBUG] No script elements found for script-type task, creating script element');
+                      const script = doc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'script');
+                      script.setAttribute('xmlns', 'http://www.omg.org/spec/BPMN/20100524/MODEL');
+                      script.appendChild(doc.createCDATASection(`\n${cgResponse}\n`));
+                      doc.documentElement.appendChild(script);
+                      updated = true;
+                    }
+
+                    // 3. If no CDATA was updated, try to update formMetadata only if formData exists  
                     if (!updated) {
                       let formData = doc.querySelector('formData');
                       if (formData) {

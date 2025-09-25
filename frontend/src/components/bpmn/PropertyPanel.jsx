@@ -296,12 +296,12 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
     console.log('🔍 PropertyPanel - xmlContent:', xmlContent);
     
     if (!xmlContent) {
-      return 'No XML data available - originalNestedElements not found in node data';
+      return ''; // Return empty string instead of error message for XMLEditor
     }
     
-    // If xmlContent is empty string, show message
+    // If xmlContent is empty string, return empty for XMLEditor
     if (xmlContent === "") {
-      return 'No inner elements found for this node';
+      return '';
     }
     
     // If it's already a string of XML elements, return it directly
@@ -317,7 +317,7 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
       // Get all child elements and convert to string
       const children = Array.from(rootElement.children);
       if (children.length === 0) {
-        return 'No inner elements found';
+        return '';
       }
       
       // Return the XML string of all child elements
@@ -328,7 +328,8 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
       }).join('\n');
       
     } catch (error) {
-      return 'Error parsing XML: ' + error.message + '\n\nRaw content:\n' + xmlContent;
+      console.error('Error parsing XML:', error.message, 'Raw content:', xmlContent);
+      return ''; // Return empty string instead of error message for XMLEditor
     }
   };
 
