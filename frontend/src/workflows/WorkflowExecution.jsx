@@ -69,6 +69,13 @@ function WorkflowExecution({ user }) {
   const [deleting, setDeleting] = useState(new Set()); // Track which instances are being deleted
   const [selectedInstanceForBpmn, setSelectedInstanceForBpmn] = useState(null); // Track selected instance for BPMN clicks
   
+  // New states for all workflows with pagination
+  const [allWorkflows, setAllWorkflows] = useState([]);
+  const [loadingWorkflows, setLoadingWorkflows] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const pageSize = 8;
+  
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedInstance, setSelectedInstance] = useState(null);
@@ -181,6 +188,7 @@ function WorkflowExecution({ user }) {
     if (workflowId) {
       loadStatus(workflowId);
       loadIncompleteWorkflows();
+      loadAllWorkflows(1);
     }
   }, [workflowId, loadStatus]);
 
@@ -214,6 +222,37 @@ function WorkflowExecution({ user }) {
       }
     },
     [workflowId, headers, loadingIncomplete]
+  );
+
+  // Load all workflows with pagination
+  const loadAllWorkflows = useCallback(
+    async (page = 1) => {
+      if (!workflowId) return;
+      
+      setLoadingWorkflows(true);
+      try {
+        const result = await sharedApiService.makeRequest(
+          `/api/workflow/workflows/${workflowId}/instances?page=${page}&size=${pageSize}`,
+          {
+            method: 'GET',
+            headers,
+          },
+          { workflowId, action: 'list_all_workflows', page }
+        );
+
+        if (result.success) {
+          const workflowsData = result.data;
+          setAllWorkflows(workflowsData.data || []);
+          setTotalPages(workflowsData.total_pages || 1);
+          setRefreshKey((k) => k + 1);
+        }
+      } catch (err) {
+        console.error('❌ Failed to load all workflows:', err);
+      } finally {
+        setLoadingWorkflows(false);
+      }
+    },
+    [workflowId, headers, pageSize]
   );
 
   // Simplified - no instances list since endpoint doesn't exist
@@ -254,8 +293,13 @@ function WorkflowExecution({ user }) {
           instance_id: result.data.instance_id,
           created_at: new Date().toISOString(),
           workflow_id: workflowId,
+          status: 'incomplete',
         };
         setIncompleteWorkflows((prev) => {
+          if (!result.data.instance_id || prev.some((w) => w.instance_id === result.data.instance_id)) return prev;
+          return [newInstance, ...prev];
+        });
+        setAllWorkflows((prev) => {
           if (!result.data.instance_id || prev.some((w) => w.instance_id === result.data.instance_id)) return prev;
           return [newInstance, ...prev];
         });
@@ -498,10 +542,16 @@ function WorkflowExecution({ user }) {
           const nextTaskId = result.data?.current_task_id;
           if (completed) {
             setIncompleteWorkflows((prev) => prev.filter((w) => w.instance_id !== selectedInstance.instance_id));
+            setAllWorkflows((prev) => prev.map((w) => 
+              w.instance_id === selectedInstance.instance_id ? { ...w, status: 'complete' } : w
+            ));
             setRefreshKey((k) => k + 1);
           } else {
             // Not completed: update list item with next task id (if we want to display later)
             setIncompleteWorkflows((prev) => prev.map((w) => (
+              w.instance_id === selectedInstance.instance_id ? { ...w, current_task_id: nextTaskId } : w
+            )));
+            setAllWorkflows((prev) => prev.map((w) => (
               w.instance_id === selectedInstance.instance_id ? { ...w, current_task_id: nextTaskId } : w
             )));
             setRefreshKey((k) => k + 1);
@@ -536,6 +586,12 @@ function WorkflowExecution({ user }) {
     // Keep the selectedInstanceForBpmn so user can still click on BPMN nodes
     // setSelectedInstanceForBpmn(null); // Uncomment if you want to clear selection on dialog close
   }, []);
+
+  // Handle page change
+  const handlePageChange = useCallback((event, page) => {
+    setCurrentPage(page);
+    loadAllWorkflows(page);
+  }, [loadAllWorkflows]);
 
   // Handle BPMN node clicks - only works after selecting an instance from the list
   const handleBpmnNodeClick = useCallback(async (event, node) => {
@@ -577,8 +633,9 @@ function WorkflowExecution({ user }) {
         );
 
         if (result.success) {
-          // Remove from local list
+          // Remove from both local lists
           setIncompleteWorkflows(prev => prev.filter(w => w.instance_id !== instanceId));
+          setAllWorkflows(prev => prev.filter(w => w.instance_id !== instanceId));
           setRefreshKey(k => k + 1);
           
           // Invalidate cache
@@ -728,7 +785,7 @@ function WorkflowExecution({ user }) {
         {workflowId && (
           <Box sx={{ mt: 3, textAlign: 'left', mx: 'auto', maxWidth: 720 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-              <Typography variant="h6">Incomplete Workflows</Typography>
+              <Typography variant="h6">All Workflows</Typography>
               {selectedInstanceForBpmn && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Chip 
@@ -752,20 +809,21 @@ function WorkflowExecution({ user }) {
                 <strong>Instance Selected:</strong> You can now click on nodes in the workflow diagram above to open the task dialog for this instance.
               </Alert>
             )}
-            {loadingIncomplete ? (
+            {loadingWorkflows ? (
               <CircularProgress size={20} />
-            ) : incompleteWorkflows.length > 0 ? (
+            ) : allWorkflows.length > 0 ? (
               <TableContainer component={Paper} variant="outlined" sx={{ mt: 1 }} key={refreshKey}>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
                       <TableCell>Instance ID (Click to select)</TableCell>
+                      <TableCell>Status</TableCell>
                       <TableCell>Created</TableCell>
                       <TableCell width="60">Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {incompleteWorkflows.map((wf) => (
+                    {allWorkflows.map((wf) => (
                       <TableRow 
                         key={wf.instance_id} 
                         hover 
@@ -787,6 +845,14 @@ function WorkflowExecution({ user }) {
                       >
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
                           {wf.instance_id}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: '0.8rem' }}>
+                          <Chip 
+                            label={wf.status} 
+                            color={wf.status === 'complete' ? 'success' : 'warning'} 
+                            size="small"
+                            icon={wf.status === 'complete' ? <CheckCircle size={14} /> : <Clock size={14} />}
+                          />
                         </TableCell>
                         <TableCell sx={{ fontSize: '0.8rem' }}>
                           {new Date(wf.created_at).toLocaleString()}
@@ -816,13 +882,25 @@ function WorkflowExecution({ user }) {
                 <Table size="small">
                   <TableBody>
                     <TableRow>
-                      <TableCell colSpan={3} align="center" sx={{ py: 4 }}>
-                        <Typography color="text.secondary">No incomplete workflows</Typography>
+                      <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
+                        <Typography color="text.secondary">No workflows found</Typography>
                       </TableCell>
                     </TableRow>
                   </TableBody>
                 </Table>
               </TableContainer>
+            )}
+            
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                <Pagination 
+                  count={totalPages} 
+                  page={currentPage} 
+                  onChange={handlePageChange}
+                  color="primary" 
+                />
+              </Box>
             )}
           </Box>
         )}

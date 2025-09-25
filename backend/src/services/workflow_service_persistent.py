@@ -226,6 +226,65 @@ class WorkflowServicePersistent:
             )
 
     @staticmethod
+    async def list_workflows_paginated(workflow_id: str, page: int = 1, size: int = 8, status: str = "all"):
+        """List workflows with pagination and status filter"""
+        logger.debug(f"[WORKFLOW] Listing workflows for: {workflow_id}, page: {page}, size: {size}, status: {status}")
+        try:
+            # Build query based on status
+            query = {"workflow_id": workflow_id}
+            if status == "incomplete":
+                query["serialized_data.completed"] = False
+            elif status == "complete":
+                query["serialized_data.completed"] = True
+            # For "all", no additional filter needed
+
+            # Get total count
+            total = await MongoStorageService.count_documents("workflowInstances", query)
+            
+            # Calculate skip value for pagination
+            skip = (page - 1) * size
+            
+            # Get paginated documents
+            docs = await MongoStorageService.find_many(
+                "workflowInstances", 
+                query, 
+                skip=skip, 
+                limit=size,
+                sort_field="created_at",
+                sort_order=-1  # Most recent first
+            )
+
+            workflows = []
+            for doc in docs:
+                workflow = {
+                    "id": str(doc["_id"]),
+                    "workflow_id": doc.get("workflow_id"),
+                    "instance_id": doc.get("instance_id"),
+                    "created_at": (
+                        doc.get("created_at").isoformat()
+                        if doc.get("created_at")
+                        else None
+                    ),
+                    "status": "complete" if doc.get("serialized_data", {}).get("completed", False) else "incomplete"
+                }
+                workflows.append(workflow)
+
+            logger.debug(f"[WORKFLOW] Found {len(workflows)} workflows (total: {total})")
+            return {
+                "data": workflows,
+                "total": total,
+                "page": page,
+                "size": size
+            }
+
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Failed to list workflows: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to list workflows: {str(e)}",
+            )
+
+    @staticmethod
     async def save_workflow_to_mongo(
         workflow_id: str, workflow, tenant_id: Optional[str] = None
     ):

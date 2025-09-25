@@ -54,27 +54,74 @@ async def workflow_health_check():
 @router.get("/workflows/{workflow_id}/incomplete")
 async def get_incomplete_workflows(
     workflow_id: str,
+    page: int = Query(1, ge=1),
+    size: int = Query(8, ge=1, le=100),
     user: dict = Depends(verify_token_middleware)
 ):
-    """Get incomplete workflow instances for a specific workflow ID"""
+    """Get incomplete workflow instances for a specific workflow ID with pagination"""
     try:
+        cache_key = f"{workflow_id}_{page}_{size}"
         now = time.time()
-        cached = _INCOMPLETE_CACHE.get(workflow_id)
+        cached = _INCOMPLETE_CACHE.get(cache_key)
         if cached and (now - cached["ts"]) < _INCOMPLETE_CACHE_TTL:
             logger.debug(f"[WORKFLOW] Returning cached response for incomplete list: workflow_id={workflow_id}")
             return cached["data"]
 
-        incomplete_workflows = await WorkflowServicePersistent.list_incomplete_workflows(workflow_id)
+        incomplete_workflows = await WorkflowServicePersistent.list_workflows_paginated(
+            workflow_id, page, size, status="incomplete"
+        )
         response_data = {
             "success": True,
-            "data": incomplete_workflows,
-            "count": len(incomplete_workflows)
+            "data": incomplete_workflows.get("data", []),
+            "count": len(incomplete_workflows.get("data", [])),
+            "total": incomplete_workflows.get("total", 0),
+            "page": page,
+            "size": size,
+            "total_pages": (incomplete_workflows.get("total", 0) + size - 1) // size
         }
-        _INCOMPLETE_CACHE[workflow_id] = {"ts": now, "data": response_data}
+        _INCOMPLETE_CACHE[cache_key] = {"ts": now, "data": response_data}
         logger.debug(f"[WORKFLOW] Returning response: {response_data}")
         return response_data
     except Exception as e:
         error_msg = f"Failed to get incomplete workflows: {str(e)}"
+        logger.error(f"[HTTP 500] {error_msg}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_msg)
+
+
+@router.get("/workflows/{workflow_id}/instances")
+async def get_all_workflows(
+    workflow_id: str,
+    page: int = Query(1, ge=1),
+    size: int = Query(8, ge=1, le=100),
+    status: str = Query("all", regex="^(all|complete|incomplete)$"),
+    user: dict = Depends(verify_token_middleware)
+):
+    """Get all workflow instances for a specific workflow ID with pagination"""
+    try:
+        cache_key = f"{workflow_id}_{page}_{size}_{status}"
+        now = time.time()
+        cached = _INCOMPLETE_CACHE.get(cache_key)
+        if cached and (now - cached["ts"]) < _INCOMPLETE_CACHE_TTL:
+            logger.debug(f"[WORKFLOW] Returning cached response for all workflows: workflow_id={workflow_id}")
+            return cached["data"]
+
+        workflows = await WorkflowServicePersistent.list_workflows_paginated(
+            workflow_id, page, size, status=status
+        )
+        response_data = {
+            "success": True,
+            "data": workflows.get("data", []),
+            "count": len(workflows.get("data", [])),
+            "total": workflows.get("total", 0),
+            "page": page,
+            "size": size,
+            "total_pages": (workflows.get("total", 0) + size - 1) // size
+        }
+        _INCOMPLETE_CACHE[cache_key] = {"ts": now, "data": response_data}
+        logger.debug(f"[WORKFLOW] Returning response: {response_data}")
+        return response_data
+    except Exception as e:
+        error_msg = f"Failed to get workflows: {str(e)}"
         logger.error(f"[HTTP 500] {error_msg}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_msg)
 
