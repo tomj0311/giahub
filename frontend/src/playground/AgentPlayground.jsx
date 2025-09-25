@@ -646,7 +646,8 @@ export default function AgentPlayground({ user }) {
 
       const result = await agentRuntimeService.listConversations(token, {
         page: currentPage,
-        page_size: pageSize
+        page_size: pageSize,
+        ...(selected && { agent_name: selected })
       })
 
 

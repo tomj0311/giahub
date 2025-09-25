@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import BPMN from '../components/bpmn/BPMN';
 import {
   Box,
   Typography,
@@ -73,6 +74,11 @@ function WorkflowExecution({ user }) {
   const [formData, setFormData] = useState({});
   const [submittingTask, setSubmittingTask] = useState(false);
 
+  // Workflow data states
+  const [workflowConfig, setWorkflowConfig] = useState(null);
+  const [bpmnData, setBpmnData] = useState(null);
+  const [loadingWorkflow, setLoadingWorkflow] = useState(false);
+
   const token = useMemo(() => user?.token || localStorage.getItem('token'), [user?.token]);
   const headers = useMemo(
     () => ({
@@ -82,14 +88,90 @@ function WorkflowExecution({ user }) {
     [token]
   );
 
-  // Simplified - no status loading since endpoint doesn't exist
+  // Load workflow configuration and BPMN data
   const loadStatus = useCallback(
     async (id) => {
       if (!id) return;
-      // Just set mode to config since we only have start endpoint
+      
+      setLoadingWorkflow(true);
+      setError(''); // Clear any previous errors
+      
+      try {
+        console.log('🔄 Loading workflow config for ID:', id);
+        
+        // Load workflow configuration from MongoDB
+        const configResult = await sharedApiService.makeRequest(
+          `/api/workflows/configs/${id}`,
+          {
+            method: 'GET',
+            headers,
+          },
+          { workflowId: id, action: 'get_config' }
+        );
+
+        console.log('📋 Config result:', configResult);
+
+        if (configResult.success || configResult.data || configResult.id) {
+          const config = configResult.data || configResult;
+          setWorkflowConfig(config);
+          console.log('✅ Workflow config loaded:', config);
+          
+          // Load BPMN data from MINIO
+          console.log('🔄 Loading BPMN data...');
+          
+          try {
+            const bpmnResult = await sharedApiService.makeRequest(
+              `/api/workflows/configs/${id}/bpmn`,
+              {
+                method: 'GET',
+                headers: {
+                  ...headers,
+                  'Accept': 'application/xml, text/xml, */*',
+                },
+              },
+              { workflowId: id, action: 'get_bpmn' }
+            );
+
+            console.log('📄 BPMN result:', bpmnResult);
+
+            if (bpmnResult.success || (typeof bpmnResult === 'string' && bpmnResult.includes('<'))) {
+              // Handle different response formats
+              let bpmnContent = bpmnResult.data || bpmnResult;
+              
+              // If it's still an object, try to extract the actual content
+              if (typeof bpmnContent === 'object' && bpmnContent.data) {
+                bpmnContent = bpmnContent.data;
+              }
+              
+              if (typeof bpmnContent === 'string' && bpmnContent.includes('<')) {
+                setBpmnData(bpmnContent);
+                console.log('✅ BPMN data loaded successfully');
+              } else {
+                console.warn('⚠️ BPMN data format unexpected:', typeof bpmnContent, bpmnContent);
+                setError('BPMN data format is invalid');
+              }
+            } else {
+              console.warn('⚠️ BPMN fetch failed:', bpmnResult);
+              setError('Failed to load BPMN diagram');
+            }
+          } catch (bpmnErr) {
+            console.error('❌ BPMN fetch error:', bpmnErr);
+            setError('Failed to fetch BPMN diagram from storage');
+          }
+        } else {
+          console.warn('⚠️ Config fetch failed:', configResult);
+          setError('Failed to load workflow configuration');
+        }
+      } catch (err) {
+        console.error('❌ Failed to load workflow data:', err);
+        setError('Failed to load workflow configuration');
+      } finally {
+        setLoadingWorkflow(false);
+      }
+      
       setMode('config');
     },
-    []
+    [headers]
   );
 
   useEffect(() => {
@@ -514,12 +596,72 @@ function WorkflowExecution({ user }) {
       >
         <Stack spacing={2} alignItems="center">
           <Typography variant="h5" gutterBottom>
-            Ready to start workflow
+            {workflowConfig?.name || 'Ready to start workflow'}
           </Typography>
           <Typography variant="body1">
             Workflow ID: <strong>{workflowId || 'NOT PROVIDED'}</strong>
           </Typography>
+          {workflowConfig?.description && (
+            <Typography variant="body2" color="text.secondary">
+              {workflowConfig.description}
+            </Typography>
+          )}
         </Stack>
+
+        {/* BPMN Workflow Display */}
+        {loadingWorkflow ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+            <CircularProgress size={40} />
+            <Typography variant="body2" sx={{ ml: 2, alignSelf: 'center' }}>
+              Loading workflow...
+            </Typography>
+          </Box>
+        ) : bpmnData ? (
+          <Box sx={{ mt: 3, border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              bgcolor: 'action.hover', 
+              px: 2, 
+              py: 1, 
+              borderBottom: '1px solid', 
+              borderColor: 'divider'
+            }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                Workflow Diagram
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Read-only view
+              </Typography>
+            </Box>
+            <Box sx={{ position: 'relative', height: '500px', width: '100%' }}>
+              <BPMN 
+                readOnly={true}
+                showToolbox={false}
+                showPropertyPanel={false}
+                initialTheme={theme.palette.mode}
+                initialBPMN={bpmnData}
+                style={{ 
+                  height: '100%', 
+                  width: '100%',
+                  '--toolbar-display': 'none'
+                }}
+                className="bpmn-readonly-viewer"
+                onError={(error) => {
+                  console.error('🔥 BPMN Component Error:', error)
+                }}
+                onLoad={() => {
+                  console.log('✅ BPMN workflow loaded successfully')
+                }}
+              />
+            </Box>
+          </Box>
+        ) : workflowId && !loadingWorkflow ? (
+          <Alert severity="warning" sx={{ mt: 3 }}>
+            No workflow diagram available for this workflow ID.
+          </Alert>
+        ) : null}
 
         <Button
           variant="contained"

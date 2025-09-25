@@ -120,27 +120,18 @@ async def get_workflow_categories(user: dict = Depends(verify_token_middleware))
 
 
 @router.get("/configs/{config_id}/bpmn")
-async def download_bpmn_file(config_id: str, user: dict = Depends(verify_token_middleware)):
-    """Download BPMN file for a workflow configuration"""
+async def get_bpmn_file(config_id: str, user: dict = Depends(verify_token_middleware)):
+    """Get BPMN file content as plain text"""
     try:
-        # Get workflow config to get filename
-        config = await WorkflowConfigService.get_workflow_config_by_id(config_id, user)
-        bpmn_filename = config.get("bpmn_filename", "workflow.bpmn")
-        
         # Get file content
         content = await WorkflowConfigService.get_bpmn_file_content(config_id, user)
         
-        # Create streaming response
-        return StreamingResponse(
-            BytesIO(content),
-            media_type="application/xml",
-            headers={
-                "Content-Disposition": f"attachment; filename={bpmn_filename}"
-            }
-        )
+        # Return raw XML content as plain text
+        return content.decode('utf-8')
+            
     except Exception as e:
-        logger.error(f"Error downloading BPMN file: {e}")
-        raise HTTPException(status_code=500, detail="Failed to download BPMN file")
+        logger.error(f"Error getting BPMN file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get BPMN file")
 
 
 # Health check endpoint for workflow service

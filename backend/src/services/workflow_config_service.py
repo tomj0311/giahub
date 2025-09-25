@@ -485,8 +485,16 @@ class WorkflowConfigService:
         tenant_id = await cls.validate_tenant_access(user)
         
         try:
+            object_id = ObjectId(config_id)
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid configuration ID"
+            )
+        
+        try:
             # Get config
-            config = await MongoStorageService.find_one("workflowConfig", {"_id": config_id}, tenant_id=tenant_id)
+            config = await MongoStorageService.find_one("workflowConfig", {"_id": object_id}, tenant_id=tenant_id)
             
             if not config:
                 logger.warning(f"[WORKFLOW] Workflow config not found: {config_id}")
