@@ -74,11 +74,9 @@ async def get_incomplete_workflows(
         logger.debug(f"[WORKFLOW] Returning response: {response_data}")
         return response_data
     except Exception as e:
-        logger.error(f"Error getting incomplete workflows: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get incomplete workflows: {str(e)}"
-        )
+        error_msg = f"Failed to get incomplete workflows: {str(e)}"
+        logger.error(f"[HTTP 500] {error_msg}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_msg)
 
 
 @router.get("/workflows/{workflow_id}/instances/{instance_id}")
@@ -95,11 +93,9 @@ async def get_workflow_instance(
         )
         return {"success": True, "data": instance}
     except Exception as e:
-        logger.error(f"Error getting workflow instance: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get workflow instance: {str(e)}"
-        )
+        error_msg = f"Failed to get workflow instance: {str(e)}"
+        logger.error(f"[HTTP 500] {error_msg}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_msg)
 
 
 @router.post("/workflows/{workflow_id}/instances/{instance_id}/submit-task")

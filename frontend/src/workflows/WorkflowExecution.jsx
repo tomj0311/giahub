@@ -347,20 +347,23 @@ function WorkflowExecution({ user }) {
       
       setSubmittingTask(true);
       try {
-        // Find the pending UserTask using BPMN spec typename or form field presence
-        const pendingUserTasks = (selectedInstance.pendingTasks || []).filter((task) => {
-          const spec = selectedInstance.serialized_data?.spec?.task_specs?.[task.task_spec];
-          const hasFormField = selectedInstance[task.task_spec]?.formField || spec?.extensions?.formData?.formFields;
-          return spec?.typename === 'UserTask' || hasFormField;
-        });
+        console.log('DEBUG - selectedInstance:', selectedInstance);
+        console.log('DEBUG - pendingTasks:', selectedInstance.pendingTasks);
+        
+        // Just take the first pending task - no filtering bullshit
+        const firstPendingTask = selectedInstance.pendingTasks?.[0];
+        
+        if (!firstPendingTask) {
+          throw new Error('No pending tasks found');
+        }
         
         // Create submission data with task ID and form data
         const submissionData = {
           data: formData,
-          ...(pendingUserTasks.length > 0 && {
-            task_id: selectedInstance.serialized_data?.spec?.task_specs?.[pendingUserTasks[0].task_spec]?.bpmn_id || pendingUserTasks[0].task_spec
-          })
+          task_id: firstPendingTask.task_spec
         };
+        
+        console.log('DEBUG - submissionData:', submissionData);
         
         const result = await sharedApiService.makeRequest(
           `/api/workflow/workflows/${workflowId}/instances/${selectedInstance.instance_id}/submit-task`,

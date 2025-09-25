@@ -449,7 +449,12 @@ class WorkflowServicePersistent:
                 
                 for task in ready_tasks:
                     task_type = type(task.task_spec).__name__
-                    if task_type == "ScriptTask":
+                    if task_type == "NoneTask":
+                        # NoneTask should not be executed - let SpiffWorkflow handle it according to standard
+                        logger.debug(f"[WORKFLOW] NoneTask detected: {task.task_spec.bpmn_id} - letting SpiffWorkflow handle according to standard")
+                        # Don't try to execute or complete - let the engine handle it naturally
+                        continue
+                    elif task_type == "ScriptTask":
                         logger.info(f"[WORKFLOW] Handling ScriptTask separately: {task.task_spec.bpmn_id}")
                         try:
                             await cls.handle_script_task(task)
@@ -478,11 +483,6 @@ class WorkflowServicePersistent:
                     await cls.update_workflow_instance(workflow, instance_id, tenant_id)
                     raise HTTPException(status_code=500, detail=f"Workflow engine error: {str(engine_error)}")
                 
-                # Log task data after engine steps
-                for task in workflow.get_tasks():
-                    if task.data:
-                        logger.debug(f"[WORKFLOW] Task {task.task_spec.bpmn_id} data: {task.data}")
-                
                 # ALWAYS update MongoDB after each step
                 await cls.update_workflow_instance(workflow, instance_id, tenant_id)
                 logger.debug(f"[WORKFLOW] MongoDB updated after step {step_count}")
@@ -495,7 +495,7 @@ class WorkflowServicePersistent:
                         task_type = type(task.task_spec).__name__
                         logger.info(f"[WORKFLOW] Manual input required for {task_type}: {task.task_spec.bpmn_id}")
                         
-                        if task_type in ["UserTask", "ManualTask"]:
+                        if task_type in ["UserTask", "ManualTask", "NoneTask"]:
                             # Extension elements are now stored in serialized data
                             # No need for separate storage - just wait for user input
                             logger.debug(f"[WORKFLOW] Waiting for user input for {task_type}: {task.task_spec.bpmn_id}")
