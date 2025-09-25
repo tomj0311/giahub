@@ -1270,13 +1270,7 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
       if (event.key === 'Escape' && showPasteArea) {
         togglePasteArea();
       }
-      // Ctrl+V or Cmd+V to open paste area if not already open
-      if ((event.ctrlKey || event.metaKey) && event.key === 'v' && !showPasteArea) {
-        // Small delay to allow the paste operation to complete first
-        setTimeout(() => {
-          setShowPasteArea(true);
-        }, 100);
-      }
+      // Removed automatic Ctrl+V handling - users can manually click "Paste XML" button
     };
 
     document.addEventListener('keydown', handleKeyDown);
