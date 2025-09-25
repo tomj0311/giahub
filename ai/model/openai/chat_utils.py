@@ -225,7 +225,10 @@ def build_tool_calls(tool_calls_data: List[ChoiceDeltaToolCall]) -> List[Dict[st
         tool_call_entry = tool_calls[_index]
         if not tool_call_entry:
             tool_call_entry["id"] = _tool_call_id
-            tool_call_entry["type"] = _tool_call_type
+            if _tool_call_type:
+                tool_call_entry["type"] = _tool_call_type
+            else:
+                tool_call_entry["type"] = "function"  # Default to "function" if type is None
             tool_call_entry["function"] = {
                 "name": _function_name or "",
                 "arguments": _function_arguments or "",
