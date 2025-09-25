@@ -471,7 +471,6 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
       // Save to history if needed
       if (shouldSaveHistory && !readOnly && !isUndoRedoOperation.current) {
         setTimeout(() => saveToHistory(newNodes, edges), 0);
-      } else if (isUndoRedoOperation.current) {
       }
       
       return newNodes;
@@ -596,7 +595,6 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
         
         // Don't save to history here - let onNodesChange handle it
         // to avoid duplicate history entries
-  // Node added via drop - history handled in onNodesChange
         
         // Check if the new node was dropped inside a participant
         const droppedInParticipant = nds.find(node => 
