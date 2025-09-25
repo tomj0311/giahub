@@ -124,7 +124,7 @@ const initialNodes = [
   },
 ];
 
-const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPropertyPanel = true, readOnly = false, initialBPMN = null, taskStatusData = null }) => {
+const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPropertyPanel = true, readOnly = false, initialBPMN = null, taskStatusData = null, onNodeClick: onNodeClickProp = null }) => {
   const reactFlowWrapper = useRef(null);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -716,7 +716,12 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
     setSelectedNode(node);
     setSelectedEdge(null);
     // Don't automatically open property panel on single click
-  }, []);
+    
+    // Call the external node click handler if provided
+    if (onNodeClickProp) {
+      onNodeClickProp(event, node);
+    }
+  }, [onNodeClickProp]);
 
   // Edge click handler - only select, don't open property panel
   const onEdgeClick = useCallback((event, edge) => {
@@ -1086,11 +1091,12 @@ const MemoizedBPMNEditorFlow = React.memo(BPMNEditorFlow, (prevProps, nextProps)
     prevProps.readOnly === nextProps.readOnly &&
     prevProps.initialBPMN === nextProps.initialBPMN &&
     prevProps.onToggleTheme === nextProps.onToggleTheme &&
-    prevProps.taskStatusData === nextProps.taskStatusData
+    prevProps.taskStatusData === nextProps.taskStatusData &&
+    prevProps.onNodeClick === nextProps.onNodeClick
   );
 });
 
-const BPMNEditor = ({ isDarkMode, onToggleTheme, showToolbox, showPropertyPanel, readOnly, initialBPMN, taskStatusData }) => (
+const BPMNEditor = ({ isDarkMode, onToggleTheme, showToolbox, showPropertyPanel, readOnly, initialBPMN, taskStatusData, onNodeClick }) => (
   <ReactFlowProvider>
     <MemoizedBPMNEditorFlow 
       isDarkMode={isDarkMode} 
@@ -1100,6 +1106,7 @@ const BPMNEditor = ({ isDarkMode, onToggleTheme, showToolbox, showPropertyPanel,
       readOnly={readOnly}
       initialBPMN={initialBPMN}
       taskStatusData={taskStatusData}
+      onNodeClick={onNodeClick}
     />
   </ReactFlowProvider>
 );

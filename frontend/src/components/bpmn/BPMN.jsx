@@ -18,6 +18,7 @@ import './BPMN.css';
  * - readOnly: boolean (default: false) - When true, acts as BPMNViewer
  * - initialBPMN: string - Initial BPMN XML to load
  * - taskStatusData: object - Task status data for coloring nodes based on workflow state
+ * - onNodeClick: function - Callback function when a node is clicked (event, node)
  */
 function BPMN({ 
   initialTheme = 'auto', 
@@ -29,6 +30,7 @@ function BPMN({
   readOnly = false,
   initialBPMN = null,
   taskStatusData = null,
+  onNodeClick = null,
   ...props 
 }) {
   // Initialize theme synchronously to prevent flash
@@ -104,6 +106,7 @@ function BPMN({
         readOnly={readOnly}
         initialBPMN={initialBPMN}
         taskStatusData={taskStatusData}
+        onNodeClick={onNodeClick}
       />
     </div>
   );

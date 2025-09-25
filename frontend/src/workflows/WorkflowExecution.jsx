@@ -530,6 +530,43 @@ function WorkflowExecution({ user }) {
     setTaskStatusData(null);
   }, []);
 
+  // Handle BPMN node clicks - map node ID to task and find matching instance
+  const handleBpmnNodeClick = useCallback(async (event, node) => {
+    
+    // Get the node ID from the BPMN node
+    const nodeId = node.id;
+    console.log('🔍 BPMN node clicked:', nodeId, node);
+    
+    // If we have task status data, check if this node has a pending task
+    const nodeStatus = taskStatusData?.[nodeId];
+    if (nodeStatus && nodeStatus.state === 16) { // State 16 = READY/PENDING
+      console.log('🎯 Clicked node has pending task:', nodeId, nodeStatus);
+      
+      // Find the first incomplete workflow instance
+      // In a more sophisticated implementation, we could match the specific instance
+      // that contains this pending task, but for now we'll use the first one
+      if (incompleteWorkflows.length > 0) {
+        const firstInstance = incompleteWorkflows[0];
+        console.log('🎯 Opening dialog for first incomplete instance:', firstInstance.instance_id);
+        await handleInstanceClick(firstInstance.instance_id);
+        return;
+      }
+    }
+    
+    // If no specific task status, try to find any incomplete workflow
+    // This is a fallback for cases where taskStatusData might not be available
+    if (incompleteWorkflows.length > 0) {
+      console.log('🔍 No specific task status, trying first incomplete workflow');
+      const firstInstance = incompleteWorkflows[0];
+      await handleInstanceClick(firstInstance.instance_id);
+    } else {
+      console.log('❌ No incomplete workflows found for node:', nodeId);
+      // Show a message that this node is not actionable
+      setError(`No actionable workflows found. Start a workflow first.`);
+      setTimeout(() => setError(''), 3000); // Clear error after 3 seconds
+    }
+  }, [incompleteWorkflows, handleInstanceClick, taskStatusData]);
+
   const handleDeleteInstance = useCallback(
     async (instanceId, event) => {
       event.stopPropagation(); // Prevent row click
@@ -671,6 +708,7 @@ function WorkflowExecution({ user }) {
                 initialTheme={theme.palette.mode}
                 initialBPMN={bpmnData}
                 taskStatusData={taskStatusData}
+                onNodeClick={handleBpmnNodeClick}
                 style={{ 
                   height: '100%', 
                   width: '100%',
