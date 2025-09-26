@@ -9,12 +9,14 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
   const [position, setPosition] = useState({ x: window.innerWidth * 0.25, y: window.innerHeight * 0.2 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  // Accordion state: 0 = XML Editor, 1 = Code Generator
+  // Accordion state: 0 = XML Editor, 1 = Code Generator, 2 = Assignee
   const [accordionOpen, setAccordionOpen] = useState(0);
   // Code generator states
   const [cgPrompt, setCgPrompt] = useState('');
   const [cgResponse, setCgResponse] = useState('');
   const [cgLoading, setCgLoading] = useState(false);
+  // Assignee states
+  const [assigneeResourceRef, setAssigneeResourceRef] = useState('');
   // Agent loading exactly like AgentPlayground
   const [grouped, setGrouped] = useState({});
   const [loading, setLoading] = useState(false);
@@ -47,6 +49,25 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
       
       const taskType = selectedNode?.data?.taskType || elementType;
       
+      // Extract potentialOwner information
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(`<root>${xmlContent}</root>`, 'text/xml');
+        const potentialOwner = doc.querySelector('potentialOwner');
+        
+        if (potentialOwner) {
+          const resourceRef = potentialOwner.querySelector('resourceRef');
+          if (resourceRef) {
+            setAssigneeResourceRef(resourceRef.textContent || '');
+          }
+        } else {
+          setAssigneeResourceRef('');
+        }
+      } catch (error) {
+        console.error('Error parsing XML for potentialOwner:', error);
+        setAssigneeResourceRef('');
+      }
+      
       if (taskType === 'userTask') {
         // For UserTask, only show extensionElements content
         try {
@@ -75,6 +96,7 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
       }
     } else {
       setEditedXml('');
+      setAssigneeResourceRef('');
     }
   }, [xmlContent, elementType, selectedNode]);
 
@@ -124,14 +146,65 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
 
   const handleCancel = () => {
     setEditedXml(xmlContent || '');
+    // Reset assignee to original value
+    if (xmlContent) {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(`<root>${xmlContent}</root>`, 'text/xml');
+        const potentialOwner = doc.querySelector('potentialOwner');
+        
+        if (potentialOwner) {
+          const resourceRef = potentialOwner.querySelector('resourceRef');
+          if (resourceRef) {
+            setAssigneeResourceRef(resourceRef.textContent || '');
+          } else {
+            setAssigneeResourceRef('');
+          }
+        } else {
+          setAssigneeResourceRef('');
+        }
+      } catch (error) {
+        setAssigneeResourceRef('');
+      }
+    } else {
+      setAssigneeResourceRef('');
+    }
     onClose();
   };
 
   const handleSave = () => {
     console.log('� XML EDITOR SAVE BUTTON CLICKED!');
     console.log('�📝 Current editedXml:', editedXml);
+    console.log('👤 Current assigneeResourceRef:', assigneeResourceRef);
     console.log('🎯 Selected Node:', selectedNode);
     console.log('🔗 Selected Edge:', selectedEdge);
+    
+    // Combine editedXml with assignee information
+    let finalXml = editedXml;
+    
+    // Handle potentialOwner separately to avoid duplication
+    if (assigneeResourceRef.trim()) {
+      // Check if editedXml already contains potentialOwner
+      const hasPotentialOwner = editedXml.includes('<potentialOwner>');
+      
+      if (!hasPotentialOwner) {
+        const potentialOwnerXml = `<potentialOwner>
+  <resourceRef>${assigneeResourceRef}</resourceRef>
+</potentialOwner>`;
+        finalXml = finalXml ? `${finalXml}\n${potentialOwnerXml}` : potentialOwnerXml;
+      } else {
+        // Replace existing potentialOwner with updated one
+        const potentialOwnerRegex = /<potentialOwner>[\s\S]*?<\/potentialOwner>/;
+        const newPotentialOwnerXml = `<potentialOwner>
+  <resourceRef>${assigneeResourceRef}</resourceRef>
+</potentialOwner>`;
+        finalXml = finalXml.replace(potentialOwnerRegex, newPotentialOwnerXml);
+      }
+    } else {
+      // Remove potentialOwner if assignee is empty
+      const potentialOwnerRegex = /<potentialOwner>[\s\S]*?<\/potentialOwner>\s*/g;
+      finalXml = finalXml.replace(potentialOwnerRegex, '');
+    }
     
     // For gateway nodes, ALWAYS update the related sequence flows, not the gateway itself
     if (selectedNode && selectedNode.type && selectedNode.type.includes('gateway')) {
@@ -146,7 +219,7 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
       
       // Parse the XML content to extract individual sequence flows
       const parser = new DOMParser();
-      const tempDoc = parser.parseFromString(`<root>${editedXml}</root>`, 'text/xml');
+      const tempDoc = parser.parseFromString(`<root>${finalXml}</root>`, 'text/xml');
       const sequenceFlows = tempDoc.querySelectorAll('sequenceFlow');
       
       console.log('📋 Parsed sequence flows:', sequenceFlows.length);
@@ -195,8 +268,8 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
           label: nodeData.name,
           documentation: nodeData.documentation,
           versionTag: nodeData.versionTag,
-          originalNestedElements: editedXml,
-          originalXML: editedXml
+          originalNestedElements: finalXml,
+          originalXML: finalXml
         }
       };
       console.log('🚀 CALLING onEdgeUpdate for single edge');
@@ -213,7 +286,7 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
           versionTag: nodeData.versionTag,
           backgroundColor: nodeData.backgroundColor,
           borderColor: nodeData.borderColor,
-          originalNestedElements: editedXml
+          originalNestedElements: finalXml
         },
         style: {
           ...selectedNode.style,
@@ -420,6 +493,20 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
                 borderRadius: '8px 8px 0 0'
               }}
             >Code Generator</button>
+            <button
+              onClick={() => toggleAccordion(2)}
+              style={{
+                flex: 1,
+                background: accordionOpen === 2 ? 'var(--bg-secondary)' : 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                border: 'none',
+                borderBottom: accordionOpen === 2 ? '2px solid var(--accent-color)' : 'none',
+                padding: '10px',
+                fontWeight: accordionOpen === 2 ? 'bold' : 'normal',
+                cursor: 'pointer',
+                borderRadius: '8px 8px 0 0'
+              }}
+            >Assignee</button>
           </div>
 
           {/* Accordion panels */}
@@ -644,6 +731,63 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
                   Update XML with Generated Code
                 </Button>
               </form>
+            )}
+            {accordionOpen === 2 && (
+              <>
+                <Typography variant="h6" gutterBottom sx={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 'bold' }}>
+                  Task Assignee
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 2 }}>
+                  Configure who this task is assigned to. This information will be saved as potentialOwner/resourceRef in the BPMN XML.
+                </Typography>
+                <TextField
+                  label="Resource Reference"
+                  variant="outlined"
+                  fullWidth
+                  value={assigneeResourceRef}
+                  onChange={(e) => setAssigneeResourceRef(e.target.value)}
+                  placeholder="e.g., User123, admin, etc."
+                  sx={{
+                    mb: 2,
+                    '& .MuiInputBase-input': {
+                      fontFamily: 'monospace',
+                      fontSize: '13px'
+                    }
+                  }}
+                />
+                {assigneeResourceRef && (
+                  <Box sx={{ 
+                    mt: 2, 
+                    p: 2, 
+                    backgroundColor: 'var(--bg-secondary)', 
+                    borderRadius: '4px',
+                    border: '1px solid var(--border-color)'
+                  }}>
+                    <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 1 }}>
+                      Preview XML:
+                    </Typography>
+                    <pre style={{ 
+                      margin: 0, 
+                      color: 'var(--text-primary)', 
+                      fontSize: '11px',
+                      fontFamily: 'monospace',
+                      whiteSpace: 'pre-wrap'
+                    }}>
+{`<potentialOwner>
+  <resourceRef>${assigneeResourceRef}</resourceRef>
+</potentialOwner>`}
+                    </pre>
+                  </Box>
+                )}
+                <Box sx={{ display: 'flex', gap: 1, mt: 2, justifyContent: 'flex-end' }}>
+                  <Button onClick={handleCancel} variant="outlined">
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSave} variant="contained">
+                    SAVE CHANGES
+                  </Button>
+                </Box>
+              </>
             )}
           </div>
         </div>
