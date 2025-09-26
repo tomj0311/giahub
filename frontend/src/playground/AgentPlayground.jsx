@@ -219,6 +219,24 @@ export default function AgentPlayground({ user }) {
     }
   }, [location.search, token])
 
+  // Update URL when conversation ID changes to enable proper browser navigation
+  useEffect(() => {
+    if (currentConversationId && messages.length > 0) {
+      const currentParams = new URLSearchParams(location.search)
+      const currentConvId = currentParams.get('conversation')
+      
+      // Only update URL if conversation ID has changed
+      if (currentConvId !== currentConversationId) {
+        const newParams = new URLSearchParams(location.search)
+        newParams.set('conversation', currentConversationId)
+        
+        // Use replace instead of push to avoid adding extra history entries during active chat
+        const newUrl = `${location.pathname}?${newParams.toString()}`
+        navigate(newUrl, { replace: true })
+      }
+    }
+  }, [currentConversationId, messages.length, location.search, location.pathname, navigate])
+
   // Scroll control - now uses window scroll instead of chat area scroll
   useEffect(() => {
     if (!autoScroll) return
