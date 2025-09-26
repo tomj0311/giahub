@@ -161,40 +161,67 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   const updateNodeColors = useCallback((statusData) => {
     if (!statusData) return;
     
+    console.log('🎨 updateNodeColors called with statusData:', statusData);
+    
+    // Log all unique states found in the data
+    const states = new Set();
+    Object.values(statusData).forEach(task => {
+      if (task && typeof task.state === 'number') {
+        states.add(task.state);
+      }
+    });
+    console.log('📊 All task states found:', Array.from(states).sort());
+    
     setNodes((currentNodes) => {
+      console.log('🔍 Current nodes:', currentNodes.map(n => ({ id: n.id, type: n.type, data: n.data })));
+      
       return currentNodes.map((node) => {
         // Only apply colors to task nodes
         if (!node.type?.includes('Task') && node.type !== 'task') {
+          console.log('⚪ Skipping non-task node:', node.id, node.type);
           return node;
         }
         
-        // Find status for this node based on task spec or node ID
-        const taskStatus = statusData[node.id] || statusData[node.data?.originalXML?.match(/id="([^"]+)"/)?.[1]];
+        // Find ONLY ready tasks (state 16) - ignore all other states
+        const allMatches = Object.entries(statusData).filter(([key, value]) => 
+          (key === node.id || value.task_spec === node.id) && value.state === 16
+        );
+        
+        console.log('🔍 Looking for READY task status (state 16 only):', {
+          nodeId: node.id,
+          nodeType: node.type,
+          readyMatches: allMatches.map(([key, value]) => ({ key, state: value.state, task_spec: value.task_spec })),
+          totalAvailableKeys: Object.keys(statusData).length
+        });
+        
+        // Only use ready tasks (state 16)
+        let taskStatus = null;
+        if (allMatches.length > 0) {
+          taskStatus = allMatches[0][1]; // Take the first ready task match
+          console.log('🎯 Found READY task:', { key: allMatches[0][0], state: taskStatus.state });
+        } else {
+          console.log('⏸️ No ready task found for node:', node.id, '- leaving uncolored');
+        }
         
         if (!taskStatus) {
+          console.log('❌ No status found for node:', node.id);
           return node;
         }
         
         let backgroundColor = '';
         let borderColor = '';
         
-        // Apply colors based on task state
-        // State 64 = COMPLETED (light green)
-        if (taskStatus.state === 64) {
-          backgroundColor = '#2b4f34ff'; // Light green
-          // borderColor = '#327542ff';
-        }
-        // State 16 = READY/STARTED (light amber)
-        else if (taskStatus.state === 16) {
-          backgroundColor = '#766226ff'; // Light amber
+        // ONLY color ready tasks (state 16) - all others remain default
+        if (taskStatus && taskStatus.state === 16) {
+          backgroundColor = '#766226ff'; // Light amber for ready tasks
           // borderColor = '#ffc107';
+          console.log('🎨 Coloring READY task:', node.id, 'with amber background');
+        } else {
+          // All other states (1, 4, 64, 128, etc.) remain uncolored
+          console.log('⚪ Leaving task uncolored:', node.id, taskStatus ? `(state: ${taskStatus.state})` : '(no status)');
         }
-        // State 128 = ERROR (light red)
-        else if (taskStatus.state === 128) {
-          backgroundColor = '#762e34ff'; // Light red
-          // borderColor = '#822a33ff';
-        }
-        // Other states can be handled here as needed
+        
+        console.log('✅ Applying colors to node:', node.id, { backgroundColor, borderColor, state: taskStatus.state });
         
         return {
           ...node,

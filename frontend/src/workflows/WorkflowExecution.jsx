@@ -97,6 +97,11 @@ function WorkflowExecution({ user }) {
     [token]
   );
 
+  // Debug: Monitor taskStatusData changes
+  useEffect(() => {
+    console.log('🔄 taskStatusData changed:', taskStatusData);
+  }, [taskStatusData]);
+
   // Load workflow configuration and BPMN data
   const loadStatus = useCallback(
     async (id) => {
@@ -140,8 +145,6 @@ function WorkflowExecution({ user }) {
               },
               { workflowId: id, action: 'get_bpmn' }
             );
-
-            console.log('📄 BPMN result:', bpmnResult);
 
             if (bpmnResult.success || (typeof bpmnResult === 'string' && bpmnResult.includes('<'))) {
               // Handle different response formats
@@ -367,6 +370,7 @@ function WorkflowExecution({ user }) {
           }
           
           // Update the BPMN viewer with task status data
+          console.log('🎨 Setting task status data for BPMN coloring:', statusData);
           setTaskStatusData(statusData);
           
           // Find pending and error tasks (state 16 = READY, state 128 = ERROR)
@@ -581,8 +585,8 @@ function WorkflowExecution({ user }) {
     setDialogOpen(false);
     setSelectedInstance(null);
     setFormData({});
-    // Clear task status data when closing dialog to reset BPMN colors
-    setTaskStatusData(null);
+    // Don't clear taskStatusData here - preserve BPMN coloring for the selected instance
+    // Task status data should persist so users can see the colored diagram after closing the dialog
     // Keep the selectedInstanceForBpmn so user can still click on BPMN nodes
     // setSelectedInstanceForBpmn(null); // Uncomment if you want to clear selection on dialog close
   }, []);
@@ -796,7 +800,10 @@ function WorkflowExecution({ user }) {
                   />
                   <Button 
                     size="small" 
-                    onClick={() => setSelectedInstanceForBpmn(null)}
+                    onClick={() => {
+                      setSelectedInstanceForBpmn(null);
+                      setTaskStatusData(null); // Clear BPMN coloring when clearing selection
+                    }}
                     sx={{ minWidth: 'auto', px: 1 }}
                   >
                     Clear
@@ -804,11 +811,7 @@ function WorkflowExecution({ user }) {
                 </Box>
               )}
             </Box>
-            {selectedInstanceForBpmn && (
-              <Alert severity="info" sx={{ mb: 2, fontSize: '0.875rem' }}>
-                <strong>Instance Selected:</strong> You can now click on nodes in the workflow diagram above to open the task dialog for this instance.
-              </Alert>
-            )}
+
             {loadingWorkflows ? (
               <CircularProgress size={20} />
             ) : allWorkflows.length > 0 ? (
@@ -838,6 +841,7 @@ function WorkflowExecution({ user }) {
                           }
                         }}
                         onClick={() => {
+                          console.log('🖱️ Instance clicked in table:', wf.instance_id);
                           setSelectedInstanceForBpmn(wf.instance_id);
                           // Load instance data for BPMN coloring but don't open dialog
                           handleInstanceClick(wf.instance_id, false);
