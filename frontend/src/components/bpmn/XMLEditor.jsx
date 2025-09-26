@@ -493,20 +493,22 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
                 borderRadius: '8px 8px 0 0'
               }}
             >Code Generator</button>
-            <button
-              onClick={() => toggleAccordion(2)}
-              style={{
-                flex: 1,
-                background: accordionOpen === 2 ? 'var(--bg-secondary)' : 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                border: 'none',
-                borderBottom: accordionOpen === 2 ? '2px solid var(--accent-color)' : 'none',
-                padding: '10px',
-                fontWeight: accordionOpen === 2 ? 'bold' : 'normal',
-                cursor: 'pointer',
-                borderRadius: '8px 8px 0 0'
-              }}
-            >Assignee</button>
+            {((selectedNode?.data?.taskType || elementType) === 'userTask' || (selectedNode?.data?.taskType || elementType) === 'manualTask') && (
+              <button
+                onClick={() => toggleAccordion(2)}
+                style={{
+                  flex: 1,
+                  background: accordionOpen === 2 ? 'var(--bg-secondary)' : 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  border: 'none',
+                  borderBottom: accordionOpen === 2 ? '2px solid var(--accent-color)' : 'none',
+                  padding: '10px',
+                  fontWeight: accordionOpen === 2 ? 'bold' : 'normal',
+                  cursor: 'pointer',
+                  borderRadius: '8px 8px 0 0'
+                }}
+              >Assignee</button>
+            )}
           </div>
 
           {/* Accordion panels */}
@@ -732,7 +734,7 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
                 </Button>
               </form>
             )}
-            {accordionOpen === 2 && (
+            {accordionOpen === 2 && ((selectedNode?.data?.taskType || elementType) === 'userTask' || (selectedNode?.data?.taskType || elementType) === 'manualTask') && (
               <>
                 <Typography variant="h6" gutterBottom sx={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 'bold' }}>
                   Task Assignee
