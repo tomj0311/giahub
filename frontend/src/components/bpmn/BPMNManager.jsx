@@ -81,48 +81,48 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
     return pieces.length ? ' ' + pieces.join(' ') : '';
   };
 
-  // Helper function to format XML with proper indentation
+  // Simple XML formatter - keeps it simple but effective
   const formatXML = (xml) => {
     try {
-      // Simple but effective formatting approach
-      let formatted = xml
-        // Add line breaks before opening tags
-        .replace(/></g, '>\n<')
-        // Add line breaks after declarations
-        .replace(/\?>/g, '?>\n')
-        // Clean up multiple newlines
-        .replace(/\n\s*\n/g, '\n');
-
-      // Split into lines and add indentation
-      const lines = formatted.split('\n');
-      let indentLevel = 0;
-      const indentSize = 2; // 2 spaces per indent level
-
+      // Step 1: Clean up the XML first
+      let clean = xml.replace(/>\s+</g, '><'); // Remove whitespace between tags
+      
+      // Step 2: Add line breaks between tags  
+      clean = clean.replace(/></g, '>\n<');
+      
+      // Step 3: Add line break after XML declaration
+      clean = clean.replace(/\?>/g, '?>\n');
+      
+      // Step 4: Format with indentation
+      const lines = clean.split('\n');
+      let indent = 0;
+      const tab = '  '; // 2 spaces
+      
       return lines.map(line => {
-        const trimmedLine = line.trim();
-        if (!trimmedLine) return '';
-
-        // Decrease indent for closing tags
-        if (trimmedLine.startsWith('</')) {
-          indentLevel = Math.max(0, indentLevel - 1);
+        const trimmed = line.trim();
+        if (!trimmed) return '';
+        
+        // Closing tag - reduce indent first
+        if (trimmed.startsWith('</')) {
+          indent = Math.max(0, indent - 1);
         }
-
-        const indentedLine = ' '.repeat(indentLevel * indentSize) + trimmedLine;
-
-        // Increase indent for opening tags (but not self-closing or same-line content)
-        if (trimmedLine.startsWith('<') &&
-          !trimmedLine.startsWith('</') &&
-          !trimmedLine.endsWith('/>') &&
-          !trimmedLine.includes('</')) {
-          indentLevel++;
+        
+        const formatted = tab.repeat(indent) + trimmed;
+        
+        // Opening tag - increase indent after formatting
+        if (trimmed.startsWith('<') && 
+            !trimmed.startsWith('</') && 
+            !trimmed.endsWith('/>') &&
+            !trimmed.match(/<[^>]+>.*<\/[^>]+>$/)) { // not self-contained
+          indent++;
         }
-
-        return indentedLine;
+        
+        return formatted;
       }).join('\n');
-
+      
     } catch (error) {
-      console.warn('Error formatting XML:', error);
-      return xml; // Return original if formatting fails
+      console.warn('XML formatting failed, returning original:', error);
+      return xml;
     }
   };
 

@@ -780,12 +780,31 @@ function WorkflowExecution({ user }) {
                           {wf.instance_id}
                         </TableCell>
                         <TableCell sx={{ fontSize: '0.8rem' }}>
-                          <Chip 
-                            label={wf.status} 
-                            color={wf.status === 'complete' ? 'success' : 'warning'} 
-                            size="small"
-                            icon={wf.status === 'complete' ? <CheckCircle size={14} /> : <Clock size={14} />}
-                          />
+                          {(() => {
+                            // Check if this instance has error tasks (status 128)
+                            const hasErrorTasks = selectedInstanceForBpmn === wf.instance_id && 
+                              activeTasks.some(task => task.status === 128);
+                            
+                            if (hasErrorTasks) {
+                              return (
+                                <Chip 
+                                  label="FAIL" 
+                                  color="error" 
+                                  size="small"
+                                  icon={<XCircle size={14} />}
+                                />
+                              );
+                            }
+                            
+                            return (
+                              <Chip 
+                                label={wf.status} 
+                                color={wf.status === 'complete' ? 'success' : 'warning'} 
+                                size="small"
+                                icon={wf.status === 'complete' ? <CheckCircle size={14} /> : <Clock size={14} />}
+                              />
+                            );
+                          })()}
                         </TableCell>
                         <TableCell sx={{ fontSize: '0.8rem' }}>
                           {new Date(wf.created_at).toLocaleString()}

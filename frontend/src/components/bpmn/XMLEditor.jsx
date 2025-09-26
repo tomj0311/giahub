@@ -620,13 +620,27 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
                     const scripts = doc.querySelectorAll('script');
                     console.log('🟡 [XML DEBUG] Found', scripts.length, '<script> elements');
                     scripts.forEach((script, idx) => {
+                      console.log(`🔍 [XML DEBUG] Processing <script> #${idx}, childNodes:`, script.childNodes.length);
+                      
+                      // Check if script already has CDATA
+                      let hasCDATA = false;
                       for (let i = 0; i < script.childNodes.length; i++) {
                         const node = script.childNodes[i];
                         if (node.nodeType === 4) { // CDATASection
-                          console.log(`🟢 [XML DEBUG] Found CDATA in <script> #${idx}, updating...`);
+                          console.log(`🟢 [XML DEBUG] Found existing CDATA in <script> #${idx}, updating...`);
                           node.data = `\n${cgResponse}\n`;
                           updated = true;
+                          hasCDATA = true;
                         }
+                      }
+                      
+                      // If no CDATA found, add it
+                      if (!hasCDATA) {
+                        console.log(`🟡 [XML DEBUG] No CDATA in <script> #${idx}, adding new CDATA...`);
+                        // Clear existing content first
+                        script.textContent = '';
+                        script.appendChild(doc.createCDATASection(`\n${cgResponse}\n`));
+                        updated = true;
                       }
                     });
 
