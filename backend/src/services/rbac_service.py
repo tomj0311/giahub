@@ -393,7 +393,7 @@ async def init_default_roles():
         await RBACService.create_role(
             role_name="tenant_admin",
             description="Tenant administrator with full access within their organization",
-            permissions=["manage_users", "manage_roles", "manage_settings", "full_access"]
+            permissions=["Read", "Write", "Delete"]
         )
     
     # General user role template (not assigned to specific users)

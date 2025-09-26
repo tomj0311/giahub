@@ -69,7 +69,7 @@ class TenantService:
             admin_role = await RBACService.create_role(
                 role_name=admin_role_name,
                 description=f"Tenant administrator for {user_email}",
-                permissions=["manage_users", "manage_roles", "manage_settings", "full_access"],
+                permissions=["Read", "Write", "Delete"],
                 owner_id=user_id,
                 is_default=False,
                 tenant_id=tenant_id
