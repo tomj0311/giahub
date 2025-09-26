@@ -95,9 +95,24 @@ class AuthService:
             logger.debug(f"[AUTH] Checking verification status for user: {normalized_username}")
             if not user.get("verified", False):
                 logger.warning(f"[AUTH] Unverified user attempted login: {normalized_username}")
+                if user.get("isInvited", False):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Please verify your email through the invitation link to activate your account"
+                    )
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Please verify your email before logging in"
+                    )
+
+            # Check if user is active (for invited users)
+            logger.debug(f"[AUTH] Checking active status for user: {normalized_username}")
+            if not user.get("active", True):
+                logger.warning(f"[AUTH] Inactive user attempted login: {normalized_username}")
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Please verify your email before logging in"
+                    detail="Your account is not yet activated. Please verify your email to activate your account."
                 )
 
             # Get user's tenant information

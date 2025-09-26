@@ -54,7 +54,7 @@ async def invite_user(
         import uuid
         from datetime import datetime
         from ..utils.auth import hash_password, normalize_email
-        from ..services.email_service import send_registration_email
+        from ..services.email_service import send_registration_email, send_invitation_email
         import secrets
         import string
 
@@ -94,13 +94,17 @@ async def invite_user(
                     detail="You can only invite users to roles you own"
                 )
 
-        # Generate temporary password
+        # Generate temporary password and verification token
         def generate_random_password() -> str:
             alphabet = string.ascii_letters + string.digits
             return ''.join(secrets.choice(alphabet) for _ in range(12))
 
+        def generate_verification_token() -> str:
+            return ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(64))
+
         temp_password = generate_random_password()
         hashed_password = hash_password(temp_password)
+        verification_token = generate_verification_token()
         new_user_id = str(uuid.uuid4())
 
         # Get inviter's tenant_id for inheritance
@@ -126,9 +130,10 @@ async def invite_user(
             "role": "user",
             "verified": False,
             "emailVerified": False,
-            "active": True,
+            "active": False,  # User is inactive until email verification
             "invitedBy": invited_by,
             "isInvited": True,
+            "verification_token": verification_token,
             "tenantId": inviter_tenant_id,  # INHERIT TENANT FROM INVITER
             "created_at": current_time,
             "updated_at": current_time,
@@ -150,10 +155,11 @@ async def invite_user(
         for role_id in incoming_role_ids:
             await RBACService.assign_role_to_user(new_user_id, role_id, tenant_id=inviter_tenant_id)
 
-        # Best-effort email
+        # Send invitation email with verification token
         try:
-            await send_registration_email(user_data["email"], "user")
-        except Exception:
+            await send_invitation_email(user_data["email"], verification_token, invited_by_user=user)
+        except Exception as e:
+            logger.warning(f"Failed to send invitation email to {user_data['email']}: {e}")
             pass
 
         # If legacy payload (role_ids), return legacy minimal response with 201

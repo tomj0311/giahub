@@ -155,24 +155,43 @@ class UserService:
                 logger.info(f"[USER] User already verified: {user.get('email')}")
                 return {"message": "Email already verified"}
             
-            # Update user as verified
+            # Update user as verified and activated (for invited users)
             current_time = datetime.utcnow()
+            update_data = {
+                "verified": True,
+                "emailVerified": True,  # Standardized field
+                "verified_at": current_time,
+                "updated_at": current_time,
+                "updatedAt": current_time.timestamp() * 1000  # Timestamp in milliseconds
+            }
+            
+            # If user was invited, activate their account
+            if user.get("isInvited", False):
+                update_data["active"] = True
+                logger.info(f"[USER] Activating invited user: {user.get('email')}")
+            
             await MongoStorageService.update_one("users",
                 {"_id": user["_id"]},
                 {
-                    "$set": {
-                        "verified": True,
-                        "emailVerified": True,  # Standardized field
-                        "verified_at": current_time,
-                        "updated_at": current_time,
-                        "updatedAt": current_time.timestamp() * 1000  # Timestamp in milliseconds
-                    },
+                    "$set": update_data,
                     "$unset": {"verification_token": ""}
                 }
             )
             
             logger.info(f"[USER] Email verified successfully for: {user.get('email')}")
-            return {"message": "Email verified successfully"}
+            
+            # Return appropriate message based on user type
+            if user.get("isInvited", False):
+                return {
+                    "message": "Email verified successfully! Your account has been activated and you can now log in.",
+                    "userType": "invited",
+                    "activated": True
+                }
+            else:
+                return {
+                    "message": "Email verified successfully!",
+                    "userType": "registered"
+                }
             
         except HTTPException:
             raise

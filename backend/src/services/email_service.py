@@ -171,3 +171,81 @@ This is an automated message. Please do not reply to this email.
     except Exception as e:
         logger.error(f"Failed to send registration email to {to}: {e}")
         # Don't raise - registration should succeed even if email fails
+
+
+async def send_invitation_email(
+    to: str, verify_token: str, invited_by_user: dict = None
+):
+    """Send an invitation email with verification token"""
+    logger.info(f"[EMAIL] Sending invitation email to: {to}")
+
+    if not SMTP_HOST:
+        logger.warning("[EMAIL] SMTP not configured, skipping invitation email")
+        return  # Skip if not configured
+
+    try:
+        verification_link = f"{CLIENT_URL}/verify?token={quote_plus(verify_token)}"
+        logger.debug(f"[EMAIL] Generated verification link: {verification_link}")
+
+        inviter_name = "the team"
+        if invited_by_user:
+            inviter_name = invited_by_user.get("name") or invited_by_user.get("firstName", "a team member")
+
+        # Create HTML content
+        logger.debug("[EMAIL] Creating invitation email HTML content")
+        html_content = f"""
+        <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.5;font-size:15px;color:#222;">
+            <h2 style="margin:0 0 16px;">You're Invited to Join GiaHUB!</h2>
+            <p>Hello!</p>
+            <p>You have been invited by <strong>{inviter_name}</strong> to join the GiaHUB Platform.</p>
+            <p>To complete your account setup and start using the platform, please verify your email address by clicking the button below:</p>
+            <p>
+                <a href="{verification_link}" 
+                   style="background:#1976d2;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:bold;">
+                   Verify Email & Activate Account
+                </a>
+            </p>
+            <p style="background:#f5f5f5;padding:12px 16px;border-radius:6px;font-size:14px;letter-spacing:1px;text-align:center;">
+                <strong>Or use this verification code:</strong><br>
+                <span style="font-size:18px;font-family:monospace;">{verify_token}</span>
+            </p>
+            <p style="font-size:12px;color:#666;">
+                If the button doesn't work, you can copy and paste this URL into your browser:<br>
+                <span style="word-break:break-all;">{verification_link}</span>
+            </p>
+            <p><strong>Note:</strong> Your account will remain inactive until you verify your email address.</p>
+            <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;">
+            <p style="font-size:12px;color:#666;">
+                This invitation was sent by {inviter_name}. If you believe you received this email in error, please ignore it.<br>
+                This is an automated message. Please do not reply to this email.
+            </p>
+        </div>
+        """
+
+        # Create text content
+        text_content = f"""
+You're Invited to Join GiaHUB!
+
+Hello!
+
+You have been invited by {inviter_name} to join the GiaHUB Platform.
+
+To complete your account setup and start using the platform, please verify your email address.
+
+Verification Code: {verify_token}
+
+Verification Link: {verification_link}
+
+Note: Your account will remain inactive until you verify your email address.
+
+This invitation was sent by {inviter_name}. If you believe you received this email in error, please ignore it.
+This is an automated message. Please do not reply to this email.
+        """
+
+        subject = "You're Invited to Join GiaHUB - Email Verification Required"
+
+        await send_email(to, subject, html_content, text_content)
+
+    except Exception as e:
+        logger.error(f"Failed to send invitation email to {to}: {e}")
+        # Don't raise - invitation should succeed even if email fails
