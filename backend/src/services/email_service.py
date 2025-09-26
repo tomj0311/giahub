@@ -142,7 +142,7 @@ async def send_registration_email(
         text_content = f"""
 Welcome{' ' + role.capitalize() if role else ''}!
 
-Thank you for registering as a {role} on the GiaHUB Platform.
+Thank you for registering as a {role} on the GIA Platform.
         """
 
         if verify_token:
@@ -162,7 +162,7 @@ Welcome to our healthcare consultation platform!
 This is an automated message. Please do not reply to this email.
         """
 
-        subject = f"Welcome to GiaHUB - {role.capitalize()} Registration"
+        subject = f"Welcome to GIA - {role.capitalize()} Registration"
         if verify_token:
             subject += " (Email Verification Required)"
 
@@ -195,9 +195,9 @@ async def send_invitation_email(
         logger.debug("[EMAIL] Creating invitation email HTML content")
         html_content = f"""
         <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.5;font-size:15px;color:#222;">
-            <h2 style="margin:0 0 16px;">You're Invited to Join GiaHUB!</h2>
+            <h2 style="margin:0 0 16px;">You're Invited to Join GIA!</h2>
             <p>Hello!</p>
-            <p>You have been invited by <strong>{inviter_name}</strong> to join the GiaHUB Platform.</p>
+            <p>You have been invited by <strong>{inviter_name}</strong> to join the GIA Platform.</p>
             <p>To complete your account setup and start using the platform, please verify your email address by clicking the button below:</p>
             <p>
                 <a href="{verification_link}" 
@@ -224,11 +224,11 @@ async def send_invitation_email(
 
         # Create text content
         text_content = f"""
-You're Invited to Join GiaHUB!
+You're Invited to Join GIA!
 
 Hello!
 
-You have been invited by {inviter_name} to join the GiaHUB Platform.
+You have been invited by {inviter_name} to join the GIA Platform.
 
 To complete your account setup and start using the platform, please verify your email address.
 
@@ -242,7 +242,7 @@ This invitation was sent by {inviter_name}. If you believe you received this ema
 This is an automated message. Please do not reply to this email.
         """
 
-        subject = "You're Invited to Join GiaHUB - Email Verification Required"
+        subject = "You're Invited to Join GIA - Email Verification Required"
 
         await send_email(to, subject, html_content, text_content)
 
