@@ -100,6 +100,12 @@ function WorkflowExecution({ user }) {
   // Debug: Monitor taskStatusData changes
   useEffect(() => {
     console.log('🔄 taskStatusData changed:', taskStatusData);
+    
+    if (taskStatusData && taskStatusData.serialized_data?.tasks) {
+      const userTaskEmailCount = Object.values(taskStatusData.serialized_data.tasks).filter(task => task.task_spec === 'userTask_getEmail').length;
+      console.log('🚨 taskStatusData - userTask_getEmail count:', userTaskEmailCount);
+      console.log('🚨 taskStatusData - all userTask_getEmail tasks:', Object.values(taskStatusData.serialized_data.tasks).filter(task => task.task_spec === 'userTask_getEmail'));
+    }
   }, [taskStatusData]);
 
   // Load workflow configuration and BPMN data
@@ -212,12 +218,12 @@ function WorkflowExecution({ user }) {
           { workflowId, action: 'list_incomplete' }
         );
 
-        if (result.success) {
-          const workflowsData = result.data;
-          const workflows = workflowsData.data || [];
-          setIncompleteWorkflows(workflows);
-          setRefreshKey((k) => k + 1);
-        }
+        // Log exact raw data as received from backend - NO FILTERING
+        console.log('EXACT RAW BACKEND DATA (Incomplete):', result);
+        
+        // Set the data exactly as received
+        setIncompleteWorkflows(result.data?.data || []);
+        setRefreshKey((k) => k + 1);
       } catch (err) {
         console.error('❌ Failed to load incomplete workflows:', err);
       } finally {
@@ -243,12 +249,13 @@ function WorkflowExecution({ user }) {
           { workflowId, action: 'list_all_workflows', page }
         );
 
-        if (result.success) {
-          const workflowsData = result.data;
-          setAllWorkflows(workflowsData.data || []);
-          setTotalPages(workflowsData.total_pages || 1);
-          setRefreshKey((k) => k + 1);
-        }
+        // Log exact raw data as received from backend - NO FILTERING
+        console.log('EXACT RAW BACKEND DATA (All Workflows):', result);
+        
+        // Set the data exactly as received
+        setAllWorkflows(result.data?.data || []);
+        setTotalPages(result.data?.total_pages || 1);
+        setRefreshKey((k) => k + 1);
       } catch (err) {
         console.error('❌ Failed to load all workflows:', err);
       } finally {
@@ -345,33 +352,22 @@ function WorkflowExecution({ user }) {
 
         if (result.success) {
           const workflowData = result.data.data;
+          
+          // FUCKING LOG THE RAW INSTANCE DATA
+          console.log('🚨 RAW INSTANCE DATA FROM API:', JSON.stringify(workflowData, null, 2));
+          console.log('🚨 RAW TASKS OBJECT:', workflowData.serialized_data?.tasks);
+          
+          // Count userTask_getEmail occurrences in RAW data
+          const rawTasks = workflowData.serialized_data?.tasks || {};
+          const userTaskEmailCount = Object.values(rawTasks).filter(task => task.task_spec === 'userTask_getEmail').length;
+          console.log('🚨 RAW DATA - userTask_getEmail count:', userTaskEmailCount);
+          
           setSelectedInstance(workflowData);
           
-          // Extract task status data for BPMN coloring
-          const statusData = {};
-          if (workflowData.serialized_data && workflowData.serialized_data.tasks) {
-            Object.entries(workflowData.serialized_data.tasks).forEach(([taskId, task]) => {
-              // Map task IDs to their status for BPMN coloring
-              statusData[taskId] = {
-                state: task.state,
-                typename: task.typename,
-                task_spec: task.task_spec
-              };
-              
-              // Also map by task_spec if available for better matching
-              if (task.task_spec) {
-                statusData[task.task_spec] = {
-                  state: task.state,
-                  typename: task.typename,
-                  task_spec: task.task_spec
-                };
-              }
-            });
-          }
-          
-          // Update the BPMN viewer with task status data
-          console.log('🎨 Setting task status data for BPMN coloring:', statusData);
-          setTaskStatusData(statusData);
+          // Set EXACT PURE MongoDB data - NO FUCKING MODIFICATIONS
+          const pureData = JSON.parse(JSON.stringify(workflowData));
+          console.log('🚨 PURE DATA BEING SET TO taskStatusData:', pureData);
+          setTaskStatusData(pureData);
           
           // Find pending and error tasks (state 16 = READY, state 128 = ERROR)
           const pendingTasks = [];
