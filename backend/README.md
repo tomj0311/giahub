@@ -1,6 +1,6 @@
 # GiaHUB Backend - Python/FastAPI
 
-This is the Python FastAPI conversion of the Node.js backend for the GiaHUB healthcare consultation platform.
+This is the Python FastAPI conversion of the Node.js backend for the GiaH healthcare consultation platform.
 
 ## Features
 

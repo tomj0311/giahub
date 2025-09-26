@@ -106,7 +106,7 @@ async def send_registration_email(
         html_content = f"""
         <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.5;font-size:15px;color:#222;">
             <h2 style="margin:0 0 16px;">Welcome{' ' + role.capitalize() if role else ''}!</h2>
-            <p>Thank you for registering as a <strong>{role}</strong> on the GiaHUB Platform.</p>
+            <p>Thank you for registering as a <strong>{role}</strong> on the H8 GIA Platform.</p>
         """
 
         if verify_token:
@@ -130,7 +130,7 @@ async def send_registration_email(
             """
 
         html_content += """
-            <p>Welcome to our healthcare consultation platform!</p>
+            <p>Welcome to our Intelligent Automation Platform!</p>
             <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;">
             <p style="font-size:12px;color:#666;">
                 This is an automated message. Please do not reply to this email.
