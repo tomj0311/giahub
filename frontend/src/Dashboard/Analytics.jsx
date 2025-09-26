@@ -177,9 +177,9 @@ const AgentPerformanceTable = ({ agents, loading }) => {
            theme.palette.error.main
   }
 
-  const maxConversations = Math.max(...agents.map(a => a.total_conversations), 1)
+  const maxConversations = Math.max(...agents.map(a => a.total_conversations || 0), 1)
   const maxResponseTime = Math.max(...agents.map(a => parseFloat(a.avg_response_time) || 0), 1)
-  const maxTokens = Math.max(...agents.map(a => a.total_tokens || a.avg_tokens), 1)
+  const maxTokens = Math.max(...agents.map(a => a.total_tokens || a.avg_tokens || 0), 1)
 
   return (
     <Fade in={true} timeout={theme.transitions.duration.enteringScreen + 200}>
@@ -265,12 +265,12 @@ const AgentPerformanceTable = ({ agents, loading }) => {
                           <Typography 
                             variant="body2" 
                             sx={{ 
-                              color: getPerformanceColor(agent.total_conversations, maxConversations),
+                              color: getPerformanceColor(agent.total_conversations || 0, maxConversations),
                               fontWeight: theme.typography.fontWeightMedium,
                               mr: 1
                             }}
                           >
-                            {agent.total_conversations}
+                            {agent.total_conversations || 0}
                           </Typography>
                           <Box
                             sx={{
@@ -283,9 +283,9 @@ const AgentPerformanceTable = ({ agents, loading }) => {
                           >
                             <Box
                               sx={{
-                                width: `${((agent.total_tokens || agent.avg_tokens) / maxTokens) * 100}%`,
+                                width: `${((agent.total_tokens || agent.avg_tokens || 0) / maxTokens) * 100}%`,
                                 height: '100%',
-                                backgroundColor: getPerformanceColor(agent.total_tokens || agent.avg_tokens, maxTokens),
+                                backgroundColor: getPerformanceColor(agent.total_tokens || agent.avg_tokens || 0, maxTokens),
                                 borderRadius: 'inherit'
                               }}
                             />
@@ -300,18 +300,18 @@ const AgentPerformanceTable = ({ agents, loading }) => {
                             fontWeight: theme.typography.fontWeightMedium
                           }}
                         >
-                          {agent.avg_response_time}s
+                          {agent.avg_response_time || 0}s
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
                         <Typography 
                           variant="body2" 
                           sx={{ 
-                            color: getPerformanceColor(agent.total_tokens || agent.avg_tokens, maxTokens),
+                            color: getPerformanceColor(agent.total_tokens || agent.avg_tokens || 0, maxTokens),
                             fontWeight: theme.typography.fontWeightMedium
                           }}
                         >
-                          {(agent.total_tokens || agent.avg_tokens)?.toLocaleString()}
+                          {(agent.total_tokens || agent.avg_tokens || 0).toLocaleString()}
                         </Typography>
                       </TableCell>
                     </TableRow>
@@ -468,7 +468,7 @@ const RecentConversationsTable = ({ conversations, loading }) => {
                               color: theme.palette.info.main
                             }}
                           >
-                            {conv.total_tokens?.toLocaleString() || '0'}
+                            {(conv.total_tokens || 0).toLocaleString()}
                           </Typography>
                         </TableCell>
                         <TableCell align="right">
@@ -479,7 +479,7 @@ const RecentConversationsTable = ({ conversations, loading }) => {
                               color: theme.palette.warning.main
                             }}
                           >
-                            {conv.response_time}s
+                            {conv.response_time || 0}s
                           </Typography>
                         </TableCell>
                         <TableCell>
@@ -660,8 +660,8 @@ const Analytics = () => {
     },
     {
       type: 'total_tokens',
-      value: overview?.total_tokens_consumed?.toLocaleString() || 0,
-      subtitle: `${overview?.total_input_tokens_consumed?.toLocaleString() || 0} input, ${overview?.total_output_tokens_consumed?.toLocaleString() || 0} output`,
+      value: (overview?.total_tokens_consumed || 0).toLocaleString(),
+      subtitle: `${(overview?.total_input_tokens_consumed || 0).toLocaleString()} input, ${(overview?.total_output_tokens_consumed || 0).toLocaleString()} output`,
       delay: 400
     }
   ]

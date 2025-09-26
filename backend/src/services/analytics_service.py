@@ -37,14 +37,46 @@ class AnalyticsService:
                 {
                     "$group": {
                         "_id": None,
-                        "avg_response_time": {"$avg": "$metrics.total_response_time"},
-                        "avg_total_tokens": {"$avg": "$metrics.total_tokens"},
-                        "avg_input_tokens": {"$avg": "$metrics.total_input_tokens"},
-                        "avg_output_tokens": {"$avg": "$metrics.total_output_tokens"},
-                        "avg_time_to_first_token": {"$avg": "$metrics.avg_time_to_first_token"},
-                        "total_tokens_consumed": {"$sum": "$metrics.total_tokens"},
-                        "total_input_tokens_consumed": {"$sum": "$metrics.total_input_tokens"},
-                        "total_output_tokens_consumed": {"$sum": "$metrics.total_output_tokens"}
+                        "avg_response_time": {
+                            "$avg": {
+                                "$ifNull": ["$metrics.total_response_time", 0]
+                            }
+                        },
+                        "avg_total_tokens": {
+                            "$avg": {
+                                "$ifNull": ["$metrics.total_tokens", 0]
+                            }
+                        },
+                        "avg_input_tokens": {
+                            "$avg": {
+                                "$ifNull": ["$metrics.total_input_tokens", 0]
+                            }
+                        },
+                        "avg_output_tokens": {
+                            "$avg": {
+                                "$ifNull": ["$metrics.total_output_tokens", 0]
+                            }
+                        },
+                        "avg_time_to_first_token": {
+                            "$avg": {
+                                "$ifNull": ["$metrics.avg_time_to_first_token", 0]
+                            }
+                        },
+                        "total_tokens_consumed": {
+                            "$sum": {
+                                "$ifNull": ["$metrics.total_tokens", 0]
+                            }
+                        },
+                        "total_input_tokens_consumed": {
+                            "$sum": {
+                                "$ifNull": ["$metrics.total_input_tokens", 0]
+                            }
+                        },
+                        "total_output_tokens_consumed": {
+                            "$sum": {
+                                "$ifNull": ["$metrics.total_output_tokens", 0]
+                            }
+                        }
                     }
                 }
             ]
@@ -56,14 +88,14 @@ class AnalyticsService:
                 "total_conversations": total_conversations,
                 "completed_conversations": completed_conversations,
                 "completion_rate": round((completed_conversations / total_conversations * 100), 2) if total_conversations > 0 else 0,
-                "avg_response_time": round(avg_data.get("avg_response_time", 0), 3),
-                "avg_total_tokens": round(avg_data.get("avg_total_tokens", 0)),
-                "avg_input_tokens": round(avg_data.get("avg_input_tokens", 0)),
-                "avg_output_tokens": round(avg_data.get("avg_output_tokens", 0)),
-                "avg_time_to_first_token": round(avg_data.get("avg_time_to_first_token", 0), 3),
-                "total_tokens_consumed": avg_data.get("total_tokens_consumed", 0),
-                "total_input_tokens_consumed": avg_data.get("total_input_tokens_consumed", 0),
-                "total_output_tokens_consumed": avg_data.get("total_output_tokens_consumed", 0)
+                "avg_response_time": round(avg_data.get("avg_response_time") or 0, 3),
+                "avg_total_tokens": round(avg_data.get("avg_total_tokens") or 0),
+                "avg_input_tokens": round(avg_data.get("avg_input_tokens") or 0),
+                "avg_output_tokens": round(avg_data.get("avg_output_tokens") or 0),
+                "avg_time_to_first_token": round(avg_data.get("avg_time_to_first_token") or 0, 3),
+                "total_tokens_consumed": avg_data.get("total_tokens_consumed") or 0,
+                "total_input_tokens_consumed": avg_data.get("total_input_tokens_consumed") or 0,
+                "total_output_tokens_consumed": avg_data.get("total_output_tokens_consumed") or 0
             }
             
         except Exception as e:
@@ -102,8 +134,16 @@ class AnalyticsService:
                         "completed_conversations": {
                             "$sum": {"$cond": [{"$eq": ["$completed", True]}, 1, 0]}
                         },
-                        "total_tokens": {"$sum": "$metrics.total_tokens"},
-                        "avg_response_time": {"$avg": "$metrics.total_response_time"}
+                        "total_tokens": {
+                            "$sum": {
+                                "$ifNull": ["$metrics.total_tokens", 0]
+                            }
+                        },
+                        "avg_response_time": {
+                            "$avg": {
+                                "$ifNull": ["$metrics.total_response_time", 0]
+                            }
+                        }
                     }
                 },
                 {"$sort": {"_id": 1}}
@@ -117,8 +157,8 @@ class AnalyticsService:
                     "date": stat["_id"],
                     "total_conversations": stat["total_conversations"],
                     "completed_conversations": stat["completed_conversations"],
-                    "total_tokens": stat["total_tokens"],
-                    "avg_response_time": round(stat["avg_response_time"], 3)
+                    "total_tokens": stat["total_tokens"] or 0,
+                    "avg_response_time": round(stat["avg_response_time"], 3) if stat["avg_response_time"] is not None else 0
                 }
                 for stat in daily_stats
             ]
@@ -145,9 +185,21 @@ class AnalyticsService:
                     "$group": {
                         "_id": "$agent_name",
                         "total_conversations": {"$sum": 1},
-                        "avg_response_time": {"$avg": "$metrics.total_response_time"},
-                        "avg_tokens": {"$avg": "$metrics.total_tokens"},
-                        "avg_time_to_first_token": {"$avg": "$metrics.avg_time_to_first_token"}
+                        "avg_response_time": {
+                            "$avg": {
+                                "$ifNull": ["$metrics.total_response_time", 0]
+                            }
+                        },
+                        "avg_tokens": {
+                            "$avg": {
+                                "$ifNull": ["$metrics.total_tokens", 0]
+                            }
+                        },
+                        "avg_time_to_first_token": {
+                            "$avg": {
+                                "$ifNull": ["$metrics.avg_time_to_first_token", 0]
+                            }
+                        }
                     }
                 },
                 {"$sort": {"total_conversations": -1}},
@@ -160,9 +212,9 @@ class AnalyticsService:
                 {
                     "agent_name": stat["_id"],
                     "total_conversations": stat["total_conversations"],
-                    "avg_response_time": round(stat["avg_response_time"], 3),
-                    "avg_tokens": round(stat["avg_tokens"]),
-                    "avg_time_to_first_token": round(stat["avg_time_to_first_token"], 3)
+                    "avg_response_time": round(stat["avg_response_time"], 3) if stat["avg_response_time"] is not None else 0,
+                    "avg_tokens": round(stat["avg_tokens"]) if stat["avg_tokens"] is not None else 0,
+                    "avg_time_to_first_token": round(stat["avg_time_to_first_token"], 3) if stat["avg_time_to_first_token"] is not None else 0
                 }
                 for stat in agent_stats
             ]
@@ -201,8 +253,8 @@ class AnalyticsService:
                     "agent_name": conv.get("agent_name", "Unknown"),
                     "conv_id": conv.get("conv_id", ""),
                     "completed": conv.get("completed", False),
-                    "total_tokens": conv.get("metrics", {}).get("total_tokens", 0),
-                    "response_time": round(conv.get("metrics", {}).get("total_response_time", 0), 3),
+                    "total_tokens": conv.get("metrics", {}).get("total_tokens") or 0,
+                    "response_time": round(conv.get("metrics", {}).get("total_response_time") or 0, 3),
                     "created_at": conv.get("created_at").isoformat() if conv.get("created_at") else None
                 }
                 for conv in conversations
