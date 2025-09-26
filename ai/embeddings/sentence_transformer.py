@@ -15,7 +15,9 @@ class SentenceTransformer(SentenceTransformerEmbedder):
     def __init__(
         self,
         # Core parameters
-        model: str = "sentence-transformers/all-MiniLM-L6-v2",
+        model: str = "sentence-transformers/all-mpnet-base-v2",
+        target_dimensions: int = 1536,
+        pad_embeddings: bool = True,
         
         # Pass through any additional parameters
         **kwargs
@@ -24,12 +26,16 @@ class SentenceTransformer(SentenceTransformerEmbedder):
         Initialize SentenceTransformer embedder with optional configuration parameters.
         
         Args:
-            model: SentenceTransformer model name or path (e.g., "sentence-transformers/all-MiniLM-L6-v2", 
-                   "sentence-transformers/all-mpnet-base-v2", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+            model: SentenceTransformer model name or path (e.g., "sentence-transformers/all-mpnet-base-v2", 
+                   "sentence-transformers/all-MiniLM-L6-v2", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+            target_dimensions: Target embedding dimensions (default 1536 for OpenAI compatibility)
+            pad_embeddings: Whether to pad/truncate embeddings to target dimensions
             **kwargs: Additional parameters passed to underlying implementation
         """
         super().__init__(
             model=model,
+            target_dimensions=target_dimensions,
+            pad_embeddings=pad_embeddings,
             **kwargs
         )
 
