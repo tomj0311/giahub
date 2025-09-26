@@ -167,11 +167,14 @@ Never use: ambiguous activity names, undefined gateway conditions, missing start
     <scriptTask id="scriptTask_1" name="Validate Email" scriptFormat="python">
       <script>
         # Standard Python code only - Variables are directly available
+        ```python
         import re
+
         if email and re.match(r"[^@]+@[^@]+\.[^@]+", email):
             email_valid = True
         else:
             email_valid = False
+        ```
       </script>
     </scriptTask>
     
