@@ -22,7 +22,6 @@ from src.db import init_database, close_database
 from src.routes import auth_router, users_router, payments_router, uploads_router, profile_router, roles_router, role_management_router, menu_router, model_config_router, tool_config_router, knowledge_router, agents_router, workflow_config_router, workflow_router, analytics_router
 from src.routes.agent_runtime import router as agent_runtime_router
 from src.services.rbac_service import init_default_roles
-from src.services.menu_service import MenuService
 from src.utils.log import logger
 
 # Load environment variables FIRST
@@ -57,11 +56,6 @@ async def lifespan(app: FastAPI):
     # Initialize default roles - DISABLED due to tenant enforcement
     # await init_default_roles()
     # logger.info("Default roles initialized")
-    
-    # Initialize default menu items
-    logger.debug("[STARTUP] Seeding default menu items")
-    await MenuService.seed_default_menu_items()
-    logger.info("Default menu items initialized")
     
     logger.debug("[STARTUP] Application startup completed")
     yield
