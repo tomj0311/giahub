@@ -88,11 +88,15 @@ async def create_role(
             logger.warning(f"[ROLES] Role creation failed - missing name for user: {user_id}")
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="roleName or name is required")
 
+        # Get user's tenant ID
+        tenant_id = await TenantService.get_user_tenant_id(user_id)
+
         role = await RBACService.create_role(
             role_name=role_name,
             description=role_data.description,
             permissions=role_data.permissions,
             owner_id=user_id,
+            tenant_id=tenant_id,
         )
         # Add legacy mirror fields for compatibility
         role_out = {
@@ -135,11 +139,15 @@ async def update_role(
         )
     
     try:
+        # Get user's tenant ID
+        tenant_id = await TenantService.get_user_tenant_id(user_id)
+        
         # Use service to update role
         updated_role = await RBACService.update_role(
             role_id, 
             role_data.dict(exclude_unset=True), 
-            user_id
+            user_id,
+            tenant_id=tenant_id
         )
         
         # Include legacy mirrors for compatibility

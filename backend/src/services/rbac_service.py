@@ -135,7 +135,7 @@ class RBACService:
         return await RBACService.create_role(
             role_name=role_name,
             description=f"Default role for user {email}",
-            permissions=["read_own_data", "update_own_profile"],
+            permissions=["Read", "Write", "Delete"],
             owner_id=owner_id,
             is_default=True,
             tenant_id=tenant_id,
@@ -402,16 +402,16 @@ async def init_default_roles():
         await RBACService.create_role(
             role_name="general_user",
             description="General user role template",
-            permissions=["read_own_data", "update_own_profile"]
+            permissions=["Read", "Write", "Delete"]
         )
 
     @staticmethod
-    async def update_role(role_id: str, update_data: Dict, user_id: str) -> Dict:
+    async def update_role(role_id: str, update_data: Dict, user_id: str, tenant_id: Optional[str] = None) -> Dict:
         """Update an existing role - only owner can update"""
 
         
         # Check if role exists
-        role = await RBACService.get_role_by_id(role_id)
+        role = await RBACService.get_role_by_id(role_id, tenant_id=tenant_id)
         if not role:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -443,11 +443,12 @@ async def init_default_roles():
         await MongoStorageService.update_one(
             "roles",
             {"roleId": role_id},
-            {"$set": filtered_update}
+            {"$set": filtered_update},
+            tenant_id=tenant_id
         )
         
         # Get updated role
-        updated_role = await RBACService.get_role_by_id(role_id)
+        updated_role = await RBACService.get_role_by_id(role_id, tenant_id=tenant_id)
         return updated_role
 
     @staticmethod
