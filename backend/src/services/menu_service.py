@@ -237,15 +237,6 @@ class MenuService:
                     "order": 3,
                     "isActive": True,
                     "expandable": False
-                },
-                {
-                    "label": "Tenants",
-                    "to": "/settings/tenants",
-                    "icon": "Castle",
-                    "parentId": settings_parent_id,
-                    "order": 4,
-                    "isActive": True,
-                    "expandable": False
                 }
             ]
             

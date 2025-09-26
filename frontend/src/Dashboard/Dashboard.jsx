@@ -172,11 +172,6 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 					label: 'User Invitation',
 					to: '/dashboard/user-invitation',
 					icon: 'UserPlus'
-				},
-				{
-					label: 'Organization',
-					to: '/dashboard/tenants',
-					icon: 'Building'
 				}
 			]
 		},
