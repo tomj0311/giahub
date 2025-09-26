@@ -87,6 +87,7 @@ function WorkflowExecution({ user }) {
   const [bpmnData, setBpmnData] = useState(null);
   const [loadingWorkflow, setLoadingWorkflow] = useState(false);
   const [taskStatusData, setTaskStatusData] = useState(null);
+  const [activeTasks, setActiveTasks] = useState([]);
 
   const token = useMemo(() => user?.token || localStorage.getItem('token'), [user?.token]);
   const headers = useMemo(
@@ -97,16 +98,6 @@ function WorkflowExecution({ user }) {
     [token]
   );
 
-  // Debug: Monitor taskStatusData changes
-  useEffect(() => {
-    console.log('🔄 taskStatusData changed:', taskStatusData);
-    
-    if (taskStatusData && taskStatusData.serialized_data?.tasks) {
-      const userTaskEmailCount = Object.values(taskStatusData.serialized_data.tasks).filter(task => task.task_spec === 'userTask_getEmail').length;
-      console.log('🚨 taskStatusData - userTask_getEmail count:', userTaskEmailCount);
-      console.log('🚨 taskStatusData - all userTask_getEmail tasks:', Object.values(taskStatusData.serialized_data.tasks).filter(task => task.task_spec === 'userTask_getEmail'));
-    }
-  }, [taskStatusData]);
 
   // Load workflow configuration and BPMN data
   const loadStatus = useCallback(
@@ -200,6 +191,24 @@ function WorkflowExecution({ user }) {
       loadAllWorkflows(1);
     }
   }, [workflowId, loadStatus]);
+
+  // Update BPMN task colors when activeTasks changes
+  useEffect(() => {
+    if (activeTasks.length > 0) {
+      const taskColors = {};
+      activeTasks.forEach(({ taskSpec, status }) => {
+        if (status === 16) {
+          taskColors[taskSpec] = 'ready'; // Status 16 = READY
+        } else if (status === 64) {
+          taskColors[taskSpec] = 'complete'; // Status 64 = COMPLETE
+        } else if (status === 128) {
+          taskColors[taskSpec] = 'error'; // Status 128 = ERROR
+        }
+      });
+      setTaskStatusData(taskColors);
+      console.log('🎨 BPMN Task Colors Updated by task_spec:', taskColors);
+    }
+  }, [activeTasks]);
 
   const loadIncompleteWorkflows = useCallback(
     async (force = false) => {
@@ -354,133 +363,57 @@ function WorkflowExecution({ user }) {
           const workflowData = result.data.data;
           
           // FUCKING LOG THE RAW INSTANCE DATA
-          console.log('🚨 RAW INSTANCE DATA FROM API:', JSON.stringify(workflowData, null, 2));
-          console.log('🚨 RAW TASKS OBJECT:', workflowData.serialized_data?.tasks);
+          console.log('🚨 RAW INSTANCE DATA FROM API:', workflowData);
           
-          // Count userTask_getEmail occurrences in RAW data
-          const rawTasks = workflowData.serialized_data?.tasks || {};
-          const userTaskEmailCount = Object.values(rawTasks).filter(task => task.task_spec === 'userTask_getEmail').length;
-          console.log('🚨 RAW DATA - userTask_getEmail count:', userTaskEmailCount);
-          
-          setSelectedInstance(workflowData);
-          
-          // Set EXACT PURE MongoDB data - NO FUCKING MODIFICATIONS
-          const pureData = JSON.parse(JSON.stringify(workflowData));
-          console.log('🚨 PURE DATA BEING SET TO taskStatusData:', pureData);
-          setTaskStatusData(pureData);
-          
-          // Find pending and error tasks (state 16 = READY, state 128 = ERROR)
-          const pendingTasks = [];
-          const errorTasks = [];
+          // Extract tasks with status 16, 64, and 128 from serialized_data.tasks
           if (workflowData.serialized_data && workflowData.serialized_data.tasks) {
-            Object.entries(workflowData.serialized_data.tasks).forEach(([taskId, task]) => {
-              if (task.state === 16) { // READY/PENDING state
-                pendingTasks.push({ taskId, ...task, taskType: 'pending' });
-              } else if (task.state === 128) { // ERROR state
-                errorTasks.push({ taskId, ...task, taskType: 'error' });
-              }
-            });
-          }
-          
-          // Combine pending and error tasks for display
-          const allActionableTasks = [...pendingTasks, ...errorTasks];
-          
-          // Check for direct task data (Task_1, Task_2, etc.) and add to actionable if not already present
-          Object.keys(workflowData).forEach(key => {
-            if (key.startsWith('Task_') && workflowData[key]?.formField) {
-              // Add this as a pending task if not already in the list
-              const existingTask = allActionableTasks.find(t => t.task_spec === key);
-              if (!existingTask) {
-                allActionableTasks.push({
-                  taskId: `${key}_direct`,
-                  task_spec: key,
-                  state: 16, // Mark as ready
-                  typename: 'UserTask', // Explicitly mark as UserTask
-                  taskType: 'pending'
-                });
-              }
-            }
-          });
-          
-          // Helper to extract field entries for a given task spec from stored instance data
-          const getFieldEntries = (instanceObj, taskSpec) => {
-            // First try to get form fields from task spec extensions
-            const spec = instanceObj.serialized_data?.spec?.task_specs?.[taskSpec];
-            if (spec?.extensions?.formData?.formFields) {
-              const entries = [];
-              const formFields = Array.isArray(spec.extensions.formData.formFields) 
-                ? spec.extensions.formData.formFields 
-                : [spec.extensions.formData.formFields];
-              formFields.forEach(f => {
-                if (f?.id) {
-                  entries.push([
-                    f.id,
-                    {
-                      name: f.label || f.id,
-                      type: f.type || 'string',
-                      required: f.required === 'true' || f.required === true,
-                    },
-                  ]);
-                }
-              });
-              return entries;
-            }
+            const tasks = workflowData.serialized_data.tasks;
+            const activeTasksData = Object.entries(tasks).filter(([taskId, task]) => {
+              const status = task.state;
+              return status === 16 || status === 64 || status === 128;
+            }).map(([taskId, task]) => ({
+              taskId,
+              taskSpec: task.task_spec, // Use task_spec for color mapping
+              status: task.state,
+              task: task
+            }));
             
-            // Fallback to legacy structure
-            const obj = instanceObj?.[taskSpec];
-            if (!obj) return [];
-            // Support both legacy shape ({formField, formData}) and direct mapping
-            if (obj.formField || obj.formData) {
-              const entries = [];
-              if (obj.formField) {
-                // Handle both array and single object formats
-                const formFields = Array.isArray(obj.formField) ? obj.formField : [obj.formField];
-                formFields.forEach(f => {
-                  if (f?.id) {
-                    entries.push([
-                      f.id,
-                      {
-                        name: f.label || f.id,
-                        type: f.type || 'string',
-                        required: f.required === 'true' || f.required === true,
-                      },
-                    ]);
-                  }
-                });
-              }
-              if (obj.formData && typeof obj.formData === 'object') {
-                Object.entries(obj.formData).forEach(([k, v]) => {
-                  if (v && typeof v === 'object') entries.push([k, v]);
-                });
-              }
-              return entries;
-            }
-            return Object.entries(obj);
-          };
+            setActiveTasks(activeTasksData);
+            console.log('🎯 activeTasks (status 16, 64, 128):', activeTasksData);
 
-          // Initialize form data based on actionable tasks using BPMN spec to detect UserTask
-          const initialFormData = {};
-          allActionableTasks.forEach((task) => {
-            const spec = workflowData.serialized_data?.spec?.task_specs?.[task.task_spec];
-            const hasFormField = workflowData[task.task_spec]?.formField || spec?.extensions?.formData?.formFields;
-            const isUserTask = spec?.typename === 'UserTask' || spec?.manual === true || hasFormField;
-            if (isUserTask) {
-              const entries = getFieldEntries(workflowData, task.task_spec);
-              entries.forEach(([key, field]) => {
-                initialFormData[key] = field?.value || '';
-              });
-            } else {
-              initialFormData[`confirm_${task.taskId}`] = '';
+            // If openDialog is true, prepare and open the dialog
+            if (openDialog) {
+              // Find pending tasks (status 16 = READY, status 128 = ERROR that might need intervention)
+              const pendingTasks = activeTasksData.filter(taskData => 
+                taskData.status === 16 || taskData.status === 128
+              ).map(taskData => ({
+                taskId: taskData.taskId,
+                task_spec: taskData.taskSpec,
+                state: taskData.status,
+                taskType: taskData.status === 128 ? 'error' : 'pending',
+                data: taskData.task
+              }));
+
+              // Set up the selected instance data for the dialog
+              const instanceForDialog = {
+                instance_id: instanceId,
+                serialized_data: workflowData.serialized_data,
+                pendingTasks: pendingTasks,
+                ...workflowData // Include any other data from the instance
+              };
+
+              // Add task-specific data from serialized_data.spec.task_specs if available
+              if (workflowData.serialized_data?.spec?.task_specs) {
+                Object.keys(workflowData.serialized_data.spec.task_specs).forEach(taskSpec => {
+                  const spec = workflowData.serialized_data.spec.task_specs[taskSpec];
+                  instanceForDialog[taskSpec] = spec;
+                });
+              }
+
+              console.log('🎯 Opening dialog for instance:', instanceForDialog);
+              setSelectedInstance(instanceForDialog);
+              setDialogOpen(true);
             }
-          });
-          
-          // Store actionable tasks in selected instance for rendering
-          workflowData.pendingTasks = allActionableTasks;
-          setFormData(initialFormData);
-          
-          // Only open dialog if requested
-          if (openDialog) {
-            setDialogOpen(true);
           }
         }
       } catch (err) {
