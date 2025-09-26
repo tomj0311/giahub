@@ -396,3 +396,113 @@ async def remove_user_role(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to remove role: {str(e)}"
         )
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    user: dict = Depends(verify_token_middleware)
+):
+    """Delete a user (only if you own all their roles or are system admin)"""
+    
+    current_user_id = user.get("id")
+    if not current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user"
+        )
+    
+    # Prevent self-deletion
+    if current_user_id == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot delete yourself"
+        )
+    
+    try:
+        # Get tenant ID
+        tenant_id = await TenantService.get_user_tenant_id(current_user_id)
+        
+        # Get the user to be deleted - try multiple ID formats
+        target_user = await MongoStorageService.find_one(
+            "users", 
+            await tenant_filter_query(current_user_id, {"id": user_id})
+        )
+        
+        # If not found with "id", try with "_id"
+        if not target_user:
+            target_user = await MongoStorageService.find_one(
+                "users", 
+                await tenant_filter_query(current_user_id, {"_id": user_id})
+            )
+        
+        if not target_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        # Get current user's roles
+        current_user_roles = await RBACService.get_user_roles(current_user_id, tenant_id)
+        current_user_role_ids = {role["roleId"] for role in current_user_roles}
+        
+        # Check if current user is system admin
+        is_system_admin = any(role.get("roleName") == "system_admin" for role in current_user_roles)
+        
+        if not is_system_admin:
+            # Get target user's roles
+            target_user_roles = await RBACService.get_user_roles(user_id, tenant_id)
+            
+            # Check if current user owns all of the target user's roles
+            for role in target_user_roles:
+                role_details = await MongoStorageService.find_one(
+                    "roles",
+                    await tenant_filter_query(current_user_id, {"roleId": role["roleId"]})
+                )
+                
+                if role_details and role_details.get("ownerId") != current_user_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Access denied. You can only delete users who have roles that you own."
+                    )
+        
+        # Delete the user - try both ID formats
+        delete_success = await MongoStorageService.delete_one(
+            "users",
+            await tenant_filter_query(current_user_id, {"id": user_id})
+        )
+        
+        # If not deleted with "id", try with "_id"
+        if not delete_success:
+            delete_success = await MongoStorageService.delete_one(
+                "users",
+                await tenant_filter_query(current_user_id, {"_id": user_id})
+            )
+        
+        if not delete_success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found or already deleted"
+            )
+        
+        # Also remove all role assignments for this user
+        await MongoStorageService.delete_many(
+            "user_roles",
+            await tenant_filter_query(current_user_id, {"userId": user_id})
+        )
+        
+        logger.info(f"User {user_id} deleted by {current_user_id}")
+        
+        return {
+            "message": "User deleted successfully",
+            "userId": user_id
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting user {user_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete user: {str(e)}"
+        )
