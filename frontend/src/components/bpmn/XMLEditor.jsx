@@ -44,28 +44,37 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
         !xmlContent.includes('No XML data available') && 
         !xmlContent.includes('originalNestedElements not found') &&
         !xmlContent.includes('No inner elements found')) {
-      const formatted = formatXML(xmlContent);
-      setEditedXml(formatted);
-    } else {
-      // Initialize empty XML structure based on task type
+      
       const taskType = selectedNode?.data?.taskType || elementType;
+      
       if (taskType === 'userTask') {
-        // Initialize with basic extensionElements structure for userTask
-        const initialXml = `<extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
-  <formData>
-    <formMetadata formId="userInfoForm" version="1.0" display="inline">
-      <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
-        <![CDATA[
-          <!-- JSX component code will be generated here -->
-        ]]>
-      </script>
-    </formMetadata>
-  </formData>
-</extensionElements>`;
-        setEditedXml(initialXml);
+        // For UserTask, only show extensionElements content
+        try {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(`<root>${xmlContent}</root>`, 'text/xml');
+          const extensionElements = doc.querySelector('extensionElements');
+          
+          if (extensionElements) {
+            // Extract only the extensionElements content
+            const serializer = new XMLSerializer();
+            let extensionXml = serializer.serializeToString(extensionElements);
+            const formatted = formatXML(extensionXml);
+            setEditedXml(formatted);
+          } else {
+            // No extensionElements found, set empty
+            setEditedXml('');
+          }
+        } catch (error) {
+          console.error('Error parsing XML for UserTask:', error);
+          setEditedXml('');
+        }
       } else {
-        setEditedXml('');
+        // For other task types, show all content as before
+        const formatted = formatXML(xmlContent);
+        setEditedXml(formatted);
       }
+    } else {
+      setEditedXml('');
     }
   }, [xmlContent, elementType, selectedNode]);
 
