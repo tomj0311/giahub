@@ -18,8 +18,6 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
   // Assignee states
   const [assigneeResourceRef, setAssigneeResourceRef] = useState('');
   // Agent loading exactly like AgentPlayground
-  const [grouped, setGrouped] = useState({});
-  const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState(null);
   const token = localStorage.getItem('token') || '';
 
@@ -34,9 +32,7 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
       agentName = 'JSX Component Generator';
     } else if (taskType === 'scriptTask') {
       agentName = 'Python Code Generator';
-    } else if (taskType === 'serviceTask') {
-      agentName = 'Python Code Generator';
-    }
+    } 
     
     setSelected(agentName);
   }, [elementType, selectedNode]);
