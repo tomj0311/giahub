@@ -2,7 +2,7 @@
 // This function parses BPMN 2.0 XML and converts it to React Flow compatible nodes and edges
 
 // Helper function to capture nested XML elements for preservation
-const captureNestedElements = (element) => {
+export const captureNestedElements = (element) => {
   if (!element) return '';
   
   let nestedXML = '';
@@ -11,6 +11,7 @@ const captureNestedElements = (element) => {
   const childNodes = element.childNodes;
   for (let i = 0; i < childNodes.length; i++) {
     const child = childNodes[i];
+    
     if (child.nodeType === Node.ELEMENT_NODE) {
       const tagName = child.tagName.toLowerCase();
       // Skip basic flow elements and documentation (we handle these separately)
@@ -20,14 +21,31 @@ const captureNestedElements = (element) => {
         const serializer = new XMLSerializer();
         nestedXML += serializer.serializeToString(child);
       }
+    } else if (child.nodeType === Node.CDATA_SECTION_NODE) {
+      // Preserve CDATA sections exactly as they are (critical for script tasks)
+      nestedXML += `<![CDATA[${child.nodeValue}]]>`;
+    } else if (child.nodeType === Node.TEXT_NODE && child.nodeValue.trim()) {
+      // Preserve meaningful text content (not just whitespace)
+      nestedXML += child.nodeValue;
     }
   }
   
   return nestedXML;
 };
 
+// Helper function to escape XML characters
+export const escapeXML = (str) => {
+  if (!str) return '';
+  return str.toString()
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+};
+
 // Helper to read all attributes from an Element into a plain object
-const getAttributesMap = (el) => {
+export const getAttributesMap = (el) => {
   if (!el || !el.attributes) return {};
   const attrs = {};
   // NamedNodeMap to array
@@ -36,6 +54,32 @@ const getAttributesMap = (el) => {
     attrs[attr.name] = attr.value;
   }
   return attrs;
+};
+
+// Helper to build an attribute string from a map, preserving ALL original attributes
+export const buildAttributesString = (attrsMap = {}, options = {}) => {
+  const { exclude = [], overrides = {} } = options;
+  const pieces = [];
+  const excluded = new Set(exclude);
+  
+  // First add all original attributes (except excluded ones)
+  Object.keys(attrsMap).forEach((key) => {
+    if (excluded.has(key)) return;
+    const value = attrsMap[key];
+    if (value === undefined || value === null) return;
+    pieces.push(`${key}="${escapeXML(value)}"`);
+  });
+  
+  // Then add any overrides that weren't already included
+  Object.keys(overrides).forEach((key) => {
+    if (excluded.has(key)) return;
+    if (attrsMap.hasOwnProperty(key)) return; // Already added above
+    const value = overrides[key];
+    if (value === undefined || value === null) return;
+    pieces.push(`${key}="${escapeXML(value)}"`);
+  });
+  
+  return pieces.length ? ' ' + pieces.join(' ') : '';
 };
 
 // Main BPMN XML parsing function

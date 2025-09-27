@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Script Task Parsing</title>
+</head>
+<body>
+    <script>
+        // Test script task parsing
+        const testXML = `<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+             targetNamespace="http://example.org/bpmn"
+             id="definitions_email_validation_1">
+  <process id="process_email_validation" name="Email Validation Process" isExecutable="true">
+    <scriptTask id="scriptTask_validate_email" name="Validate Email" scriptFormat="python">
+      <![CDATA[
+      import re
+      if email and re.match(r"[^@]+@[^@]+\.[^@]+", email):
+          email_valid = True
+      else:
+          email_valid = False
+      ]]>
+    </scriptTask>
+  </process>
+</definitions>`;
+
+        // Test the captureNestedElements function
+        function captureNestedElements(element) {
+            if (!element) return '';
+            
+            let nestedXML = '';
+            
+            // Capture child elements that are not documentation, incoming, or outgoing
+            const childNodes = element.childNodes;
+            console.log('Child nodes for element:', element.tagName, childNodes.length);
+            
+            for (let i = 0; i < childNodes.length; i++) {
+                const child = childNodes[i];
+                console.log('Child node type:', child.nodeType, 'Name:', child.nodeName, 'Value:', child.nodeValue);
+                
+                if (child.nodeType === Node.ELEMENT_NODE) {
+                    const tagName = child.tagName.toLowerCase();
+                    // Skip basic flow elements and documentation (we handle these separately)
+                    if (!tagName.includes('incoming') && 
+                        !tagName.includes('outgoing') && 
+                        !tagName.includes('documentation')) {
+                        const serializer = new XMLSerializer();
+                        const serialized = serializer.serializeToString(child);
+                        console.log('Serialized element:', serialized);
+                        nestedXML += serialized;
+                    }
+                } else if (child.nodeType === Node.CDATA_SECTION_NODE) {
+                    // Preserve CDATA sections exactly as they are (critical for script tasks)
+                    const cdataContent = `<![CDATA[${child.nodeValue}]]>`;
+                    console.log('Found CDATA:', cdataContent);
+                    nestedXML += cdataContent;
+                } else if (child.nodeType === Node.TEXT_NODE && child.nodeValue.trim()) {
+                    // Preserve meaningful text content (not just whitespace)
+                    console.log('Found text node:', child.nodeValue);
+                    nestedXML += child.nodeValue;
+                }
+            }
+            
+            console.log('Final nested XML:', nestedXML);
+            return nestedXML;
+        }
+
+        // Parse the test XML
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(testXML, 'text/xml');
+        
+        // Find the script task
+        const scriptTask = xmlDoc.querySelector('scriptTask');
+        console.log('Found script task:', scriptTask);
+        
+        if (scriptTask) {
+            console.log('Script task children:', scriptTask.childNodes);
+            const nestedElements = captureNestedElements(scriptTask);
+            console.log('Captured nested elements:', nestedElements);
+        }
+    </script>
+</body>
+</html>

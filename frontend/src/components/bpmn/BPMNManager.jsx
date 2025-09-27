@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { parseBPMNXML } from './utils/bpmnParser';
+import { parseBPMNXML, captureNestedElements, escapeXML, getAttributesMap, buildAttributesString } from './utils/bpmnParser';
 import './BPMNManager.css';
 
 const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
@@ -8,117 +8,61 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
   const [showPasteArea, setShowPasteArea] = useState(false);
   const [pastedXML, setPastedXML] = useState('');
 
-  // Helper function to capture nested XML elements for preservation
-  const captureNestedElements = (element) => {
-    if (!element) return '';
-    
-    let nestedXML = '';
-    
-    // Capture child elements that are not documentation, incoming, or outgoing
-    const childNodes = element.childNodes;
-    for (let i = 0; i < childNodes.length; i++) {
-      const child = childNodes[i];
-      if (child.nodeType === Node.ELEMENT_NODE) {
-        const tagName = child.tagName.toLowerCase();
-        // Skip basic flow elements and documentation (we handle these separately)
-        if (!tagName.includes('incoming') && 
-            !tagName.includes('outgoing') && 
-            !tagName.includes('documentation')) {
-          nestedXML += child.outerHTML;
-        }
-      }
-    }
-    
-    return nestedXML;
-  };
-
-  // Helper function to escape XML characters
-  const escapeXML = (str) => {
-    if (!str) return '';
-    return str.toString()
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&apos;');
-  };
-
-  // Helper to read all attributes from an Element into a plain object
-  const getAttributesMap = (el) => {
-    if (!el || !el.attributes) return {};
-    const attrs = {};
-    // NamedNodeMap to array
-    for (let i = 0; i < el.attributes.length; i++) {
-      const attr = el.attributes[i];
-      attrs[attr.name] = attr.value;
-    }
-    return attrs;
-  };
-
-  // Helper to build an attribute string from a map, preserving ALL original attributes
-  const buildAttributesString = (attrsMap = {}, options = {}) => {
-    const { exclude = [], overrides = {} } = options;
-    const pieces = [];
-    const excluded = new Set(exclude);
-    
-    // First add all original attributes (except excluded ones)
-    Object.keys(attrsMap).forEach((key) => {
-      if (excluded.has(key)) return;
-      const value = attrsMap[key];
-      if (value === undefined || value === null) return;
-      pieces.push(`${key}="${escapeXML(value)}"`);
-    });
-    
-    // Then add any overrides that weren't already included
-    Object.keys(overrides).forEach((key) => {
-      if (excluded.has(key)) return;
-      if (attrsMap.hasOwnProperty(key)) return; // Already added above
-      const value = overrides[key];
-      if (value === undefined || value === null) return;
-      pieces.push(`${key}="${escapeXML(value)}"`);
-    });
-    
-    return pieces.length ? ' ' + pieces.join(' ') : '';
-  };
-
-  // Simple XML formatter - keeps it simple but effective
+  // Simple XML formatter - preserves CDATA content exactly as is
   const formatXML = (xml) => {
     try {
-      // Step 1: Clean up the XML first
-      let clean = xml.replace(/>\s+</g, '><'); // Remove whitespace between tags
+      // Step 1: Extract CDATA sections to preserve them
+      const cdataMap = new Map();
+      let cdataCounter = 0;
       
-      // Step 2: Add line breaks between tags  
+      let clean = xml.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, (match) => {
+        const placeholder = `__CDATA_${cdataCounter++}__`;
+        cdataMap.set(placeholder, match);
+        return placeholder;
+      });
+      
+      // Step 2: Clean up XML (excluding CDATA)
+      clean = clean.replace(/>\s+</g, '><');
       clean = clean.replace(/></g, '>\n<');
-      
-      // Step 3: Add line break after XML declaration
       clean = clean.replace(/\?>/g, '?>\n');
       
-      // Step 4: Format with indentation
+      // Step 3: Format with indentation
       const lines = clean.split('\n');
       let indent = 0;
-      const tab = '  '; // 2 spaces
+      const tab = '  ';
       
-      return lines.map(line => {
+      const formatted = lines.map(line => {
         const trimmed = line.trim();
         if (!trimmed) return '';
         
-        // Closing tag - reduce indent first
+        // Don't format lines with CDATA placeholders
+        if (trimmed.includes('__CDATA_')) {
+          return tab.repeat(indent) + trimmed;
+        }
+        
         if (trimmed.startsWith('</')) {
           indent = Math.max(0, indent - 1);
         }
         
-        const formatted = tab.repeat(indent) + trimmed;
+        const result = tab.repeat(indent) + trimmed;
         
-        // Opening tag - increase indent after formatting
         if (trimmed.startsWith('<') && 
             !trimmed.startsWith('</') && 
             !trimmed.endsWith('/>') &&
-            !trimmed.match(/<[^>]+>.*<\/[^>]+>$/)) { // not self-contained
+            !trimmed.match(/<[^>]+>.*<\/[^>]+>$/)) {
           indent++;
         }
         
-        return formatted;
+        return result;
       }).join('\n');
+      
+      // Step 4: Restore CDATA sections
+      let final = formatted;
+      cdataMap.forEach((cdata, placeholder) => {
+        final = final.replace(placeholder, cdata);
+      });
+      
+      return final;
       
     } catch (error) {
       console.warn('XML formatting failed, returning original:', error);
