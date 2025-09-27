@@ -17,6 +17,7 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
   const [cgLoading, setCgLoading] = useState(false);
   // Assignee states
   const [assigneeResourceRef, setAssigneeResourceRef] = useState('');
+  const [editablePotentialOwnerXml, setEditablePotentialOwnerXml] = useState('');
   // Agent loading exactly like AgentPlayground
   const [selected, setSelected] = useState(null);
   const token = localStorage.getItem('token') || '';
@@ -56,8 +57,20 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
           if (resourceRef) {
             setAssigneeResourceRef(resourceRef.textContent || '');
           }
+          
+          // Set editable potentialOwner inner XML
+          let innerXML = '';
+          for (let i = 0; i < potentialOwner.childNodes.length; i++) {
+            const child = potentialOwner.childNodes[i];
+            if (child.nodeType === Node.ELEMENT_NODE) {
+              const serializer = new XMLSerializer();
+              innerXML += serializer.serializeToString(child);
+            }
+          }
+          setEditablePotentialOwnerXml(formatXML(innerXML));
         } else {
           setAssigneeResourceRef('');
+          setEditablePotentialOwnerXml('');
         }
       } catch (error) {
         console.error('Error parsing XML for potentialOwner:', error);
@@ -197,9 +210,26 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
     // Combine editedXml with assignee information
     let finalXml = editedXml;
     
-    // Handle potentialOwner separately to avoid duplication
-    if (assigneeResourceRef.trim()) {
+    // Handle potentialOwner from the editable XML
+    if (editablePotentialOwnerXml.trim()) {
       // Check if editedXml already contains potentialOwner
+      const hasPotentialOwner = editedXml.includes('<potentialOwner>');
+      
+      if (!hasPotentialOwner) {
+        const potentialOwnerXml = `<potentialOwner>
+${editablePotentialOwnerXml}
+</potentialOwner>`;
+        finalXml = finalXml ? `${finalXml}\n${potentialOwnerXml}` : potentialOwnerXml;
+      } else {
+        // Replace existing potentialOwner with updated one
+        const potentialOwnerRegex = /<potentialOwner>[\s\S]*?<\/potentialOwner>/;
+        const newPotentialOwnerXml = `<potentialOwner>
+${editablePotentialOwnerXml}
+</potentialOwner>`;
+        finalXml = finalXml.replace(potentialOwnerRegex, newPotentialOwnerXml);
+      }
+    } else if (assigneeResourceRef.trim()) {
+      // Fallback to assigneeResourceRef if no editable XML
       const hasPotentialOwner = editedXml.includes('<potentialOwner>');
       
       if (!hasPotentialOwner) {
@@ -208,7 +238,6 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
 </potentialOwner>`;
         finalXml = finalXml ? `${finalXml}\n${potentialOwnerXml}` : potentialOwnerXml;
       } else {
-        // Replace existing potentialOwner with updated one
         const potentialOwnerRegex = /<potentialOwner>[\s\S]*?<\/potentialOwner>/;
         const newPotentialOwnerXml = `<potentialOwner>
   <resourceRef>${assigneeResourceRef}</resourceRef>
@@ -216,7 +245,7 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
         finalXml = finalXml.replace(potentialOwnerRegex, newPotentialOwnerXml);
       }
     } else {
-      // Remove potentialOwner if assignee is empty
+      // Remove potentialOwner if both are empty
       const potentialOwnerRegex = /<potentialOwner>[\s\S]*?<\/potentialOwner>\s*/g;
       finalXml = finalXml.replace(potentialOwnerRegex, '');
     }
@@ -768,48 +797,99 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
                 <Typography variant="h6" gutterBottom sx={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 'bold' }}>
                   Task Assignee
                 </Typography>
-                <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 2 }}>
-                  Configure who this task is assigned to. This information will be saved as potentialOwner/resourceRef in the BPMN XML.
-                </Typography>
-                <TextField
-                  label="Resource Reference"
-                  variant="outlined"
-                  fullWidth
-                  value={assigneeResourceRef}
-                  onChange={(e) => setAssigneeResourceRef(e.target.value)}
-                  placeholder="e.g., User123, admin, etc."
-                  sx={{
-                    mb: 2,
-                    '& .MuiInputBase-input': {
-                      fontFamily: 'monospace',
-                      fontSize: '13px'
-                    }
-                  }}
-                />
-                {assigneeResourceRef && (
-                  <Box sx={{ 
-                    mt: 2, 
-                    p: 2, 
-                    backgroundColor: 'var(--bg-secondary)', 
-                    borderRadius: '4px',
-                    border: '1px solid var(--border-color)'
-                  }}>
-                    <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 1 }}>
-                      Preview XML:
-                    </Typography>
-                    <pre style={{ 
-                      margin: 0, 
-                      color: 'var(--text-primary)', 
-                      fontSize: '11px',
-                      fontFamily: 'monospace',
-                      whiteSpace: 'pre-wrap'
-                    }}>
+                {(() => {
+                  try {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(`<root>${xmlContent}</root>`, 'text/xml');
+                    const potentialOwner = doc.querySelector('potentialOwner');
+                    
+                    if (potentialOwner) {
+                      // Show inner XML of potentialOwner
+                      let innerXML = '';
+                      for (let i = 0; i < potentialOwner.childNodes.length; i++) {
+                        const child = potentialOwner.childNodes[i];
+                        if (child.nodeType === Node.ELEMENT_NODE) {
+                          const serializer = new XMLSerializer();
+                          innerXML += serializer.serializeToString(child);
+                        }
+                      }
+                      const formattedInnerXML = formatXML(innerXML);
+                      
+                      return (
+                        <>
+                          <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 2 }}>
+                            Edit potentialOwner inner XML:
+                          </Typography>
+                          <TextField
+                            multiline
+                            fullWidth
+                            value={editablePotentialOwnerXml}
+                            onChange={(e) => setEditablePotentialOwnerXml(e.target.value)}
+                            placeholder="Enter potentialOwner inner XML content..."
+                            sx={{
+                              '& .MuiInputBase-input': {
+                                fontFamily: 'monospace',
+                                fontSize: '13px',
+                                height: '150px !important',
+                                overflow: 'auto !important'
+                              }
+                            }}
+                          />
+                        </>
+                      );
+                    } else {
+                      // No potentialOwner, show text field
+                      return (
+                        <>
+                          <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 2 }}>
+                            Configure who this task is assigned to. This information will be saved as potentialOwner/resourceRef in the BPMN XML.
+                          </Typography>
+                          <TextField
+                            label="Resource Reference"
+                            variant="outlined"
+                            fullWidth
+                            value={assigneeResourceRef}
+                            onChange={(e) => setAssigneeResourceRef(e.target.value)}
+                            placeholder="e.g., User123, admin, etc."
+                            sx={{
+                              mb: 2,
+                              '& .MuiInputBase-input': {
+                                fontFamily: 'monospace',
+                                fontSize: '13px'
+                              }
+                            }}
+                          />
+                          {assigneeResourceRef && (
+                            <Box sx={{ 
+                              mt: 2, 
+                              p: 2, 
+                              backgroundColor: 'var(--bg-secondary)', 
+                              borderRadius: '4px',
+                              border: '1px solid var(--border-color)'
+                            }}>
+                              <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 1 }}>
+                                Preview XML:
+                              </Typography>
+                              <pre style={{ 
+                                margin: 0, 
+                                color: 'var(--text-primary)', 
+                                fontSize: '11px',
+                                fontFamily: 'monospace',
+                                whiteSpace: 'pre-wrap'
+                              }}>
 {`<potentialOwner>
   <resourceRef>${assigneeResourceRef}</resourceRef>
 </potentialOwner>`}
-                    </pre>
-                  </Box>
-                )}
+                              </pre>
+                            </Box>
+                          )}
+                        </>
+                      );
+                    }
+                  } catch (error) {
+                    return null;
+                  }
+                })()}
                 <Box sx={{ display: 'flex', gap: 1, mt: 2, justifyContent: 'flex-end' }}>
                   <Button onClick={handleCancel} variant="outlined">
                     Cancel
