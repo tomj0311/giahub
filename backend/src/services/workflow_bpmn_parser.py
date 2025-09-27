@@ -16,7 +16,7 @@ class EnhancedBpmnTaskParser(SpiffTaskParser):
     
     def parse_extensions(self, node=None):
         """
-        Parse ALL extension elements, including custom namespaces
+        Parse ALL extension elements, including custom namespaces and potentialOwner
         """
         if node is None:
             node = self.node
@@ -26,6 +26,11 @@ class EnhancedBpmnTaskParser(SpiffTaskParser):
         
         # Now parse ALL other extension elements
         all_extensions = self._parse_all_extensions(node)
+        
+        # Parse potentialOwner elements (they are task-level, not in extensionElements)
+        potential_owners = self._parse_potential_owners(node)
+        if potential_owners:
+            all_extensions['potentialOwners'] = potential_owners
         
         # Merge them together
         extensions.update(all_extensions)
@@ -203,3 +208,30 @@ class EnhancedBpmnTaskParser(SpiffTaskParser):
         except Exception as e:
             # If there's any error, return empty string rather than failing
             return ""
+    
+    def _parse_potential_owners(self, node):
+        """Parse potentialOwner elements"""
+        owners = []
+        
+        # Find potentialOwner elements using xpath
+        xpath = xpath_eval(node, DEFAULT_NSMAP)
+        potential_owner_elements = xpath('.//bpmn:potentialOwner')
+        
+        # Also try without namespace prefix in case it's not recognized
+        if not potential_owner_elements:
+            potential_owner_elements = node.xpath('.//*[local-name()="potentialOwner"]')
+        
+        for owner_elem in potential_owner_elements:
+            # Parse resourceAssignmentExpression -> formalExpression
+            resource_assignment = owner_elem.xpath('.//*[local-name()="resourceAssignmentExpression"]')
+            if resource_assignment:
+                formal_expression = resource_assignment[0].xpath('.//*[local-name()="formalExpression"]')
+                if formal_expression and formal_expression[0].text:
+                    owners.append(formal_expression[0].text.strip())
+            
+            # Parse resourceRef (alternative format)
+            resource_ref = owner_elem.xpath('.//*[local-name()="resourceRef"]')
+            if resource_ref and resource_ref[0].text:
+                owners.append(resource_ref[0].text.strip())
+                    
+        return owners

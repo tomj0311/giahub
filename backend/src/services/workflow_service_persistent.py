@@ -31,6 +31,7 @@ from ..utils.log import logger
 from ..utils.mongo_storage import MongoStorageService
 from .workflow_bpmn_parser import EnhancedBpmnTaskParser
 from .agent_runtime_service import AgentRuntimeService
+from .workflow_notification_service import TaskNotificationService
 
 # Module loaded log
 logger.debug("[WORKFLOW] Persistent service module loaded")
@@ -558,6 +559,12 @@ class WorkflowServicePersistent:
                             # Extension elements are now stored in serialized data
                             # No need for separate storage - just wait for user input
                             logger.debug(f"[WORKFLOW] Waiting for user input for {task_type}: {task.task_spec.bpmn_id}")
+                            
+                            # Send task assignment emails if extensions contain email addresses
+                            try:
+                                await TaskNotificationService.send_task_assignment_emails(task, workflow_id, instance_id)
+                            except Exception as e:
+                                logger.error(f"[WORKFLOW] Email notification failed: {e}")
                             
                             # Stop here - wait for user input
                             break
