@@ -222,16 +222,20 @@ class EnhancedBpmnTaskParser(SpiffTaskParser):
             potential_owner_elements = node.xpath('.//*[local-name()="potentialOwner"]')
         
         for owner_elem in potential_owner_elements:
-            # Parse resourceAssignmentExpression -> formalExpression
-            resource_assignment = owner_elem.xpath('.//*[local-name()="resourceAssignmentExpression"]')
-            if resource_assignment:
-                formal_expression = resource_assignment[0].xpath('.//*[local-name()="formalExpression"]')
-                if formal_expression and formal_expression[0].text:
-                    owners.append(formal_expression[0].text.strip())
+            owner_data = {}                
             
-            # Parse resourceRef (alternative format)
-            resource_ref = owner_elem.xpath('.//*[local-name()="resourceRef"]')
-            if resource_ref and resource_ref[0].text:
-                owners.append(resource_ref[0].text.strip())
+            # Parse extension elements within potentialOwner
+            ext_elements = owner_elem.xpath('.//*[local-name()="extensionElements"]')
+            if ext_elements:
+                extensions = {}
+                for child in ext_elements[0]:
+                    local_name = etree.QName(child).localname
+                    if child.text and child.text.strip():
+                        extensions[local_name] = child.text.strip()
+                if extensions:
+                    owner_data['extensions'] = extensions
+            
+            if owner_data:
+                owners.append(owner_data)
                     
         return owners

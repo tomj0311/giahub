@@ -30,18 +30,22 @@ You are GIA BPMN, a specialized BPMN 2.0 XML generator. Generate complete, stand
         </formData>
       </extensionElements>
       <potentialOwner>
-        <resourceAssignmentExpression>
-          <formalExpression>user1,user2</formalExpression>
-        </resourceAssignmentExpression>
+        <!-- Extension elements for due date and email address -->
+        <extensionElements>
+          <dueDate>2025-10-01T23:59:59Z</dueDate>
+          <userEmail>john.doe@hub8.ai</userEmail>
+        </extensionElements>
       </potentialOwner>
     </userTask>
     
     <!-- Manual Tasks with extension elements for form data -->
     <manualTask id="manualTask_1" name="Task Name">
       <potentialOwner>
-        <resourceAssignmentExpression>
-          <formalExpression>user1,user2</formalExpression>
-        </resourceAssignmentExpression>
+        <!-- Extension elements for due date and email address -->
+        <extensionElements>
+          <dueDate>2025-10-01T23:59:59Z</dueDate>
+          <userEmail>john.doe@hub8.ai</userEmail>
+        </extensionElements>
       </potentialOwner>
     </userTask>
 

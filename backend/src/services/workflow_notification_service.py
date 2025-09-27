@@ -25,105 +25,84 @@ class TaskNotificationService:
             extensions = task.task_spec.extensions
             logger.info(f"[TASK_NOTIFY] Task {task.task_spec.bpmn_id} has extensions: {extensions}")
 
-            # Look for potential owners or email addresses in extensions
-            email_addresses = []
+            # Look for potential owners with email addresses and due dates
+            email_data = []  # List of {email, due_date} dicts
             
             # Check for potentialOwners in extensions
             if 'potentialOwners' in extensions:
                 potential_owners = extensions['potentialOwners']
                 if isinstance(potential_owners, list):
                     for owner in potential_owners:
-                        if isinstance(owner, str):
-                            # Split by comma and clean up email addresses
-                            emails = [email.strip() for email in owner.split(',')]
-                            email_addresses.extend(emails)
-                        elif isinstance(owner, dict) and 'email' in owner:
-                            email_addresses.append(owner['email'])
-                elif isinstance(potential_owners, str):
-                    # Single string with comma-separated emails
-                    emails = [email.strip() for email in potential_owners.split(',')]
-                    email_addresses.extend(emails)
+                        if isinstance(owner, dict) and 'extensions' in owner:
+                            owner_extensions = owner['extensions']
+                            if 'userEmail' in owner_extensions:
+                                email_data.append({
+                                    'email': owner_extensions['userEmail'],
+                                    'due_date': owner_extensions.get('dueDate')
+                                })
 
-            # Also check for direct email fields in extensions
-            for key, value in extensions.items():
-                if 'email' in key.lower() and isinstance(value, str):
-                    if '@' in value:  # Basic email validation
-                        email_addresses.append(value)
+            # Filter out invalid emails
+            email_data = [item for item in email_data if item['email'] and '@' in item['email']]
 
-            # Remove duplicates and filter valid emails
-            email_addresses = list(set([email for email in email_addresses if email and '@' in email]))
-
-            if not email_addresses:
+            if not email_data:
                 logger.debug(f"[TASK_NOTIFY] No email addresses found in task {task.task_spec.bpmn_id} extensions")
                 return
 
-            logger.info(f"[TASK_NOTIFY] Sending task assignment emails to: {email_addresses}")
+            logger.info(f"[TASK_NOTIFY] Sending task assignment emails to: {[item['email'] for item in email_data]}")
 
             # Create email content
             task_name = getattr(task.task_spec, 'name', task.task_spec.bpmn_id)
             subject = f"Task Assignment: {task_name}"
             
             # Get form data for context
-            form_data = getattr(task, 'data', {})
             form_fields_info = ""
-            if 'formData' in form_data and 'formFields' in form_data['formData']:
-                form_fields = form_data['formData']['formFields']
+            if 'formData' in extensions and 'formFields' in extensions['formData']:
+                form_fields = extensions['formData']['formFields']
                 if form_fields:
-                    form_fields_info = f"\n\nTask contains {len(form_fields)} form fields to complete."
-
-            html_content = f"""
-            <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.5;font-size:15px;color:#222;">
-                <h2 style="margin:0 0 16px;">Task Assignment Notification</h2>
-                <p>You have been assigned a new task to complete on the GIA Platform.</p>
-                
-                <div style="background:#f5f5f5;padding:16px;border-radius:6px;margin:16px 0;">
-                    <strong>Task Details:</strong><br>
-                    <strong>Task Name:</strong> {task_name}<br>
-                    <strong>Task ID:</strong> {task.task_spec.bpmn_id}<br>
-                    <strong>Workflow ID:</strong> {workflow_id}<br>
-                    <strong>Instance ID:</strong> {instance_id}{form_fields_info}
-                </div>
-                
-                <p>Please log into the platform to view and complete this task.</p>
-                
-                <p>
-                    <a href="{os.getenv('CLIENT_URL', 'http://localhost:5173')}/workflows/{workflow_id}/instances/{instance_id}" 
-                       style="background:#1976d2;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:bold;">
-                       View Task
-                    </a>
-                </p>
-                
-                <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;">
-                <p style="font-size:12px;color:#666;">
-                    This is an automated notification from the GIA Platform workflow system.<br>
-                    Please do not reply to this email.
-                </p>
-            </div>
-            """
-
-            text_content = f"""
-Task Assignment Notification
-
-You have been assigned a new task to complete on the GIA Platform.
-
-Task Details:
-- Task Name: {task_name}
-- Task ID: {task.task_spec.bpmn_id}
-- Workflow ID: {workflow_id}
-- Instance ID: {instance_id}{form_fields_info}
-
-Please log into the platform to view and complete this task.
-
-Link: {os.getenv('CLIENT_URL', 'http://localhost:5173')}/workflows/{workflow_id}/instances/{instance_id}
-
-This is an automated notification from the GIA Platform workflow system.
-Please do not reply to this email.
-            """
+                    form_fields_info = f"<br><strong>Form Fields:</strong> {len(form_fields)} fields to complete"
 
             # Send emails to all potential owners
-            for email_address in email_addresses:
+            for email_item in email_data:
+                email_address = email_item['email']
+                due_date = email_item['due_date']
+                
+                # Add due date info if available
+                due_date_info = ""
+                if due_date:
+                    due_date_info = f"<br><strong>Due Date:</strong> {due_date}"
+                
+                html_content = f"""
+                <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.5;font-size:15px;color:#222;">
+                    <h2 style="margin:0 0 16px;">Task Assignment Notification</h2>
+                    <p>You have been assigned a new task to complete on the GIA Platform.</p>
+                    
+                    <div style="background:#f5f5f5;padding:16px;border-radius:6px;margin:16px 0;">
+                        <strong>Task Details:</strong><br>
+                        <strong>Task Name:</strong> {task_name}<br>
+                        <strong>Task ID:</strong> {task.task_spec.bpmn_id}<br>
+                        <strong>Workflow ID:</strong> {workflow_id}<br>
+                        <strong>Instance ID:</strong> {instance_id}{form_fields_info}{due_date_info}
+                    </div>
+                    
+                    <p>Please log into the platform to view and complete this task.</p>
+                    
+                    <p>
+                        <a href="{os.getenv('CLIENT_URL', 'http://localhost:5173')}/dashboard/task/{workflow_id}/{instance_id}" 
+                           style="background:#1976d2;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:bold;">
+                           Complete Task
+                        </a>
+                    </p>
+                    
+                    <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;">
+                    <p style="font-size:12px;color:#666;">
+                        This is an automated notification from the GIA system.<br>
+                        Please do not reply to this email.
+                    </p>
+                </div>
+                """
+
                 try:
-                    await send_email(email_address, subject, html_content, text_content)
+                    await send_email(email_address, subject, html_content, "")
                     logger.info(f"[TASK_NOTIFY] Task assignment email sent to {email_address}")
                 except Exception as email_error:
                     logger.error(f"[TASK_NOTIFY] Failed to send task assignment email to {email_address}: {email_error}")

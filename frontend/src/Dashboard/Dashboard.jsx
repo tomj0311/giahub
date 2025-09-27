@@ -53,6 +53,7 @@ const AgentPlayground = lazy(() => import('../playground/AgentPlayground'))
 const WorkflowConfig = lazy(() => import('../workflows/WorkflowConfig'))
 const WorkflowDashboard = lazy(() => import('../workflows/WorkflowDashboard'))
 const WorkflowExecution = lazy(() => import('../workflows/WorkflowExecution'))
+const TaskCompletion = lazy(() => import('../workflows/TaskCompletion'))
 const DynamicComponentLoader = lazy(() => import('../workflows/DynamicComponentLoader'))
 const Analytics = lazy(() => import('./Analytics'))
 const BPMN = lazy(() => import('../components/bpmn/BPMN'))
@@ -736,6 +737,7 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="bpmn" element={<BPMNEditorWrapper />} />
 				<Route path="monitor" element={<WorkflowDashboard user={user} />} />
 				<Route path="workflow-execution" element={<WorkflowExecution user={user} />} />
+				<Route path="task/:workflowId/:instanceId" element={<TaskCompletion user={user} />} />
 				<Route path="manage" element={<BPMN initialTheme={themeKey === 'aurora' ? 'dark' : themeKey === 'ocean' ? 'light' : 'auto'} key={themeKey} style={{ width: '100%', minHeight: '70vh', borderRadius: 8, overflow: 'hidden' }} />} />
 				<Route path="tenants" element={<div>Tenants - Coming Soon</div>} />
 				<Route path="help" element={<div>Help & Support - Coming Soon</div>} />
