@@ -585,188 +585,124 @@ function WorkflowExecution({ user }) {
   return (
     <Box
       sx={{
-        p: 3,
         background: theme.custom?.backgroundGradient || theme.palette.background.default,
         minHeight: '100vh',
+        width: '100%',
+        maxWidth: '100%',
+        overflow: 'hidden',
       }}
     >
       {/* Header */}
-      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid', borderColor: 'divider' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <IconButton onClick={() => navigate('/dashboard/monitor')}>
             <ArrowLeft />
           </IconButton>
-          <Typography variant="h4" fontWeight="bold">
+          <Typography variant="h5" fontWeight="bold">
             Workflow Execution
           </Typography>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Tooltip title="Start workflow">
-              <span>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  startIcon={running ? <CircularProgress color="inherit" size={16} /> : <Play />}
-                  disabled={!workflowId || running}
-                  onClick={executeWorkflow}
-                >
-                  {running ? 'Starting…' : 'Start Workflow'}
-                </Button>
-              </span>
-            </Tooltip>
-          </Stack>
+          <Typography variant="body2" color="text.secondary">
+            ID: <strong>{workflowId || 'NOT PROVIDED'}</strong>
+          </Typography>
         </Box>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Tooltip title="Start workflow">
+            <span>
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={running ? <CircularProgress color="inherit" size={16} /> : <Play />}
+                disabled={!workflowId || running}
+                onClick={executeWorkflow}
+              >
+                {running ? 'Starting…' : 'Start Workflow'}
+              </Button>
+            </span>
+          </Tooltip>
+        </Stack>
       </Box>
 
-      <Box
-        sx={{
-          p: 4,
-          textAlign: 'center',
-          background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(
-            theme.palette.background.paper,
-            0.95
-          )})`,
-          backdropFilter: 'blur(10px)',
-          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-          borderRadius: 3,
-        }}
-      >
-        <Stack spacing={2} alignItems="center">
-          <Typography variant="h5" gutterBottom>
-            {workflowConfig?.name || 'Ready to start workflow'}
-          </Typography>
-          <Typography variant="body1">
-            Workflow ID: <strong>{workflowId || 'NOT PROVIDED'}</strong>
-          </Typography>
-          {workflowConfig?.description && (
-            <Typography variant="body2" color="text.secondary">
-              {workflowConfig.description}
-            </Typography>
-          )}
-        </Stack>
-
-        {/* BPMN Workflow Display */}
-        {loadingWorkflow ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-            <CircularProgress size={40} />
-            <Typography variant="body2" sx={{ ml: 2, alignSelf: 'center' }}>
-              Loading workflow...
-            </Typography>
-          </Box>
-        ) : bpmnData ? (
-          <Box sx={{ mt: 3, border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-            <Box sx={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center',
-              bgcolor: 'action.hover', 
-              px: 2, 
-              py: 1, 
-              borderBottom: '1px solid', 
-              borderColor: 'divider'
-            }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                Workflow Diagram
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Read-only view
-              </Typography>
+      {/* Two Column Layout */}
+      <Box sx={{ display: 'flex', height: 'calc(100vh - 120px)', width: '100%', maxWidth: '100%', margin: '0', overflow: 'hidden' }}>
+        
+        {/* Left Pane - Instances */}
+        <Box sx={{ 
+          width: '300px', 
+          minWidth: '300px',
+          maxWidth: '300px',
+          borderRight: '1px solid', 
+          borderColor: 'divider',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden'
+        }}>
+          {/* Left Header */}
+          <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+              <Typography variant="h6">Active Instances</Typography>
+              <IconButton 
+                size="small" 
+                onClick={() => loadAllWorkflows(currentPage)}
+                disabled={loadingWorkflows}
+                title="Refresh list"
+              >
+                <RefreshCw size={16} />
+              </IconButton>
             </Box>
-            <Box sx={{ position: 'relative', height: '500px', width: '100%' }}>
-              <BPMN 
-                readOnly={true}
-                showToolbox={false}
-                showPropertyPanel={false}
-                initialTheme={theme.palette.mode}
-                initialBPMN={bpmnData}
-                taskStatusData={taskStatusData}
-                onNodeClick={handleBpmnNodeClick}
-                style={{ 
-                  height: '100%', 
-                  width: '100%',
-                  '--toolbar-display': 'none'
-                }}
-                className="bpmn-readonly-viewer"
-                onError={(error) => {
-                  console.error('🔥 BPMN Component Error:', error)
-                }}
-                onLoad={() => {
-                  console.log('✅ BPMN workflow loaded successfully')
-                }}
-              />
-            </Box>
-          </Box>
-        ) : workflowId && !loadingWorkflow ? (
-          <Alert severity="warning" sx={{ mt: 3 }}>
-            No workflow diagram available for this workflow ID.
-          </Alert>
-        ) : null}
-
-        {error && (
-          <Box sx={{ mt: 3 }}>
-            <Typography color="error">{error}</Typography>
-          </Box>
-        )}
-
-        {workflowId && (
-          <Box sx={{ mt: 3, textAlign: 'left', mx: 'auto', maxWidth: 720 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Typography variant="h6">All Workflows</Typography>
-                <IconButton 
-                  size="small" 
-                  onClick={() => loadAllWorkflows(currentPage)}
-                  disabled={loadingWorkflows}
-                  title="Refresh list"
-                >
-                  <RefreshCw size={16} />
-                </IconButton>
-              </Box>
-              {selectedInstanceForBpmn && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {selectedInstanceForBpmn && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                <Chip 
+                  label={`Selected: ${selectedInstanceForBpmn.substring(0, 8)}...`}
+                  color="primary"
+                  size="small"
+                  variant="outlined"
+                />
+                {pollingInterval && (
                   <Chip 
-                    label={`Selected: ${selectedInstanceForBpmn.substring(0, 8)}...`}
-                    color="primary"
+                    label="Polling"
+                    color="success"
                     size="small"
                     variant="outlined"
+                    icon={<RefreshCw size={12} />}
                   />
-                  {pollingInterval && (
-                    <Chip 
-                      label="Polling Active"
-                      color="success"
-                      size="small"
-                      variant="outlined"
-                      icon={<RefreshCw size={12} />}
-                    />
-                  )}
-                  <Button 
-                    size="small" 
-                    onClick={() => {
-                      setSelectedInstanceForBpmn(null);
-                      setTaskStatusData(null); // Clear BPMN coloring when clearing selection
-                      // Stop polling when clearing selection
-                      if (pollingInterval) {
-                        clearInterval(pollingInterval);
-                        setPollingInterval(null);
-                      }
-                    }}
-                    sx={{ minWidth: 'auto', px: 1 }}
-                  >
-                    Clear
-                  </Button>
-                </Box>
-              )}
-            </Box>
+                )}
+                <Button 
+                  size="small" 
+                  onClick={() => {
+                    setSelectedInstanceForBpmn(null);
+                    setTaskStatusData(null);
+                    if (pollingInterval) {
+                      clearInterval(pollingInterval);
+                      setPollingInterval(null);
+                    }
+                  }}
+                  sx={{ minWidth: 'auto', px: 1 }}
+                >
+                  Clear
+                </Button>
+              </Box>
+            )}
+          </Box>
 
+          {/* Instances List */}
+          <Box sx={{ flex: 1, overflow: 'auto' }}>
+            {error && (
+              <Alert severity="error" sx={{ m: 2 }}>
+                {error}
+              </Alert>
+            )}
+            
             {loadingWorkflows ? (
-              <CircularProgress size={20} />
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+                <CircularProgress size={20} />
+              </Box>
             ) : allWorkflows.length > 0 ? (
-              <TableContainer component={Paper} variant="outlined" sx={{ mt: 1 }} key={refreshKey}>
+              <TableContainer key={refreshKey}>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell>Instance ID (Click to select)</TableCell>
+                      <TableCell>Instance ID</TableCell>
                       <TableCell>Status</TableCell>
-                      <TableCell>Created</TableCell>
                       <TableCell width="60">Actions</TableCell>
                     </TableRow>
                   </TableHead>
@@ -788,16 +724,13 @@ function WorkflowExecution({ user }) {
                         onClick={() => {
                           console.log('🖱️ Instance clicked in table:', wf.instance_id);
                           setSelectedInstanceForBpmn(wf.instance_id);
-                          // Load instance data for BPMN coloring but don't open dialog
                           handleInstanceClick(wf.instance_id, false);
                           
-                          // Clear any existing polling interval
                           if (pollingInterval) {
                             clearInterval(pollingInterval);
                             setPollingInterval(null);
                           }
                           
-                          // Start polling for this specific instance if not complete
                           if (wf.status !== 'complete') {
                             console.log('🚀 STARTING SPECIFIC INSTANCE POLLING for:', wf.instance_id);
                             const interval = setInterval(async () => {
@@ -808,17 +741,14 @@ function WorkflowExecution({ user }) {
                               }
                             }, 3000);
                             setPollingInterval(interval);
-                          } else {
-                            console.log('⏹️ NOT POLLING - instance is complete:', wf.instance_id);
                           }
                         }}
                       >
-                        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                          {wf.instance_id}
+                        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                          {wf.instance_id.substring(0, 12)}...
                         </TableCell>
-                        <TableCell sx={{ fontSize: '0.8rem' }}>
+                        <TableCell sx={{ fontSize: '0.75rem' }}>
                           {(() => {
-                            // Check if this instance has error tasks (status 128)
                             const hasErrorTasks = selectedInstanceForBpmn === wf.instance_id && 
                               activeTasks.some(task => task.status === 128);
                             
@@ -828,7 +758,7 @@ function WorkflowExecution({ user }) {
                                   label="FAIL" 
                                   color="error" 
                                   size="small"
-                                  icon={<XCircle size={14} />}
+                                  icon={<XCircle size={12} />}
                                 />
                               );
                             }
@@ -838,13 +768,10 @@ function WorkflowExecution({ user }) {
                                 label={wf.status} 
                                 color={wf.status === 'complete' ? 'success' : 'warning'} 
                                 size="small"
-                                icon={wf.status === 'complete' ? <CheckCircle size={14} /> : <Clock size={14} />}
+                                icon={wf.status === 'complete' ? <CheckCircle size={12} /> : <Clock size={12} />}
                               />
                             );
                           })()}
-                        </TableCell>
-                        <TableCell sx={{ fontSize: '0.8rem' }}>
-                          {new Date(wf.created_at).toLocaleString()}
                         </TableCell>
                         <TableCell>
                           <IconButton
@@ -855,9 +782,9 @@ function WorkflowExecution({ user }) {
                             title="Delete instance"
                           >
                             {deleting.has(wf.instance_id) ? (
-                              <CircularProgress size={16} />
+                              <CircularProgress size={14} />
                             ) : (
-                              <Trash2 size={16} />
+                              <Trash2 size={14} />
                             )}
                           </IconButton>
                         </TableCell>
@@ -867,33 +794,105 @@ function WorkflowExecution({ user }) {
                 </Table>
               </TableContainer>
             ) : (
-              <TableContainer component={Paper} variant="outlined" sx={{ mt: 1 }}>
-                <Table size="small">
-                  <TableBody>
-                    <TableRow>
-                      <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
-                        <Typography color="text.secondary">No workflows found</Typography>
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </TableContainer>
+              <Box sx={{ p: 4, textAlign: 'center' }}>
+                <Typography color="text.secondary">No workflows found</Typography>
+              </Box>
             )}
             
             {/* Pagination */}
             {totalPages > 1 && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
                 <Pagination 
                   count={totalPages} 
                   page={currentPage} 
                   onChange={handlePageChange}
-                  color="primary" 
+                  color="primary"
+                  size="small"
                 />
               </Box>
             )}
           </Box>
-        )}
+        </Box>
 
+        {/* Right Pane - BPMN Preview */}
+        <Box sx={{ 
+          flex: 1,
+          display: 'flex', 
+          flexDirection: 'column', 
+          overflow: 'hidden',
+          minWidth: 0
+        }}>
+          {/* Right Header */}
+          <Box sx={{ 
+            p: 2, 
+            borderBottom: '1px solid', 
+            borderColor: 'divider',
+            bgcolor: 'background.paper',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <Typography variant="h6">
+              {workflowConfig?.name || 'Workflow Diagram'}
+            </Typography>
+            {workflowConfig?.description && (
+              <Typography variant="caption" color="text.secondary">
+                {workflowConfig.description}
+              </Typography>
+            )}
+          </Box>
+
+          {/* BPMN Content */}
+          <Box sx={{ 
+            width: '100%',
+            height: 'calc(100vh - 160px)', 
+            position: 'relative', 
+            overflow: 'hidden' 
+          }}>
+            {loadingWorkflow ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                <CircularProgress size={40} />
+                <Typography variant="body2" sx={{ ml: 2 }}>
+                  Loading workflow...
+                </Typography>
+              </Box>
+            ) : bpmnData ? (
+              <BPMN 
+                readOnly={true}
+                showToolbox={false}
+                showPropertyPanel={false}
+                initialTheme={theme.palette.mode}
+                initialBPMN={bpmnData}
+                taskStatusData={taskStatusData}
+                onNodeClick={handleBpmnNodeClick}
+                style={{ 
+                  height: '100%', 
+                  width: '100%',
+                  '--toolbar-display': 'none'
+                }}
+                className="bpmn-readonly-viewer"
+                onError={(error) => {
+                  console.error('🔥 BPMN Component Error:', error)
+                }}
+                onLoad={() => {
+                  console.log('✅ BPMN workflow loaded successfully')
+                }}
+              />
+            ) : workflowId && !loadingWorkflow ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                <Alert severity="warning">
+                  No workflow diagram available for this workflow ID.
+                </Alert>
+              </Box>
+            ) : (
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                <Typography color="text.secondary">
+                  Select a workflow to view the diagram
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        </Box>
       </Box>
 
       {/* User Task Dialog */}
