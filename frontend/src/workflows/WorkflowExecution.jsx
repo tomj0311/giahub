@@ -627,9 +627,9 @@ function WorkflowExecution({ user }) {
         
         {/* Left Pane - Instances */}
         <Box sx={{ 
-          width: '300px', 
-          minWidth: '300px',
-          maxWidth: '300px',
+          width: '450px', 
+          minWidth: '450px',
+          maxWidth: '450px',
           borderRight: '1px solid', 
           borderColor: 'divider',
           display: 'flex',
