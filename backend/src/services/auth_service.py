@@ -32,28 +32,28 @@ class AuthService:
     ADMIN_PASS = os.getenv('ADMIN_PASS', '123')
 
     @classmethod
-    async def authenticate_user(cls, username: str, password: str) -> Dict[str, Any]:
+    async def authenticate_user(cls, email: str, password: str) -> Dict[str, Any]:
         """Authenticate user and return login response"""
-        logger.info(f"[AUTH] Login attempt for username: {username}")
+        logger.info(f"[AUTH] Login attempt for email: {email}")
 
-        if not username or not password:
-            logger.warning(f"[AUTH] Login failed - missing credentials for: {username}")
+        if not email or not password:
+            logger.warning(f"[AUTH] Login failed - missing credentials for: {email}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username and password are required"
+                detail="Email and password are required"
             )
 
-        normalized_username = normalize_email(username)
-        logger.debug(f"[AUTH] Normalized username: {normalized_username}")
+        normalized_email = normalize_email(email)
+        logger.debug(f"[AUTH] Normalized email: {normalized_email}")
 
         # Check admin login first
-        logger.debug(f"[AUTH] Checking admin credentials for: {normalized_username}")
-        if normalized_username == normalize_email(cls.ADMIN_USER) and password == cls.ADMIN_PASS:
-            logger.info(f"[AUTH] Admin login successful for: {username}")
-            logger.debug(f"[AUTH] Generating admin token for: {username}")
+        logger.debug(f"[AUTH] Checking admin credentials for: {normalized_email}")
+        if normalized_email == normalize_email(cls.ADMIN_USER) and password == cls.ADMIN_PASS:
+            logger.info(f"[AUTH] Admin login successful for: {email}")
+            logger.debug(f"[AUTH] Generating admin token for: {email}")
             token = generate_token({
                 "role": "admin",
-                "username": username,
+                "username": email,
                 "id": "admin",
                 "tenantId": "admin"
             })
@@ -65,36 +65,36 @@ class AuthService:
             }
 
         # Regular user authentication
-        logger.debug(f"[AUTH] Proceeding to regular user authentication for: {normalized_username}")
-        return await cls._authenticate_regular_user(normalized_username, password)
+        logger.debug(f"[AUTH] Proceeding to regular user authentication for: {normalized_email}")
+        return await cls._authenticate_regular_user(normalized_email, password)
 
     @classmethod
-    async def _authenticate_regular_user(cls, normalized_username: str, password: str) -> Dict[str, Any]:
+    async def _authenticate_regular_user(cls, normalized_email: str, password: str) -> Dict[str, Any]:
         """Authenticate regular user"""
-        logger.debug(f"[AUTH] Authenticating regular user: {normalized_username}")
+        logger.debug(f"[AUTH] Authenticating regular user: {normalized_email}")
         try:
-            logger.debug(f"[AUTH] Looking up user in database: {normalized_username}")
-            user = await MongoStorageService.find_one("users", {"email": normalized_username})
+            logger.debug(f"[AUTH] Looking up user in database: {normalized_email}")
+            user = await MongoStorageService.find_one("users", {"email": normalized_email})
 
             if not user:
-                logger.warning(f"[AUTH] User not found: {normalized_username}")
+                logger.warning(f"[AUTH] User not found: {normalized_email}")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid credentials"
                 )
 
-            logger.debug(f"[AUTH] Verifying password for user: {normalized_username}")
+            logger.debug(f"[AUTH] Verifying password for user: {normalized_email}")
             if not verify_password(password, user.get("password_hash", "")):
-                logger.warning(f"[AUTH] Invalid password for user: {normalized_username}")
+                logger.warning(f"[AUTH] Invalid password for user: {normalized_email}")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid credentials"
                 )
 
             # Check if user is verified
-            logger.debug(f"[AUTH] Checking verification status for user: {normalized_username}")
+            logger.debug(f"[AUTH] Checking verification status for user: {normalized_email}")
             if not user.get("verified", False):
-                logger.warning(f"[AUTH] Unverified user attempted login: {normalized_username}")
+                logger.warning(f"[AUTH] Unverified user attempted login: {normalized_email}")
                 if user.get("isInvited", False):
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
@@ -107,20 +107,20 @@ class AuthService:
                     )
 
             # Check if user is active (for invited users)
-            logger.debug(f"[AUTH] Checking active status for user: {normalized_username}")
+            logger.debug(f"[AUTH] Checking active status for user: {normalized_email}")
             if not user.get("active", True):
-                logger.warning(f"[AUTH] Inactive user attempted login: {normalized_username}")
+                logger.warning(f"[AUTH] Inactive user attempted login: {normalized_email}")
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Your account is not yet activated. Please verify your email to activate your account."
                 )
 
             # Get user's tenant information
-            logger.debug(f"[AUTH] Getting tenant information for user: {normalized_username}")
+            logger.debug(f"[AUTH] Getting tenant information for user: {normalized_email}")
             tenant_info = await TenantService.get_user_tenant_info(str(user["_id"]))
 
             # Generate token with user and tenant information
-            logger.debug(f"[AUTH] Generating token for user: {normalized_username}")
+            logger.debug(f"[AUTH] Generating token for user: {normalized_email}")
             token_payload = {
                 "role": "user",
                 "id": str(user["_id"]),
@@ -137,17 +137,17 @@ class AuthService:
             # Update last login
             await cls._update_last_login(user["_id"], tenant_id=tenant_info.get("tenant_id") if tenant_info else None)
 
-            logger.info(f"[AUTH] User login successful for: {normalized_username}")
+            logger.info(f"[AUTH] User login successful for: {normalized_email}")
             return {
                 "token": token,
                 "role": "user",
-                "name": f"{user.get('firstName', '')} {user.get('lastName', '')}".strip() or normalized_username
+                "name": f"{user.get('firstName', '')} {user.get('lastName', '')}".strip() or normalized_email
             }
 
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"[AUTH] Authentication error for {normalized_username}: {e}")
+            logger.error(f"[AUTH] Authentication error for {normalized_email}: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Authentication service error"

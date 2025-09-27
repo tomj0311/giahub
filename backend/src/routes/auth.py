@@ -19,7 +19,7 @@ router = APIRouter(tags=["authentication"])
 
 # Pydantic models
 class LoginRequest(BaseModel):
-    username: str
+    email: EmailStr
     password: str
 
 
@@ -32,15 +32,15 @@ class LoginResponse(BaseModel):
 @router.post("/login", response_model=LoginResponse)
 async def login(request: LoginRequest):
     """Login endpoint for admin and users"""
-    logger.info(f"[LOGIN] Attempting login for user: {request.username}")
-    logger.debug(f"[LOGIN] Login request received with username: {request.username}")
+    logger.info(f"[LOGIN] Attempting login for user: {request.email}")
+    logger.debug(f"[LOGIN] Login request received with email: {request.email}")
     try:
-        result = await AuthService.authenticate_user(request.username, request.password)
-        logger.info(f"[LOGIN] Success for user: {request.username}")
-        logger.debug(f"[LOGIN] Generated response for user: {request.username}")
+        result = await AuthService.authenticate_user(request.email, request.password)
+        logger.info(f"[LOGIN] Success for user: {request.email}")
+        logger.debug(f"[LOGIN] Generated response for user: {request.email}")
         return LoginResponse(**result)
     except Exception as e:
-        logger.error(f"[LOGIN] Failed for user: {request.username} - {str(e)}")
+        logger.error(f"[LOGIN] Failed for user: {request.email} - {str(e)}")
         raise
 
 

@@ -57,7 +57,7 @@ export default function LoginPage({ onLogin }) {
       const resp = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ email: username, password })
       })
       
       if (resp.ok) {

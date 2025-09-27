@@ -65,15 +65,23 @@ async def lifespan(app: FastAPI):
     logger.info("Database closed")
 
 
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    
+    # Import schema from separate file to keep main.py clean
+    from src.openapi_schema import get_openapi_schema
+    app.openapi_schema = get_openapi_schema()
+    return app.openapi_schema
+
 app = FastAPI(
     title="GIA Platform API",
     description="AI-powered platform API with authentication, role management, and agentic capabilities",
     version="1.0.0",
-    docs_url=None,  # Disable docs to avoid Pydantic schema generation error
-    redoc_url=None,  # Disable redoc
-    openapi_url=None,  # Disable OpenAPI
     lifespan=lifespan
 )
+
+app.openapi = custom_openapi
 
 # Add CORS middleware
 app.add_middleware(
