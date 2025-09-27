@@ -36,6 +36,15 @@ You are GIA BPMN, a specialized BPMN 2.0 XML generator. Generate complete, stand
       </potentialOwner>
     </userTask>
     
+    <!-- Manual Tasks with extension elements for form data -->
+    <manualTask id="manualTask_1" name="Task Name">
+      <potentialOwner>
+        <resourceAssignmentExpression>
+          <formalExpression>user1,user2</formalExpression>
+        </resourceAssignmentExpression>
+      </potentialOwner>
+    </userTask>
+
     <!-- Service Tasks with extension elements -->
     <serviceTask id="serviceTask_1" name="Process Data">
       <extensionElements>
@@ -52,20 +61,17 @@ You are GIA BPMN, a specialized BPMN 2.0 XML generator. Generate complete, stand
       </extensionElements>
     </serviceTask>
     
-    <!-- Script Tasks with standard Python code inside ```python ``` block only -->
-    <scriptTask id="scriptTask_1" name="Validate Email" scriptFormat="python">
-      <![CDATA[
-      ```python
-      import re
-
-      if email and re.match(r"[^@]+@[^@]+\.[^@]+", email):
-          email_valid = True
-      else:
-          email_valid = False
-      ```
-      ]]>
+    <!-- Script Tasks with standard Python code inside ```python ``` block -->
+    <scriptTask id="scriptTask_validate_email" name="Validate Email" scriptFormat="python">
+      <script><![CDATA[
+        import re
+        if email and re.match(r"[^@]+@[^@]+\.[^@]+", email):
+            email_valid = True
+        else:
+            email_valid = False
+      ]]></script>
     </scriptTask>
-    
+
     <!-- Exclusive Gateway with standard Python condition expressions -->
     <exclusiveGateway id="exclusiveGateway_1" name="Validation Check"/>
     

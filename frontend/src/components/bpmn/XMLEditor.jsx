@@ -99,8 +99,19 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
   const formatXML = (xml) => {
     if (!xml) return '';
     
+    // Extract and preserve CDATA sections
+    const cdataPlaceholders = [];
+    let formatted = xml;
+    
+    // Find all CDATA sections and replace them with placeholders
+    formatted = formatted.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, (match, content) => {
+      const placeholder = `__CDATA_PLACEHOLDER_${cdataPlaceholders.length}__`;
+      cdataPlaceholders.push(content); // Preserve original content exactly
+      return placeholder;
+    });
+    
     // Clean up the XML first - remove extra whitespace between tags
-    let formatted = xml.replace(/>\s*</g, '><');
+    formatted = formatted.replace(/>\s*</g, '><');
     
     // Add line breaks after each closing bracket
     formatted = formatted.replace(/></g, '>\n<');
@@ -132,7 +143,15 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
       }
     }
     
-    return formattedLines.join('\n');
+    let result = formattedLines.join('\n');
+    
+    // Restore CDATA sections with original formatting
+    cdataPlaceholders.forEach((originalContent, index) => {
+      const placeholder = `__CDATA_PLACEHOLDER_${index}__`;
+      result = result.replace(placeholder, `<![CDATA[${originalContent}]]>`);
+    });
+    
+    return result;
   };
 
   const handleUpdate = () => {

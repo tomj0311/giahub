@@ -5,32 +5,8 @@
 export const captureNestedElements = (element) => {
   if (!element) return '';
   
-  let nestedXML = '';
-  
-  // Capture child elements that are not documentation, incoming, or outgoing
-  const childNodes = element.childNodes;
-  for (let i = 0; i < childNodes.length; i++) {
-    const child = childNodes[i];
-    
-    if (child.nodeType === Node.ELEMENT_NODE) {
-      const tagName = child.tagName.toLowerCase();
-      // Skip basic flow elements and documentation (we handle these separately)
-      if (!tagName.includes('incoming') && 
-          !tagName.includes('outgoing') && 
-          !tagName.includes('documentation')) {
-        const serializer = new XMLSerializer();
-        nestedXML += serializer.serializeToString(child);
-      }
-    } else if (child.nodeType === Node.CDATA_SECTION_NODE) {
-      // Preserve CDATA sections exactly as they are (critical for script tasks)
-      nestedXML += `<![CDATA[${child.nodeValue}]]>`;
-    } else if (child.nodeType === Node.TEXT_NODE && child.nodeValue.trim()) {
-      // Preserve meaningful text content (not just whitespace)
-      nestedXML += child.nodeValue;
-    }
-  }
-  
-  return nestedXML;
+  // Simple: just return innerHTML to capture EVERYTHING
+  return element.innerHTML || '';
 };
 
 // Helper function to escape XML characters
