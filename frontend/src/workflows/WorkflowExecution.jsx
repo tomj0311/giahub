@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BPMN from '../components/bpmn/BPMN';
+import JsonViewer from '../components/JsonViewer';
 import {
   Box,
   Typography,
@@ -75,6 +76,10 @@ function WorkflowExecution({ user }) {
   const [totalPages, setTotalPages] = useState(1);
   const pageSize = 8; // Default pagination size
   const [lastKnownInstanceId, setLastKnownInstanceId] = useState(null); // Track the most recent instance ID
+
+  // JSON viewer states
+  const [selectedInstanceData, setSelectedInstanceData] = useState(null);
+  const [showJsonViewer, setShowJsonViewer] = useState(false);
 
   
   // Dialog states
@@ -350,6 +355,10 @@ function WorkflowExecution({ user }) {
           
           // FUCKING LOG THE RAW INSTANCE DATA
           console.log('🚨 RAW INSTANCE DATA FROM API:', workflowData);
+          
+          // Store the full instance data for JSON viewer
+          setSelectedInstanceData(workflowData);
+          setShowJsonViewer(true);
           
           // Extract tasks with status 16, 64, and 128 from serialized_data.tasks
           if (workflowData.serialized_data && workflowData.serialized_data.tasks) {
@@ -657,7 +666,7 @@ function WorkflowExecution({ user }) {
               </Typography>
             )}
             {selectedInstanceForBpmn && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 1 }}>
                 <Chip 
                   label={`Selected: ${selectedInstanceForBpmn.substring(0, 8)}...`}
                   color="primary"
@@ -685,6 +694,15 @@ function WorkflowExecution({ user }) {
                   }
                   return null;
                 })()}
+                {showJsonViewer && (
+                  <Chip 
+                    label="JSON View Active"
+                    size="small"
+                    variant="outlined"
+                    color="secondary"
+                    icon={<Eye size={12} />}
+                  />
+                )}
               </Box>
             )}
           </Box>
@@ -813,6 +831,20 @@ function WorkflowExecution({ user }) {
                   onChange={handlePageChange}
                   color="primary"
                   size="small"
+                />
+              </Box>
+            )}
+
+            {/* JSON Viewer */}
+            {showJsonViewer && selectedInstanceData && (
+              <Box sx={{ p: 2 }}>
+                <JsonViewer
+                  data={selectedInstanceData}
+                  title={`Instance Data: ${selectedInstanceData.instance_id || 'Unknown'}`}
+                  onClose={() => {
+                    setShowJsonViewer(false);
+                    setSelectedInstanceData(null);
+                  }}
                 />
               </Box>
             )}
