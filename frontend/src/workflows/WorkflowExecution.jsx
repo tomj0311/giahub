@@ -481,6 +481,17 @@ function WorkflowExecution({ user }) {
             message: result.data.message || 'Task submitted successfully',
             data: result.data,
           });
+
+          // Wait 2 seconds then refresh the instance status to update BPMN colors
+          setTimeout(async () => {
+            console.log('🔄 Refreshing instance status after task submission...');
+            if (selectedInstance.instance_id === selectedInstanceForBpmn) {
+              // Refresh the selected instance to update BPMN task colors
+              await handleInstanceClick(selectedInstance.instance_id, false);
+            }
+            // Also refresh the workflows list to update status
+            loadAllWorkflows(currentPage);
+          }, 2000);
         }
       } catch (err) {
         console.error('Failed to submit task:', err);
