@@ -63,18 +63,17 @@ function WorkflowExecution({ user }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [mode, setMode] = useState('config'); // Always config since we only have start endpoint
-  const [incompleteWorkflows, setIncompleteWorkflows] = useState([]);
-  const [loadingIncomplete, setLoadingIncomplete] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0); // Force re-render key
   const [deleting, setDeleting] = useState(new Set()); // Track which instances are being deleted
   const [selectedInstanceForBpmn, setSelectedInstanceForBpmn] = useState(null); // Track selected instance for BPMN clicks
+  const [pollingInterval, setPollingInterval] = useState(null);
   
   // New states for all workflows with pagination
   const [allWorkflows, setAllWorkflows] = useState([]);
   const [loadingWorkflows, setLoadingWorkflows] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const pageSize = 8;
+  const pageSize = 8; // Default pagination size
   
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -98,6 +97,97 @@ function WorkflowExecution({ user }) {
     [token]
   );
 
+  // Polling function to get all instances and update the list
+  const pollAllInstances = useCallback(async () => {
+    console.log('🔄 POLLING ALL INSTANCES CALLED:', { workflowId });
+    
+    if (!workflowId) {
+      console.error('Poll error: missing workflowId', { workflowId });
+      return;
+    }
+    
+    try {
+      // COMPLETELY BYPASS CACHE - make direct API call with timestamp to force fresh request
+      const timestamp = Date.now();
+      const endpoint = `/api/workflow/workflows/${workflowId}/instances?page=${currentPage || 1}&size=${pageSize || 8}&_t=${timestamp}`;
+      
+      // Clear all cache related to this workflow first
+      sharedApiService.invalidateCache(`/api/workflow/workflows/${workflowId}`);
+      
+      const result = await sharedApiService.makeRequest(
+        endpoint,
+        { method: 'GET', headers },
+        { workflowId: workflowId, action: 'poll_all_instances', page: currentPage || 1, pageSize: pageSize || 8, timestamp: timestamp }
+      );
+      
+      if (result.success) {
+        // Update the entire list with fresh data
+        setAllWorkflows(result.data?.data || []);
+        setTotalPages(result.data?.total_pages || 1);
+        setRefreshKey((k) => k + 1);
+        console.log('🔄 All instances updated:', result.data?.data?.length || 0, 'instances');
+      }
+    } catch (err) {
+      console.error('Poll all instances error:', err);
+    }
+  }, [workflowId, headers, currentPage, pageSize]);
+
+  // Polling function for a specific instance
+  const pollSpecificInstance = useCallback(async (instanceId) => {
+    console.log('🔄 POLLING SPECIFIC INSTANCE:', { workflowId, instanceId });
+    
+    if (!workflowId || !instanceId) {
+      console.error('Poll error: missing workflowId or instanceId', { workflowId, instanceId });
+      return;
+    }
+    
+    try {
+      // COMPLETELY BYPASS CACHE - make direct API call with timestamp to force fresh request
+      const timestamp = Date.now();
+      const endpoint = `/api/workflow/workflows/${workflowId}/instances/${instanceId}?_t=${timestamp}`;
+      
+      // Clear all cache related to this workflow first
+      sharedApiService.invalidateCache(`/api/workflow/workflows/${workflowId}`);
+      
+      const result = await sharedApiService.makeRequest(
+        endpoint,
+        { method: 'GET', headers },
+        { workflowId: workflowId, instanceId: instanceId, action: 'poll_specific', timestamp: timestamp }
+      );
+      
+      if (result.success) {
+        const workflowData = result.data.data;
+        
+        // Update the specific instance in the list
+        setAllWorkflows(prev => prev.map(w => 
+          w.instance_id === instanceId ? { ...w, status: workflowData.status || 'incomplete' } : w
+        ));
+        
+        // Update BPMN if this is the selected instance
+        if (selectedInstanceForBpmn === instanceId && workflowData.serialized_data?.tasks) {
+          const activeTasksData = Object.entries(workflowData.serialized_data.tasks)
+            .filter(([_, task]) => [16, 64, 128].includes(task.state))
+            .map(([taskId, task]) => ({ taskId, taskSpec: task.task_spec, status: task.state, task }));
+          setActiveTasks(activeTasksData);
+        }
+        
+        // Stop polling if complete
+        if (workflowData.status === 'complete') {
+          console.log('⏹️ STOPPING POLLING - instance completed:', instanceId);
+          if (pollingInterval) {
+            clearInterval(pollingInterval);
+            setPollingInterval(null);
+          }
+          return false; // Signal to stop polling
+        }
+        
+        return true; // Continue polling
+      }
+    } catch (err) {
+      console.error('Poll specific instance error:', err);
+      return false; // Stop polling on error
+    }
+  }, [workflowId, headers, selectedInstanceForBpmn, pollingInterval]);
 
   // Load workflow configuration and BPMN data
   const loadStatus = useCallback(
@@ -187,10 +277,26 @@ function WorkflowExecution({ user }) {
     setMode('config');
     if (workflowId) {
       loadStatus(workflowId);
-      loadIncompleteWorkflows();
       loadAllWorkflows(1);
     }
+    
+    // Cleanup polling interval when workflowId changes
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        setPollingInterval(null);
+      }
+    };
   }, [workflowId, loadStatus]);
+  
+  // Cleanup polling interval on component unmount
+  useEffect(() => {
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [pollingInterval]);
 
   // Update BPMN task colors when activeTasks changes
   useEffect(() => {
@@ -210,38 +316,6 @@ function WorkflowExecution({ user }) {
     }
   }, [activeTasks]);
 
-  const loadIncompleteWorkflows = useCallback(
-    async (force = false) => {
-      if (!workflowId || (!force && loadingIncomplete)) {
-        return;
-      }
-      
-      setLoadingIncomplete(true);
-      try {
-        const result = await sharedApiService.makeRequest(
-          `/api/workflow/workflows/${workflowId}/incomplete`,
-          {
-            method: 'GET',
-            headers,
-          },
-          { workflowId, action: 'list_incomplete' }
-        );
-
-        // Log exact raw data as received from backend - NO FILTERING
-        console.log('EXACT RAW BACKEND DATA (Incomplete):', result);
-        
-        // Set the data exactly as received
-        setIncompleteWorkflows(result.data?.data || []);
-        setRefreshKey((k) => k + 1);
-      } catch (err) {
-        console.error('❌ Failed to load incomplete workflows:', err);
-      } finally {
-        setLoadingIncomplete(false);
-      }
-    },
-    [workflowId, headers, loadingIncomplete]
-  );
-
   // Load all workflows with pagination
   const loadAllWorkflows = useCallback(
     async (page = 1) => {
@@ -249,13 +323,17 @@ function WorkflowExecution({ user }) {
       
       setLoadingWorkflows(true);
       try {
+        // Invalidate cache to ensure fresh data
+        const cacheKey = `/api/workflow/workflows/${workflowId}/instances?page=${page || 1}&size=${pageSize || 8}`;
+        sharedApiService.invalidateCache(cacheKey);
+        
         const result = await sharedApiService.makeRequest(
-          `/api/workflow/workflows/${workflowId}/instances?page=${page}&size=${pageSize}`,
+          cacheKey,
           {
             method: 'GET',
             headers,
           },
-          { workflowId, action: 'list_all_workflows', page }
+          { workflowId, action: 'list_all_workflows', page: page || 1, pageSize: pageSize || 8, bypassCache: true }
         );
 
         // Log exact raw data as received from backend - NO FILTERING
@@ -272,14 +350,6 @@ function WorkflowExecution({ user }) {
       }
     },
     [workflowId, headers, pageSize]
-  );
-
-  // Simplified - no instances list since endpoint doesn't exist
-  const loadWorkflowInstances = useCallback(
-    async (page = 1, status = '', size = 10) => {
-      // No-op since this endpoint doesn't exist
-    },
-    []
   );
 
   const startWorkflowByConfigId = useCallback(
@@ -314,18 +384,20 @@ function WorkflowExecution({ user }) {
           workflow_id: workflowId,
           status: 'incomplete',
         };
-        setIncompleteWorkflows((prev) => {
-          if (!result.data.instance_id || prev.some((w) => w.instance_id === result.data.instance_id)) return prev;
-          return [newInstance, ...prev];
-        });
         setAllWorkflows((prev) => {
           if (!result.data.instance_id || prev.some((w) => w.instance_id === result.data.instance_id)) return prev;
           return [newInstance, ...prev];
         });
         setRefreshKey((k) => k + 1);
 
-        // Invalidate cache so the next manual fetch gets fresh data
-        sharedApiService.invalidateCache(`/api/workflow/workflows/${workflowId}/incomplete`);
+        // NUCLEAR OPTION: Clear ALL cache to ensure fresh data everywhere
+        sharedApiService.clearAllCache();
+        
+        // Start polling all instances to get the updated list
+        console.log('🚀 STARTING POLLING for all instances after workflow start');
+        if (pollingInterval) clearInterval(pollingInterval);
+        const interval = setInterval(() => pollAllInstances(), 3000);
+        setPollingInterval(interval);
 
       } catch (err) {
         const message = err?.message || 'Unknown error starting workflow';
@@ -474,16 +546,12 @@ function WorkflowExecution({ user }) {
           const completed = !!result.data?.completed;
           const nextTaskId = result.data?.current_task_id;
           if (completed) {
-            setIncompleteWorkflows((prev) => prev.filter((w) => w.instance_id !== selectedInstance.instance_id));
             setAllWorkflows((prev) => prev.map((w) => 
               w.instance_id === selectedInstance.instance_id ? { ...w, status: 'complete' } : w
             ));
             setRefreshKey((k) => k + 1);
           } else {
             // Not completed: update list item with next task id (if we want to display later)
-            setIncompleteWorkflows((prev) => prev.map((w) => (
-              w.instance_id === selectedInstance.instance_id ? { ...w, current_task_id: nextTaskId } : w
-            )));
             setAllWorkflows((prev) => prev.map((w) => (
               w.instance_id === selectedInstance.instance_id ? { ...w, current_task_id: nextTaskId } : w
             )));
@@ -566,13 +634,12 @@ function WorkflowExecution({ user }) {
         );
 
         if (result.success) {
-          // Remove from both local lists
-          setIncompleteWorkflows(prev => prev.filter(w => w.instance_id !== instanceId));
+          // Remove from local list
           setAllWorkflows(prev => prev.filter(w => w.instance_id !== instanceId));
           setRefreshKey(k => k + 1);
           
           // Invalidate cache
-          sharedApiService.invalidateCache(`/api/workflow/workflows/${workflowId}/incomplete`);
+          sharedApiService.invalidateCache(`/api/workflow/workflows/${workflowId}/instances`);
         } else {
           throw new Error(result.error || 'Failed to delete instance');
         }
@@ -718,7 +785,17 @@ function WorkflowExecution({ user }) {
         {workflowId && (
           <Box sx={{ mt: 3, textAlign: 'left', mx: 'auto', maxWidth: 720 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-              <Typography variant="h6">All Workflows</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Typography variant="h6">All Workflows</Typography>
+                <IconButton 
+                  size="small" 
+                  onClick={() => loadAllWorkflows(currentPage)}
+                  disabled={loadingWorkflows}
+                  title="Refresh list"
+                >
+                  <RefreshCw size={16} />
+                </IconButton>
+              </Box>
               {selectedInstanceForBpmn && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Chip 
@@ -727,11 +804,25 @@ function WorkflowExecution({ user }) {
                     size="small"
                     variant="outlined"
                   />
+                  {pollingInterval && (
+                    <Chip 
+                      label="Polling Active"
+                      color="success"
+                      size="small"
+                      variant="outlined"
+                      icon={<RefreshCw size={12} />}
+                    />
+                  )}
                   <Button 
                     size="small" 
                     onClick={() => {
                       setSelectedInstanceForBpmn(null);
                       setTaskStatusData(null); // Clear BPMN coloring when clearing selection
+                      // Stop polling when clearing selection
+                      if (pollingInterval) {
+                        clearInterval(pollingInterval);
+                        setPollingInterval(null);
+                      }
                     }}
                     sx={{ minWidth: 'auto', px: 1 }}
                   >
@@ -774,6 +865,27 @@ function WorkflowExecution({ user }) {
                           setSelectedInstanceForBpmn(wf.instance_id);
                           // Load instance data for BPMN coloring but don't open dialog
                           handleInstanceClick(wf.instance_id, false);
+                          
+                          // Clear any existing polling interval
+                          if (pollingInterval) {
+                            clearInterval(pollingInterval);
+                            setPollingInterval(null);
+                          }
+                          
+                          // Start polling for this specific instance if not complete
+                          if (wf.status !== 'complete') {
+                            console.log('🚀 STARTING SPECIFIC INSTANCE POLLING for:', wf.instance_id);
+                            const interval = setInterval(async () => {
+                              const shouldContinue = await pollSpecificInstance(wf.instance_id);
+                              if (!shouldContinue) {
+                                clearInterval(interval);
+                                setPollingInterval(null);
+                              }
+                            }, 3000);
+                            setPollingInterval(interval);
+                          } else {
+                            console.log('⏹️ NOT POLLING - instance is complete:', wf.instance_id);
+                          }
                         }}
                       >
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
