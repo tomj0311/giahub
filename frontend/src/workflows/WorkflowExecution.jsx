@@ -639,7 +639,9 @@ function WorkflowExecution({ user }) {
           {/* Left Header */}
           <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-              <Typography variant="h6">Active Instances</Typography>
+              <Typography variant="h6">
+                {workflowConfig?.name || 'Active Instances'}
+              </Typography>
               <IconButton 
                 size="small" 
                 onClick={() => loadAllWorkflows(currentPage)}
@@ -649,6 +651,11 @@ function WorkflowExecution({ user }) {
                 <RefreshCw size={16} />
               </IconButton>
             </Box>
+            {workflowConfig?.description && (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                {workflowConfig.description}
+              </Typography>
+            )}
             {selectedInstanceForBpmn && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 <Chip 
@@ -820,30 +827,10 @@ function WorkflowExecution({ user }) {
           overflow: 'hidden',
           minWidth: 0
         }}>
-          {/* Right Header */}
-          <Box sx={{ 
-            p: 2, 
-            borderBottom: '1px solid', 
-            borderColor: 'divider',
-            bgcolor: 'background.paper',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <Typography variant="h6">
-              {workflowConfig?.name || 'Workflow Diagram'}
-            </Typography>
-            {workflowConfig?.description && (
-              <Typography variant="caption" color="text.secondary">
-                {workflowConfig.description}
-              </Typography>
-            )}
-          </Box>
-
           {/* BPMN Content */}
           <Box sx={{ 
             width: '100%',
-            height: 'calc(100vh - 160px)', 
+            height: 'calc(100vh - 120px)', 
             position: 'relative', 
             overflow: 'hidden' 
           }}>
