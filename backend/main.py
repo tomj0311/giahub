@@ -119,7 +119,7 @@ app.include_router(analytics_router, prefix="/api/analytics")
 # Re-enable Agent Runtime routes (previously disabled) so frontend playground works
 app.include_router(agent_runtime_router)
 app.include_router(payments_router, prefix="/api/payments")
-app.include_router(uploads_router)
+app.include_router(uploads_router, prefix="/api")
 
 
 

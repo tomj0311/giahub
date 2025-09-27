@@ -87,8 +87,8 @@ class FileService:
         try:
             cls.validate_file(file)
 
-            # Create file path: uploads/{tenant_id}/{user_id}/{collection}/
-            file_path = f"uploads/{user_id}/{file.filename}"
+            # Create file path: uploads/{user_id}/{collection}/{filename}
+            file_path = f"uploads/{user_id}/{collection}/{file.filename}"
 
             # Check if file already exists
             file_exists = await cls.check_file_exists(file_path)
