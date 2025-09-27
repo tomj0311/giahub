@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BPMN from '../components/bpmn/BPMN';
 import {
@@ -74,6 +74,8 @@ function WorkflowExecution({ user }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const pageSize = 8; // Default pagination size
+  const [lastKnownInstanceId, setLastKnownInstanceId] = useState(null); // Track the most recent instance ID
+
   
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -97,97 +99,9 @@ function WorkflowExecution({ user }) {
     [token]
   );
 
-  // Polling function to get all instances and update the list
-  const pollAllInstances = useCallback(async () => {
-    console.log('🔄 POLLING ALL INSTANCES CALLED:', { workflowId });
-    
-    if (!workflowId) {
-      console.error('Poll error: missing workflowId', { workflowId });
-      return;
-    }
-    
-    try {
-      // COMPLETELY BYPASS CACHE - make direct API call with timestamp to force fresh request
-      const timestamp = Date.now();
-      const endpoint = `/api/workflow/workflows/${workflowId}/instances?page=${currentPage || 1}&size=${pageSize || 8}&_t=${timestamp}`;
-      
-      // Clear all cache related to this workflow first
-      sharedApiService.invalidateCache(`/api/workflow/workflows/${workflowId}`);
-      
-      const result = await sharedApiService.makeRequest(
-        endpoint,
-        { method: 'GET', headers },
-        { workflowId: workflowId, action: 'poll_all_instances', page: currentPage || 1, pageSize: pageSize || 8, timestamp: timestamp }
-      );
-      
-      if (result.success) {
-        // Update the entire list with fresh data
-        setAllWorkflows(result.data?.data || []);
-        setTotalPages(result.data?.total_pages || 1);
-        setRefreshKey((k) => k + 1);
-        console.log('🔄 All instances updated:', result.data?.data?.length || 0, 'instances');
-      }
-    } catch (err) {
-      console.error('Poll all instances error:', err);
-    }
-  }, [workflowId, headers, currentPage, pageSize]);
 
-  // Polling function for a specific instance
-  const pollSpecificInstance = useCallback(async (instanceId) => {
-    console.log('🔄 POLLING SPECIFIC INSTANCE:', { workflowId, instanceId });
-    
-    if (!workflowId || !instanceId) {
-      console.error('Poll error: missing workflowId or instanceId', { workflowId, instanceId });
-      return;
-    }
-    
-    try {
-      // COMPLETELY BYPASS CACHE - make direct API call with timestamp to force fresh request
-      const timestamp = Date.now();
-      const endpoint = `/api/workflow/workflows/${workflowId}/instances/${instanceId}?_t=${timestamp}`;
-      
-      // Clear all cache related to this workflow first
-      sharedApiService.invalidateCache(`/api/workflow/workflows/${workflowId}`);
-      
-      const result = await sharedApiService.makeRequest(
-        endpoint,
-        { method: 'GET', headers },
-        { workflowId: workflowId, instanceId: instanceId, action: 'poll_specific', timestamp: timestamp }
-      );
-      
-      if (result.success) {
-        const workflowData = result.data.data;
-        
-        // Update the specific instance in the list
-        setAllWorkflows(prev => prev.map(w => 
-          w.instance_id === instanceId ? { ...w, status: workflowData.status || 'incomplete' } : w
-        ));
-        
-        // Update BPMN if this is the selected instance
-        if (selectedInstanceForBpmn === instanceId && workflowData.serialized_data?.tasks) {
-          const activeTasksData = Object.entries(workflowData.serialized_data.tasks)
-            .filter(([_, task]) => [16, 64, 128].includes(task.state))
-            .map(([taskId, task]) => ({ taskId, taskSpec: task.task_spec, status: task.state, task }));
-          setActiveTasks(activeTasksData);
-        }
-        
-        // Stop polling if complete
-        if (workflowData.status === 'complete') {
-          console.log('⏹️ STOPPING POLLING - instance completed:', instanceId);
-          if (pollingInterval) {
-            clearInterval(pollingInterval);
-            setPollingInterval(null);
-          }
-          return false; // Signal to stop polling
-        }
-        
-        return true; // Continue polling
-      }
-    } catch (err) {
-      console.error('Poll specific instance error:', err);
-      return false; // Stop polling on error
-    }
-  }, [workflowId, headers, selectedInstanceForBpmn, pollingInterval]);
+
+
 
   // Load workflow configuration and BPMN data
   const loadStatus = useCallback(
@@ -338,18 +252,31 @@ function WorkflowExecution({ user }) {
 
         // Log exact raw data as received from backend - NO FILTERING
         console.log('EXACT RAW BACKEND DATA (All Workflows):', result);
+        console.log('🔍 Extracting workflows from result.data?.data:', result.data?.data);
         
         // Set the data exactly as received
-        setAllWorkflows(result.data?.data || []);
+        const workflows = result.data?.data || [];
+        console.log('🔍 Final workflows array length:', workflows.length);
+        setAllWorkflows(workflows);
         setTotalPages(result.data?.total_pages || 1);
         setRefreshKey((k) => k + 1);
+        console.log('✅ Called setAllWorkflows with', workflows.length, 'items');
+        
+        // Initialize the last known instance ID if we don't have one yet
+        if (!lastKnownInstanceId && workflows.length > 0) {
+          const newestInstanceId = workflows[0]?.instance_id;
+          if (newestInstanceId) {
+            setLastKnownInstanceId(newestInstanceId);
+            console.log('📍 Initialized last known instance ID to:', newestInstanceId);
+          }
+        }
       } catch (err) {
         console.error('❌ Failed to load all workflows:', err);
       } finally {
         setLoadingWorkflows(false);
       }
     },
-    [workflowId, headers, pageSize]
+    [workflowId, headers, pageSize, lastKnownInstanceId]
   );
 
   const startWorkflowByConfigId = useCallback(
@@ -368,7 +295,7 @@ function WorkflowExecution({ user }) {
             headers,
             body: JSON.stringify({ initial_data: {} }),
           },
-          { configId, action: 'start', token: token?.substring(0, 10) }
+          { configId, action: 'start', token: token?.substring(0, 10), timestamp: Date.now(), bypassCache: true }
         );
 
         if (!result.success) {
@@ -377,27 +304,14 @@ function WorkflowExecution({ user }) {
 
         setResult({ message: 'Workflow started successfully', data: result.data });
 
-        // Optimistically add the new instance to the list without refetching
-        const newInstance = {
-          instance_id: result.data.instance_id,
-          created_at: new Date().toISOString(),
-          workflow_id: workflowId,
-          status: 'incomplete',
-        };
-        setAllWorkflows((prev) => {
-          if (!result.data.instance_id || prev.some((w) => w.instance_id === result.data.instance_id)) return prev;
-          return [newInstance, ...prev];
-        });
-        setRefreshKey((k) => k + 1);
-
-        // NUCLEAR OPTION: Clear ALL cache to ensure fresh data everywhere
-        sharedApiService.clearAllCache();
+        // Set the newly created instance as the last known instance
+        setLastKnownInstanceId(result.data.instance_id);
         
-        // Start polling all instances to get the updated list
-        console.log('🚀 STARTING POLLING for all instances after workflow start');
-        if (pollingInterval) clearInterval(pollingInterval);
-        const interval = setInterval(() => pollAllInstances(), 3000);
-        setPollingInterval(interval);
+        // Wait 2 seconds then fetch fresh instances
+        setTimeout(() => {
+          console.log('🔄 Fetching instances after 2 second delay...');
+          loadAllWorkflows(currentPage);
+        }, 2000);
 
       } catch (err) {
         const message = err?.message || 'Unknown error starting workflow';
