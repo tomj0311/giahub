@@ -47,15 +47,15 @@
 }
 
 .task-content {
-  width: 100px;
-  height: 80px;
+  width: 80px;
+  height: 60px;
   border: 1px solid var(--accent-color);
   border-radius: 6px;
   background: var(--accent-bg-light);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px;
+  padding: 6px;
   position: relative;
   /* Smooth hover glow without layout shifts */
   transition: box-shadow 150ms ease;
@@ -66,7 +66,7 @@
   position: absolute;
   top: 4px;
   left: 4px;
-  font-size: 12px;
+  font-size: 8px;
   line-height: 1;
   min-width: 14px;
   text-align: center;
