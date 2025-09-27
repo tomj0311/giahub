@@ -657,29 +657,27 @@ function WorkflowExecution({ user }) {
                   size="small"
                   variant="outlined"
                 />
-                {pollingInterval && (
-                  <Chip 
-                    label="Polling"
-                    color="success"
-                    size="small"
-                    variant="outlined"
-                    icon={<RefreshCw size={12} />}
-                  />
-                )}
-                <Button 
-                  size="small" 
-                  onClick={() => {
-                    setSelectedInstanceForBpmn(null);
-                    setTaskStatusData(null);
-                    if (pollingInterval) {
-                      clearInterval(pollingInterval);
-                      setPollingInterval(null);
-                    }
-                  }}
-                  sx={{ minWidth: 'auto', px: 1 }}
-                >
-                  Clear
-                </Button>
+                {(() => {
+                  const selectedWorkflow = allWorkflows.find(wf => wf.instance_id === selectedInstanceForBpmn);
+                  if (selectedWorkflow && selectedWorkflow.status !== 'complete') {
+                    return (
+                      <Chip 
+                        label="Incomplete"
+                        size="small"
+                        variant="outlined"
+                        sx={{ 
+                          borderColor: '#ff9800',
+                          color: '#ff9800',
+                          '& .MuiChip-icon': {
+                            color: '#ff9800'
+                          }
+                        }}
+                        icon={<Clock size={12} />}
+                      />
+                    );
+                  }
+                  return null;
+                })()}
               </Box>
             )}
           </Box>
