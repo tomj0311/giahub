@@ -2,7 +2,7 @@
 Workflow CRUD routes - refactored to use WorkflowService
 """
 
-from fastapi import APIRouter, Depends, status, Query, HTTPException
+from fastapi import APIRouter, Depends, status, Query, HTTPException, BackgroundTasks
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
 from datetime import datetime
@@ -20,10 +20,19 @@ _INCOMPLETE_CACHE = {}
 _INCOMPLETE_CACHE_TTL = float(os.getenv("INCOMPLETE_CACHE_TTL", "0.5"))  # seconds
 
 
+async def _run_workflow_background(workflow_id: str, initial_data: dict, user: dict):
+    """Run workflow in background"""
+    try:
+        result = await WorkflowServicePersistent.run_workflow(workflow_id, initial_data, user)
+        logger.info(f"Workflow {workflow_id} completed in background")
+    except Exception as e:
+        logger.error(f"Background workflow {workflow_id} failed: {str(e)}")
+
 @router.post("/workflows/{workflow_id}/start")
 async def start_workflow_by_workflow_id(
     workflow_id: str,
     request: dict,
+    background_tasks: BackgroundTasks,
     user: dict = Depends(verify_token_middleware)
 ):
     """Start a new workflow instance using workflow configuration ID"""
@@ -37,12 +46,10 @@ async def start_workflow_by_workflow_id(
         "started_at": str(datetime.now())
     })
     
-    result = await WorkflowServicePersistent.run_workflow(
-        workflow_id, 
-        initial_data, 
-        user
-    )
-    return result
+    # Start workflow in background
+    background_tasks.add_task(_run_workflow_background, workflow_id, initial_data, user)
+    
+    return {"success": True, "message": "Workflow started in background", "workflow_id": workflow_id}
 
 
 @router.get("/workflows/health")
@@ -145,11 +152,22 @@ async def get_workflow_instance(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_msg)
 
 
+async def _submit_task_background(workflow_id: str, instance_id: str, task_id: str, task_data: dict, user: dict):
+    """Submit task in background"""
+    try:
+        result = await WorkflowServicePersistent.submit_user_task_and_continue(
+            workflow_id, instance_id, task_id, task_data, user
+        )
+        logger.info(f"Task {task_id} completed in background")
+    except Exception as e:
+        logger.error(f"Background task {task_id} failed: {str(e)}")
+
 @router.post("/workflows/{workflow_id}/instances/{instance_id}/submit-task")
 async def submit_user_task(
     workflow_id: str,
     instance_id: str,
     request: dict,
+    background_tasks: BackgroundTasks,
     user: dict = Depends(verify_token_middleware)
 ):
     """Submit user task data and continue workflow"""
@@ -164,10 +182,10 @@ async def submit_user_task(
                 detail="task_id is required in request body"
             )
         
-        result = await WorkflowServicePersistent.submit_user_task_and_continue(
-            workflow_id, instance_id, task_id, task_data, user
-        )
-        return {"success": True, "data": result}
+        # Submit task in background
+        background_tasks.add_task(_submit_task_background, workflow_id, instance_id, task_id, task_data, user)
+        
+        return {"success": True, "message": "Task submitted in background", "task_id": task_id}
     except Exception as e:
         logger.error(f"Error executing task: {e}")
         raise HTTPException(
