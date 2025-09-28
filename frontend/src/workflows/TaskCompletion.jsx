@@ -263,13 +263,6 @@ function TaskCompletion({ user }) {
       <Box sx={{ maxWidth: 600, mx: 'auto', pt: 4 }}>
         {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-          <Button
-            startIcon={<ArrowLeft />}
-            onClick={() => navigate('/dashboard')}
-            sx={{ mr: 2 }}
-          >
-            Back
-          </Button>
           <Typography variant="h4" fontWeight="bold">
             Complete Task
           </Typography>

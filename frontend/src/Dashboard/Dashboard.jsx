@@ -720,6 +720,10 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 	}
 	return (
 		<Routes>
+			{/* TaskCompletion route without dashboard layout */}
+			<Route path="task/:workflowId/:instanceId" element={<TaskCompletion user={user} />} />
+			
+			{/* All other routes with dashboard layout */}
 			<Route path="/" element={<DashboardLayout user={user} onLogout={onLogout} themeKey={themeKey} setThemeKey={setThemeKey} />}>
 				<Route index element={<Navigate to="home" replace />} />
 				<Route path="home" element={<Home user={user} />} />
@@ -737,7 +741,6 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="bpmn" element={<BPMNEditorWrapper />} />
 				<Route path="monitor" element={<WorkflowDashboard user={user} />} />
 				<Route path="workflow-execution" element={<WorkflowExecution user={user} />} />
-				<Route path="task/:workflowId/:instanceId" element={<TaskCompletion user={user} />} />
 				<Route path="manage" element={<BPMN initialTheme={themeKey === 'aurora' ? 'dark' : themeKey === 'ocean' ? 'light' : 'auto'} key={themeKey} style={{ width: '100%', minHeight: '70vh', borderRadius: 8, overflow: 'hidden' }} />} />
 				<Route path="tenants" element={<div>Tenants - Coming Soon</div>} />
 				<Route path="help" element={<div>Help & Support - Coming Soon</div>} />
