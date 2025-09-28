@@ -490,15 +490,6 @@ function WorkflowExecution({ user }) {
             data: result.data,
           });
 
-          // Wait 2 seconds then refresh the instance status to update BPMN colors
-          setTimeout(async () => {
-            if (selectedInstance.instance_id === selectedInstanceForBpmn) {
-              // Refresh the selected instance to update BPMN task colors
-              await handleInstanceClick(selectedInstance.instance_id, false);
-            }
-            // Also refresh the workflows list to update status
-            loadAllWorkflows(currentPage);
-          }, 2000);
         }
       } catch (err) {
         setError('Failed to submit task data');
@@ -506,18 +497,32 @@ function WorkflowExecution({ user }) {
         setSubmittingTask(false);
       }
     },
-    [selectedInstance, formData, workflowId, headers]
+    [selectedInstance, formData, workflowId, headers, selectedInstanceForBpmn, handleInstanceClick, loadAllWorkflows, currentPage]
   );
 
   const handleCloseDialog = useCallback(() => {
+    const instanceIdToRefresh = selectedInstance?.instance_id;
+    const shouldRefresh = instanceIdToRefresh === selectedInstanceForBpmn;
+    
     setDialogOpen(false);
     setSelectedInstance(null);
     setFormData({});
+    
+    // Wait 2 seconds then refresh the instance status to update BPMN colors
+    if (shouldRefresh) {
+      setTimeout(async () => {
+        // Refresh the selected instance to update BPMN task colors
+        await handleInstanceClick(instanceIdToRefresh, false);
+        // Also refresh the workflows list to update status
+        loadAllWorkflows(currentPage);
+      }, 2000);
+    }
+    
     // Don't clear taskStatusData here - preserve BPMN coloring for the selected instance
     // Task status data should persist so users can see the colored diagram after closing the dialog
     // Keep the selectedInstanceForBpmn so user can still click on BPMN nodes
     // setSelectedInstanceForBpmn(null); // Uncomment if you want to clear selection on dialog close
-  }, []);
+  }, [selectedInstance, selectedInstanceForBpmn, handleInstanceClick, loadAllWorkflows, currentPage]);
 
   // Handle page change
   const handlePageChange = useCallback((event, page) => {
