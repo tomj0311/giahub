@@ -119,8 +119,6 @@ function WorkflowExecution({ user }) {
       setError(''); // Clear any previous errors
       
       try {
-        console.log('🔄 Loading workflow config for ID:', id);
-        
         // Load workflow configuration from MongoDB
         const configResult = await sharedApiService.makeRequest(
           `/api/workflows/configs/${id}`,
@@ -131,15 +129,11 @@ function WorkflowExecution({ user }) {
           { workflowId: id, action: 'get_config' }
         );
 
-        console.log('📋 Config result:', configResult);
-
         if (configResult.success || configResult.data || configResult.id) {
           const config = configResult.data || configResult;
           setWorkflowConfig(config);
-          console.log('✅ Workflow config loaded:', config);
           
           // Load BPMN data from MINIO
-          console.log('🔄 Loading BPMN data...');
           
           try {
             const bpmnResult = await sharedApiService.makeRequest(
@@ -165,25 +159,19 @@ function WorkflowExecution({ user }) {
               
               if (typeof bpmnContent === 'string' && bpmnContent.includes('<')) {
                 setBpmnData(bpmnContent);
-                console.log('✅ BPMN data loaded successfully');
               } else {
-                console.warn('⚠️ BPMN data format unexpected:', typeof bpmnContent, bpmnContent);
                 setError('BPMN data format is invalid');
               }
             } else {
-              console.warn('⚠️ BPMN fetch failed:', bpmnResult);
               setError('Failed to load BPMN diagram');
             }
           } catch (bpmnErr) {
-            console.error('❌ BPMN fetch error:', bpmnErr);
             setError('Failed to fetch BPMN diagram from storage');
           }
         } else {
-          console.warn('⚠️ Config fetch failed:', configResult);
           setError('Failed to load workflow configuration');
         }
       } catch (err) {
-        console.error('❌ Failed to load workflow data:', err);
         setError('Failed to load workflow configuration');
       } finally {
         setLoadingWorkflow(false);
@@ -225,16 +213,13 @@ function WorkflowExecution({ user }) {
       const taskColors = {};
       const today = new Date();
       
-      activeTasks.forEach(({ taskSpec, status, dueDate }) => {
+        activeTasks.forEach(({ taskSpec, status, dueDate }) => {
         // Check if task is overdue
         let isOverdue = false;
         if (dueDate) {
           const taskDueDate = new Date(dueDate);
           isOverdue = today > taskDueDate;
-          console.log(`🔍 Checking task ${taskSpec}: Due=${dueDate}, Today=${today.toISOString()}, Overdue=${isOverdue}`);
-        }
-        
-        if (status === 16) {
+        }        if (status === 16) {
           // Status 16 = READY - check if overdue, use 'error' for overdue tasks
           taskColors[taskSpec] = isOverdue ? 'error' : 'ready';
         } else if (status === 64) {
@@ -242,15 +227,9 @@ function WorkflowExecution({ user }) {
         } else if (status === 128) {
           taskColors[taskSpec] = 'error'; // Status 128 = ERROR
         }
-        
-        // Log overdue tasks
-        if (isOverdue && status === 16) {
-          console.log(`⚠️ Task ${taskSpec} is OVERDUE! Due: ${dueDate}, Today: ${today.toISOString()} - Setting to ERROR color`);
-        }
+
       });
       setTaskStatusData(taskColors);
-      console.log('🎨 BPMN Task Colors Updated by task_spec (with overdue check):', taskColors);
-      console.log('🎯 TaskStatusData being sent to BPMN:', taskColors);
     }
   }, [activeTasks]);
 
@@ -274,28 +253,21 @@ function WorkflowExecution({ user }) {
           { workflowId, action: 'list_all_workflows', page: page || 1, pageSize: pageSize || 8, bypassCache: true }
         );
 
-        // Log exact raw data as received from backend - NO FILTERING
-        console.log('EXACT RAW BACKEND DATA (All Workflows):', result);
-        console.log('🔍 Extracting workflows from result.data?.data:', result.data?.data);
-        
         // Set the data exactly as received
         const workflows = result.data?.data || [];
-        console.log('🔍 Final workflows array length:', workflows.length);
         setAllWorkflows(workflows);
         setTotalPages(result.data?.total_pages || 1);
         setRefreshKey((k) => k + 1);
-        console.log('✅ Called setAllWorkflows with', workflows.length, 'items');
         
         // Initialize the last known instance ID if we don't have one yet
         if (!lastKnownInstanceId && workflows.length > 0) {
           const newestInstanceId = workflows[0]?.instance_id;
           if (newestInstanceId) {
             setLastKnownInstanceId(newestInstanceId);
-            console.log('📍 Initialized last known instance ID to:', newestInstanceId);
           }
         }
       } catch (err) {
-        console.error('❌ Failed to load all workflows:', err);
+        // Error handled silently
       } finally {
         setLoadingWorkflows(false);
       }
@@ -333,13 +305,11 @@ function WorkflowExecution({ user }) {
         
         // Wait 2 seconds then fetch fresh instances
         setTimeout(() => {
-          console.log('🔄 Fetching instances after 2 second delay...');
           loadAllWorkflows(currentPage);
         }, 2000);
 
       } catch (err) {
         const message = err?.message || 'Unknown error starting workflow';
-        console.error('Workflow start error:', err);
         setError(message);
       } finally {
         setRunning(false);
@@ -360,6 +330,9 @@ function WorkflowExecution({ user }) {
   const handleInstanceClick = useCallback(
     async (instanceId, openDialog = true) => {
       try {
+        // Invalidate cache for this specific instance to ensure fresh data
+        sharedApiService.invalidateCache(`/api/workflow/workflows/${workflowId}/instances/${instanceId}`);
+        
         const result = await sharedApiService.makeRequest(
           `/api/workflow/workflows/${workflowId}/instances/${instanceId}`,
           {
@@ -371,9 +344,6 @@ function WorkflowExecution({ user }) {
 
         if (result.success) {
           const workflowData = result.data.data;
-          
-          // FUCKING LOG THE RAW INSTANCE DATA
-          console.log('🚨 RAW INSTANCE DATA FROM API:', workflowData);
           
           // Store the full instance data for JSON viewer
           setSelectedInstanceData(workflowData);
@@ -411,7 +381,6 @@ function WorkflowExecution({ user }) {
             });
             
             setActiveTasks(activeTasksData);
-            console.log('🎯 activeTasks with dueDate and timestamps (status 16, 64, 128):', activeTasksData);
 
             // If openDialog is true, prepare and open the dialog
             if (openDialog) {
@@ -442,14 +411,12 @@ function WorkflowExecution({ user }) {
                 });
               }
 
-              console.log('🎯 Opening dialog for instance:', instanceForDialog);
               setSelectedInstance(instanceForDialog);
               setDialogOpen(true);
             }
           }
         }
       } catch (err) {
-        console.error('Failed to get instance details:', err);
         setError('Failed to load instance details');
       }
     },
@@ -469,10 +436,7 @@ function WorkflowExecution({ user }) {
       
       setSubmittingTask(true);
       try {
-        console.log('DEBUG - selectedInstance:', selectedInstance);
-        console.log('DEBUG - pendingTasks:', selectedInstance.pendingTasks);
-        
-        // Just take the first pending task - no filtering bullshit
+        // Just take the first pending task
         const firstPendingTask = selectedInstance.pendingTasks?.[0];
         
         if (!firstPendingTask) {
@@ -484,8 +448,6 @@ function WorkflowExecution({ user }) {
           data: formData,
           task_id: firstPendingTask.task_spec
         };
-        
-        console.log('DEBUG - submissionData:', submissionData);
         
         const result = await sharedApiService.makeRequest(
           `/api/workflow/workflows/${workflowId}/instances/${selectedInstance.instance_id}/submit-task`,
@@ -530,7 +492,6 @@ function WorkflowExecution({ user }) {
 
           // Wait 2 seconds then refresh the instance status to update BPMN colors
           setTimeout(async () => {
-            console.log('🔄 Refreshing instance status after task submission...');
             if (selectedInstance.instance_id === selectedInstanceForBpmn) {
               // Refresh the selected instance to update BPMN task colors
               await handleInstanceClick(selectedInstance.instance_id, false);
@@ -540,7 +501,6 @@ function WorkflowExecution({ user }) {
           }, 2000);
         }
       } catch (err) {
-        console.error('Failed to submit task:', err);
         setError('Failed to submit task data');
       } finally {
         setSubmittingTask(false);
@@ -570,7 +530,6 @@ function WorkflowExecution({ user }) {
     
     // Only allow BPMN node clicks if an instance has been selected from the list first
     if (!selectedInstanceForBpmn) {
-      console.log('❌ No instance selected. User must select from the list first.');
       setError('Please select a workflow instance from the list first, then click on the diagram nodes.');
       setTimeout(() => setError(''), 4000); // Clear error after 4 seconds
       return;
@@ -578,7 +537,6 @@ function WorkflowExecution({ user }) {
     
     // Get the node ID from the BPMN node
     const nodeId = node.id;
-    console.log('🔍 BPMN node clicked:', nodeId, node, 'for selected instance:', selectedInstanceForBpmn);
     
     // Open the dialog for the pre-selected instance (force dialog open)
     await handleInstanceClick(selectedInstanceForBpmn, true);
@@ -597,8 +555,7 @@ function WorkflowExecution({ user }) {
                          workflowConfig.bpmn_file_path ||
                          workflowConfig.filePath;
     
-    console.log('📍 Using minio full path from existing config:', minioFullPath);
-    console.log('🔍 Full workflowConfig:', workflowConfig);
+
     
     // Navigate to dashboard/bpmn with the XML data and full minio path
     navigate('/dashboard/bpmn', {
@@ -644,7 +601,6 @@ function WorkflowExecution({ user }) {
           throw new Error(result.error || 'Failed to delete instance');
         }
       } catch (err) {
-        console.error('Failed to delete instance:', err);
         setError(`Failed to delete instance: ${err.message}`);
       } finally {
         setDeleting(prev => {
@@ -824,7 +780,6 @@ function WorkflowExecution({ user }) {
                           }
                         }}
                         onClick={() => {
-                          console.log('🖱️ Instance clicked in table:', wf.instance_id);
                           setSelectedInstanceForBpmn(wf.instance_id);
                           handleInstanceClick(wf.instance_id, false);
                           
@@ -834,7 +789,6 @@ function WorkflowExecution({ user }) {
                           }
                           
                           if (wf.status !== 'complete') {
-                            console.log('🚀 STARTING SPECIFIC INSTANCE POLLING for:', wf.instance_id);
                             const interval = setInterval(async () => {
                               const shouldContinue = await pollSpecificInstance(wf.instance_id);
                               if (!shouldContinue) {
@@ -968,10 +922,7 @@ function WorkflowExecution({ user }) {
                 }}
                 className="bpmn-readonly-viewer"
                 onError={(error) => {
-                  console.error('🔥 BPMN Component Error:', error)
-                }}
-                onLoad={() => {
-                  console.log('✅ BPMN workflow loaded successfully')
+                  // BPMN Component Error handled silently
                 }}
               />
             ) : workflowId && !loadingWorkflow ? (

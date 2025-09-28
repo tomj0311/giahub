@@ -169,26 +169,13 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   const updateNodeColors = useCallback((statusData) => {
     if (!statusData) return;
     
-    console.log('🎨 updateNodeColors called with statusData:', statusData);
-    
     setNodes((currentNodes) => {
-      console.log('🔍 Current nodes:', currentNodes.map(n => ({ id: n.id, type: n.type, label: n.data?.label })));
-      console.log('🔍 Available statusData keys:', Object.keys(statusData));
       
       return currentNodes.map((node) => {
         // Check if this node ID matches any task_spec in statusData
         const taskStatus = statusData[node.id];
         
-        console.log('🔍 Looking for task status by node ID (task_spec):', {
-          nodeId: node.id,
-          nodeType: node.type,
-          foundStatus: taskStatus,
-          nodeLabel: node.data?.label,
-          availableTaskSpecs: Object.keys(statusData)
-        });
-        
         if (!taskStatus) {
-          console.log('❌ No status found for node:', node.id);
           return {
             ...node,
             data: {
@@ -205,18 +192,11 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
         // Apply colors based on task status
         if (taskStatus === 'ready') {
           backgroundColor = '#FF8F00'; // Full amber for ready tasks
-          console.log('🎨 Coloring READY task:', node.id, '(task_spec) with amber background');
         } else if (taskStatus === 'complete') {
           backgroundColor = '#2E7D32'; // Full green for completed tasks
-          console.log('🎨 Coloring COMPLETE task:', node.id, '(task_spec) with green background');
         } else if (taskStatus === 'error') {
           backgroundColor = '#C62828'; // Full red for error tasks
-          console.log('🎨 Coloring ERROR task:', node.id, '(task_spec) with red background');
-        } else {
-          console.log('⚪ Unknown status for task:', node.id, 'status:', taskStatus);
         }
-        
-        console.log('✅ Applying colors to node:', node.id, '(task_spec)', { backgroundColor, borderColor, status: taskStatus });
         
         return {
           ...node,
@@ -370,8 +350,6 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
             }
           }, 100);
         } else {
-          console.warn('⚠️ Parsing returned no nodes')
-          
           // Show fallback message
           setNodes([{
             id: 'bpmn-empty',
@@ -386,8 +364,6 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
         }
         
       } catch (error) {
-        console.error('🔥 Error loading initial BPMN:', error);
-        
         // Show error in diagram
         setNodes([{
           id: 'bpmn-error',
