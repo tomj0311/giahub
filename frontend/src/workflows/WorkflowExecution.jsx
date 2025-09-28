@@ -48,6 +48,7 @@ import {
   CheckCircle,
   XCircle,
   Trash2,
+  Edit,
 } from 'lucide-react';
 import sharedApiService from '../utils/apiService';
 
@@ -547,6 +548,35 @@ function WorkflowExecution({ user }) {
     await handleInstanceClick(selectedInstanceForBpmn, true);
   }, [selectedInstanceForBpmn, handleInstanceClick]);
 
+  // Handle Edit BPMN button click - navigate to BPMN editor with XML data
+  const handleEditBPMN = useCallback(() => {
+    if (!bpmnData || !workflowConfig) return;
+    
+    // Get the minio full path from the existing workflowConfig (already loaded)
+    const minioFullPath = workflowConfig.bpmn_path || 
+                         workflowConfig.file_path || 
+                         workflowConfig.minio_path ||
+                         workflowConfig.path ||
+                         workflowConfig.s3_path ||
+                         workflowConfig.bpmn_file_path ||
+                         workflowConfig.filePath;
+    
+    console.log('📍 Using minio full path from existing config:', minioFullPath);
+    console.log('🔍 Full workflowConfig:', workflowConfig);
+    
+    // Navigate to dashboard/bpmn with the XML data and full minio path
+    navigate('/dashboard/bpmn', {
+      state: {
+        initialBPMN: bpmnData,
+        editMode: true,
+        workflowId: workflowId,
+        minioFullPath: minioFullPath, // Full path like "uploads/bpmn/81e395d3-1b47-4d22-b538-1ca011358887/process(36).bpmn"
+        saveEndpoint: `/api/workflows/configs/${workflowId}/bpmn`,
+        saveMode: 'workflow'
+      }
+    });
+  }, [bpmnData, navigate, workflowId, workflowConfig]);
+
   const handleDeleteInstance = useCallback(
     async (instanceId, event) => {
       event.stopPropagation(); // Prevent row click
@@ -625,6 +655,19 @@ function WorkflowExecution({ user }) {
                 onClick={executeWorkflow}
               >
                 {running ? 'Starting…' : 'Start Workflow'}
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip title="Edit BPMN diagram">
+            <span>
+              <Button
+                variant="outlined"
+                color="secondary"
+                startIcon={<Edit />}
+                disabled={!bpmnData}
+                onClick={handleEditBPMN}
+              >
+                Edit BPMN
               </Button>
             </span>
           </Tooltip>

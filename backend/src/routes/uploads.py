@@ -107,7 +107,7 @@ async def upload_files_to_path(
             raise HTTPException(status_code=400, detail="Path cannot be empty")
         
         logger.info(f"UPLOAD CALLING FileService: clean_path={clean_path}")
-        results = await FileService.upload_multiple_files(files, tenant_id, user_id, clean_path)
+        results = await FileService.upload_multiple_files(files, tenant_id, user_id, clean_path, path)
         logger.info(f"UPLOAD SUCCESS: {results}")
         
         return {

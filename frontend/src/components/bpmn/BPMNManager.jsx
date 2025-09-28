@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { parseBPMNXML, captureNestedElements, escapeXML, getAttributesMap, buildAttributesString } from './utils/bpmnParser';
+import sharedApiService from '../../utils/apiService';
 import './BPMNManager.css';
 
-const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
+const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false, minioFullPath = null }) => {
   const [showXML, setShowXML] = useState(false);
   const [bpmnXML, setBpmnXML] = useState('');
   const [showPasteArea, setShowPasteArea] = useState(false);
@@ -315,6 +316,9 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
 
     console.log('Generated XML length:', formattedXML.length);
     console.log('Generated XML preview:', formattedXML.substring(0, 500) + '...');
+
+    // Store generated XML for access by save function
+    window.lastGeneratedBPMN = formattedXML;
 
     return formattedXML;
   };
@@ -1023,6 +1027,54 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
     }
   };
 
+  const uploadBPMN = async () => {
+    try {
+      // Generate fresh XML for upload - same as download logic
+      const xml = generateBPMNXML();
+      setBpmnXML(xml);
+
+      // Create blob - same as download logic
+      const blob = new Blob([xml], { type: 'application/xml' });
+      
+      // Use upload path functionality instead of simple upload
+      const formData = new FormData();
+      formData.append('files', blob, 'process.bpmn');
+
+      const token = localStorage.getItem('token');
+
+      // Use the exact minioFullPath without any modifications
+      const uploadPath = minioFullPath;
+      
+      console.log('🔄 UPLOADING BPMN TO PATH:', {
+        originalPath: minioFullPath,
+        uploadPath,
+        finalUrl: `/api/upload/${uploadPath}`
+      });
+
+      // Use upload path endpoint - uploads to uploads/{user_id}/{path}/
+      const result = await sharedApiService.makeRequest(
+        `/api/upload/${uploadPath}`,
+        {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: formData
+        },
+        { path: uploadPath, files: 1, token: token?.substring(0, 10) }
+      );
+
+      if (result.success) {
+        console.log('✅ BPMN UPLOAD SUCCESS:', result.data);
+        alert(`BPMN file uploaded successfully to ${uploadPath}`);
+      } else {
+        console.error('❌ BPMN UPLOAD FAILED:', result.error);
+        alert(`Error uploading BPMN: ${result.error || 'Upload failed'}`);
+      }
+    } catch (error) {
+      console.error('💥 BPMN UPLOAD ERROR:', error);
+      alert(`Error uploading BPMN: ${error.message}`);
+    }
+  };
+
   const copyToClipboard = () => {
     navigator.clipboard.writeText(bpmnXML);
     alert('BPMN XML copied to clipboard!');
@@ -1262,6 +1314,11 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false }) => {
 
       {!readOnly && (
         <div className="exporter-controls">
+          {minioFullPath && (
+            <button onClick={uploadBPMN} className="btn-secondary">
+              Upload BPMN
+            </button>
+          )}
           <button onClick={handleGenerateXML} className="btn-primary">
             Generate XML
           </button>

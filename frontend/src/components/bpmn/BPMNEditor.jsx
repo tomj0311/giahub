@@ -1,4 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
+import { api } from '../../config/api';
 import ReactFlow, {
   ReactFlowProvider,
   addEdge,
@@ -138,6 +140,12 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   const [userManuallyClosed, setUserManuallyClosed] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const { project, fitView } = useReactFlow();
+
+  // Get minio path from navigation state
+  const location = useLocation();
+  const minioFullPath = location.state?.minioFullPath;
+  const workflowId = location.state?.workflowId;
+  const [saving, setSaving] = useState(false);
 
   // Undo/Redo state
   const [history, setHistory] = useState([{ nodes: initialNodes, edges: initialEdges }]);
@@ -998,6 +1006,18 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
       <div className="editor-content">
         {!readOnly && (
           <div className="bpmn-action-bar">
+            {minioFullPath && (
+              <button onClick={() => {
+                const bpmnManager = document.querySelector('.bpmn-exporter');
+                if (bpmnManager) {
+                  // Call the uploadBPMN function from BPMNManager
+                  const uploadBtn = bpmnManager.querySelector('button');
+                  if (uploadBtn) uploadBtn.click();
+                }
+              }} className="btn-secondary">
+                Upload BPMN
+              </button>
+            )}
             <button onClick={() => {
               const bpmnManager = document.querySelector('.bpmn-exporter');
               if (bpmnManager) {
@@ -1078,7 +1098,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
             {!readOnly && <MiniMap />}
           </ReactFlow>
         </div>
-        <BPMNExporter nodes={nodes} edges={edges} onImportBPMN={handleImportBPMN} readOnly={readOnly} />
+        <BPMNExporter nodes={nodes} edges={edges} onImportBPMN={handleImportBPMN} readOnly={readOnly} minioFullPath={minioFullPath} />
         {showPropertyPanel && (
           <PropertyPanel
             selectedNode={selectedNode}

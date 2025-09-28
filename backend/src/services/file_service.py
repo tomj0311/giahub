@@ -29,6 +29,7 @@ class FileService:
         ".json",
         ".xml",
         ".html",
+        ".bpmn",
     }
     MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
 
@@ -77,7 +78,7 @@ class FileService:
 
     @classmethod
     async def upload_file_to_minio(
-        cls, file: UploadFile, tenant_id: str, user_id: str, collection: str
+        cls, file: UploadFile, tenant_id: str, user_id: str, collection: str, path: str = ""
     ) -> Dict[str, Any]:
         """Upload file to MinIO storage"""
         logger.info(
@@ -88,7 +89,10 @@ class FileService:
             cls.validate_file(file)
 
             # Create file path: uploads/{user_id}/{collection}/{filename}
-            file_path = f"uploads/{user_id}/{collection}/{file.filename}"
+            if path:
+                file_path = f"{path}/{file.filename}"
+            else:
+                file_path = f"uploads/{user_id}/{collection}/{file.filename}"
 
             # Check if file already exists
             file_exists = await cls.check_file_exists(file_path)
@@ -140,7 +144,7 @@ class FileService:
 
     @classmethod
     async def upload_multiple_files(
-        cls, files: List[UploadFile], tenant_id: str, user_id: str, collection: str
+        cls, files: List[UploadFile], tenant_id: str, user_id: str, collection: str, path: str = ""
     ) -> List[Dict[str, Any]]:
         """Upload multiple files to MinIO storage"""
         if not files or all(not file.filename for file in files):
@@ -155,7 +159,7 @@ class FileService:
 
             try:
                 file_info = await cls.upload_file_to_minio(
-                    file, tenant_id, user_id, collection
+                    file, tenant_id, user_id, collection, path
                 )
                 results.append(file_info)
             except Exception as e:
