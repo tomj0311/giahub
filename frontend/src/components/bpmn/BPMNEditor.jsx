@@ -1010,8 +1010,8 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
               <button onClick={() => {
                 const bpmnManager = document.querySelector('.bpmn-exporter');
                 if (bpmnManager) {
-                  // Call the uploadBPMN function from BPMNManager
-                  const uploadBtn = bpmnManager.querySelector('button');
+                  // Find the Upload BPMN button specifically
+                  const uploadBtn = Array.from(bpmnManager.querySelectorAll('button')).find(btn => btn.textContent.trim() === 'Upload BPMN');
                   if (uploadBtn) uploadBtn.click();
                 }
               }} className="btn-secondary">
@@ -1021,7 +1021,8 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
             <button onClick={() => {
               const bpmnManager = document.querySelector('.bpmn-exporter');
               if (bpmnManager) {
-                const generateBtn = bpmnManager.querySelector('button');
+                // Find the Generate XML button specifically
+                const generateBtn = Array.from(bpmnManager.querySelectorAll('button')).find(btn => btn.textContent.trim() === 'Generate XML');
                 if (generateBtn) generateBtn.click();
               }
             }} className="btn-primary">
@@ -1030,8 +1031,9 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
             <button onClick={() => {
               const bpmnManager = document.querySelector('.bpmn-exporter');
               if (bpmnManager) {
-                const buttons = bpmnManager.querySelectorAll('button');
-                if (buttons[1]) buttons[1].click();
+                // Find the Download .bpmn button specifically
+                const downloadBtn = Array.from(bpmnManager.querySelectorAll('button')).find(btn => btn.textContent.trim() === 'Download .bpmn');
+                if (downloadBtn) downloadBtn.click();
               }
             }} className="btn-secondary">
               Download .bpmn
@@ -1039,8 +1041,9 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
             <button onClick={() => {
               const bpmnManager = document.querySelector('.bpmn-exporter');
               if (bpmnManager) {
-                const buttons = bpmnManager.querySelectorAll('button');
-                if (buttons[2]) buttons[2].click();
+                // Find the Import .bpmn button specifically
+                const importBtn = Array.from(bpmnManager.querySelectorAll('button')).find(btn => btn.textContent.trim() === 'Import .bpmn');
+                if (importBtn) importBtn.click();
               }
             }} className="btn-secondary">
               Import .bpmn
@@ -1048,8 +1051,9 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
             <button onClick={() => {
               const bpmnManager = document.querySelector('.bpmn-exporter');
               if (bpmnManager) {
-                const buttons = bpmnManager.querySelectorAll('button');
-                if (buttons[3]) buttons[3].click();
+                // Find the Paste XML button specifically
+                const pasteBtn = Array.from(bpmnManager.querySelectorAll('button')).find(btn => btn.textContent.trim() === 'Paste XML');
+                if (pasteBtn) pasteBtn.click();
               }
             }} className="btn-secondary">
               Paste XML

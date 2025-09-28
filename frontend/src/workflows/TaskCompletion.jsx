@@ -18,10 +18,14 @@ import {
 import { ArrowLeft, CheckCircle, Paperclip, X } from 'lucide-react';
 import sharedApiService from '../utils/apiService';
 
-function TaskCompletion({ user }) {
-  const { workflowId, instanceId } = useParams();
+function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInstanceId, isDialog = false, onClose, onSuccess }) {
+  const { workflowId: paramWorkflowId, instanceId: paramInstanceId } = useParams();
   const navigate = useNavigate();
   const theme = useTheme();
+  
+  // Use props if provided (dialog mode), otherwise use URL params
+  const workflowId = propWorkflowId || paramWorkflowId;
+  const instanceId = propInstanceId || paramInstanceId;
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -197,6 +201,12 @@ function TaskCompletion({ user }) {
 
       if (result.success) {
         setSuccess(true);
+        // Call onSuccess callback if provided (dialog mode)
+        if (onSuccess) {
+          setTimeout(() => {
+            onSuccess();
+          }, 1500); // Show success message briefly before closing
+        }
       } else {
         setError('Failed to submit task.');
       }
@@ -211,11 +221,11 @@ function TaskCompletion({ user }) {
   if (loading) {
     return (
       <Box sx={{ 
-        minHeight: '100vh', 
+        minHeight: isDialog ? '400px' : '100vh', 
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center',
-        background: theme.custom?.backgroundGradient || theme.palette.background.default
+        background: isDialog ? 'transparent' : (theme.custom?.backgroundGradient || theme.palette.background.default)
       }}>
         <CircularProgress size={40} />
         <Typography sx={{ ml: 2 }}>Loading task...</Typography>
@@ -226,11 +236,11 @@ function TaskCompletion({ user }) {
   if (success) {
     return (
       <Box sx={{ 
-        minHeight: '100vh', 
+        minHeight: isDialog ? '400px' : '100vh', 
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center',
-        background: theme.custom?.backgroundGradient || theme.palette.background.default,
+        background: isDialog ? 'transparent' : (theme.custom?.backgroundGradient || theme.palette.background.default),
         p: 2
       }}>
         <Card sx={{ maxWidth: 500, width: '100%' }}>
@@ -242,12 +252,14 @@ function TaskCompletion({ user }) {
             <Typography color="text.secondary" sx={{ mb: 3 }}>
               Your task has been submitted and the workflow will continue processing.
             </Typography>
-            <Button 
-              variant="contained" 
-              onClick={() => navigate('/dashboard')}
-            >
-              Go to Dashboard
-            </Button>
+            {!isDialog && (
+              <Button 
+                variant="contained" 
+                onClick={() => navigate('/dashboard')}
+              >
+                Go to Dashboard
+              </Button>
+            )}
           </CardContent>
         </Card>
       </Box>
@@ -256,17 +268,31 @@ function TaskCompletion({ user }) {
 
   return (
     <Box sx={{ 
-      minHeight: '100vh',
-      background: theme.custom?.backgroundGradient || theme.palette.background.default,
-      p: 2
+      minHeight: isDialog ? 'auto' : '100vh',
+      background: isDialog ? 'transparent' : (theme.custom?.backgroundGradient || theme.palette.background.default),
+      p: 2,
+      overflow: 'auto',
+      maxHeight: isDialog ? '80vh' : 'none'
     }}>
-      <Box sx={{ maxWidth: 600, mx: 'auto', pt: 4 }}>
+      <Box sx={{ maxWidth: 600, mx: 'auto', pt: isDialog ? 1 : 4 }}>
         {/* Header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" fontWeight="bold">
-            Complete Task
-          </Typography>
-        </Box>
+        {!isDialog && (
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+            <Typography variant="h4" fontWeight="bold">
+              Complete Task
+            </Typography>
+          </Box>
+        )}
+        {isDialog && (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+            <Typography variant="h5" fontWeight="bold">
+              Complete Task
+            </Typography>
+            <Button onClick={onClose} color="inherit">
+              ×
+            </Button>
+          </Box>
+        )}
 
         {error && (
           <Alert severity="error" sx={{ mb: 3 }}>
