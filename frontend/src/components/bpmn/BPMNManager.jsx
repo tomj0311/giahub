@@ -1036,18 +1036,24 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false, minioFullPa
       // Create blob - same as download logic
       const blob = new Blob([xml], { type: 'application/xml' });
       
+      // Extract filename from path and use path without filename
+      const pathParts = minioFullPath.split('/');
+      const filename = pathParts.pop(); // Remove and get last part as filename
+      const pathOnly = pathParts.join('/'); // Join remaining parts as path
+      
       // Use upload path functionality instead of simple upload
       const formData = new FormData();
-      formData.append('files', blob, 'process.bpmn');
+      formData.append('files', blob, filename);
 
       const token = localStorage.getItem('token');
 
-      // Use the exact minioFullPath without any modifications
-      const uploadPath = minioFullPath;
+      // Use only the path part, not including filename
+      const uploadPath = pathOnly;
       
       console.log('🔄 UPLOADING BPMN TO PATH:', {
         originalPath: minioFullPath,
-        uploadPath,
+        extractedFilename: filename,
+        pathOnly: uploadPath,
         finalUrl: `/api/upload/${uploadPath}`
       });
 

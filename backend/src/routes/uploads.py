@@ -99,15 +99,28 @@ async def upload_files_to_path(
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid user")
     
-    tenant_id = await FileService.validate_tenant_access(user)
-    
     try:
         clean_path = path.strip().strip('/')
         if not clean_path:
             raise HTTPException(status_code=400, detail="Path cannot be empty")
         
         logger.info(f"UPLOAD CALLING FileService: clean_path={clean_path}")
-        results = await FileService.upload_multiple_files(files, tenant_id, user_id, clean_path, path)
+        
+        uploaded_files = []
+        errors = []
+        
+        for file in files:
+            content = await file.read()
+            object_name = f"{clean_path}/{file.filename}"
+            
+            success = await FileService.upload_file_content(object_name, content)
+            
+            if success:
+                uploaded_files.append({"filename": file.filename, "path": object_name})
+            else:
+                errors.append({"filename": file.filename, "error": "Upload failed"})
+        
+        results = {"uploaded_files": uploaded_files, "errors": errors}
         logger.info(f"UPLOAD SUCCESS: {results}")
         
         return {
