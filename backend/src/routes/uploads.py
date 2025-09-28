@@ -198,58 +198,6 @@ async def download_file(
         )
 
 
-@router.post("/simple-upload")
-async def simple_upload_files(
-    files: List[UploadFile] = File(...),
-    collection: str = Form(""),
-    task_id: str = Form(""),
-    user: dict = Depends(verify_token_middleware)
-):
-    """Simple file upload to MinIO without vector indexing or knowledge processing.
-    Just uploads files to storage with optional collection and task_id prefix."""
-    
-    if not files:
-        raise HTTPException(status_code=400, detail="No files uploaded")
-    
-    if len(files) > 20:
-        raise HTTPException(status_code=400, detail="Too many files. Maximum is 20 files.")
-    
-    user_id = user.get("id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid user")
-    
-    tenant_id = await FileService.validate_tenant_access(user)
-    
-    try:
-        # Build path with collection and task_id: collection/task_id or just collection
-        base_path = collection.strip() if collection.strip() else "simple-uploads"
-        if task_id.strip():
-            upload_path = f"{base_path}/{task_id.strip()}"
-        else:
-            upload_path = base_path
-        
-        logger.info(f"SIMPLE UPLOAD: path={upload_path}, files={len(files)}, user={user_id}, task_id={task_id}")
-        
-        results = await FileService.upload_multiple_files(files, tenant_id, user_id, upload_path)
-        
-        logger.info(f"SIMPLE UPLOAD SUCCESS: {results}")
-        
-        return {
-            "message": "Files uploaded successfully to storage",
-            "collection": base_path,
-            "task_id": task_id,
-            "full_path": upload_path,
-            "files": results.get("uploaded_files", []),
-            "errors": results.get("errors", []),
-            "storage_only": True,
-            "no_indexing": True
-        }
-
-    except Exception as e:
-        logger.error(f"SIMPLE UPLOAD ERROR: {e}")
-        raise HTTPException(status_code=500, detail=f"Simple upload failed: {str(e)}")
-
-
 @router.get("/diag")
 async def uploads_diagnostics():
     """Lightweight diagnostics to debug upload 500s without changing code."""

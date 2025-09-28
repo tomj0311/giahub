@@ -125,47 +125,38 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
     if (attachedFiles.length === 0) return { success: true };
 
     try {
-      // Simple upload without vector indexing - just store files in MinIO
       const formData = new FormData();
-      const collectionName = `task_${instanceId}`;
-      const taskId = taskData.taskSpec;
+      const uploadPath = `task_${instanceId}`;
       
-      // Add collection, task_id and files
-      formData.append('collection', collectionName);
-      formData.append('task_id', taskId);
+      // Add files to form data
       attachedFiles.forEach(file => formData.append('files', file));
 
-      console.log('🚀 SIMPLE UPLOADING FILES:', attachedFiles.map(f => f.name));
-      console.log('📍 COLLECTION:', collectionName);
-      console.log('📍 TASK_ID:', taskId);
-      console.log('📍 EXPECTED PATH: uploads/{user_id}/' + collectionName + '/' + taskId + '/{filename}');
-
-      // Use new simple upload endpoint - NO VECTOR INDEXING
+      // Use upload endpoint with path parameter
       const result = await sharedApiService.makeRequest(
-        '/api/simple-upload',
+        `/api/upload/${uploadPath}`,
         {
           method: 'POST',
           headers: token ? { Authorization: `Bearer ${token}` } : {},
           body: formData
         },
-        { collection: collectionName, task_id: taskId, files: attachedFiles.length, token: token?.substring(0, 10) }
+        { path: uploadPath, files: attachedFiles.length, token: token?.substring(0, 10) }
       );
 
       if (result.success) {
-        console.log('✅ SIMPLE UPLOAD SUCCESS:', result.data);
+        console.log('✅ UPLOAD SUCCESS:', result.data);
         return { success: true, data: result.data };
       } else {
-        console.error('❌ SIMPLE UPLOAD FAILED:', result.error);
+        console.error('❌ UPLOAD FAILED:', result.error);
         return { 
           success: false, 
-          error: result.error || 'Simple upload failed'
+          error: result.error || 'Upload failed'
         };
       }
     } catch (error) {
-      console.error('💥 SIMPLE UPLOAD ERROR:', error);
+      console.error('💥 UPLOAD ERROR:', error);
       return { 
         success: false, 
-        error: error.message || 'Simple upload failed'
+        error: error.message || 'Upload failed'
       };
     }
   };
