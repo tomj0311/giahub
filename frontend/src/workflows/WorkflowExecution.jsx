@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BPMN from '../components/bpmn/BPMN';
 import JsonViewer from '../components/JsonViewer';
@@ -10,10 +10,8 @@ import {
   IconButton,
   useTheme,
   alpha,
-  TextField,
   Stack,
   Chip,
-  Divider,
   CircularProgress,
   Tooltip,
   Alert,
@@ -23,27 +21,14 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   Pagination,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Card,
-  CardContent,
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  FormControlLabel,
-  Checkbox,
 } from '@mui/material';
 import {
   ArrowLeft,
   Play,
   RefreshCw,
-  CheckCircle2,
-  List,
   Eye,
   Clock,
   CheckCircle,
@@ -57,7 +42,7 @@ import sharedApiService from '../utils/apiService';
 function WorkflowExecution({ user }) {
 
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const workflowId = searchParams.get('workflow');
   const theme = useTheme();
 
@@ -65,7 +50,6 @@ function WorkflowExecution({ user }) {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
-  const [mode, setMode] = useState('config'); // Always config since we only have start endpoint
   const [refreshKey, setRefreshKey] = useState(0); // Force re-render key
   const [deleting, setDeleting] = useState(new Set()); // Track which instances are being deleted
   const [selectedInstanceForBpmn, setSelectedInstanceForBpmn] = useState(null); // Track selected instance for BPMN clicks
@@ -87,8 +71,6 @@ function WorkflowExecution({ user }) {
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedInstance, setSelectedInstance] = useState(null);
-  const [formData, setFormData] = useState({});
-  const [submittingTask, setSubmittingTask] = useState(false);
 
   // Workflow data states
   const [workflowConfig, setWorkflowConfig] = useState(null);
@@ -176,14 +158,11 @@ function WorkflowExecution({ user }) {
       } finally {
         setLoadingWorkflow(false);
       }
-      
-      setMode('config');
     },
     [headers]
   );
 
   useEffect(() => {
-    setMode('config');
     if (workflowId) {
       loadStatus(workflowId);
       loadAllWorkflows(1);
@@ -423,82 +402,7 @@ function WorkflowExecution({ user }) {
     [workflowId, headers]
   );
 
-  const handleFormChange = useCallback((fieldId, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [fieldId]: value
-    }));
-  }, []);
 
-  const handleSubmitTask = useCallback(
-    async () => {
-      if (!selectedInstance) return;
-      
-      setSubmittingTask(true);
-      try {
-        // Just take the first pending task
-        const firstPendingTask = selectedInstance.pendingTasks?.[0];
-        
-        if (!firstPendingTask) {
-          throw new Error('No pending tasks found');
-        }
-        
-        // Create submission data with task ID and form data
-        const submissionData = {
-          data: formData,
-          task_id: firstPendingTask.task_spec
-        };
-        
-        const result = await sharedApiService.makeRequest(
-          `/api/workflow/workflows/${workflowId}/instances/${selectedInstance.instance_id}/submit-task`,
-          {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(submissionData),
-          },
-          { workflowId, instanceId: selectedInstance.instance_id, action: 'submit_task' }
-        );
-
-        if (result.success) {
-          setDialogOpen(false);
-          setSelectedInstance(null);
-          setFormData({});
-
-          // Optimistically update the list: remove if completed
-          const completed = !!result.data?.completed;
-          const nextTaskId = result.data?.current_task_id;
-          if (completed) {
-            setAllWorkflows((prev) => prev.map((w) => 
-              w.instance_id === selectedInstance.instance_id ? { ...w, status: 'complete' } : w
-            ));
-            setRefreshKey((k) => k + 1);
-          } else {
-            // Not completed: update list item with next task id (if we want to display later)
-            setAllWorkflows((prev) => prev.map((w) => (
-              w.instance_id === selectedInstance.instance_id ? { ...w, current_task_id: nextTaskId } : w
-            )));
-            setRefreshKey((k) => k + 1);
-          }
-          // Invalidate cache so future fetches are fresh (no immediate refetch here)
-          sharedApiService.invalidateCache(`/api/workflow/workflows/${workflowId}/incomplete`);
-          // Also invalidate the specific instance cache so reopening shows the next task
-          sharedApiService.invalidateCache(`/api/workflow/workflows/${workflowId}/instances/${selectedInstance.instance_id}`);
-          
-          // Show success message
-          setResult({
-            message: result.data.message || 'Task submitted successfully',
-            data: result.data,
-          });
-
-        }
-      } catch (err) {
-        setError('Failed to submit task data');
-      } finally {
-        setSubmittingTask(false);
-      }
-    },
-    [selectedInstance, formData, workflowId, headers, selectedInstanceForBpmn, handleInstanceClick, loadAllWorkflows, currentPage]
-  );
 
   const handleCloseDialog = useCallback(() => {
     const instanceIdToRefresh = selectedInstance?.instance_id;
@@ -506,7 +410,6 @@ function WorkflowExecution({ user }) {
     
     setDialogOpen(false);
     setSelectedInstance(null);
-    setFormData({});
     
     // Wait 2 seconds then refresh the instance status to update BPMN colors
     if (shouldRefresh) {
@@ -795,8 +698,11 @@ function WorkflowExecution({ user }) {
                           
                           if (wf.status !== 'complete') {
                             const interval = setInterval(async () => {
-                              const shouldContinue = await pollSpecificInstance(wf.instance_id);
-                              if (!shouldContinue) {
+                              // Refresh the instance status periodically for incomplete workflows
+                              await handleInstanceClick(wf.instance_id, false);
+                              // Check if workflow is now complete
+                              const updatedWorkflow = allWorkflows.find(w => w.instance_id === wf.instance_id);
+                              if (updatedWorkflow?.status === 'complete') {
                                 clearInterval(interval);
                                 setPollingInterval(null);
                               }
