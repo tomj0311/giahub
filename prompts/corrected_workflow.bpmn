@@ -1,0 +1,420 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+  xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0"
+  xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0"
+  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+  id="Definitions_1"
+  targetNamespace="http://example.com/bpmn"
+  xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL http://www.omg.org/spec/BPMN/2.0/20100501/BPMN20.xsd">
+  <process id="tender_process_4" isExecutable="true">
+    <startEvent id="startEvent_1" name="Tender Issued">
+      <outgoing>flow_1</outgoing>
+    </startEvent>
+    <endEvent id="endEvent_rejected" name="Process Ended (Rejected)">
+      <incoming>flow_11</incoming>
+    </endEvent>
+    <endEvent id="endEvent_process_complete" name="Tender Monitoring Complete">
+      <incoming>flow_20</incoming>
+    </endEvent>
+    <serviceTask id="serviceTask_email_notify" name="Send Due Notification">
+      <incoming>flow_5</incoming>
+      <outgoing>flow_7</outgoing>
+      <extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+        <serviceConfiguration xmlns="http://example.org/service">
+          <endpoint>https://api.mail.example.com/send</endpoint>
+          <method>POST</method>
+          <timeout>15000</timeout>
+          <retryCount>2</retryCount>
+          <headers>
+            <header name="Content-Type" value="application/json"/>
+          </headers>
+        </serviceConfiguration>
+      </extensionElements>
+    </serviceTask>
+    <userTask id="userTask_tender_submission" name="Party Y Submits Tender">
+      <incoming>flow_1</incoming>
+      <outgoing>flow_2</outgoing>
+      <extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+        <formData xmlns="http://example.org/form">
+          <formField id="submission_date" label="Submission Date" type="date" required="true"/>
+          <formField id="completion_remarks" label="Remarks" type="string" required="false"/>
+        </formData>
+      </extensionElements>
+      <potentialOwner xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+        <extensionElements>
+          <dueDate>+P7D</dueDate>
+          <userEmail>party.y@example.com</userEmail>
+        </extensionElements>
+      </potentialOwner>
+    </userTask>
+    <userTask id="userTask_acceptance" name="Approve Acceptance">
+      <incoming>flow_8</incoming>
+      <outgoing>flow_9</outgoing>
+      <extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+        <formData xmlns="http://example.org/form">
+          <formField id="acceptance" label="Accept Overdue?" type="boolean" required="true"/>
+          <formField id="acceptance_remarks" label="Remarks" type="string" required="false"/>
+        </formData>
+      </extensionElements>
+      <potentialOwner xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+        <extensionElements>
+          <userEmail>reviewer@example.com</userEmail>
+        </extensionElements>
+      </potentialOwner>
+    </userTask>
+    <userTask id="userTask_stage1" name="Stage 1 Execution">
+      <incoming>flow_6</incoming>
+      <incoming>flow_10</incoming>
+      <outgoing>flow_12</outgoing>
+      <extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+        <formData xmlns="http://example.org/form">
+          <formField id="stage1_completion_date" label="Completion Date" type="date" required="true"/>
+          <formField id="stage1_remarks" label="Remarks" type="string" required="false"/>
+        </formData>
+      </extensionElements>
+      <potentialOwner xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+        <extensionElements>
+          <dueDate>+P45D</dueDate>
+          <userEmail>party.y@example.com</userEmail>
+        </extensionElements>
+      </potentialOwner>
+    </userTask>
+    <userTask id="userTask_stage2" name="Stage 2 Execution">
+      <incoming>flow_14</incoming>
+      <outgoing>flow_15</outgoing>
+      <extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+        <formData xmlns="http://example.org/form">
+          <formField id="stage2_completion_date" label="Completion Date" type="date" required="true"/>
+          <formField id="stage2_remarks" label="Remarks" type="string" required="false"/>
+        </formData>
+      </extensionElements>
+      <potentialOwner xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+        <extensionElements>
+          <dueDate>+P60D</dueDate>
+          <userEmail>party.y@example.com</userEmail>
+        </extensionElements>
+      </potentialOwner>
+    </userTask>
+    <userTask id="userTask_stage3" name="Stage 3 Execution">
+      <incoming>flow_17</incoming>
+      <outgoing>flow_18</outgoing>
+      <extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+        <formData xmlns="http://example.org/form">
+          <formField id="stage3_completion_date" label="Completion Date" type="date" required="true"/>
+          <formField id="stage3_remarks" label="Remarks" type="string" required="false"/>
+        </formData>
+      </extensionElements>
+      <potentialOwner xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+        <extensionElements>
+          <dueDate>+P30D</dueDate>
+          <userEmail>party.y@example.com</userEmail>
+        </extensionElements>
+      </potentialOwner>
+    </userTask>
+    <scriptTask id="scriptTask_check_due" name="Check Due Status" scriptFormat="python">
+      <incoming>flow_3</incoming>
+      <incoming>flow_13</incoming>
+      <incoming>flow_16</incoming>
+      <incoming>flow_19</incoming>
+      <outgoing>flow_4</outgoing>
+      <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+      from datetime import datetime
+      is_overdue_and_pending = False
+      if due_date and not completion_date:
+          if datetime.utcnow() > due_date:
+              is_overdue_and_pending = True
+    ]]></script>
+    </scriptTask>
+    <!-- Fixed: Made gateway_after_submission default to flow_3 -->
+    <exclusiveGateway id="gateway_after_submission" name="Submission Gateway" default="flow_3">
+      <incoming>flow_2</incoming>
+      <outgoing>flow_3</outgoing>
+    </exclusiveGateway>
+    <exclusiveGateway id="gateway_after_due_check" name="Due Check Gateway">
+      <incoming>flow_4</incoming>
+      <outgoing>flow_5</outgoing>
+      <outgoing>flow_6</outgoing>
+    </exclusiveGateway>
+    <!-- Fixed: Made gateway_after_notify default to flow_8 -->
+    <exclusiveGateway id="gateway_after_notify" name="Notification Gateway" default="flow_8">
+      <incoming>flow_7</incoming>
+      <outgoing>flow_8</outgoing>
+    </exclusiveGateway>
+    <exclusiveGateway id="gateway_after_acceptance" name="Acceptance Decision Gateway">
+      <incoming>flow_9</incoming>
+      <outgoing>flow_10</outgoing>
+      <outgoing>flow_11</outgoing>
+    </exclusiveGateway>
+    <!-- Fixed: Made gateway_after_stage1 default to flow_14 -->
+    <exclusiveGateway id="gateway_after_stage1" name="Stage 1 Gateway" default="flow_14">
+      <incoming>flow_12</incoming>
+      <outgoing>flow_13</outgoing>
+      <outgoing>flow_14</outgoing>
+    </exclusiveGateway>
+    <!-- Fixed: Made gateway_after_stage2 default to flow_17 -->
+    <exclusiveGateway id="gateway_after_stage2" name="Stage 2 Gateway" default="flow_17">
+      <incoming>flow_15</incoming>
+      <outgoing>flow_16</outgoing>
+      <outgoing>flow_17</outgoing>
+    </exclusiveGateway>
+    <!-- Fixed: Made gateway_after_stage3 default to flow_20 -->
+    <exclusiveGateway id="gateway_after_stage3" name="Stage 3 Gateway" default="flow_20">
+      <incoming>flow_18</incoming>
+      <outgoing>flow_19</outgoing>
+      <outgoing>flow_20</outgoing>
+    </exclusiveGateway>
+    <sequenceFlow id="flow_1" sourceRef="startEvent_1" targetRef="userTask_tender_submission" />
+    <sequenceFlow id="flow_2" sourceRef="userTask_tender_submission" targetRef="gateway_after_submission" />
+    <!-- Default flow - no condition needed -->
+    <sequenceFlow id="flow_3" sourceRef="gateway_after_submission" targetRef="scriptTask_check_due" />
+    <sequenceFlow id="flow_4" sourceRef="scriptTask_check_due" targetRef="gateway_after_due_check" />
+    <sequenceFlow id="flow_5" name="Notify" sourceRef="gateway_after_due_check" targetRef="serviceTask_email_notify">
+      <conditionExpression xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xsi:type="tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">is_overdue_and_pending == True</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_6" name="Proceed" sourceRef="gateway_after_due_check" targetRef="userTask_stage1">
+      <conditionExpression xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xsi:type="tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">is_overdue_and_pending == False</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_7" sourceRef="serviceTask_email_notify" targetRef="gateway_after_notify" />
+    <!-- Default flow - no condition needed -->
+    <sequenceFlow id="flow_8" sourceRef="gateway_after_notify" targetRef="userTask_acceptance" />
+    <sequenceFlow id="flow_9" sourceRef="userTask_acceptance" targetRef="gateway_after_acceptance" />
+    <sequenceFlow id="flow_10" name="Accepted" sourceRef="gateway_after_acceptance" targetRef="userTask_stage1">
+      <conditionExpression xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xsi:type="tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">acceptance == True</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_11" name="Rejected" sourceRef="gateway_after_acceptance" targetRef="endEvent_rejected">
+      <conditionExpression xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xsi:type="tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">acceptance == False</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_12" sourceRef="userTask_stage1" targetRef="gateway_after_stage1" />
+    <!-- Added condition for flow_13 -->
+    <sequenceFlow id="flow_13" name="Check Due" sourceRef="gateway_after_stage1" targetRef="scriptTask_check_due">
+      <conditionExpression xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xsi:type="tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">stage1_completion_date is not None</conditionExpression>
+    </sequenceFlow>
+    <!-- Default flow - no condition needed -->
+    <sequenceFlow id="flow_14" sourceRef="gateway_after_stage1" targetRef="userTask_stage2" />
+    <sequenceFlow id="flow_15" sourceRef="userTask_stage2" targetRef="gateway_after_stage2" />
+    <!-- Added condition for flow_16 -->
+    <sequenceFlow id="flow_16" name="Check Due" sourceRef="gateway_after_stage2" targetRef="scriptTask_check_due">
+      <conditionExpression xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xsi:type="tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">stage2_completion_date is not None</conditionExpression>
+    </sequenceFlow>
+    <!-- Default flow - no condition needed -->
+    <sequenceFlow id="flow_17" sourceRef="gateway_after_stage2" targetRef="userTask_stage3" />
+    <sequenceFlow id="flow_18" sourceRef="userTask_stage3" targetRef="gateway_after_stage3" />
+    <!-- Added condition for flow_19 -->
+    <sequenceFlow id="flow_19" name="Check Due" sourceRef="gateway_after_stage3" targetRef="scriptTask_check_due">
+      <conditionExpression xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xsi:type="tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">stage3_completion_date is not None</conditionExpression>
+    </sequenceFlow>
+    <!-- Default flow - no condition needed -->
+    <sequenceFlow id="flow_20" sourceRef="gateway_after_stage3" targetRef="endEvent_process_complete" />
+  </process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="tender_process_4">
+      <bpmndi:BPMNShape id="shape_startEvent_1" bpmnElement="startEvent_1">
+        <dc:Bounds x="100" y="120" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="100" y="161" width="36" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="endEvent_rejected_di" bpmnElement="endEvent_rejected">
+        <dc:Bounds x="1299.9737360472752" y="32.77084701247543" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1299.9737360472752" y="73.77084701247543" width="36" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="endEvent_process_complete_di" bpmnElement="endEvent_process_complete">
+        <dc:Bounds x="1453.1845042678922" y="220.74523965856866" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1453.1845042678922" y="261.74523965856866" width="36" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="serviceTask_email_notify_di" bpmnElement="serviceTask_email_notify">
+        <dc:Bounds x="736.1588969139857" y="28.83453709783325" width="120" height="80" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="736.1588969139857" y="113.83453709783325" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="userTask_tender_submission_di" bpmnElement="userTask_tender_submission">
+        <dc:Bounds x="180" y="105" width="120" height="80" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="180" y="190" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="userTask_acceptance_di" bpmnElement="userTask_acceptance">
+        <dc:Bounds x="986.1588969139857" y="28.83453709783325" width="120" height="80" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="986.1588969139857" y="113.83453709783325" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="userTask_stage1_di" bpmnElement="userTask_stage1">
+        <dc:Bounds x="647.8726198292843" y="244.67498358502957" width="120" height="80" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="647.8726198292843" y="329.67498358502957" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="userTask_stage2_di" bpmnElement="userTask_stage2">
+        <dc:Bounds x="934.0380827314511" y="235.101772816809" width="120" height="80" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="934.0380827314511" y="320.101772816809" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="userTask_stage3_di" bpmnElement="userTask_stage3">
+        <dc:Bounds x="1193.6112934996715" y="235.10177281680893" width="120" height="80" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1193.6112934996715" y="320.10177281680893" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="scriptTask_check_due_di" bpmnElement="scriptTask_check_due">
+        <dc:Bounds x="466.16546290216684" y="79.4714379514117" width="120" height="80" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="466.16546290216684" y="164.4714379514117" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_gateway_after_submission" bpmnElement="gateway_after_submission">
+        <dc:Bounds x="330" y="135" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="330" y="190" width="50" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_gateway_after_due_check" bpmnElement="gateway_after_due_check">
+        <dc:Bounds x="616.1654629021668" y="109.4714379514117" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="616.1654629021668" y="164.4714379514117" width="50" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_gateway_after_notify" bpmnElement="gateway_after_notify">
+        <dc:Bounds x="886.1588969139857" y="58.83453709783325" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="886.1588969139857" y="113.83453709783325" width="50" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_gateway_after_acceptance" bpmnElement="gateway_after_acceptance">
+        <dc:Bounds x="1136.1588969139857" y="58.83453709783325" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1136.1588969139857" y="113.83453709783325" width="50" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_gateway_after_stage1" bpmnElement="gateway_after_stage1">
+        <dc:Bounds x="797.8726198292843" y="274.67498358502957" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="797.8726198292843" y="329.67498358502957" width="50" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_gateway_after_stage2" bpmnElement="gateway_after_stage2">
+        <dc:Bounds x="1061.7005909389363" y="272.54760341431387" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1061.7005909389363" y="327.54760341431387" width="50" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_gateway_after_stage3" bpmnElement="gateway_after_stage3">
+        <dc:Bounds x="1320.2101116217991" y="274.67498358502957" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1320.2101116217991" y="329.67498358502957" width="50" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="edge_flow_1" bpmnElement="flow_1">
+        <di:waypoint x="136" y="138" />
+        <di:waypoint x="180" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_2" bpmnElement="flow_2">
+        <di:waypoint x="300" y="145" />
+        <di:waypoint x="330" y="160" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_3" bpmnElement="flow_3">
+        <di:waypoint x="355" y="160" />
+        <di:waypoint x="430" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_4" bpmnElement="flow_4">
+        <di:waypoint x="550" y="145" />
+        <di:waypoint x="580" y="160" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_5" bpmnElement="flow_5">
+        <di:waypoint x="605" y="160" />
+        <di:waypoint x="650" y="105" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="600" y="95" width="100" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_6" bpmnElement="flow_6">
+        <di:waypoint x="605" y="185" />
+        <di:waypoint x="650" y="240" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="600" y="230" width="100" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_7" bpmnElement="flow_7">
+        <di:waypoint x="770" y="105" />
+        <di:waypoint x="800" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_8" bpmnElement="flow_8">
+        <di:waypoint x="825" y="120" />
+        <di:waypoint x="900" y="105" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_9" bpmnElement="flow_9">
+        <di:waypoint x="1020" y="105" />
+        <di:waypoint x="1050" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_10" bpmnElement="flow_10">
+        <di:waypoint x="1075" y="120" />
+        <di:waypoint x="650" y="240" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="600" y="230" width="100" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_11" bpmnElement="flow_11">
+        <di:waypoint x="1075" y="96" />
+        <di:waypoint x="1100" y="88" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1050" y="78" width="100" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_12" bpmnElement="flow_12">
+        <di:waypoint x="770" y="240" />
+        <di:waypoint x="800" y="255" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_13" bpmnElement="flow_13">
+        <di:waypoint x="825" y="255" />
+        <di:waypoint x="430" y="145" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="600" y="200" width="100" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_14" bpmnElement="flow_14">
+        <di:waypoint x="825" y="240" />
+        <di:waypoint x="900" y="240" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_15" bpmnElement="flow_15">
+        <di:waypoint x="1020" y="240" />
+        <di:waypoint x="1050" y="255" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_16" bpmnElement="flow_16">
+        <di:waypoint x="1075" y="255" />
+        <di:waypoint x="430" y="145" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="700" y="200" width="100" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_17" bpmnElement="flow_17">
+        <di:waypoint x="1075" y="240" />
+        <di:waypoint x="1150" y="240" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_18" bpmnElement="flow_18">
+        <di:waypoint x="1270" y="240" />
+        <di:waypoint x="1300" y="255" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_19" bpmnElement="flow_19">
+        <di:waypoint x="1325" y="255" />
+        <di:waypoint x="430" y="145" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="800" y="200" width="100" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_20" bpmnElement="flow_20">
+        <di:waypoint x="1325" y="240" />
+        <di:waypoint x="1400" y="243" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>
