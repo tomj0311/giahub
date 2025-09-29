@@ -18,7 +18,7 @@ import {
 import { ArrowLeft, CheckCircle, Paperclip, X } from 'lucide-react';
 import sharedApiService from '../utils/apiService';
 
-function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInstanceId, isDialog = false, onClose, onSuccess }) {
+function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInstanceId, taskId: propTaskId, isDialog = false, onClose, onSuccess }) {
   const { workflowId: paramWorkflowId, instanceId: paramInstanceId } = useParams();
   const navigate = useNavigate();
   const theme = useTheme();
@@ -88,7 +88,35 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
               instanceData
             });
           } else {
-            setError('No pending tasks found for this workflow instance.');
+            // If a specific task ID was provided, show data for that task
+            if (propTaskId) {
+              const taskSpecs = instanceData.serialized_data?.spec?.task_specs || {};
+              const specificTaskSpec = taskSpecs[propTaskId];
+              
+              if (specificTaskSpec) {
+                const workflowData = instanceData.serialized_data?.data || instanceData.data || {};
+                const formFields = specificTaskSpec.extensions?.formData?.formFields || [];
+                
+                // Create form fields with values from workflow data
+                const fieldsWithData = formFields.map(field => ({
+                  ...field,
+                  value: workflowData[field.id] || 'Not provided'
+                }));
+                
+                setTaskData({
+                  taskId: propTaskId,
+                  taskSpec: propTaskId,
+                  taskName: specificTaskSpec.bpmn_name || specificTaskSpec.name || propTaskId,
+                  formFields: fieldsWithData,
+                  instanceData,
+                  isCompleted: true
+                });
+              } else {
+                setError(`Task '${propTaskId}' not found in workflow.`);
+              }
+            } else {
+              setError('No pending tasks found for this workflow instance.');
+            }
           }
         } else {
           setError('Invalid workflow instance data.');
@@ -303,85 +331,104 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
 
               {taskData.formFields.length > 0 ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {taskData.formFields.map((field) => (
-                    <Box key={field.id}>
-                      {field.type === 'boolean' ? (
-                        <FormControlLabel
-                          control={
-                            <Checkbox
-                              checked={formData[field.id] || false}
-                              onChange={(e) => handleFormChange(field.id, e.target.checked)}
-                            />
-                          }
-                          label={field.label || field.id}
-                        />
-                      ) : (
-                        <TextField
-                          fullWidth
-                          label={field.label || field.id}
-                          value={formData[field.id] || ''}
-                          onChange={(e) => handleFormChange(field.id, e.target.value)}
-                          required={field.required === 'true' || field.required === true}
-                          type={field.type === 'number' ? 'number' : 'text'}
-                          variant="outlined"
-                        />
-                      )}
-                    </Box>
-                  ))}
-
-                  {/* File Attachment Section */}
-                  <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                      Attach Files
-                    </Typography>
-                    
-                    <input
-                      type="file"
-                      multiple
-                      style={{ display: 'none' }}
-                      id="task-file-upload"
-                      onChange={handleFileAttachment}
-                      accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"
-                    />
-                    <label htmlFor="task-file-upload">
-                      <Button
-                        component="span"
+                  {taskData.isCompleted ? (
+                    // Show completed task data in read-only mode
+                    taskData.formFields.map((field) => (
+                      <TextField
+                        key={field.id}
+                        fullWidth
+                        label={field.label || field.id}
+                        value={field.value || 'Not provided'}
+                        InputProps={{ readOnly: true }}
                         variant="outlined"
-                        startIcon={<Paperclip size={16} />}
-                        disabled={submitting}
-                        sx={{ mb: 1 }}
-                      >
-                        Attach Files
-                      </Button>
-                    </label>
-
-                    {attachedFiles.length > 0 && (
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
-                        {attachedFiles.map((file, index) => (
-                          <Chip
-                            key={index}
-                            label={`${file.name} (${(file.size / 1024).toFixed(1)} KB)`}
-                            onDelete={() => removeFile(index)}
-                            deleteIcon={<X size={14} />}
-                            color="primary"
-                            variant="outlined"
-                            size="small"
+                      />
+                    ))
+                  ) : (
+                    // Show editable form fields for pending tasks
+                    taskData.formFields.map((field) => (
+                      <Box key={field.id}>
+                        {field.type === 'boolean' ? (
+                          <FormControlLabel
+                            control={
+                              <Checkbox
+                                checked={formData[field.id] || false}
+                                onChange={(e) => handleFormChange(field.id, e.target.checked)}
+                              />
+                            }
+                            label={field.label || field.id}
                           />
-                        ))}
+                        ) : (
+                          <TextField
+                            fullWidth
+                            label={field.label || field.id}
+                            value={formData[field.id] || ''}
+                            onChange={(e) => handleFormChange(field.id, e.target.value)}
+                            required={field.required === 'true' || field.required === true}
+                            type={field.type === 'number' ? 'number' : 'text'}
+                            variant="outlined"
+                          />
+                        )}
                       </Box>
-                    )}
-                  </Paper>
+                    ))
+                  )}
 
-                  <Button
-                    variant="contained"
-                    size="large"
-                    onClick={handleSubmit}
-                    disabled={submitting}
-                    startIcon={submitting ? <CircularProgress size={16} /> : null}
-                    sx={{ mt: 2, alignSelf: 'flex-end' }}
-                  >
-                    {submitting ? 'Submitting...' : 'Submit Task'}
-                  </Button>
+                  {!taskData.isCompleted && (
+                    <>
+                      {/* File Attachment Section */}
+                      <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
+                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                          Attach Files
+                        </Typography>
+                        
+                        <input
+                          type="file"
+                          multiple
+                          style={{ display: 'none' }}
+                          id="task-file-upload"
+                          onChange={handleFileAttachment}
+                          accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"
+                        />
+                        <label htmlFor="task-file-upload">
+                          <Button
+                            component="span"
+                            variant="outlined"
+                            startIcon={<Paperclip size={16} />}
+                            disabled={submitting}
+                            sx={{ mb: 1 }}
+                          >
+                            Attach Files
+                          </Button>
+                        </label>
+
+                        {attachedFiles.length > 0 && (
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+                            {attachedFiles.map((file, index) => (
+                              <Chip
+                                key={index}
+                                label={`${file.name} (${(file.size / 1024).toFixed(1)} KB)`}
+                                onDelete={() => removeFile(index)}
+                                deleteIcon={<X size={14} />}
+                                color="primary"
+                                variant="outlined"
+                                size="small"
+                              />
+                            ))}
+                          </Box>
+                        )}
+                      </Paper>
+
+                      <Button
+                        variant="contained"
+                        size="large"
+                        onClick={handleSubmit}
+                        disabled={submitting}
+                        startIcon={submitting ? <CircularProgress size={16} /> : null}
+                        sx={{ mt: 2, alignSelf: 'flex-end' }}
+                      >
+                        {submitting ? 'Submitting...' : 'Submit Task'}
+                      </Button>
+                    </>
+                  )}
                 </Box>
               ) : (
                 <Box>

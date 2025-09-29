@@ -71,6 +71,7 @@ function WorkflowExecution({ user }) {
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedInstance, setSelectedInstance] = useState(null);
+  const [clickedTaskId, setClickedTaskId] = useState(null);
 
   // Workflow data states
   const [workflowConfig, setWorkflowConfig] = useState(null);
@@ -410,6 +411,7 @@ function WorkflowExecution({ user }) {
     
     setDialogOpen(false);
     setSelectedInstance(null);
+    setClickedTaskId(null); // Clear the clicked task ID
     
     // Wait 2 seconds then refresh the instance status to update BPMN colors
     if (shouldRefresh) {
@@ -443,8 +445,9 @@ function WorkflowExecution({ user }) {
       return;
     }
     
-    // Get the node ID from the BPMN node
+    // Get the node ID from the BPMN node and store it
     const nodeId = node.id;
+    setClickedTaskId(nodeId);
     
     // Open the dialog for the pre-selected instance (force dialog open)
     await handleInstanceClick(selectedInstanceForBpmn, true);
@@ -861,6 +864,7 @@ function WorkflowExecution({ user }) {
               user={user}
               workflowId={workflowId}
               instanceId={selectedInstance.instance_id}
+              taskId={clickedTaskId}
               isDialog={true}
               onClose={handleCloseDialog}
               onSuccess={() => {
