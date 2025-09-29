@@ -132,22 +132,17 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			order: 40,
 			children: [
 				{
-					label: 'Workflows',
-					to: '/dashboard/workflows',
-					icon: 'Settings'
-				},
-				{
 					label: 'Dynamic',
 					to: '/dashboard/dynamic',
 					icon: 'Code'
 				},
 				{
-					label: 'BPMN',
+					label: 'Create BPMN Diagram',
 					to: '/dashboard/bpmn',
 					icon: 'GitBranch'
 				},
 				{
-					label: 'Monitor',
+					label: 'Manage Wrokflows',
 					to: '/dashboard/monitor',
 					icon: 'Monitor'
 				}
@@ -223,8 +218,8 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			const isSectionSelected = item.children?.some((child) =>
 				location.pathname === child.to || location.pathname.startsWith(child.to)
 			)
-			// Force all sections to be expanded
-			const isExpanded = true
+			// Use expandedSections state to control expansion
+			const isExpanded = expandedSections[item.label] || false
 			const ExpandIcon = isExpanded ? ChevronUp : ChevronDown
 			const Icon = getIconComponent(item.icon)
 
