@@ -38,6 +38,7 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import SendIcon from '@mui/icons-material/Send'
 import CancelIcon from '@mui/icons-material/Cancel'
 import EditIcon from '@mui/icons-material/Edit'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import { agentService } from '../services/agentService'
 import { agentRuntimeService } from '../services/agentRuntimeService'
 import sharedApiService from '../utils/apiService'
@@ -851,19 +852,44 @@ export default function AgentPlayground({ user }) {
                     
                     return (
                       <>
-                        {/* Always show the original content including XML */}
-                        {bpmnData.contentWithoutBPMN && (
-                          <ReactMarkdown 
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                              a: ({ node, ...props }) => (
-                                <a {...props} target="_blank" rel="noopener noreferrer" />
-                              )
-                            }}
-                          >
-                            {bpmnData.contentWithoutBPMN}
-                          </ReactMarkdown>
-                        )}
+                        {/* Show markdown content */}
+                        <ReactMarkdown 
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            a: ({ node, ...props }) => (
+                              <a {...props} target="_blank" rel="noopener noreferrer" />
+                            ),
+                            pre: ({ children, ...props }) => (
+                              <Box sx={{ position: 'relative', '&:hover .copy-btn': { opacity: 1 } }}>
+                                <Box
+                                  component="pre"
+                                  {...props}
+                                  sx={{ 
+                                    p: 1, 
+                                    bgcolor: 'action.hover', 
+                                    borderRadius: 1, 
+                                    overflowX: 'auto', 
+                                    fontSize: 13, 
+                                    lineHeight: 1.4,
+                                    m: 0
+                                  }}
+                                >
+                                  {children}
+                                </Box>
+                                <IconButton
+                                  className="copy-btn"
+                                  size="small"
+                                  onClick={() => navigator.clipboard.writeText(children?.props?.children || '')}
+                                  sx={{ position: 'absolute', top: 4, right: 4, opacity: 0, transition: 'opacity 0.2s' }}
+                                >
+                                  <ContentCopyIcon fontSize="small" />
+                                </IconButton>
+                              </Box>
+                            )
+                          }}
+                        >
+                          {bpmnData.contentWithoutBPMN || m.content || '...'}
+                        </ReactMarkdown>
                         
                         {/* Additionally show BPMN diagram if detected */}
                         {bpmnData.hasBPMN && (
@@ -919,20 +945,6 @@ export default function AgentPlayground({ user }) {
                               />
                             </Box>
                           </Box>
-                        )}
-                        
-                        {/* Fallback if no content */}
-                        {!bpmnData.contentWithoutBPMN && !bpmnData.hasBPMN && (
-                          <ReactMarkdown 
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                              a: ({ node, ...props }) => (
-                                <a {...props} target="_blank" rel="noopener noreferrer" />
-                              )
-                            }}
-                          >
-                            {m.content && m.content.length ? m.content : '...'}
-                          </ReactMarkdown>
                         )}
                       </>
                     )

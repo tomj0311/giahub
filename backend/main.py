@@ -138,7 +138,7 @@ def health_check():
 
 
 if __name__ == "__main__":
-    # FORCE PORT 4000 - NO BULLSHIT
+    # FORCE PORT 4000 
     uvicorn.run(
         app,
         host="0.0.0.0",
