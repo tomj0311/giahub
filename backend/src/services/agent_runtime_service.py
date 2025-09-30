@@ -6,6 +6,7 @@ import os
 import uuid
 import base64
 from typing import Dict, Any, Optional, AsyncGenerator, List
+from datetime import datetime
 from fastapi import HTTPException, status
 from ..utils.log import logger
 from ..utils.mongo_storage import MongoStorageService
@@ -577,9 +578,109 @@ class AgentRuntimeService:
             logger.error(f"Failed to log agent execution results: {e}")
 
     @classmethod
+    async def _save_conversation_to_history(cls, conv_id: str, agent_name: str, user_prompt: str, agent_response: str, user: Dict[str, Any], completed: bool = True):
+        """Save conversation to history automatically after agent execution"""
+        try:
+            tenant_id = user.get("tenantId")
+            if not tenant_id:
+                logger.warning("No tenant_id found, cannot save conversation to history")
+                return
+            
+            user_id = user.get("id") or user.get("userId") or "unknown"
+            
+            # Create message objects in the same format as frontend
+            user_message = {
+                "role": "user",
+                "content": user_prompt,
+                "ts": int(datetime.utcnow().timestamp() * 1000)
+            }
+            
+            agent_message = {
+                "role": "agent", 
+                "content": agent_response,
+                "ts": int(datetime.utcnow().timestamp() * 1000)
+            }
+            
+            messages = [user_message, agent_message]
+            
+            # Generate conversation title from first user message (same logic as frontend)
+            title = None
+            if user_prompt:
+                words = user_prompt.strip().split()
+                if len(words) > 25:
+                    title = " ".join(words[:25]) + "..."
+                else:
+                    title = user_prompt.strip()
+            
+            # Check if conversation already exists
+            existing = await MongoStorageService.find_one(
+                "conversations", 
+                {"conversation_id": conv_id}, 
+                tenant_id=tenant_id
+            )
+            
+            if existing:
+                # Update existing conversation by appending new messages
+                existing_messages = existing.get("messages", [])
+                
+                # Check if this user message already exists (to avoid duplicates)
+                user_msg_exists = any(
+                    msg.get("role") == "user" and msg.get("content") == user_prompt 
+                    for msg in existing_messages
+                )
+                
+                if not user_msg_exists:
+                    # Append new messages to existing conversation
+                    updated_messages = existing_messages + messages
+                    
+                    update_data = {
+                        "messages": updated_messages,
+                        "updated_at": datetime.utcnow(),
+                        "title": title or existing.get("title", "Conversation")
+                    }
+                    
+                    await MongoStorageService.update_one(
+                        "conversations",
+                        {"conversation_id": conv_id},
+                        update_data,
+                        tenant_id=tenant_id
+                    )
+                    
+                    logger.info(f"Updated existing conversation {conv_id} with new messages")
+                else:
+                    logger.debug(f"User message already exists in conversation {conv_id}, skipping duplicate")
+            else:
+                # Create new conversation
+                conversation_data = {
+                    "conversation_id": conv_id,
+                    "agent_name": agent_name,
+                    "messages": messages,
+                    "uploaded_files": [],
+                    "conv_id": conv_id,
+                    "title": title or "Conversation",
+                    "tenantId": tenant_id,
+                    "userId": user_id,
+                    "created_at": datetime.utcnow(),
+                    "updated_at": datetime.utcnow()
+                }
+                
+                await MongoStorageService.insert_one(
+                    "conversations", 
+                    conversation_data, 
+                    tenant_id=tenant_id
+                )
+                
+                logger.info(f"Created new conversation {conv_id} in history")
+                
+        except Exception as e:
+            logger.error(f"Failed to save conversation to history: {e}")
+
+    @classmethod
     async def execute_agent(cls, agent_name: str, prompt: str, user: Dict[str, Any], conv_id: Optional[str] = None, cancel_event: Optional[asyncio.Event] = None, stream: bool = True) -> AsyncGenerator[Dict[str, Any], None]:
         agent = None
         completed = False
+        agent_response_content = ""
+        
         try:
             # Handle the case where agent is not found
             try:
@@ -595,6 +696,10 @@ class AgentRuntimeService:
                 yield {"type": "error", "error": f"Agent '{agent_name}' not found"}
                 return
                 
+            # Generate conversation ID if not provided
+            if not conv_id:
+                conv_id = f"conv_{int(datetime.utcnow().timestamp() * 1000)}"
+            
             # Use agent document as-is with minimal runtime additions
             agent_config = {
                 **agent_doc,  # Use entire agent document as-is
@@ -602,14 +707,34 @@ class AgentRuntimeService:
             if conv_id:
                 agent_config["conv_id"] = conv_id
             agent = await cls.build_agent_from_config(agent_config, user)
+            
+            # Stream agent responses and collect the content
             async for response in cls.run_agent_stream(agent, prompt, user, conv_id, cancel_event=cancel_event, stream=stream):
-                if response.get("type") == "agent_run_complete":
+                # Collect agent response content for conversation saving
+                if response.get("type") == "agent_chunk" and response.get("payload", {}).get("content"):
+                    agent_response_content += response["payload"]["content"]
+                elif response.get("type") == "agent_run_complete":
                     completed = True
+                    
                 yield response
+                
         except Exception as e:
             logger.error(f"Failed to execute agent '{agent_name}': {e}")
-            yield {"type": "error", "error": f"Failed to execute agent: {str(e)}"}
+            error_message = f"Failed to execute agent: {str(e)}"
+            agent_response_content = f"Error: {error_message}"
+            yield {"type": "error", "error": error_message}
         finally:
+            # Automatically save conversation to history when execution completes
+            if conv_id and prompt.strip():
+                await cls._save_conversation_to_history(
+                    conv_id=conv_id,
+                    agent_name=agent_name,
+                    user_prompt=prompt,
+                    agent_response=agent_response_content,
+                    user=user,
+                    completed=completed
+                )
+            
             # Log results after execution completion
             if completed and agent:
                 await cls._log_agent_execution_results(agent, user, agent_name, conv_id)

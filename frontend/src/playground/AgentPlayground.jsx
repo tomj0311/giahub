@@ -475,23 +475,7 @@ export default function AgentPlayground({ user }) {
       }
     }
 
-    // Save user message immediately
-    try {
-      const savePayload = {
-        conversation_id: convId,
-        agent_name: selected,
-        messages: newMessages,
-        uploaded_files: currentUploadedFiles, // Use the current uploaded files
-        conv_id: convId,
-        vector_collection_name: vectorCollectionName,
-        title: generateTitle(newMessages)
-      }
-      
-      
-      await agentRuntimeService.saveConversation(savePayload, token)
-    } catch (e) {
-      console.error('Failed to save user message:', e)
-    }
+    // Note: Conversation saving is now handled automatically by the backend
 
     // Add placeholder message for agent response
     const agentMsgId = Date.now()
@@ -557,7 +541,7 @@ export default function AgentPlayground({ user }) {
                     return updated
                   })
                 } else if (event.type === 'agent_run_complete') {
-                  // Mark streaming as complete and save final conversation
+                  // Mark streaming as complete - conversation saving is handled by backend
                   setMessages(prev => {
                     const updated = prev.map(msg =>
                       msg.ts === agentMsgId
@@ -565,18 +549,6 @@ export default function AgentPlayground({ user }) {
                         : msg
                     )
                     finalMessages = updated
-
-                    // Save the complete conversation with the final agent response
-                    agentRuntimeService.saveConversation({
-                      conversation_id: convId,
-                      agent_name: selected,
-                      messages: updated,
-                      uploaded_files: currentUploadedFiles,
-                      conv_id: convId,
-                      vector_collection_name: vectorCollectionName,
-                      title: generateTitle(updated)
-                    }, token).catch(e => console.error('Failed to save final conversation:', e))
-
                     return updated
                   })
                 } else if (event.type === 'error' || event.error) {
@@ -588,18 +560,6 @@ export default function AgentPlayground({ user }) {
                   setMessages(prev => {
                     const updated = [...prev, errorMsg]
                     finalMessages = updated
-
-                    // Save conversation with error message
-                    agentRuntimeService.saveConversation({
-                      conversation_id: convId,
-                      agent_name: selected,
-                      messages: updated,
-                      uploaded_files: currentUploadedFiles,
-                      conv_id: convId,
-                      vector_collection_name: vectorCollectionName,
-                      title: generateTitle(updated)
-                    }, token).catch(e => console.error('Failed to save conversation with error:', e))
-
                     return updated
                   })
                 }
@@ -619,18 +579,6 @@ export default function AgentPlayground({ user }) {
       const errorMsg = { role: 'system', content: `Error: ${e.message || e}`, ts: Date.now() }
       setMessages(prev => {
         const updated = prev.filter(msg => msg.ts !== agentMsgId).concat([errorMsg])
-
-        // Save conversation with error
-        agentRuntimeService.saveConversation({
-          conversation_id: convId,
-          agent_name: selected,
-          messages: updated,
-          uploaded_files: currentUploadedFiles,
-          conv_id: convId,
-          vector_collection_name: vectorCollectionName,
-          title: generateTitle(updated)
-        }, token).catch(e => console.error('Failed to save conversation with error:', e))
-
         return updated
       })
     } finally {
