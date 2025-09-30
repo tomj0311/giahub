@@ -12,67 +12,49 @@ import {
   Collapse,
   IconButton,
   alpha,
-  useTheme
+  useTheme,
+  Chip
 } from '@mui/material';
 import { 
   Play as PlayIcon, 
   RotateCcw as RefreshIcon, 
-  Code as CodeIcon, 
   Eye as PreviewIcon, 
   ChevronDown, 
   ChevronUp,
-  BookOpen as DocumentationIcon 
+  BookOpen as DocumentationIcon,
+  Sparkles as GenerateIcon
 } from 'lucide-react';
 import DynamicComponent from '../components/dynamic/DynamicComponent';
 import { useSnackbar } from '../contexts/SnackbarContext';
+import { agentRuntimeService } from '../services/agentRuntimeService';
 
 const DynamicComponentLoader = memo(function DynamicComponentLoader({ user }) {
 
   const theme = useTheme();
   const { showSuccess, showError, showWarning } = useSnackbar();
   
-  const [componentCode, setComponentCode] = useState('');
   const [renderedComponent, setRenderedComponent] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showDocumentation, setShowDocumentation] = useState(false);
+  
+  // Code generator states
+  const [cgPrompt, setCgPrompt] = useState('');
+  const [cgResponse, setCgResponse] = useState('');
+  const [cgLoading, setCgLoading] = useState(false);
+  const token = localStorage.getItem('token') || '';
 
   // Example component code for demonstration
-  const exampleCode = `const ExampleComponent = () => {
-  const [count, setCount] = React.useState(0);
-  
-  return (
-    <Card sx={{ maxWidth: 400, margin: 'auto' }}>
-      <CardContent>
-        <Typography variant="h5" component="div" gutterBottom>
-          Dynamic Counter Component
-        </Typography>
-        <Typography variant="h2" color="primary" align="center" sx={{ my: 2 }}>
-          {count}
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-          <Button 
-            variant="contained" 
-            onClick={() => setCount(count - 1)}
-            color="secondary"
-          >
-            Decrease
-          </Button>
-          <Button 
-            variant="contained" 
-            onClick={() => setCount(count + 1)}
-            color="primary"
-          >
-            Increase
-          </Button>
-        </Box>
-      </CardContent>
-    </Card>
-  );
-};`;
+  const examplePrompts = [
+    "Create a user profile card with avatar, name, email, and a follow button",
+    "Build a todo list component with add, delete, and mark complete functionality",
+    "Design a weather widget showing temperature, condition, and forecast",
+    "Create a product card for an e-commerce site with image, price, and add to cart button",
+    "Build a simple calculator with basic arithmetic operations"
+  ];
 
-  const handleApplyComponent = async () => {
-    if (!componentCode.trim()) {
-      showWarning('Please enter component code');
+  const handleApplyComponent = async (cleanedCode) => {
+    if (!cleanedCode.trim()) {
+      showWarning('No component code to apply');
       return;
     }
 
@@ -80,11 +62,11 @@ const DynamicComponentLoader = memo(function DynamicComponentLoader({ user }) {
     
     try {
       // Basic validation - check if code contains a component definition
-      if (!componentCode.includes('const') || !componentCode.includes('return')) {
+      if (!cleanedCode.includes('const') || !cleanedCode.includes('return')) {
         throw new Error('Component code must contain a component definition with return statement');
       }
       
-      setRenderedComponent(componentCode);
+      setRenderedComponent(cleanedCode);
       showSuccess('Component applied successfully');
     } catch (err) {
       showError(`Error validating component: ${err.message}`);
@@ -95,14 +77,113 @@ const DynamicComponentLoader = memo(function DynamicComponentLoader({ user }) {
   };
 
   const handleClearComponent = () => {
-    setComponentCode('');
     setRenderedComponent(null);
+    setCgResponse('');
+    setCgPrompt('');
     showSuccess('Component cleared');
   };
 
-  const handleLoadExample = () => {
-    setComponentCode(exampleCode);
-    showSuccess('Example component loaded');
+  const handleLoadExamplePrompt = (prompt) => {
+    setCgPrompt(prompt);
+    showSuccess('Example prompt loaded');
+  };
+
+  // Code generator: call backend exactly like XMLEditor
+  const handleCgSubmit = async (e) => {
+    e.preventDefault();
+    if (!cgPrompt.trim()) return;
+    setCgLoading(true);
+    setCgResponse('');
+
+    const agentName = 'JSX Component Generator';
+
+    try {
+      const response = await agentRuntimeService.runAgentStream(
+        {
+          agent_name: agentName,
+          prompt: cgPrompt,
+          conv_id: `dynamicloader_${Date.now()}`
+        },
+        token
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body available');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const event = JSON.parse(line.slice(6));
+
+              if (event.type === 'agent_chunk' && event.payload?.content) {
+                setCgResponse(prev => prev + event.payload.content);
+              } else if (event.type === 'error' || event.error) {
+                setCgResponse('Error: ' + (event.error || event.details?.message || 'Unknown error'));
+              }
+            } catch (parseError) {
+              console.warn('Failed to parse SSE event:', line, parseError);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      setCgResponse('Error: ' + (err.message || err));
+    } finally {
+      setCgLoading(false);
+    }
+  };
+
+  // Function to extract JSX code from markdown code blocks
+  const extractJSXFromMarkdown = (text) => {
+    if (!text) return '';
+    
+    console.log('🔍 Original text:', text);
+    
+    // Look for ```jsx or ```javascript or ``` code blocks
+    const codeBlockRegex = /```(?:jsx|javascript|js|react)?\s*\n?([\s\S]*?)```/g;
+    const matches = [...text.matchAll(codeBlockRegex)];
+    
+    if (matches.length > 0) {
+      // Return the content of the first code block
+      const extracted = matches[0][1].trim();
+      console.log('✅ Extracted from code block:', extracted);
+      return extracted;
+    }
+    
+    // If no code blocks found, try to find component definition directly
+    const componentMatch = text.match(/const\s+\w+\s*=[\s\S]*?return[\s\S]*?};/);
+    if (componentMatch) {
+      console.log('✅ Found component definition:', componentMatch[0]);
+      return componentMatch[0].trim();
+    }
+    
+    // If no patterns found, return the original text
+    console.log('⚠️ No code patterns found, returning original');
+    return text.trim();
+  };
+
+  const handleUseGeneratedCode = () => {
+    if (cgResponse.trim()) {
+      const cleanedCode = extractJSXFromMarkdown(cgResponse);
+      handleApplyComponent(cleanedCode);
+    }
   };
 
   return (
@@ -122,20 +203,20 @@ const DynamicComponentLoader = memo(function DynamicComponentLoader({ user }) {
               mb: 1
             }}
           >
-            Dynamic Component Loader
+            AI Component Generator
           </Typography>
           <Typography 
             variant="body1" 
             color="text.secondary"
             sx={{ maxWidth: 800 }}
           >
-            Paste your React component code below and click "Apply Component" to render it dynamically.
-            All Material-UI components and React hooks are available in the scope.
+            Describe the React component you want to create and let AI generate it for you.
+            All Material-UI components and React hooks are available in the generated components.
           </Typography>
         </Box>
 
         <Stack direction={{ xs: 'column', lg: 'row' }} spacing={3}>
-          {/* Code Input Section */}
+          {/* Code Generator Section */}
           <Box sx={{ flex: 1 }}>
             <Card sx={{ 
               bgcolor: theme.palette.background.paper,
@@ -144,84 +225,135 @@ const DynamicComponentLoader = memo(function DynamicComponentLoader({ user }) {
               <Box sx={{ 
                 p: 2, 
                 display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'space-between',
+                alignItems: 'center',
                 borderBottom: `1px solid ${alpha(theme.palette.divider, 0.12)}`
               }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <CodeIcon size={20} color={theme.palette.text.secondary} />
-                  <Typography variant="h6" fontWeight="bold">
-                    Component Code
-                  </Typography>
-                </Box>
-                <Button
-                  size="small"
-                  onClick={handleLoadExample}
-                  variant="outlined"
-                  sx={{ 
-                    textTransform: 'none',
-                    borderColor: alpha(theme.palette.primary.main, 0.3),
-                    '&:hover': {
-                      borderColor: theme.palette.primary.main,
-                      bgcolor: alpha(theme.palette.primary.main, 0.04)
-                    }
-                  }}
-                >
-                  Load Example
-                </Button>
+                <GenerateIcon size={20} color={theme.palette.text.secondary} />
+                <Typography variant="h6" fontWeight="bold" sx={{ ml: 1 }}>
+                  AI Component Generator
+                </Typography>
               </Box>
               
               <CardContent sx={{ p: 2 }}>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={20}
-                  variant="outlined"
-                  value={componentCode}
-                  onChange={(e) => setComponentCode(e.target.value)}
-                  placeholder="Paste your React component code here..."
-                  sx={{ 
-                    '& .MuiInputBase-input': {
-                      fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-                      fontSize: '0.875rem',
-                      lineHeight: 1.4
-                    },
-                    '& .MuiOutlinedInput-root': {
-                      bgcolor: alpha(theme.palette.action.hover, 0.3),
-                      '&:hover': {
-                        bgcolor: alpha(theme.palette.action.hover, 0.4)
-                      },
-                      '&.Mui-focused': {
-                        bgcolor: alpha(theme.palette.action.hover, 0.2)
-                      }
-                    }
-                  }}
-                />
-                
-                <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
-                  <Button
+                {/* Example Prompts */}
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                    Try these example prompts:
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {examplePrompts.slice(0, 3).map((prompt, index) => {
+                      const truncatedText = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
+                      return (
+                        <Chip
+                          key={index}
+                          label={truncatedText}
+                          onClick={() => handleLoadExamplePrompt(prompt)}
+                          variant="outlined"
+                          size="small"
+                          title={prompt}
+                          sx={{ 
+                            maxWidth: '180px',
+                            fontSize: '0.7rem',
+                            height: '24px',
+                            cursor: 'pointer',
+                            '& .MuiChip-label': {
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              paddingLeft: '8px',
+                              paddingRight: '8px'
+                            },
+                            '&:hover': {
+                              bgcolor: alpha(theme.palette.primary.main, 0.04),
+                              borderColor: theme.palette.primary.main
+                            }
+                          }}
+                        />
+                      );
+                    })}
+                  </Box>
+                </Box>
+
+                <form onSubmit={handleCgSubmit} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                  <TextField
+                    label="Describe the component you want to generate"
+                    variant="outlined"
+                    fullWidth
+                    multiline
+                    rows={4}
+                    value={cgPrompt}
+                    onChange={e => setCgPrompt(e.target.value)}
+                    placeholder="e.g., Create a user profile card with avatar, name, email, and a follow button"
+                    disabled={cgLoading}
+                    sx={{ mb: 2 }}
+                  />
+                  
+                  <Button 
+                    type="submit" 
                     variant="contained"
-                    startIcon={<PlayIcon size={18} />}
-                    onClick={handleApplyComponent}
-                    disabled={isLoading || !componentCode.trim()}
+                    disabled={cgLoading || !cgPrompt.trim()}
+                    startIcon={<GenerateIcon size={18} />}
                     sx={{ 
-                      minWidth: 150,
+                      alignSelf: 'flex-start',
+                      mb: 2,
                       textTransform: 'none',
                       fontWeight: 'bold'
                     }}
                   >
-                    {isLoading ? 'Applying...' : 'Apply Component'}
+                    {cgLoading ? 'Generating...' : 'Generate Component'}
                   </Button>
-                  <Button
+
+                  <TextField
+                    label="Generated Code"
                     variant="outlined"
-                    startIcon={<RefreshIcon size={18} />}
-                    onClick={handleClearComponent}
-                    disabled={!componentCode && !renderedComponent}
-                    sx={{ textTransform: 'none' }}
-                  >
-                    Clear
-                  </Button>
-                </Stack>
+                    multiline
+                    fullWidth
+                    value={cgResponse}
+                    onChange={(e) => setCgResponse(e.target.value)}
+                    placeholder="Generated component code will appear here..."
+                    rows={15}
+                    sx={{
+                      '& .MuiInputBase-input': {
+                        fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+                        fontSize: '0.875rem',
+                        lineHeight: 1.4
+                      }
+                    }}
+                  />
+                  
+                  <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+                    <Button 
+                      onClick={() => {
+                        if (cgResponse.trim()) {
+                          const cleanedCode = extractJSXFromMarkdown(cgResponse);
+                          handleApplyComponent(cleanedCode);
+                        }
+                      }}
+                      variant="contained"
+                      disabled={!cgResponse.trim() || isLoading}
+                      startIcon={<PlayIcon size={18} />}
+                      sx={{ 
+                        textTransform: 'none',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      Preview Component
+                    </Button>
+                    <Button 
+                      onClick={() => {
+                        setCgResponse('');
+                        setCgPrompt('');
+                        showSuccess('Generator cleared');
+                      }}
+                      variant="outlined"
+                      disabled={!cgResponse.trim() && !cgPrompt.trim()}
+                      startIcon={<RefreshIcon size={18} />}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      Clear All
+                    </Button>
+                  </Stack>
+                </form>
               </CardContent>
             </Card>
           </Box>
@@ -249,7 +381,6 @@ const DynamicComponentLoader = memo(function DynamicComponentLoader({ user }) {
                   <Paper sx={{ 
                     p: 2,
                     minHeight: 200,
-                    bgcolor: alpha(theme.palette.background.default, 0.6),
                     border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
                     borderRadius: 1
                   }}>
@@ -257,12 +388,11 @@ const DynamicComponentLoader = memo(function DynamicComponentLoader({ user }) {
                   </Paper>
                 ) : (
                   <Paper sx={{ 
-                    p: 4,
+                    p: 2,
                     minHeight: 200,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    bgcolor: alpha(theme.palette.action.hover, 0.3),
                     border: `2px dashed ${alpha(theme.palette.divider, 0.3)}`,
                     borderRadius: 1
                   }}>
@@ -317,41 +447,30 @@ const DynamicComponentLoader = memo(function DynamicComponentLoader({ user }) {
               <Stack spacing={2}>
                 <Box>
                   <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                    Component Requirements:
+                    How to Use:
                   </Typography>
                   <Box component="ul" sx={{ ml: 2, '& li': { mb: 0.5 } }}>
-                    <li>Define your component using <code>const ComponentName = () =&gt; {`{}`}</code> syntax</li>
-                    <li>Include a <code>return</code> statement with JSX</li>
-                    <li>All Material-UI components are available (Box, Button, Typography, etc.)</li>
-                    <li>React hooks are available (useState, useEffect, etc.)</li>
+                    <li>Describe the component you want in plain English</li>
+                    <li>Click "Generate Component" and wait for AI to create the code</li>
+                    <li>Click "Preview Component" to see your component in action</li>
+                    <li>All Material-UI components and React hooks are available</li>
                   </Box>
                 </Box>
                 
                 <Box>
                   <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                    Example Structure:
+                    Example Prompts:
                   </Typography>
                   <Paper sx={{ 
                     p: 2, 
-                    bgcolor: alpha(theme.palette.action.hover, 0.3),
-                    fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
                     fontSize: '0.875rem',
                     overflow: 'auto'
                   }}>
-                    <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
-{`const MyComponent = () => {
-  const [state, setState] = React.useState(initialValue);
-  
-  return (
-    <Box>
-      <Typography>Hello World</Typography>
-      <Button onClick={() => setState(newValue)}>
-        Click me
-      </Button>
-    </Box>
-  );
-};`}
-                    </pre>
+                    <Box component="ul" sx={{ m: 0, '& li': { mb: 1 } }}>
+                      {examplePrompts.map((prompt, index) => (
+                        <li key={index}>{prompt}</li>
+                      ))}
+                    </Box>
                   </Paper>
                 </Box>
               </Stack>

@@ -28,7 +28,7 @@ Forms, Tables, Dashboards, Modals, Navigation, Cards, Charts, Authentication, Fi
 
 **Validation:** Include real-time form validation with error states and user feedback
 
-**API Integration:** Use fetch with try-catch error handling and loading states
+**API Integration:** DO NOT USE ANY API CALLS
 
 **Accessibility:** Add ARIA labels, roles, keyboard navigation, and semantic structure
 
