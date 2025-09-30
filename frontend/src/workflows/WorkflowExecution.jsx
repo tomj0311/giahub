@@ -445,13 +445,50 @@ function WorkflowExecution({ user }) {
       return;
     }
     
+    // Only proceed if we have existing instance data to avoid unnecessary re-fetch
+    if (!selectedInstanceData) {
+      setError('Instance data not loaded. Please select an instance from the list first.');
+      setTimeout(() => setError(''), 4000);
+      return;
+    }
+    
     // Get the node ID from the BPMN node and store it
     const nodeId = node.id;
     setClickedTaskId(nodeId);
     
-    // Open the dialog for the pre-selected instance (force dialog open)
-    await handleInstanceClick(selectedInstanceForBpmn, true);
-  }, [selectedInstanceForBpmn, handleInstanceClick]);
+    // Use existing instance data to open dialog without re-fetching
+    const workflowData = selectedInstanceData;
+    
+    // Find pending tasks (status 16 = READY, status 128 = ERROR that might need intervention)
+    const pendingTasks = activeTasks.filter(taskData => 
+      taskData.status === 16 || taskData.status === 128
+    ).map(taskData => ({
+      taskId: taskData.taskId,
+      task_spec: taskData.taskSpec,
+      state: taskData.status,
+      taskType: taskData.status === 128 ? 'error' : 'pending',
+      data: taskData.task
+    }));
+
+    // Set up the selected instance data for the dialog using existing data
+    const instanceForDialog = {
+      instance_id: selectedInstanceForBpmn,
+      serialized_data: workflowData.serialized_data,
+      pendingTasks: pendingTasks,
+      ...workflowData // Include any other data from the instance
+    };
+
+    // Add task-specific data from serialized_data.spec.task_specs if available
+    if (workflowData.serialized_data?.spec?.task_specs) {
+      Object.keys(workflowData.serialized_data.spec.task_specs).forEach(taskSpec => {
+        const spec = workflowData.serialized_data.spec.task_specs[taskSpec];
+        instanceForDialog[taskSpec] = spec;
+      });
+    }
+
+    setSelectedInstance(instanceForDialog);
+    setDialogOpen(true);
+  }, [selectedInstanceForBpmn, selectedInstanceData, activeTasks]);
 
   // Handle Edit BPMN button click - navigate to BPMN editor with XML data
   const handleEditBPMN = useCallback(() => {
