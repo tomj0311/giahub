@@ -85,29 +85,16 @@ const ExampleComponent = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    
     if (!validateForm()) return;
-    
+
     setLoading(true);
     setSuccess(false);
-    
+    setErrors({});
+
     try {
-      const response = await fetch('/api/submit', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Submission failed');
-      }
-      
-      const result = await response.json();
       setSuccess(true);
-      setFormData({ name: '', email: '', amount: 0 });
-    } catch (error) {
+      setFormData({ username: '', email: '', amount: '' });
+    } catch {
       setErrors({ submit: 'Failed to submit form. Please try again.' });
     } finally {
       setLoading(false);
