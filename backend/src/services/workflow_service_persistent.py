@@ -39,6 +39,7 @@ logger.debug("[WORKFLOW] Persistent service module loaded")
 
 class WorkflowServicePersistent:
     """Service for handling BPMN workflow execution and management with state persistence"""
+    
     @classmethod
     async def execute_workflow_steps(cls, workflow, workflow_id, user, instance_id=None, bpmn_map=None):
         """SIMPLE: Execute workflow one step at a time, always update MongoDB"""

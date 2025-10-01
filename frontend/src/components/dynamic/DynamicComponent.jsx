@@ -2,6 +2,42 @@ import React from 'react';
 import { Alert, Box } from '@mui/material';
 import { MUIComponents } from './imports.js';
 
+// Error Boundary Component
+class ComponentErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('🚨 ComponentErrorBoundary caught an error:', error, errorInfo);
+    this.setState({
+      error: error,
+      errorInfo: errorInfo
+    });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return React.createElement(Alert, { 
+        severity: 'error',
+        sx: { mt: 2 }
+      }, [
+        React.createElement('strong', { key: 'title' }, 'Component Runtime Error: '),
+        this.state.error?.message || 'Unknown error occurred',
+        React.createElement('br', { key: 'br' }),
+        React.createElement('small', { key: 'details' }, 'Check console for detailed error information.')
+      ]);
+    }
+
+    return this.props.children;
+  }
+}
+
 // Load Babel standalone for JSX compilation
 const loadBabel = () => {
   return new Promise((resolve, reject) => {
@@ -32,20 +68,120 @@ const DynamicComponent = ({ componentCode, children }) => {
         setLoading(true);
         setError(null);
 
-        // Extract component name from code
-        const componentMatch = componentCode.match(/const\s+(\w+)\s*=/);
+        // Clean and preprocess the component code
+        let cleanedCode = componentCode
+          // Normalize line endings to Unix style
+          .replace(/\r\n/g, '\n')
+          .replace(/\r/g, '\n')
+          // Remove BOM (Byte Order Mark) if present
+          .replace(/^\uFEFF/, '')
+          // Remove zero-width characters that can cause parsing issues
+          .replace(/[\u200B-\u200D\uFEFF]/g, '')
+          // Normalize quotes (smart quotes to regular quotes)
+          .replace(/[""]/g, '"')
+          .replace(/['']/g, "'")
+          // Fix template literal syntax issues
+          .replace(/\\`/g, '`') // Fix escaped backticks
+          .replace(/\\{/g, '{') // Fix escaped braces in template literals
+          .replace(/\\}/g, '}') // Fix escaped braces in template literals
+          .replace(/\\\$/g, '$') // Fix escaped dollar signs
+          // Fix common syntax issues
+          .replace(/\s+;/g, ';') // Remove extra whitespace before semicolons
+          .replace(/;\s*}/g, ';}') // Ensure proper spacing around closing braces
+          .replace(/}\s*;\s*$/, '}') // Fix trailing semicolons after function definitions
+          // Remove any trailing whitespace
+          .trim();
+
+        // Ensure the component code ends with proper closing
+        if (!cleanedCode.endsWith(';') && !cleanedCode.endsWith('}')) {
+          cleanedCode += ';';
+        }
+
+        console.log('Original code length:', componentCode.length);
+        console.log('Cleaned code length:', cleanedCode.length);
+        console.log('First 200 chars of cleaned code:', cleanedCode.substring(0, 200));
+        console.log('Last 200 chars of cleaned code:', cleanedCode.substring(cleanedCode.length - 200));
+
+        // Extract component name from cleaned code
+        const componentMatch = cleanedCode.match(/const\s+(\w+)\s*=/);
         const componentName = componentMatch ? componentMatch[1] : 'DynamicComponent';
         
-  // removed component name debug log
+        console.log('Component name:', componentName);
 
         // Load Babel
         const Babel = await loadBabel();
-  // removed babel loaded log
+        console.log('Babel loaded successfully');
+
+        // Validate basic syntax before compilation
+        try {
+          // Check for balanced braces and brackets
+          const openBraces = (cleanedCode.match(/\{/g) || []).length;
+          const closeBraces = (cleanedCode.match(/\}/g) || []).length;
+          const openParens = (cleanedCode.match(/\(/g) || []).length;
+          const closeParens = (cleanedCode.match(/\)/g) || []).length;
+          
+          if (openBraces !== closeBraces) {
+            console.error('Brace analysis:');
+            console.error('Code snippet with line numbers:');
+            cleanedCode.split('\n').forEach((line, index) => {
+              const lineNum = index + 1;
+              const openCount = (line.match(/\{/g) || []).length;
+              const closeCount = (line.match(/\}/g) || []).length;
+              if (openCount > 0 || closeCount > 0) {
+                console.error(`Line ${lineNum}: { x${openCount}, } x${closeCount} - ${line.trim()}`);
+              }
+            });
+            throw new Error(`Syntax error: Mismatched braces. Found ${openBraces} opening braces and ${closeBraces} closing braces. Check console for line-by-line analysis.`);
+          }
+          if (openParens !== closeParens) {
+            throw new Error(`Syntax error: Mismatched parentheses. Found ${openParens} opening parentheses and ${closeParens} closing parentheses.`);
+          }
+
+          // Check if component is properly structured
+          if (!cleanedCode.includes('return')) {
+            throw new Error('Component must have a return statement');
+          }
+        } catch (syntaxError) {
+          throw new Error(`Pre-compilation validation failed: ${syntaxError.message}`);
+        }
 
         // Compile JSX to JavaScript
-        const compiledCode = Babel.transform(componentCode, {
-          presets: ['react']
-        }).code;
+        let compiledCode;
+        try {
+          compiledCode = Babel.transform(cleanedCode, {
+            presets: [
+              ['env', {
+                targets: {
+                  browsers: ['> 1%', 'last 2 versions']
+                }
+              }],
+              ['react', { 
+                runtime: 'classic'
+              }]
+            ],
+            filename: 'dynamic-component.jsx'
+          }).code;
+        } catch (babelError) {
+          // Enhanced error reporting for Babel compilation errors
+          console.error('Babel compilation error:', babelError);
+          
+          let errorMsg = babelError.message || 'Unknown compilation error';
+          let location = '';
+          
+          if (babelError.loc) {
+            location = ` at line ${babelError.loc.line}, column ${babelError.loc.column}`;
+            
+            // Show the problematic line
+            const lines = cleanedCode.split('\n');
+            const errorLine = lines[babelError.loc.line - 1];
+            if (errorLine) {
+              console.error(`Error line ${babelError.loc.line}: ${errorLine}`);
+              console.error(' '.repeat(babelError.loc.column - 1) + '^');
+            }
+          }
+          
+          throw new Error(`JSX compilation failed${location}: ${errorMsg}`);
+        }
 
   // removed compiled code log
 
@@ -64,6 +200,7 @@ const DynamicComponent = ({ componentCode, children }) => {
           Box: MUIComponents.Box,
           Card: MUIComponents.Card,
           CardContent: MUIComponents.CardContent,
+          CardActions: MUIComponents.CardActions,
           Typography: MUIComponents.Typography,
           Button: MUIComponents.Button,
           TextField: MUIComponents.TextField,
@@ -89,12 +226,22 @@ const DynamicComponent = ({ componentCode, children }) => {
           FormControlLabel: MUIComponents.FormControlLabel,
           Switch: MUIComponents.Switch,
           Slider: MUIComponents.Slider,
+          CircularProgress: MUIComponents.CircularProgress,
           console: {
             log: console.log,
             error: console.error,
             warn: console.warn
           }
         };
+
+        // Check for missing components before execution
+        const componentRegex = /<(\w+)[\s\/>]/g;
+        const usedComponents = [...cleanedCode.matchAll(componentRegex)].map(match => match[1]);
+        const missingComponents = usedComponents.filter(comp => !context[comp] && comp !== componentName);
+        
+        if (missingComponents.length > 0) {
+          throw new Error(`Missing components: ${missingComponents.join(', ')}. Available components: ${Object.keys(context).filter(key => key[0] === key[0].toUpperCase()).join(', ')}`);
+        }
 
         // Create function parameters and values
         const paramNames = Object.keys(context);
@@ -103,6 +250,21 @@ const DynamicComponent = ({ componentCode, children }) => {
         // Execute the compiled code
         const fn = new Function(...paramNames, compiledCode + `; return ${componentName};`);
         const ComponentConstructor = fn(...paramValues);
+
+        // Validate that we got a function back
+        if (typeof ComponentConstructor !== 'function') {
+          throw new Error(`Component "${componentName}" is not a valid React component function`);
+        }
+
+        // Test render the component to catch any runtime errors
+        try {
+          const testElement = React.createElement(ComponentConstructor);
+          if (!React.isValidElement(testElement)) {
+            throw new Error(`Component "${componentName}" does not return a valid React element`);
+          }
+        } catch (renderError) {
+          throw new Error(`Component rendering failed: ${renderError.message}`);
+        }
 
   // removed component constructor log
 
@@ -141,7 +303,9 @@ const DynamicComponent = ({ componentCode, children }) => {
   }
 
   if (component) {
-    return React.createElement(component);
+    return React.createElement(ComponentErrorBoundary, null,
+      React.createElement(component)
+    );
   }
 
   return React.createElement(Alert, { 
