@@ -703,15 +703,14 @@ function WorkflowExecution({ user }) {
                     {allWorkflows.map((wf) => (
                       <TableRow 
                         key={wf.instance_id} 
-                        hover 
                         sx={{ 
                           cursor: 'pointer',
                           backgroundColor: selectedInstanceForBpmn === wf.instance_id ? 
-                            alpha(theme.palette.primary.main, 0.1) : 'inherit',
+                            alpha(theme.palette.action.selected, 0.16) : 'inherit',
                           '&:hover': {
                             backgroundColor: selectedInstanceForBpmn === wf.instance_id ? 
-                              alpha(theme.palette.primary.main, 0.15) : 
-                              alpha(theme.palette.action.hover, 0.04)
+                              alpha(theme.palette.action.selected, 0.16) : 
+                              theme.palette.action.hover
                           }
                         }}
                         onClick={() => {

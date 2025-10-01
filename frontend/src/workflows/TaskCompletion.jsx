@@ -12,10 +12,8 @@ import {
   FormControlLabel,
   Checkbox,
   useTheme,
-  Chip,
-  Paper,
 } from '@mui/material';
-import { ArrowLeft, CheckCircle, Paperclip, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle } from 'lucide-react';
 import sharedApiService from '../utils/apiService';
 
 function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInstanceId, taskId: propTaskId, isDialog = false, onClose, onSuccess }) {
@@ -33,7 +31,6 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
   const [success, setSuccess] = useState(false);
   const [taskData, setTaskData] = useState(null);
   const [formData, setFormData] = useState({});
-  const [attachedFiles, setAttachedFiles] = useState([]);
 
   const token = useMemo(() => user?.token || localStorage.getItem('token'), [user?.token]);
   const headers = useMemo(
@@ -139,69 +136,10 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
     }));
   };
 
-  const handleFileAttachment = (event) => {
-    const newFiles = Array.from(event.target.files || []);
-    setAttachedFiles(prev => [...prev, ...newFiles]);
-    event.target.value = ''; // Reset input
-  };
-
-  const removeFile = (index) => {
-    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const uploadFiles = async () => {
-    if (attachedFiles.length === 0) return { success: true };
-
-    try {
-      const formData = new FormData();
-      const uploadPath = `task_${instanceId}`;
-      
-      // Add files to form data
-      attachedFiles.forEach(file => formData.append('files', file));
-
-      // Use upload endpoint with path parameter
-      const result = await sharedApiService.makeRequest(
-        `/api/upload/${uploadPath}`,
-        {
-          method: 'POST',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          body: formData
-        },
-        { path: uploadPath, files: attachedFiles.length, token: token?.substring(0, 10) }
-      );
-
-      if (result.success) {
-        console.log('✅ UPLOAD SUCCESS:', result.data);
-        return { success: true, data: result.data };
-      } else {
-        console.error('❌ UPLOAD FAILED:', result.error);
-        return { 
-          success: false, 
-          error: result.error || 'Upload failed'
-        };
-      }
-    } catch (error) {
-      console.error('💥 UPLOAD ERROR:', error);
-      return { 
-        success: false, 
-        error: error.message || 'Upload failed'
-      };
-    }
-  };
-
   const handleSubmit = async () => {
     try {
       setSubmitting(true);
       setError('');
-
-      // Upload files first if any
-      if (attachedFiles.length > 0) {
-        const uploadResult = await uploadFiles();
-        if (!uploadResult.success) {
-          setError(`File upload failed: ${uploadResult.error}`);
-          return;
-        }
-      }
 
       const submissionData = {
         data: formData,
@@ -374,49 +312,6 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
 
                   {!taskData.isCompleted && (
                     <>
-                      {/* File Attachment Section */}
-                      <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
-                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                          Attach Files
-                        </Typography>
-                        
-                        <input
-                          type="file"
-                          multiple
-                          style={{ display: 'none' }}
-                          id="task-file-upload"
-                          onChange={handleFileAttachment}
-                          accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"
-                        />
-                        <label htmlFor="task-file-upload">
-                          <Button
-                            component="span"
-                            variant="outlined"
-                            startIcon={<Paperclip size={16} />}
-                            disabled={submitting}
-                            sx={{ mb: 1 }}
-                          >
-                            Attach Files
-                          </Button>
-                        </label>
-
-                        {attachedFiles.length > 0 && (
-                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
-                            {attachedFiles.map((file, index) => (
-                              <Chip
-                                key={index}
-                                label={`${file.name} (${(file.size / 1024).toFixed(1)} KB)`}
-                                onDelete={() => removeFile(index)}
-                                deleteIcon={<X size={14} />}
-                                color="primary"
-                                variant="outlined"
-                                size="small"
-                              />
-                            ))}
-                          </Box>
-                        )}
-                      </Paper>
-
                       <Button
                         variant="contained"
                         size="large"
@@ -435,49 +330,6 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
                   <Typography color="text.secondary" sx={{ mb: 2 }}>
                     This task requires confirmation to proceed.
                   </Typography>
-
-                  {/* File Attachment Section */}
-                  <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                      Attach Files
-                    </Typography>
-                    
-                    <input
-                      type="file"
-                      multiple
-                      style={{ display: 'none' }}
-                      id="task-file-upload-confirm"
-                      onChange={handleFileAttachment}
-                      accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"
-                    />
-                    <label htmlFor="task-file-upload-confirm">
-                      <Button
-                        component="span"
-                        variant="outlined"
-                        startIcon={<Paperclip size={16} />}
-                        disabled={submitting}
-                        sx={{ mb: 1 }}
-                      >
-                        Attach Files
-                      </Button>
-                    </label>
-
-                    {attachedFiles.length > 0 && (
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
-                        {attachedFiles.map((file, index) => (
-                          <Chip
-                            key={index}
-                            label={`${file.name} (${(file.size / 1024).toFixed(1)} KB)`}
-                            onDelete={() => removeFile(index)}
-                            deleteIcon={<X size={14} />}
-                            color="primary"
-                            variant="outlined"
-                            size="small"
-                          />
-                        ))}
-                      </Box>
-                    )}
-                  </Paper>
 
                   <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                     <Button
