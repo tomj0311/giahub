@@ -9,15 +9,12 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
   const [position, setPosition] = useState({ x: window.innerWidth * 0.25, y: window.innerHeight * 0.2 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  // Accordion state: 0 = XML Editor, 1 = Code Generator, 2 = Assignee, 3 = XML Properties
+  // Accordion state: 0 = XML Editor, 1 = Code Generator, 2 = XML Properties
   const [accordionOpen, setAccordionOpen] = useState(0);
   // Code generator states
   const [cgPrompt, setCgPrompt] = useState('');
   const [cgResponse, setCgResponse] = useState('');
   const [cgLoading, setCgLoading] = useState(false);
-  // Assignee states
-  const [assigneeResourceRef, setAssigneeResourceRef] = useState('');
-  const [editablePotentialOwnerXml, setEditablePotentialOwnerXml] = useState('');
   // XML Properties states
   const [xmlProperties, setXmlProperties] = useState({
     userTask: {
@@ -226,37 +223,6 @@ ${potentialOwnerContent}
       const taskType = selectedNode?.data?.taskType || elementType;
       console.log('🎯 Task type:', taskType);
       
-      // Extract potentialOwner information
-      try {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(`<root>${xmlContent}</root>`, 'text/xml');
-        const potentialOwner = doc.querySelector('potentialOwner');
-        
-        if (potentialOwner) {
-          const resourceRef = potentialOwner.querySelector('resourceRef');
-          if (resourceRef) {
-            setAssigneeResourceRef(resourceRef.textContent || '');
-          }
-          
-          // Set editable potentialOwner inner XML
-          let innerXML = '';
-          for (let i = 0; i < potentialOwner.childNodes.length; i++) {
-            const child = potentialOwner.childNodes[i];
-            if (child.nodeType === Node.ELEMENT_NODE) {
-              const serializer = new XMLSerializer();
-              innerXML += serializer.serializeToString(child);
-            }
-          }
-          setEditablePotentialOwnerXml(formatXML(innerXML));
-        } else {
-          setAssigneeResourceRef('');
-          setEditablePotentialOwnerXml('');
-        }
-      } catch (error) {
-        console.error('Error parsing XML for potentialOwner:', error);
-        setAssigneeResourceRef('');
-      }
-      
       if (taskType === 'userTask') {
         // For UserTask, only show extensionElements content
         try {
@@ -288,7 +254,6 @@ ${potentialOwnerContent}
       parseXmlToProperties(xmlContent);
     } else {
       setEditedXml('');
-      setAssigneeResourceRef('');
     }
   }, [xmlContent, elementType, selectedNode]);
 
@@ -364,29 +329,6 @@ ${potentialOwnerContent}
 
   const handleCancel = () => {
     setEditedXml(xmlContent || '');
-    // Reset assignee to original value
-    if (xmlContent) {
-      try {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(`<root>${xmlContent}</root>`, 'text/xml');
-        const potentialOwner = doc.querySelector('potentialOwner');
-        
-        if (potentialOwner) {
-          const resourceRef = potentialOwner.querySelector('resourceRef');
-          if (resourceRef) {
-            setAssigneeResourceRef(resourceRef.textContent || '');
-          } else {
-            setAssigneeResourceRef('');
-          }
-        } else {
-          setAssigneeResourceRef('');
-        }
-      } catch (error) {
-        setAssigneeResourceRef('');
-      }
-    } else {
-      setAssigneeResourceRef('');
-    }
     onClose();
   };
 
@@ -396,10 +338,10 @@ ${potentialOwnerContent}
     console.log('🎯 Selected Node:', selectedNode);
     console.log('🔗 Selected Edge:', selectedEdge);
     
-    // SIMPLE RULE: Whatever is in the XML editor gets saved as finalXml
+    // ABSOLUTE RULE: Whatever is in the XML editor gets saved EXACTLY as is - NO MODIFICATIONS
     let finalXml = editedXml;
     
-    console.log('🔥 FINAL XML TO BE SAVED:', finalXml);
+    console.log('🔥 FINAL XML TO BE SAVED EXACTLY AS IS:', finalXml);
     
     // For gateway nodes, ALWAYS update the related sequence flows, not the gateway itself
     if (selectedNode && selectedNode.type && selectedNode.type.includes('gateway')) {
@@ -463,8 +405,8 @@ ${potentialOwnerContent}
           label: nodeData.name,
           documentation: nodeData.documentation,
           versionTag: nodeData.versionTag,
-          originalNestedElements: finalXml,
-          originalXML: finalXml
+          originalNestedElements: finalXml,  // EXACT XML from editor
+          originalXML: finalXml              // EXACT XML from editor
         }
       };
       console.log('🚀 CALLING onEdgeUpdate for single edge');
@@ -481,8 +423,8 @@ ${potentialOwnerContent}
           versionTag: nodeData?.versionTag || selectedNode.data?.versionTag,
           backgroundColor: nodeData?.backgroundColor || selectedNode.data?.backgroundColor,
           borderColor: nodeData?.borderColor || selectedNode.data?.borderColor,
-          originalNestedElements: finalXml,
-          originalXML: finalXml
+          originalNestedElements: finalXml,  // EXACT XML from editor - NO PROCESSING
+          originalXML: finalXml              // EXACT XML from editor - NO PROCESSING
         },
         style: {
           ...selectedNode.style,
@@ -490,11 +432,11 @@ ${potentialOwnerContent}
           borderColor: nodeData?.borderColor || selectedNode.style?.borderColor
         }
       };
-      console.log('🚀 CALLING onNodeUpdate with finalXml:', finalXml);
+      console.log('🚀 CALLING onNodeUpdate with EXACT finalXml from editor:', finalXml);
       onNodeUpdate(updatedNode);
     }
     
-    console.log('✅ XML EDITOR SAVE FUNCTION COMPLETED - finalXml saved to originalNestedElements:', finalXml);
+    console.log('✅ XML EDITOR SAVE COMPLETED - EXACT XML from editor saved to originalNestedElements:', finalXml);
     
     // Close the editor
     onClose();
@@ -690,35 +632,19 @@ ${potentialOwnerContent}
               }}
             >Code Generator</button>
             <button
-              onClick={() => toggleAccordion(3)}
+              onClick={() => toggleAccordion(2)}
               style={{
                 flex: 1,
-                background: accordionOpen === 3 ? 'var(--bg-secondary)' : 'var(--bg-primary)',
+                background: accordionOpen === 2 ? 'var(--bg-secondary)' : 'var(--bg-primary)',
                 color: 'var(--text-primary)',
                 border: 'none',
-                borderBottom: accordionOpen === 3 ? '2px solid var(--accent-color)' : 'none',
+                borderBottom: accordionOpen === 2 ? '2px solid var(--accent-color)' : 'none',
                 padding: '10px',
-                fontWeight: accordionOpen === 3 ? 'bold' : 'normal',
+                fontWeight: accordionOpen === 2 ? 'bold' : 'normal',
                 cursor: 'pointer',
                 borderRadius: '8px 8px 0 0'
               }}
             >XML Properties</button>
-            {((selectedNode?.data?.taskType || elementType) === 'userTask' || (selectedNode?.data?.taskType || elementType) === 'manualTask') && (
-              <button
-                onClick={() => toggleAccordion(2)}
-                style={{
-                  flex: 1,
-                  background: accordionOpen === 2 ? 'var(--bg-secondary)' : 'var(--bg-primary)',
-                  color: 'var(--text-primary)',
-                  border: 'none',
-                  borderBottom: accordionOpen === 2 ? '2px solid var(--accent-color)' : 'none',
-                  padding: '10px',
-                  fontWeight: accordionOpen === 2 ? 'bold' : 'normal',
-                  cursor: 'pointer',
-                  borderRadius: '8px 8px 0 0'
-                }}
-              >Assignee</button>
-            )}
           </div>
 
           {/* Accordion panels */}
@@ -956,115 +882,7 @@ ${potentialOwnerContent}
                 </Button>
               </form>
             )}
-            {accordionOpen === 2 && ((selectedNode?.data?.taskType || elementType) === 'userTask' || (selectedNode?.data?.taskType || elementType) === 'manualTask') && (
-              <>
-                <Typography variant="h6" gutterBottom sx={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 'bold' }}>
-                  Task Assignee
-                </Typography>
-                {(() => {
-                  try {
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(`<root>${xmlContent}</root>`, 'text/xml');
-                    const potentialOwner = doc.querySelector('potentialOwner');
-                    
-                    if (potentialOwner) {
-                      // Show inner XML of potentialOwner
-                      let innerXML = '';
-                      for (let i = 0; i < potentialOwner.childNodes.length; i++) {
-                        const child = potentialOwner.childNodes[i];
-                        if (child.nodeType === Node.ELEMENT_NODE) {
-                          const serializer = new XMLSerializer();
-                          innerXML += serializer.serializeToString(child);
-                        }
-                      }
-                      const formattedInnerXML = formatXML(innerXML);
-                      
-                      return (
-                        <>
-                          <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 2 }}>
-                            Edit potentialOwner inner XML:
-                          </Typography>
-                          <TextField
-                            multiline
-                            fullWidth
-                            value={editablePotentialOwnerXml}
-                            onChange={(e) => setEditablePotentialOwnerXml(e.target.value)}
-                            placeholder="Enter potentialOwner inner XML content..."
-                            sx={{
-                              '& .MuiInputBase-input': {
-                                fontFamily: 'monospace',
-                                fontSize: '13px',
-                                height: '150px !important',
-                                overflow: 'auto !important'
-                              }
-                            }}
-                          />
-                        </>
-                      );
-                    } else {
-                      // No potentialOwner, show text field
-                      return (
-                        <>
-                          <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 2 }}>
-                            Configure who this task is assigned to. This information will be saved as potentialOwner/resourceRef in the BPMN XML.
-                          </Typography>
-                          <TextField
-                            label="Resource Reference"
-                            variant="outlined"
-                            fullWidth
-                            value={assigneeResourceRef}
-                            onChange={(e) => setAssigneeResourceRef(e.target.value)}
-                            placeholder="e.g., User123, admin, etc."
-                            sx={{
-                              mb: 2,
-                              '& .MuiInputBase-input': {
-                                fontFamily: 'monospace',
-                                fontSize: '13px'
-                              }
-                            }}
-                          />
-                          {assigneeResourceRef && (
-                            <Box sx={{ 
-                              mt: 2, 
-                              p: 2, 
-                              backgroundColor: 'var(--bg-secondary)', 
-                              borderRadius: '4px',
-                              border: '1px solid var(--border-color)'
-                            }}>
-                              <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 1 }}>
-                                Preview XML:
-                              </Typography>
-                              <pre style={{ 
-                                margin: 0, 
-                                color: 'var(--text-primary)', 
-                                fontSize: '11px',
-                                fontFamily: 'monospace',
-                                whiteSpace: 'pre-wrap'
-                              }}>
-{`<potentialOwner>
-  <resourceRef>${assigneeResourceRef}</resourceRef>
-</potentialOwner>`}
-                              </pre>
-                            </Box>
-                          )}
-                        </>
-                      );
-                    }
-                  } catch (error) {
-                    return null;
-                  }
-                })()}
-                <Box sx={{ display: 'flex', gap: 1, mt: 2, justifyContent: 'flex-end' }}>
-                  <Button onClick={handleCancel} variant="outlined">
-                    Cancel
-                  </Button>
-                  <Button onClick={handleSave} variant="contained">
-                    SAVE CHANGES
-                  </Button>
-                </Box>
-              </>
-            )}
-            {accordionOpen === 3 && (
+            {accordionOpen === 2 && (
               <>
                 <Typography variant="h6" gutterBottom sx={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 'bold' }}>
                   XML Properties - {selectedNode?.data?.taskType || elementType}
