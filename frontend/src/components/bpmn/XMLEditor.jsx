@@ -9,8 +9,11 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
   const [position, setPosition] = useState({ x: window.innerWidth * 0.25, y: window.innerHeight * 0.2 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  // Accordion state: 0 = XML Editor, 1 = Code Generator, 2 = XML Properties
-  const [accordionOpen, setAccordionOpen] = useState(0);
+  const TAB_XML_PROPERTIES = 0;
+  const TAB_CODE_GENERATOR = 1;
+  const TAB_XML_EDITOR = 2;
+
+  const [accordionOpen, setAccordionOpen] = useState(TAB_XML_PROPERTIES);
   // Code generator states
   const [cgPrompt, setCgPrompt] = useState('');
   const [cgResponse, setCgResponse] = useState('');
@@ -604,52 +607,52 @@ ${potentialOwnerContent}
           {/* Accordion headers */}
           <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)' }}>
             <button
-              onClick={() => toggleAccordion(0)}
+              onClick={() => toggleAccordion(TAB_XML_PROPERTIES)}
               style={{
                 flex: 1,
-                background: accordionOpen === 0 ? 'var(--bg-secondary)' : 'var(--bg-primary)',
+                background: accordionOpen === TAB_XML_PROPERTIES ? 'var(--bg-secondary)' : 'var(--bg-primary)',
                 color: 'var(--text-primary)',
                 border: 'none',
-                borderBottom: accordionOpen === 0 ? '2px solid var(--accent-color)' : 'none',
+                borderBottom: accordionOpen === TAB_XML_PROPERTIES ? '2px solid var(--accent-color)' : 'none',
                 padding: '10px',
-                fontWeight: accordionOpen === 0 ? 'bold' : 'normal',
+                fontWeight: accordionOpen === TAB_XML_PROPERTIES ? 'bold' : 'normal',
                 cursor: 'pointer',
                 borderRadius: '8px 8px 0 0'
               }}
-            >XML Editor</button>
+            >XML Properties</button>
             <button
-              onClick={() => toggleAccordion(1)}
+              onClick={() => toggleAccordion(TAB_CODE_GENERATOR)}
               style={{
                 flex: 1,
-                background: accordionOpen === 1 ? 'var(--bg-secondary)' : 'var(--bg-primary)',
+                background: accordionOpen === TAB_CODE_GENERATOR ? 'var(--bg-secondary)' : 'var(--bg-primary)',
                 color: 'var(--text-primary)',
                 border: 'none',
-                borderBottom: accordionOpen === 1 ? '2px solid var(--accent-color)' : 'none',
+                borderBottom: accordionOpen === TAB_CODE_GENERATOR ? '2px solid var(--accent-color)' : 'none',
                 padding: '10px',
-                fontWeight: accordionOpen === 1 ? 'bold' : 'normal',
+                fontWeight: accordionOpen === TAB_CODE_GENERATOR ? 'bold' : 'normal',
                 cursor: 'pointer',
                 borderRadius: '8px 8px 0 0'
               }}
             >Code Generator</button>
             <button
-              onClick={() => toggleAccordion(2)}
+              onClick={() => toggleAccordion(TAB_XML_EDITOR)}
               style={{
                 flex: 1,
-                background: accordionOpen === 2 ? 'var(--bg-secondary)' : 'var(--bg-primary)',
+                background: accordionOpen === TAB_XML_EDITOR ? 'var(--bg-secondary)' : 'var(--bg-primary)',
                 color: 'var(--text-primary)',
                 border: 'none',
-                borderBottom: accordionOpen === 2 ? '2px solid var(--accent-color)' : 'none',
+                borderBottom: accordionOpen === TAB_XML_EDITOR ? '2px solid var(--accent-color)' : 'none',
                 padding: '10px',
-                fontWeight: accordionOpen === 2 ? 'bold' : 'normal',
+                fontWeight: accordionOpen === TAB_XML_EDITOR ? 'bold' : 'normal',
                 cursor: 'pointer',
                 borderRadius: '8px 8px 0 0'
               }}
-            >XML Properties</button>
+            >XML Editor</button>
           </div>
 
           {/* Accordion panels */}
           <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
-            {accordionOpen === 0 && (
+            {accordionOpen === TAB_XML_EDITOR && (
               <>
                 <TextField
                   multiline
@@ -676,7 +679,7 @@ ${potentialOwnerContent}
                 </Box>
               </>
             )}
-            {accordionOpen === 1 && (
+            {accordionOpen === TAB_CODE_GENERATOR && (
               <form onSubmit={handleCgSubmit} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <div style={{ color: 'var(--text-primary)', marginBottom: '10px' }}>
                   Agent: {selected || 'Python Code Generator'}
@@ -871,7 +874,7 @@ ${potentialOwnerContent}
                     // Parse the updated XML to sync with properties
                     parseXmlToProperties(formattedXml);
                     
-                    setAccordionOpen(0);
+                    setAccordionOpen(TAB_XML_EDITOR);
                     console.log('✅ [XML DEBUG] XML updated and set in editor, response cleared');
                   }} 
                   variant="contained"
@@ -882,7 +885,7 @@ ${potentialOwnerContent}
                 </Button>
               </form>
             )}
-            {accordionOpen === 2 && (
+            {accordionOpen === TAB_XML_PROPERTIES && (
               <>
                 <Typography variant="h6" gutterBottom sx={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 'bold' }}>
                   XML Properties - {selectedNode?.data?.taskType || elementType}
@@ -1469,7 +1472,7 @@ ${xmlProperties.scriptTask.scriptCode}
                       }
                       
                       setEditedXml(formatXML(generatedXml));
-                      setAccordionOpen(0); // Switch to XML Editor tab
+                      setAccordionOpen(TAB_XML_EDITOR); // Switch to XML Editor tab
                     }}
                     variant="contained"
                     color="primary"
