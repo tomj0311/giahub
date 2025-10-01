@@ -132,12 +132,12 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			order: 40,
 			children: [
 				{
-					label: 'Dynamic',
+					label: 'Generate UI Components',
 					to: '/dashboard/dynamic',
 					icon: 'Code'
 				},
 				{
-					label: 'Create BPMN Diagram',
+					label: 'Create Process Diagrams',
 					to: '/dashboard/bpmn',
 					icon: 'GitBranch'
 				},

@@ -22,6 +22,7 @@ import {
   ChevronDown, 
   ChevronUp,
   BookOpen as DocumentationIcon,
+  BookOpen,
   Sparkles as GenerateIcon
 } from 'lucide-react';
 import DynamicComponent from '../components/dynamic/DynamicComponent';
@@ -257,12 +258,16 @@ const DynamicComponentLoader = memo(function DynamicComponentLoader({ user }) {
           </Typography>
         </Box>
 
+        {/* Code Generator and Generated Code Section - Top Row */}
         <Stack direction={{ xs: 'column', lg: 'row' }} spacing={3}>
-          {/* Code Generator Section */}
+          {/* AI Component Generator Section */}
           <Box sx={{ flex: 1 }}>
             <Card sx={{ 
               bgcolor: theme.palette.background.paper,
-              border: `1px solid ${alpha(theme.palette.divider, 0.12)}`
+              border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column'
             }}>
               <Box sx={{ 
                 p: 2, 
@@ -276,7 +281,7 @@ const DynamicComponentLoader = memo(function DynamicComponentLoader({ user }) {
                 </Typography>
               </Box>
               
-              <CardContent sx={{ p: 2 }}>
+              <CardContent sx={{ p: 2, flex: 1, display: 'flex', flexDirection: 'column' }}>
                 {/* Example Prompts */}
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
@@ -316,13 +321,13 @@ const DynamicComponentLoader = memo(function DynamicComponentLoader({ user }) {
                   </Box>
                 </Box>
 
-                <form onSubmit={handleCgSubmit} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <form onSubmit={handleCgSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
                   <TextField
                     label="Describe the component you want to generate"
                     variant="outlined"
                     fullWidth
                     multiline
-                    rows={4}
+                    rows={2}
                     value={cgPrompt}
                     onChange={e => setCgPrompt(e.target.value)}
                     placeholder="e.g., Create a user profile card with avatar, name, email, and a follow button"
@@ -330,94 +335,33 @@ const DynamicComponentLoader = memo(function DynamicComponentLoader({ user }) {
                     sx={{ mb: 2 }}
                   />
                   
-                  <Button 
-                    type="submit" 
-                    variant="contained"
-                    disabled={cgLoading || !cgPrompt.trim()}
-                    startIcon={<GenerateIcon size={18} />}
-                    sx={{ 
-                      alignSelf: 'flex-start',
-                      mb: 2,
-                      textTransform: 'none',
-                      fontWeight: 'bold'
-                    }}
-                  >
-                    {cgLoading ? 'Generating...' : 'Generate Component'}
-                  </Button>
-
-                  <TextField
-                    label="Generated Code"
-                    variant="outlined"
-                    multiline
-                    fullWidth
-                    value={cgResponse}
-                    onChange={(e) => setCgResponse(e.target.value)}
-                    placeholder="Generated component code will appear here..."
-                    rows={15}
-                    sx={{
-                      '& .MuiInputBase-input': {
-                        fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-                        fontSize: '0.875rem',
-                        lineHeight: 1.4
-                      }
-                    }}
-                  />
-                  
-                  <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                     <Button 
-                      onClick={() => {
-                        if (cgResponse.trim()) {
-                          const cleanedCode = extractJSXFromMarkdown(cgResponse);
-                          handleApplyComponent(cleanedCode);
-                        }
-                      }}
+                      type="submit" 
                       variant="contained"
-                      disabled={!cgResponse.trim() || isLoading}
-                      startIcon={<PlayIcon size={18} />}
+                      disabled={cgLoading || !cgPrompt.trim()}
+                      startIcon={<GenerateIcon size={18} />}
                       sx={{ 
                         textTransform: 'none',
                         fontWeight: 'bold'
                       }}
                     >
-                      Preview Component
+                      {cgLoading ? 'Generating...' : 'Generate Component'}
                     </Button>
-                    <Button 
-                      onClick={() => {
-                        const fixedCode = handleFixSyntax(cgResponse);
-                        setCgResponse(fixedCode);
-                        showSuccess('Syntax issues fixed');
-                      }}
-                      variant="outlined"
-                      disabled={!cgResponse.trim()}
-                      startIcon={<RefreshIcon size={18} />}
-                      sx={{ textTransform: 'none' }}
-                    >
-                      Fix Syntax
-                    </Button>
-                    <Button 
-                      onClick={() => {
-                        setCgResponse('');
-                        setCgPrompt('');
-                        showSuccess('Generator cleared');
-                      }}
-                      variant="outlined"
-                      disabled={!cgResponse.trim() && !cgPrompt.trim()}
-                      startIcon={<RefreshIcon size={18} />}
-                      sx={{ textTransform: 'none' }}
-                    >
-                      Clear All
-                    </Button>
-                  </Stack>
+                  </Box>
                 </form>
               </CardContent>
             </Card>
           </Box>
 
-          {/* Preview Section */}
+          {/* Generated Code Section */}
           <Box sx={{ flex: 1 }}>
             <Card sx={{ 
               bgcolor: theme.palette.background.paper,
-              border: `1px solid ${alpha(theme.palette.divider, 0.12)}`
+              border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column'
             }}>
               <Box sx={{ 
                 p: 2, 
@@ -425,47 +369,86 @@ const DynamicComponentLoader = memo(function DynamicComponentLoader({ user }) {
                 alignItems: 'center',
                 borderBottom: `1px solid ${alpha(theme.palette.divider, 0.12)}`
               }}>
-                <PreviewIcon size={20} color={theme.palette.text.secondary} />
+                <BookOpen size={20} color={theme.palette.text.secondary} />
                 <Typography variant="h6" fontWeight="bold" sx={{ ml: 1 }}>
-                  Component Preview
+                  Generated Code
                 </Typography>
               </Box>
               
-              <CardContent sx={{ p: 2 }}>
-                {renderedComponent ? (
-                  <Paper sx={{ 
-                    p: 2,
-                    minHeight: 200,
-                    border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
-                    borderRadius: 1
-                  }}>
-                    <DynamicComponent componentCode={renderedComponent} />
-                  </Paper>
-                ) : (
-                  <Paper sx={{ 
-                    p: 2,
-                    minHeight: 200,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    border: `2px dashed ${alpha(theme.palette.divider, 0.3)}`,
-                    borderRadius: 1
-                  }}>
-                    <Typography 
-                      variant="body2" 
-                      color="text.secondary" 
-                      align="center"
-                      sx={{ lineHeight: 1.6 }}
-                    >
-                      Enter component code and click "Apply Component"<br />
-                      to see the preview here
-                    </Typography>
-                  </Paper>
-                )}
+              <CardContent sx={{ p: 2, flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <TextField
+                  label="Generated Code"
+                  variant="outlined"
+                  multiline
+                  fullWidth
+                  value={cgResponse}
+                  onChange={(e) => setCgResponse(e.target.value)}
+                  placeholder="Generated component code will appear here..."
+                  rows={12}
+                  sx={{
+                    mb: 2,
+                    flex: 1,
+                    '& .MuiInputBase-input': {
+                      fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+                      fontSize: '0.875rem',
+                      lineHeight: 1.4
+                    }
+                  }}
+                />
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <Button 
+                    onClick={() => {
+                      if (cgResponse.trim()) {
+                        const cleanedCode = extractJSXFromMarkdown(cgResponse);
+                        handleApplyComponent(cleanedCode);
+                      }
+                    }}
+                    variant="contained"
+                    disabled={!cgResponse.trim() || isLoading}
+                    startIcon={<PlayIcon size={18} />}
+                    sx={{ 
+                      textTransform: 'none',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    Preview Component
+                  </Button>
+                </Box>
               </CardContent>
             </Card>
           </Box>
         </Stack>
+
+        {/* Preview Section - Appears below after clicking Preview Component */}
+        {renderedComponent && (
+          <Card sx={{ 
+            bgcolor: theme.palette.background.paper,
+            border: `1px solid ${alpha(theme.palette.divider, 0.12)}`
+          }}>
+            <Box sx={{ 
+              p: 2, 
+              display: 'flex', 
+              alignItems: 'center',
+              borderBottom: `1px solid ${alpha(theme.palette.divider, 0.12)}`
+            }}>
+              <PreviewIcon size={20} color={theme.palette.text.secondary} />
+              <Typography variant="h6" fontWeight="bold" sx={{ ml: 1 }}>
+                Component Preview
+              </Typography>
+            </Box>
+            
+            <CardContent sx={{ p: 2 }}>
+              <Paper sx={{ 
+                p: 2,
+                minHeight: 200,
+                border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
+                borderRadius: 1
+              }}>
+                <DynamicComponent componentCode={renderedComponent} />
+              </Paper>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Documentation Section */}
         <Card sx={{ 
