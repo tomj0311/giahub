@@ -406,28 +406,15 @@ function WorkflowExecution({ user }) {
 
 
   const handleCloseDialog = useCallback(() => {
-    const instanceIdToRefresh = selectedInstance?.instance_id;
-    const shouldRefresh = instanceIdToRefresh === selectedInstanceForBpmn;
-    
     setDialogOpen(false);
     setSelectedInstance(null);
     setClickedTaskId(null); // Clear the clicked task ID
-    
-    // Wait 2 seconds then refresh the instance status to update BPMN colors
-    if (shouldRefresh) {
-      setTimeout(async () => {
-        // Refresh the selected instance to update BPMN task colors
-        await handleInstanceClick(instanceIdToRefresh, false);
-        // Also refresh the workflows list to update status
-        loadAllWorkflows(currentPage);
-      }, 2000);
-    }
     
     // Don't clear taskStatusData here - preserve BPMN coloring for the selected instance
     // Task status data should persist so users can see the colored diagram after closing the dialog
     // Keep the selectedInstanceForBpmn so user can still click on BPMN nodes
     // setSelectedInstanceForBpmn(null); // Uncomment if you want to clear selection on dialog close
-  }, [selectedInstance, selectedInstanceForBpmn, handleInstanceClick, loadAllWorkflows, currentPage]);
+  }, []);
 
   // Handle page change
   const handlePageChange = useCallback((event, page) => {
@@ -906,10 +893,6 @@ function WorkflowExecution({ user }) {
               onClose={handleCloseDialog}
               onSuccess={() => {
                 handleCloseDialog();
-                // Refresh the workflows list after successful task completion
-                setTimeout(() => {
-                  loadAllWorkflows(currentPage);
-                }, 1000);
               }}
             />
           )}
