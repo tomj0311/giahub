@@ -112,37 +112,9 @@ const DynamicComponent = ({ componentCode, children }) => {
         const Babel = await loadBabel();
         console.log('Babel loaded successfully');
 
-        // Validate basic syntax before compilation
-        try {
-          // Check for balanced braces and brackets
-          const openBraces = (cleanedCode.match(/\{/g) || []).length;
-          const closeBraces = (cleanedCode.match(/\}/g) || []).length;
-          const openParens = (cleanedCode.match(/\(/g) || []).length;
-          const closeParens = (cleanedCode.match(/\)/g) || []).length;
-          
-          if (openBraces !== closeBraces) {
-            console.error('Brace analysis:');
-            console.error('Code snippet with line numbers:');
-            cleanedCode.split('\n').forEach((line, index) => {
-              const lineNum = index + 1;
-              const openCount = (line.match(/\{/g) || []).length;
-              const closeCount = (line.match(/\}/g) || []).length;
-              if (openCount > 0 || closeCount > 0) {
-                console.error(`Line ${lineNum}: { x${openCount}, } x${closeCount} - ${line.trim()}`);
-              }
-            });
-            throw new Error(`Syntax error: Mismatched braces. Found ${openBraces} opening braces and ${closeBraces} closing braces. Check console for line-by-line analysis.`);
-          }
-          if (openParens !== closeParens) {
-            throw new Error(`Syntax error: Mismatched parentheses. Found ${openParens} opening parentheses and ${closeParens} closing parentheses.`);
-          }
-
-          // Check if component is properly structured
-          if (!cleanedCode.includes('return')) {
-            throw new Error('Component must have a return statement');
-          }
-        } catch (syntaxError) {
-          throw new Error(`Pre-compilation validation failed: ${syntaxError.message}`);
+        // Basic validation - just check for return statement
+        if (!cleanedCode.includes('return')) {
+          throw new Error('Component must have a return statement');
         }
 
         // Compile JSX to JavaScript

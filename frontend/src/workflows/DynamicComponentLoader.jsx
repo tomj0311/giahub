@@ -61,14 +61,10 @@ const DynamicComponentLoader = memo(function DynamicComponentLoader({ user }) {
     setIsLoading(true);
     
     try {
-      // Basic validation - check if code contains a component definition
-      if (!cleanedCode.includes('const') || !cleanedCode.includes('return')) {
-        throw new Error('Component code must contain a component definition with return statement');
-      }
-      
       setRenderedComponent(cleanedCode);
       showSuccess('Component applied successfully');
     } catch (err) {
+      console.error('❌ Component validation failed:', err);
       showError(`Error validating component: ${err.message}`);
       setRenderedComponent(null);
     } finally {
@@ -160,23 +156,48 @@ const DynamicComponentLoader = memo(function DynamicComponentLoader({ user }) {
     const codeBlockRegex = /```(?:jsx|javascript|js|react)?\s*\n?([\s\S]*?)```/g;
     const matches = [...text.matchAll(codeBlockRegex)];
     
+    let extractedCode = '';
+    
     if (matches.length > 0) {
       // Return the content of the first code block
-      const extracted = matches[0][1].trim();
-      console.log('✅ Extracted from code block:', extracted);
-      return extracted;
+      extractedCode = matches[0][1].trim();
+      console.log('✅ Extracted from code block:', extractedCode);
+    } else {
+      // If no code blocks found, try to find component definition directly
+      const componentMatch = text.match(/const\s+\w+\s*=[\s\S]*?return[\s\S]*?};?/);
+      if (componentMatch) {
+        extractedCode = componentMatch[0].trim();
+        console.log('✅ Found component definition:', extractedCode);
+      } else {
+        // If no patterns found, return the original text
+        extractedCode = text.trim();
+        console.log('⚠️ No code patterns found, returning original');
+      }
     }
     
-    // If no code blocks found, try to find component definition directly
-    const componentMatch = text.match(/const\s+\w+\s*=[\s\S]*?return[\s\S]*?};/);
-    if (componentMatch) {
-      console.log('✅ Found component definition:', componentMatch[0]);
-      return componentMatch[0].trim();
+    // Clean up the extracted code to fix common issues
+    let cleanedCode = extractedCode
+      // Remove any trailing semicolons after function definitions
+      .replace(/};\s*$/, '}')
+      // Ensure proper formatting for arrays and objects
+      .replace(/\]\s*>/g, ']\n>')
+      // Fix any malformed array/object syntax
+      .replace(/,\s*\]/g, '\n  ]')
+      .replace(/,\s*}/g, '\n  }');
+    
+    // Validate that the code has proper structure
+    if (cleanedCode.includes('const') && cleanedCode.includes('return')) {
+      // Ensure the component function is properly closed
+      const openBraces = (cleanedCode.match(/{/g) || []).length;
+      const closeBraces = (cleanedCode.match(/}/g) || []).length;
+      
+      if (openBraces > closeBraces) {
+        // Add missing closing braces
+        cleanedCode += '}'.repeat(openBraces - closeBraces);
+      }
     }
     
-    // If no patterns found, return the original text
-    console.log('⚠️ No code patterns found, returning original');
-    return text.trim();
+    return cleanedCode;
   };
 
   const handleUseGeneratedCode = () => {
@@ -184,6 +205,27 @@ const DynamicComponentLoader = memo(function DynamicComponentLoader({ user }) {
       const cleanedCode = extractJSXFromMarkdown(cgResponse);
       handleApplyComponent(cleanedCode);
     }
+  };
+
+  // Function to fix common syntax issues in manually entered code
+  const handleFixSyntax = (code) => {
+    if (!code) return '';
+    
+    return code
+      // Fix array closing issues
+      .replace(/\]\s*>\s*}/g, ']\n  }')
+      // Fix object property formatting
+      .replace(/,\s*\]/g, '\n  ]')
+      .replace(/,\s*}/g, '\n  }')
+      // Remove trailing semicolons after component definitions
+      .replace(/};\s*$/, '}')
+      // Ensure proper spacing around operators
+      .replace(/=>/g, ' => ')
+      // Fix missing spaces after commas in arrays/objects
+      .replace(/,([^\s])/g, ', $1')
+      // Fix template literal issues
+      .replace(/\\\$/g, '$')
+      .trim();
   };
 
   return (
@@ -338,6 +380,19 @@ const DynamicComponentLoader = memo(function DynamicComponentLoader({ user }) {
                       }}
                     >
                       Preview Component
+                    </Button>
+                    <Button 
+                      onClick={() => {
+                        const fixedCode = handleFixSyntax(cgResponse);
+                        setCgResponse(fixedCode);
+                        showSuccess('Syntax issues fixed');
+                      }}
+                      variant="outlined"
+                      disabled={!cgResponse.trim()}
+                      startIcon={<RefreshIcon size={18} />}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      Fix Syntax
                     </Button>
                     <Button 
                       onClick={() => {
