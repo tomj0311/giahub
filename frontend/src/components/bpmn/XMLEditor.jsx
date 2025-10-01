@@ -40,7 +40,7 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
       scriptCode: ''
     },
     gateway: {
-      conditions: [{ flowId: '', condition: '', name: '' }]
+      conditions: []
     }
   });
   // Sub-accordion state for UserTask sections
@@ -92,11 +92,14 @@ ${potentialOwnerContent}
       setEditedXml(formatXML(generatedXml));
     } else if (selectedNode?.type && selectedNode.type.includes('gateway')) {
       // Generate gateway sequence flows XML
-      const gatewayXml = xmlProperties.gateway.conditions.map(condition => 
-        condition.flowId ? `<sequenceFlow id="${condition.flowId}" sourceRef="${selectedNode.id}" targetRef="TARGET_REF" name="${condition.name}">
+      const validConditions = xmlProperties.gateway.conditions.filter(condition =>
+        condition.flowId?.trim() && condition.name?.trim() && condition.condition?.trim()
+      );
+      const gatewayXml = validConditions.map(condition => 
+        `<sequenceFlow id="${condition.flowId}" sourceRef="${selectedNode.id}" targetRef="TARGET_REF" name="${condition.name}">
   <conditionExpression xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xsi:type="tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">${condition.condition}</conditionExpression>
-</sequenceFlow>` : ''
-      ).filter(Boolean).join('\n');
+</sequenceFlow>`
+      ).join('\n');
       
       setEditedXml(formatXML(gatewayXml));
     }
@@ -182,13 +185,13 @@ ${potentialOwnerContent}
           flowId: flow.getAttribute('id') || '',
           name: flow.getAttribute('name') || '',
           condition: flow.querySelector('conditionExpression')?.textContent?.trim() || ''
-        }));
+        })).filter(flow => flow.name.trim() && flow.condition.trim());
         
         // Update gateway properties
         setXmlProperties(prev => ({
           ...prev,
           gateway: {
-            conditions: sequenceFlows.length > 0 ? sequenceFlows : [{ flowId: '', condition: '', name: '' }]
+            conditions: sequenceFlows
           }
         }));
       }
@@ -1320,68 +1323,74 @@ ${potentialOwnerContent}
                     <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
                       Sequence Flow Conditions:
                     </Typography>
-                    {xmlProperties.gateway.conditions.map((condition, index) => (
-                      <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <TextField
-                          size="small"
-                          label="Flow ID"
-                          value={condition.flowId}
-                          onChange={(e) => {
-                            const newConditions = [...xmlProperties.gateway.conditions];
-                            newConditions[index].flowId = e.target.value;
-                            setXmlProperties(prev => ({
-                              ...prev,
-                              gateway: { ...prev.gateway, conditions: newConditions }
-                            }));
-                            updateXmlFromProperties();
-                          }}
-                          sx={{ flex: 1 }}
-                        />
-                        <TextField
-                          size="small"
-                          label="Name"
-                          value={condition.name}
-                          onChange={(e) => {
-                            const newConditions = [...xmlProperties.gateway.conditions];
-                            newConditions[index].name = e.target.value;
-                            setXmlProperties(prev => ({
-                              ...prev,
-                              gateway: { ...prev.gateway, conditions: newConditions }
-                            }));
-                            updateXmlFromProperties();
-                          }}
-                          sx={{ flex: 1 }}
-                        />
-                        <TextField
-                          size="small"
-                          label="Condition"
-                          value={condition.condition}
-                          onChange={(e) => {
-                            const newConditions = [...xmlProperties.gateway.conditions];
-                            newConditions[index].condition = e.target.value;
-                            setXmlProperties(prev => ({
-                              ...prev,
-                              gateway: { ...prev.gateway, conditions: newConditions }
-                            }));
-                            updateXmlFromProperties();
-                          }}
-                          sx={{ flex: 2 }}
-                        />
-                        <button
-                          onClick={() => {
-                            const newConditions = xmlProperties.gateway.conditions.filter((_, i) => i !== index);
-                            setXmlProperties(prev => ({
-                              ...prev,
-                              gateway: { ...prev.gateway, conditions: newConditions }
-                            }));
-                            updateXmlFromProperties();
-                          }}
-                          style={{ background: 'red', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
+                    {xmlProperties.gateway.conditions.length === 0 ? (
+                      <Typography variant="body2" sx={{ color: 'var(--text-secondary)', opacity: 0.7, fontSize: '12px', fontStyle: 'italic' }}>
+                        No sequence flows detected in this gateway's XML.
+                      </Typography>
+                    ) : (
+                      xmlProperties.gateway.conditions.map((condition, index) => (
+                        <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <TextField
+                            size="small"
+                            label="Flow ID"
+                            value={condition.flowId}
+                            onChange={(e) => {
+                              const newConditions = [...xmlProperties.gateway.conditions];
+                              newConditions[index].flowId = e.target.value;
+                              setXmlProperties(prev => ({
+                                ...prev,
+                                gateway: { ...prev.gateway, conditions: newConditions }
+                              }));
+                              updateXmlFromProperties();
+                            }}
+                            sx={{ flex: 1 }}
+                          />
+                          <TextField
+                            size="small"
+                            label="Name"
+                            value={condition.name}
+                            onChange={(e) => {
+                              const newConditions = [...xmlProperties.gateway.conditions];
+                              newConditions[index].name = e.target.value;
+                              setXmlProperties(prev => ({
+                                ...prev,
+                                gateway: { ...prev.gateway, conditions: newConditions }
+                              }));
+                              updateXmlFromProperties();
+                            }}
+                            sx={{ flex: 1 }}
+                          />
+                          <TextField
+                            size="small"
+                            label="Condition"
+                            value={condition.condition}
+                            onChange={(e) => {
+                              const newConditions = [...xmlProperties.gateway.conditions];
+                              newConditions[index].condition = e.target.value;
+                              setXmlProperties(prev => ({
+                                ...prev,
+                                gateway: { ...prev.gateway, conditions: newConditions }
+                              }));
+                              updateXmlFromProperties();
+                            }}
+                            sx={{ flex: 2 }}
+                          />
+                          <button
+                            onClick={() => {
+                              const newConditions = xmlProperties.gateway.conditions.filter((_, i) => i !== index);
+                              setXmlProperties(prev => ({
+                                ...prev,
+                                gateway: { ...prev.gateway, conditions: newConditions }
+                              }));
+                              updateXmlFromProperties();
+                            }}
+                            style={{ background: 'red', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))
+                    )}
                     <Button
                       onClick={() => {
                         const newConditions = [...xmlProperties.gateway.conditions, { flowId: '', condition: '', name: '' }];
@@ -1464,11 +1473,14 @@ ${xmlProperties.serviceTask.headers.map(header =>
 ${xmlProperties.scriptTask.scriptCode}
 ]]></script>`;
                       } else if (selectedNode?.type && selectedNode.type.includes('gateway')) {
-                        generatedXml = xmlProperties.gateway.conditions.map(condition => 
-                          condition.flowId ? `<sequenceFlow id="${condition.flowId}" sourceRef="${selectedNode.id}" targetRef="TARGET_REF" name="${condition.name}">
+                        const validConditions = xmlProperties.gateway.conditions.filter(condition =>
+                          condition.flowId?.trim() && condition.name?.trim() && condition.condition?.trim()
+                        );
+                        generatedXml = validConditions.map(condition => 
+                          `<sequenceFlow id="${condition.flowId}" sourceRef="${selectedNode.id}" targetRef="TARGET_REF" name="${condition.name}">
   <conditionExpression xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xsi:type="tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">${condition.condition}</conditionExpression>
-</sequenceFlow>` : ''
-                        ).filter(Boolean).join('\n');
+</sequenceFlow>`
+                        ).join('\n');
                       }
                       
                       setEditedXml(formatXML(generatedXml));
