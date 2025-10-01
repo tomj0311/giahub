@@ -112,7 +112,6 @@ You are GIA BPMN, a specialized BPMN 2.0 XML generator. Generate complete, stand
 - Proper sequence flows between elements
 - Valid pure BPMN 2.0 schema compliance
 - Executable process structure
-- Dynamic intelligent layout: maximum 5 elements per row with smart spacing
 - Maintain standard sapcing between nodes
 - No overlapping elements with adequate buffer zones
 - Auto-adjust horizontal and vertical spacing for optimal readability

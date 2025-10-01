@@ -266,27 +266,32 @@ export function buildTheme(key) {
       }
     }
   };
-  // Center placeholder/text while preserving overall height (works for size=medium and size=small)
+  // Fix text field alignment and positioning
   theme.components.MuiOutlinedInput = {
     ...(theme.components.MuiOutlinedInput || {}),
     styleOverrides: {
       ...(theme.components.MuiOutlinedInput?.styleOverrides || {}),
       root: {
         ...(theme.components.MuiOutlinedInput?.styleOverrides?.root || {}),
-        alignItems: 'center',
+        '& .MuiOutlinedInput-input': {
+          padding: '16.5px 14px'
+        },
         '&.MuiInputBase-sizeSmall .MuiOutlinedInput-input': {
-          paddingTop: 16.5,
-          paddingBottom: 16.5
+          padding: '8.5px 14px'
         }
       },
       input: {
         ...(theme.components.MuiOutlinedInput?.styleOverrides?.input || {}),
-        paddingTop: 16.5,
-        paddingBottom: 16.5
+        height: 'auto',
+        padding: '16.5px 14px',
+        '&::placeholder': {
+          opacity: 0.6,
+          color: 'inherit'
+        }
       }
     }
   };
-  // Center the floating label inside outlined fields (affects visible label text)
+  // Fix input label positioning for outlined fields
   theme.components.MuiInputLabel = {
     ...(theme.components.MuiInputLabel || {}),
     styleOverrides: {
@@ -294,20 +299,30 @@ export function buildTheme(key) {
       root: {
         ...(theme.components.MuiInputLabel?.styleOverrides?.root || {}),
         '&.MuiInputLabel-outlined': {
+          position: 'absolute',
           top: '50%',
-          transform: 'translate(14px, -50%) scale(1)'
+          left: 14,
+          transform: 'translateY(-50%)',
+          transformOrigin: 'top left',
+          transition: 'color 200ms cubic-bezier(0.0, 0, 0.2, 1) 0ms,transform 200ms cubic-bezier(0.0, 0, 0.2, 1) 0ms,max-width 200ms cubic-bezier(0.0, 0, 0.2, 1) 0ms',
+          zIndex: 1,
+          pointerEvents: 'none',
+          maxWidth: 'calc(100% - 24px)'
         },
         '&.MuiInputLabel-outlined.MuiInputLabel-sizeSmall': {
           top: '50%',
-          transform: 'translate(14px, -50%) scale(1)'
+          transform: 'translateY(-50%)'
         },
         '&.MuiInputLabel-outlined.MuiInputLabel-shrink': {
           top: 0,
-          transform: 'translate(14px, -9px) scale(0.75)'
+          left: 14,
+          transform: 'translate(0, -9px) scale(0.75)',
+          transformOrigin: 'top left',
+          maxWidth: 'calc(133% - 24px)'
         },
         '&.MuiInputLabel-outlined.MuiInputLabel-sizeSmall.MuiInputLabel-shrink': {
           top: 0,
-          transform: 'translate(14px, -9px) scale(0.75)'
+          transform: 'translate(0, -9px) scale(0.75)'
         }
       }
     }

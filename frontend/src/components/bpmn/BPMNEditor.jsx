@@ -33,6 +33,7 @@ import TextAnnotationNode from './nodes/TextAnnotationNode';
 import ParticipantNode from './nodes/ParticipantNode';
 import LaneNode from './nodes/LaneNode';
 import PropertyPanel from './PropertyPanel';
+import XMLEditor from './XMLEditor';
 import './BPMNEditor.css';
 
 const nodeTypes = {
@@ -139,6 +140,11 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   const [isPropertyPanelOpen, setIsPropertyPanelOpen] = useState(false);
   const [userManuallyClosed, setUserManuallyClosed] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
+  
+  // XMLEditor state
+  const [isXmlEditorOpen, setIsXmlEditorOpen] = useState(false);
+  const [xmlContent, setXmlContent] = useState('');
+  
   const { project, fitView } = useReactFlow();
 
   // Get minio path from navigation state
@@ -786,6 +792,43 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
     setSelectedEdge(updatedEdge);
   }, [setEdges, saveToHistory, nodes, readOnly]);
 
+  // XMLEditor handlers
+  const handleXmlEditorOpen = useCallback((content) => {
+    setXmlContent(content || '');
+    setIsXmlEditorOpen(true);
+  }, []);
+
+  const handleXmlEditorClose = useCallback(() => {
+    setIsXmlEditorOpen(false);
+    setXmlContent('');
+  }, []);
+
+  const handleXmlUpdate = useCallback((updatedXml) => {
+    setXmlContent(updatedXml);
+    setIsXmlEditorOpen(false);
+    
+    // Auto-save when XML is updated from dialog
+    if (selectedNode) {
+      const updatedNode = {
+        ...selectedNode,
+        data: {
+          ...selectedNode.data,
+          originalNestedElements: updatedXml
+        }
+      };
+      handleNodeUpdate(updatedNode);
+    } else if (selectedEdge) {
+      const updatedEdge = {
+        ...selectedEdge,
+        data: {
+          ...selectedEdge.data,
+          originalNestedElements: updatedXml
+        }
+      };
+      handleEdgeUpdate(updatedEdge);
+    }
+  }, [selectedNode, selectedEdge, handleNodeUpdate, handleEdgeUpdate]);
+
   // Delete functionality - handle Delete key press
   const onKeyDown = useCallback((event) => {
     if (event.key === 'Delete' || event.key === 'Backspace') {
@@ -1089,8 +1132,38 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
             onToggle={handlePropertyPanelToggle}
             readOnly={readOnly}
             edges={edges}
+            onXmlEditorOpen={handleXmlEditorOpen}
           />
         )}
+        
+        {/* XMLEditor rendered at higher level */}
+        <XMLEditor
+          isOpen={isXmlEditorOpen}
+          onClose={handleXmlEditorClose}
+          xmlContent={xmlContent}
+          onUpdate={handleXmlUpdate}
+          elementType={selectedNode ? selectedNode.type : selectedEdge ? 'sequence flow' : 'element'}
+          selectedNode={selectedNode}
+          selectedEdge={selectedEdge}
+          onNodeUpdate={handleNodeUpdate}
+          onEdgeUpdate={handleEdgeUpdate}
+          edges={edges}
+          nodeData={selectedNode ? {
+            name: selectedNode.data.label || '',
+            id: selectedNode.id || '',
+            versionTag: selectedNode.data.versionTag || '',
+            documentation: selectedNode.data.documentation || '',
+            backgroundColor: selectedNode.style?.backgroundColor || selectedNode.data.backgroundColor || '',
+            borderColor: selectedNode.style?.borderColor || selectedNode.data.borderColor || ''
+          } : selectedEdge ? {
+            name: selectedEdge.data?.label || '',
+            id: selectedEdge.id || '',
+            versionTag: selectedEdge.data?.versionTag || '',
+            documentation: selectedEdge.data?.documentation || '',
+            backgroundColor: selectedEdge.style?.backgroundColor || selectedEdge.data?.backgroundColor || '',
+            borderColor: selectedEdge.style?.borderColor || selectedEdge.data?.borderColor || ''
+          } : {}}
+        />
       </div>
     </div>
   );

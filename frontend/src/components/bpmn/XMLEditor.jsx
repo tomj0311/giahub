@@ -9,7 +9,7 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
   const [position, setPosition] = useState({ x: window.innerWidth * 0.25, y: window.innerHeight * 0.2 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  // Accordion state: 0 = XML Editor, 1 = Code Generator, 2 = Assignee
+  // Accordion state: 0 = XML Editor, 1 = Code Generator, 2 = Assignee, 3 = XML Properties
   const [accordionOpen, setAccordionOpen] = useState(0);
   // Code generator states
   const [cgPrompt, setCgPrompt] = useState('');
@@ -18,6 +18,184 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
   // Assignee states
   const [assigneeResourceRef, setAssigneeResourceRef] = useState('');
   const [editablePotentialOwnerXml, setEditablePotentialOwnerXml] = useState('');
+  // XML Properties states
+  const [xmlProperties, setXmlProperties] = useState({
+    userTask: {
+      formData: {
+        formFields: [{ id: '', label: '', type: 'string', required: false }],
+        jsxCode: ''
+      },
+      potentialOwner: {
+        fields: [{ name: 'dueDate', value: '', type: 'datetime-local', label: 'Due Date' }]
+      }
+    },
+    serviceTask: {
+      endpoint: '',
+      method: 'POST',
+      timeout: '20000',
+      retryCount: '2',
+      headers: [{ name: 'Content-Type', value: 'application/json' }]
+    },
+    scriptTask: {
+      scriptCode: ''
+    },
+    gateway: {
+      conditions: [{ flowId: '', condition: '', name: '' }]
+    }
+  });
+  // Sub-accordion state for UserTask sections
+  const [userTaskAccordion, setUserTaskAccordion] = useState(0); // 0 = formData, 1 = potentialOwner
+
+  // Simple function to update XML from properties
+  const updateXmlFromProperties = () => {
+    const taskType = selectedNode?.data?.taskType || elementType;
+    
+    if (taskType === 'userTask') {
+      // Generate formData section
+      let formDataXml = `<extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+  <formData xmlns="http://example.org/form">
+    <scriptData xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+      <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+${xmlProperties.userTask.formData.jsxCode || '// JSX code will be generated here'}
+]]></script>
+    </scriptData>
+${xmlProperties.userTask.formData.formFields.map(field => 
+  field.id ? `    <formField id="${field.id}" label="${field.label}" type="${field.type}" required="${field.required}"/>` : ''
+).filter(Boolean).join('\n')}
+  </formData>
+</extensionElements>`;
+
+      // Generate potentialOwner section if any values are set
+      let potentialOwnerXml = '';
+      const potentialOwnerFields = xmlProperties.userTask.potentialOwner.fields.filter(field => field.value.trim());
+      
+      if (potentialOwnerFields.length > 0) {
+        let potentialOwnerContent = `  <extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+${potentialOwnerFields.map(field => {
+  if (field.name === 'dueDate') {
+    return `    <dueDate>${field.value}Z</dueDate>`;
+  } else if (field.name === 'userEmail') {
+    return `    <userEmail>${field.value}</userEmail>`;
+  } else {
+    return `    <${field.name}>${field.value}</${field.name}>`;
+  }
+}).join('\n')}
+  </extensionElements>`;
+        
+        potentialOwnerXml = `<potentialOwner>
+${potentialOwnerContent}
+</potentialOwner>`;
+      }
+
+      // Combine both sections
+      const generatedXml = potentialOwnerXml ? `${formDataXml}\n${potentialOwnerXml}` : formDataXml;
+      setEditedXml(formatXML(generatedXml));
+    } else if (selectedNode?.type && selectedNode.type.includes('gateway')) {
+      // Generate gateway sequence flows XML
+      const gatewayXml = xmlProperties.gateway.conditions.map(condition => 
+        condition.flowId ? `<sequenceFlow id="${condition.flowId}" sourceRef="${selectedNode.id}" targetRef="TARGET_REF" name="${condition.name}">
+  <conditionExpression xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xsi:type="tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">${condition.condition}</conditionExpression>
+</sequenceFlow>` : ''
+      ).filter(Boolean).join('\n');
+      
+      setEditedXml(formatXML(gatewayXml));
+    }
+  };
+
+  // Function to parse XML and update properties state
+  const parseXmlToProperties = (xmlContent) => {
+    console.log('🔍 PARSING XML TO PROPERTIES:', xmlContent);
+    if (!xmlContent) return;
+    
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(`<root>${xmlContent}</root>`, 'text/xml');
+      const taskType = selectedNode?.data?.taskType || elementType;
+      
+      if (taskType === 'userTask') {
+        // Parse formData
+        const scriptElement = doc.querySelector('script');
+        const jsxCode = scriptElement ? scriptElement.textContent.trim() : '';
+        
+        const formFields = Array.from(doc.querySelectorAll('formField')).map(field => ({
+          id: field.getAttribute('id') || '',
+          label: field.getAttribute('label') || '',
+          type: field.getAttribute('type') || 'string',
+          required: field.getAttribute('required') === 'true'
+        }));
+        
+        // Parse potentialOwner
+        const potentialOwnerFields = [];
+        const potentialOwner = doc.querySelector('potentialOwner');
+        console.log('🎯 Found potentialOwner:', !!potentialOwner);
+        
+        if (potentialOwner) {
+          // Get extensionElements inside potentialOwner
+          const extensionElements = potentialOwner.querySelector('extensionElements');
+          console.log('📦 Found extensionElements:', !!extensionElements);
+          
+          if (extensionElements) {
+            console.log('🔢 extensionElements children count:', extensionElements.children.length);
+            // Parse ALL child elements, not just specific ones
+            for (let i = 0; i < extensionElements.children.length; i++) {
+              const element = extensionElements.children[i];
+              const tagName = element.tagName;
+              const value = element.textContent;
+              
+              console.log(`🏷️ Found element: ${tagName} = ${value}`);
+              
+              potentialOwnerFields.push({
+                name: tagName,
+                value: value,
+                type: 'text',
+                label: tagName
+              });
+            }
+          }
+        }
+        
+        console.log('📋 Final potentialOwnerFields:', potentialOwnerFields);
+        
+        // Ensure at least one field exists
+        if (potentialOwnerFields.length === 0) {
+          potentialOwnerFields.push({ name: 'dueDate', value: '', type: 'datetime-local', label: 'Due Date' });
+        }
+        
+        console.log('🔄 About to set state with fields:', potentialOwnerFields);
+        
+        // Update state
+        setXmlProperties(prev => ({
+          ...prev,
+          userTask: {
+            formData: {
+              formFields: formFields.length > 0 ? formFields : [{ id: '', label: '', type: 'string', required: false }],
+              jsxCode: jsxCode
+            },
+            potentialOwner: {
+              fields: potentialOwnerFields
+            }
+          }
+        }));
+      } else if (selectedNode?.type && selectedNode.type.includes('gateway')) {
+        // Parse gateway sequence flows
+        const sequenceFlows = Array.from(doc.querySelectorAll('sequenceFlow')).map(flow => ({
+          flowId: flow.getAttribute('id') || '',
+          name: flow.getAttribute('name') || '',
+          condition: flow.querySelector('conditionExpression')?.textContent?.trim() || ''
+        }));
+        
+        // Update gateway properties
+        setXmlProperties(prev => ({
+          ...prev,
+          gateway: {
+            conditions: sequenceFlows.length > 0 ? sequenceFlows : [{ flowId: '', condition: '', name: '' }]
+          }
+        }));
+      }
+    } catch (error) {
+      console.error('Error parsing XML to properties:', error);
+    }
+  };
   // Agent loading exactly like AgentPlayground
   const [selected, setSelected] = useState(null);
   const token = localStorage.getItem('token') || '';
@@ -39,12 +217,14 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
   }, [elementType, selectedNode]);
 
   useEffect(() => {
+    console.log('🚀 XMLEditor useEffect triggered with xmlContent:', xmlContent);
     if (xmlContent && 
         !xmlContent.includes('No XML data available') && 
         !xmlContent.includes('originalNestedElements not found') &&
         !xmlContent.includes('No inner elements found')) {
       
       const taskType = selectedNode?.data?.taskType || elementType;
+      console.log('🎯 Task type:', taskType);
       
       // Extract potentialOwner information
       try {
@@ -103,11 +283,21 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
         const formatted = formatXML(xmlContent);
         setEditedXml(formatted);
       }
+      
+      // Parse XML to populate properties ONLY ONCE when content loads
+      parseXmlToProperties(xmlContent);
     } else {
       setEditedXml('');
       setAssigneeResourceRef('');
     }
   }, [xmlContent, elementType, selectedNode]);
+
+  // Watch for changes in editedXml and update properties - REMOVED AUTO PARSING
+  // useEffect(() => {
+  //   if (editedXml && accordionOpen === 3) { 
+  //     parseXmlToProperties(editedXml);
+  //   }
+  // }, [editedXml, accordionOpen]);
 
   const formatXML = (xml) => {
     if (!xml) return '';
@@ -201,54 +391,15 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
   };
 
   const handleSave = () => {
-    console.log('� XML EDITOR SAVE BUTTON CLICKED!');
-    console.log('�📝 Current editedXml:', editedXml);
-    console.log('👤 Current assigneeResourceRef:', assigneeResourceRef);
+    console.log('🔥 XML EDITOR SAVE BUTTON CLICKED!');
+    console.log('📝 Current editedXml:', editedXml);
     console.log('🎯 Selected Node:', selectedNode);
     console.log('🔗 Selected Edge:', selectedEdge);
     
-    // Combine editedXml with assignee information
+    // SIMPLE RULE: Whatever is in the XML editor gets saved as finalXml
     let finalXml = editedXml;
     
-    // Handle potentialOwner from the editable XML
-    if (editablePotentialOwnerXml.trim()) {
-      // Check if editedXml already contains potentialOwner
-      const hasPotentialOwner = editedXml.includes('<potentialOwner>');
-      
-      if (!hasPotentialOwner) {
-        const potentialOwnerXml = `<potentialOwner>
-${editablePotentialOwnerXml}
-</potentialOwner>`;
-        finalXml = finalXml ? `${finalXml}\n${potentialOwnerXml}` : potentialOwnerXml;
-      } else {
-        // Replace existing potentialOwner with updated one
-        const potentialOwnerRegex = /<potentialOwner>[\s\S]*?<\/potentialOwner>/;
-        const newPotentialOwnerXml = `<potentialOwner>
-${editablePotentialOwnerXml}
-</potentialOwner>`;
-        finalXml = finalXml.replace(potentialOwnerRegex, newPotentialOwnerXml);
-      }
-    } else if (assigneeResourceRef.trim()) {
-      // Fallback to assigneeResourceRef if no editable XML
-      const hasPotentialOwner = editedXml.includes('<potentialOwner>');
-      
-      if (!hasPotentialOwner) {
-        const potentialOwnerXml = `<potentialOwner>
-  <resourceRef>${assigneeResourceRef}</resourceRef>
-</potentialOwner>`;
-        finalXml = finalXml ? `${finalXml}\n${potentialOwnerXml}` : potentialOwnerXml;
-      } else {
-        const potentialOwnerRegex = /<potentialOwner>[\s\S]*?<\/potentialOwner>/;
-        const newPotentialOwnerXml = `<potentialOwner>
-  <resourceRef>${assigneeResourceRef}</resourceRef>
-</potentialOwner>`;
-        finalXml = finalXml.replace(potentialOwnerRegex, newPotentialOwnerXml);
-      }
-    } else {
-      // Remove potentialOwner if both are empty
-      const potentialOwnerRegex = /<potentialOwner>[\s\S]*?<\/potentialOwner>\s*/g;
-      finalXml = finalXml.replace(potentialOwnerRegex, '');
-    }
+    console.log('🔥 FINAL XML TO BE SAVED:', finalXml);
     
     // For gateway nodes, ALWAYS update the related sequence flows, not the gateway itself
     if (selectedNode && selectedNode.type && selectedNode.type.includes('gateway')) {
@@ -325,24 +476,25 @@ ${editablePotentialOwnerXml}
         ...selectedNode,
         data: {
           ...selectedNode.data,
-          label: nodeData.name,
-          documentation: nodeData.documentation,
-          versionTag: nodeData.versionTag,
-          backgroundColor: nodeData.backgroundColor,
-          borderColor: nodeData.borderColor,
-          originalNestedElements: finalXml
+          label: nodeData?.name || selectedNode.data?.name,
+          documentation: nodeData?.documentation || selectedNode.data?.documentation,
+          versionTag: nodeData?.versionTag || selectedNode.data?.versionTag,
+          backgroundColor: nodeData?.backgroundColor || selectedNode.data?.backgroundColor,
+          borderColor: nodeData?.borderColor || selectedNode.data?.borderColor,
+          originalNestedElements: finalXml,
+          originalXML: finalXml
         },
         style: {
           ...selectedNode.style,
-          backgroundColor: nodeData.backgroundColor || selectedNode.style?.backgroundColor,
-          borderColor: nodeData.borderColor || selectedNode.style?.borderColor
+          backgroundColor: nodeData?.backgroundColor || selectedNode.style?.backgroundColor,
+          borderColor: nodeData?.borderColor || selectedNode.style?.borderColor
         }
       };
-      console.log('🚀 CALLING onNodeUpdate');
+      console.log('🚀 CALLING onNodeUpdate with finalXml:', finalXml);
       onNodeUpdate(updatedNode);
     }
     
-    console.log('✅ XML EDITOR SAVE FUNCTION COMPLETED');
+    console.log('✅ XML EDITOR SAVE FUNCTION COMPLETED - finalXml saved to originalNestedElements:', finalXml);
     
     // Close the editor
     onClose();
@@ -470,10 +622,10 @@ ${editablePotentialOwnerXml}
     }}>
       <div style={{
         position: 'absolute',
-        left: position.x,
-        top: position.y,
-        width: '50vw',
-        height: '60vh',
+        left: position.x-200,
+        top: position.y-100,
+        width: '60vw',
+        height: '70vh',
         background: 'var(--bg-primary)',
         border: '1px solid var(--border-color)',
         borderRadius: '8px',
@@ -537,6 +689,20 @@ ${editablePotentialOwnerXml}
                 borderRadius: '8px 8px 0 0'
               }}
             >Code Generator</button>
+            <button
+              onClick={() => toggleAccordion(3)}
+              style={{
+                flex: 1,
+                background: accordionOpen === 3 ? 'var(--bg-secondary)' : 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                border: 'none',
+                borderBottom: accordionOpen === 3 ? '2px solid var(--accent-color)' : 'none',
+                padding: '10px',
+                fontWeight: accordionOpen === 3 ? 'bold' : 'normal',
+                cursor: 'pointer',
+                borderRadius: '8px 8px 0 0'
+              }}
+            >XML Properties</button>
             {((selectedNode?.data?.taskType || elementType) === 'userTask' || (selectedNode?.data?.taskType || elementType) === 'manualTask') && (
               <button
                 onClick={() => toggleAccordion(2)}
@@ -775,6 +941,10 @@ ${editablePotentialOwnerXml}
                     const formattedXml = formatXML(updatedXml);
                     setEditedXml(formattedXml);
                     setCgResponse('');
+                    
+                    // Parse the updated XML to sync with properties
+                    parseXmlToProperties(formattedXml);
+                    
                     setAccordionOpen(0);
                     console.log('✅ [XML DEBUG] XML updated and set in editor, response cleared');
                   }} 
@@ -885,6 +1055,609 @@ ${editablePotentialOwnerXml}
                   }
                 })()}
                 <Box sx={{ display: 'flex', gap: 1, mt: 2, justifyContent: 'flex-end' }}>
+                  <Button onClick={handleCancel} variant="outlined">
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSave} variant="contained">
+                    SAVE CHANGES
+                  </Button>
+                </Box>
+              </>
+            )}
+            {accordionOpen === 3 && (
+              <>
+                <Typography variant="h6" gutterBottom sx={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 'bold' }}>
+                  XML Properties - {selectedNode?.data?.taskType || elementType}
+                </Typography>
+                
+                {/* UserTask Properties */}
+                {(selectedNode?.data?.taskType || elementType) === 'userTask' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {/* Sub-accordion headers */}
+                    <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)' }}>
+                      <button
+                        onClick={() => setUserTaskAccordion(0)}
+                        style={{
+                          flex: 1,
+                          background: userTaskAccordion === 0 ? 'var(--bg-secondary)' : 'var(--bg-primary)',
+                          color: 'var(--text-primary)',
+                          border: 'none',
+                          borderBottom: userTaskAccordion === 0 ? '2px solid var(--accent-color)' : 'none',
+                          padding: '8px',
+                          fontWeight: userTaskAccordion === 0 ? 'bold' : 'normal',
+                          cursor: 'pointer',
+                          fontSize: '12px'
+                        }}
+                      >Form Data</button>
+                      <button
+                        onClick={() => setUserTaskAccordion(1)}
+                        style={{
+                          flex: 1,
+                          background: userTaskAccordion === 1 ? 'var(--bg-secondary)' : 'var(--bg-primary)',
+                          color: 'var(--text-primary)',
+                          border: 'none',
+                          borderBottom: userTaskAccordion === 1 ? '2px solid var(--accent-color)' : 'none',
+                          padding: '8px',
+                          fontWeight: userTaskAccordion === 1 ? 'bold' : 'normal',
+                          cursor: 'pointer',
+                          fontSize: '12px'
+                        }}
+                      >Potential Owner</button>
+                    </div>
+                    
+                    {/* Form Data Section */}
+                    {userTaskAccordion === 0 && (
+                      <div style={{ padding: '12px 0' }}>
+                        <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 1 }}>
+                          Form Fields:
+                        </Typography>
+                        {xmlProperties.userTask.formData.formFields.map((field, index) => (
+                          <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                            <TextField
+                              size="small"
+                              label="ID"
+                              value={field.id}
+                              onChange={(e) => {
+                                const newFields = [...xmlProperties.userTask.formData.formFields];
+                                newFields[index].id = e.target.value;
+                                setXmlProperties(prev => ({
+                                  ...prev,
+                                  userTask: { 
+                                    ...prev.userTask, 
+                                    formData: { ...prev.userTask.formData, formFields: newFields }
+                                  }
+                                }));
+                                updateXmlFromProperties();
+                              }}
+                              sx={{ flex: 1 }}
+                            />
+                            <TextField
+                              size="small"
+                              label="Label"
+                              value={field.label}
+                              onChange={(e) => {
+                                const newFields = [...xmlProperties.userTask.formData.formFields];
+                                newFields[index].label = e.target.value;
+                                setXmlProperties(prev => ({
+                                  ...prev,
+                                  userTask: { 
+                                    ...prev.userTask, 
+                                    formData: { ...prev.userTask.formData, formFields: newFields }
+                                  }
+                                }));
+                                updateXmlFromProperties();
+                              }}
+                              sx={{ flex: 1 }}
+                            />
+                            <TextField
+                              size="small"
+                              select
+                              label="Type"
+                              value={field.type}
+                              onChange={(e) => {
+                                const newFields = [...xmlProperties.userTask.formData.formFields];
+                                newFields[index].type = e.target.value;
+                                setXmlProperties(prev => ({
+                                  ...prev,
+                                  userTask: { 
+                                    ...prev.userTask, 
+                                    formData: { ...prev.userTask.formData, formFields: newFields }
+                                  }
+                                }));
+                                updateXmlFromProperties();
+                              }}
+                              SelectProps={{ native: true }}
+                              sx={{ flex: 1 }}
+                            >
+                              <option value="string">String</option>
+                              <option value="number">Number</option>
+                              <option value="boolean">Boolean</option>
+                            </TextField>
+                            <label style={{ display: 'flex', alignItems: 'center', fontSize: '12px' }}>
+                              <input
+                                type="checkbox"
+                                checked={field.required}
+                                onChange={(e) => {
+                                  const newFields = [...xmlProperties.userTask.formData.formFields];
+                                  newFields[index].required = e.target.checked;
+                                  setXmlProperties(prev => ({
+                                    ...prev,
+                                    userTask: { 
+                                      ...prev.userTask, 
+                                      formData: { ...prev.userTask.formData, formFields: newFields }
+                                    }
+                                  }));
+                                  updateXmlFromProperties();
+                                }}
+                                style={{ marginRight: '4px' }}
+                              />
+                              Required
+                            </label>
+                            <button
+                              onClick={() => {
+                                const newFields = xmlProperties.userTask.formData.formFields.filter((_, i) => i !== index);
+                                setXmlProperties(prev => ({
+                                  ...prev,
+                                  userTask: { 
+                                    ...prev.userTask, 
+                                    formData: { ...prev.userTask.formData, formFields: newFields }
+                                  }
+                                }));
+                                updateXmlFromProperties();
+                              }}
+                              style={{ background: 'red', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                        <Button
+                          onClick={() => {
+                            const newFields = [...xmlProperties.userTask.formData.formFields, { id: '', label: '', type: 'string', required: false }];
+                            setXmlProperties(prev => ({
+                              ...prev,
+                              userTask: { 
+                                ...prev.userTask, 
+                                formData: { ...prev.userTask.formData, formFields: newFields }
+                              }
+                            }));
+                            updateXmlFromProperties();
+                          }}
+                          variant="outlined"
+                          size="small"
+                        >
+                          Add Field
+                        </Button>
+                        
+                        <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 2, mt: 2 }}>
+                          JSX Code:
+                        </Typography>
+                        <TextField
+                          multiline
+                          fullWidth
+                          label="React JSX Code"
+                          value={xmlProperties.userTask.formData.jsxCode}
+                          onChange={(e) => {
+                            setXmlProperties(prev => ({
+                              ...prev,
+                              userTask: { 
+                                ...prev.userTask, 
+                                formData: { ...prev.userTask.formData, jsxCode: e.target.value }
+                              }
+                            }));
+                            updateXmlFromProperties();
+                          }}
+                          sx={{
+                            mb: 2,
+                            '& .MuiInputBase-input': {
+                              fontFamily: 'monospace',
+                              fontSize: '13px',
+                              height: '100px !important',
+                              overflow: 'auto !important'
+                            }
+                          }}
+                        />
+                      </div>
+                    )}
+                    
+                    {/* Potential Owner Section */}
+                    {userTaskAccordion === 1 && (
+                      <div style={{ padding: '12px 0' }}>
+                        <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 1 }}>
+                          Potential Owner Fields:
+                        </Typography>
+                        {xmlProperties.userTask.potentialOwner.fields.map((field, index) => (
+                          <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                            <TextField
+                              size="small"
+                              label="Field Name"
+                              value={field.name}
+                              onChange={(e) => {
+                                const newFields = [...xmlProperties.userTask.potentialOwner.fields];
+                                newFields[index].name = e.target.value;
+                                // Auto-update label to match field name
+                                newFields[index].label = e.target.value.charAt(0).toUpperCase() + e.target.value.slice(1);
+                                // Set appropriate input type based on field name
+                                if (e.target.value === 'dueDate') {
+                                  newFields[index].type = 'datetime-local';
+                                } else if (e.target.value === 'userEmail') {
+                                  newFields[index].type = 'email';
+                                } else {
+                                  newFields[index].type = 'text';
+                                }
+                                setXmlProperties(prev => ({
+                                  ...prev,
+                                  userTask: { 
+                                    ...prev.userTask, 
+                                    potentialOwner: { fields: newFields }
+                                  }
+                                }));
+                                updateXmlFromProperties();
+                              }}
+                              sx={{ flex: 1 }}
+                              placeholder="Enter field name"
+                            />
+                            <TextField
+                              size="small"
+                              label={field.label}
+                              type={field.type}
+                              value={field.value}
+                              onChange={(e) => {
+                                const newFields = [...xmlProperties.userTask.potentialOwner.fields];
+                                newFields[index].value = e.target.value;
+                                setXmlProperties(prev => ({
+                                  ...prev,
+                                  userTask: { 
+                                    ...prev.userTask, 
+                                    potentialOwner: { fields: newFields }
+                                  }
+                                }));
+                                updateXmlFromProperties();
+                              }}
+                              sx={{ flex: 2 }}
+                              InputLabelProps={field.type === 'datetime-local' ? { shrink: true } : {}}
+                            />
+                            <button
+                              onClick={() => {
+                                const newFields = xmlProperties.userTask.potentialOwner.fields.filter((_, i) => i !== index);
+                                setXmlProperties(prev => ({
+                                  ...prev,
+                                  userTask: { 
+                                    ...prev.userTask, 
+                                    potentialOwner: { fields: newFields }
+                                  }
+                                }));
+                                updateXmlFromProperties();
+                              }}
+                              style={{ background: 'red', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                        <Button
+                          onClick={() => {
+                            const newFields = [...xmlProperties.userTask.potentialOwner.fields, { name: 'dueDate', value: '', type: 'datetime-local', label: 'Due Date' }];
+                            setXmlProperties(prev => ({
+                              ...prev,
+                              userTask: { 
+                                ...prev.userTask, 
+                                potentialOwner: { fields: newFields }
+                              }
+                            }));
+                            updateXmlFromProperties();
+                          }}
+                          variant="outlined"
+                          size="small"
+                        >
+                          Add Field
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ServiceTask Properties */}
+                {(selectedNode?.data?.taskType || elementType) === 'serviceTask' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <TextField
+                      size="small"
+                      label="Endpoint URL"
+                      value={xmlProperties.serviceTask.endpoint}
+                      onChange={(e) => setXmlProperties(prev => ({
+                        ...prev,
+                        serviceTask: { ...prev.serviceTask, endpoint: e.target.value }
+                      }))}
+                      fullWidth
+                    />
+                    <TextField
+                      size="small"
+                      select
+                      label="HTTP Method"
+                      value={xmlProperties.serviceTask.method}
+                      onChange={(e) => setXmlProperties(prev => ({
+                        ...prev,
+                        serviceTask: { ...prev.serviceTask, method: e.target.value }
+                      }))}
+                      SelectProps={{ native: true }}
+                    >
+                      <option value="GET">GET</option>
+                      <option value="POST">POST</option>
+                      <option value="PUT">PUT</option>
+                      <option value="DELETE">DELETE</option>
+                    </TextField>
+                    <TextField
+                      size="small"
+                      label="Timeout (ms)"
+                      type="number"
+                      value={xmlProperties.serviceTask.timeout}
+                      onChange={(e) => setXmlProperties(prev => ({
+                        ...prev,
+                        serviceTask: { ...prev.serviceTask, timeout: e.target.value }
+                      }))}
+                    />
+                    <TextField
+                      size="small"
+                      label="Retry Count"
+                      type="number"
+                      value={xmlProperties.serviceTask.retryCount}
+                      onChange={(e) => setXmlProperties(prev => ({
+                        ...prev,
+                        serviceTask: { ...prev.serviceTask, retryCount: e.target.value }
+                      }))}
+                    />
+                    <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
+                      Headers:
+                    </Typography>
+                    {xmlProperties.serviceTask.headers.map((header, index) => (
+                      <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <TextField
+                          size="small"
+                          label="Name"
+                          value={header.name}
+                          onChange={(e) => {
+                            const newHeaders = [...xmlProperties.serviceTask.headers];
+                            newHeaders[index].name = e.target.value;
+                            setXmlProperties(prev => ({
+                              ...prev,
+                              serviceTask: { ...prev.serviceTask, headers: newHeaders }
+                            }));
+                          }}
+                          sx={{ flex: 1 }}
+                        />
+                        <TextField
+                          size="small"
+                          label="Value"
+                          value={header.value}
+                          onChange={(e) => {
+                            const newHeaders = [...xmlProperties.serviceTask.headers];
+                            newHeaders[index].value = e.target.value;
+                            setXmlProperties(prev => ({
+                              ...prev,
+                              serviceTask: { ...prev.serviceTask, headers: newHeaders }
+                            }));
+                          }}
+                          sx={{ flex: 1 }}
+                        />
+                        <button
+                          onClick={() => {
+                            const newHeaders = xmlProperties.serviceTask.headers.filter((_, i) => i !== index);
+                            setXmlProperties(prev => ({
+                              ...prev,
+                              serviceTask: { ...prev.serviceTask, headers: newHeaders }
+                            }));
+                          }}
+                          style={{ background: 'red', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    <Button
+                      onClick={() => {
+                        const newHeaders = [...xmlProperties.serviceTask.headers, { name: '', value: '' }];
+                        setXmlProperties(prev => ({
+                          ...prev,
+                          serviceTask: { ...prev.serviceTask, headers: newHeaders }
+                        }));
+                      }}
+                      variant="outlined"
+                      size="small"
+                    >
+                      Add Header
+                    </Button>
+                  </div>
+                )}
+
+                {/* ScriptTask Properties */}
+                {(selectedNode?.data?.taskType || elementType) === 'scriptTask' && (
+                  <div>
+                    <TextField
+                      multiline
+                      fullWidth
+                      label="Script Code"
+                      value={xmlProperties.scriptTask.scriptCode}
+                      onChange={(e) => setXmlProperties(prev => ({
+                        ...prev,
+                        scriptTask: { ...prev.scriptTask, scriptCode: e.target.value }
+                      }))}
+                      sx={{
+                        '& .MuiInputBase-input': {
+                          fontFamily: 'monospace',
+                          fontSize: '13px',
+                          height: '150px !important',
+                          overflow: 'auto !important'
+                        }
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* Gateway Properties */}
+                {(selectedNode?.type && selectedNode.type.includes('gateway')) && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
+                      Sequence Flow Conditions:
+                    </Typography>
+                    {xmlProperties.gateway.conditions.map((condition, index) => (
+                      <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <TextField
+                          size="small"
+                          label="Flow ID"
+                          value={condition.flowId}
+                          onChange={(e) => {
+                            const newConditions = [...xmlProperties.gateway.conditions];
+                            newConditions[index].flowId = e.target.value;
+                            setXmlProperties(prev => ({
+                              ...prev,
+                              gateway: { ...prev.gateway, conditions: newConditions }
+                            }));
+                            updateXmlFromProperties();
+                          }}
+                          sx={{ flex: 1 }}
+                        />
+                        <TextField
+                          size="small"
+                          label="Name"
+                          value={condition.name}
+                          onChange={(e) => {
+                            const newConditions = [...xmlProperties.gateway.conditions];
+                            newConditions[index].name = e.target.value;
+                            setXmlProperties(prev => ({
+                              ...prev,
+                              gateway: { ...prev.gateway, conditions: newConditions }
+                            }));
+                            updateXmlFromProperties();
+                          }}
+                          sx={{ flex: 1 }}
+                        />
+                        <TextField
+                          size="small"
+                          label="Condition"
+                          value={condition.condition}
+                          onChange={(e) => {
+                            const newConditions = [...xmlProperties.gateway.conditions];
+                            newConditions[index].condition = e.target.value;
+                            setXmlProperties(prev => ({
+                              ...prev,
+                              gateway: { ...prev.gateway, conditions: newConditions }
+                            }));
+                            updateXmlFromProperties();
+                          }}
+                          sx={{ flex: 2 }}
+                        />
+                        <button
+                          onClick={() => {
+                            const newConditions = xmlProperties.gateway.conditions.filter((_, i) => i !== index);
+                            setXmlProperties(prev => ({
+                              ...prev,
+                              gateway: { ...prev.gateway, conditions: newConditions }
+                            }));
+                            updateXmlFromProperties();
+                          }}
+                          style={{ background: 'red', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    <Button
+                      onClick={() => {
+                        const newConditions = [...xmlProperties.gateway.conditions, { flowId: '', condition: '', name: '' }];
+                        setXmlProperties(prev => ({
+                          ...prev,
+                          gateway: { ...prev.gateway, conditions: newConditions }
+                        }));
+                        updateXmlFromProperties();
+                      }}
+                      variant="outlined"
+                      size="small"
+                    >
+                      Add Condition
+                    </Button>
+                  </div>
+                )}
+
+                <Box sx={{ display: 'flex', gap: 1, mt: 2, justifyContent: 'flex-end' }}>
+                  <Button
+                    onClick={() => {
+                      // Generate XML from properties
+                      let generatedXml = '';
+                      const taskType = selectedNode?.data?.taskType || elementType;
+                      
+                      if (taskType === 'userTask') {
+                        // Generate formData section
+                        let formDataXml = `<extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+  <formData xmlns="http://example.org/form">
+    <scriptData xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+      <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+${xmlProperties.userTask.formData.jsxCode || '// JSX code will be generated here'}
+]]></script>
+    </scriptData>
+${xmlProperties.userTask.formData.formFields.map(field => 
+  field.id ? `    <formField id="${field.id}" label="${field.label}" type="${field.type}" required="${field.required}"/>` : ''
+).filter(Boolean).join('\n')}
+  </formData>
+</extensionElements>`;
+
+                        // Generate potentialOwner section if any values are set
+                        let potentialOwnerXml = '';
+                        const potentialOwnerFields = xmlProperties.userTask.potentialOwner.fields.filter(field => field.value.trim());
+                        
+                        if (potentialOwnerFields.length > 0) {
+                          let potentialOwnerContent = `  <extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+${potentialOwnerFields.map(field => {
+  if (field.name === 'dueDate') {
+    return `    <dueDate>${field.value}Z</dueDate>`;
+  } else if (field.name === 'userEmail') {
+    return `    <userEmail>${field.value}</userEmail>`;
+  } else {
+    return `    <${field.name}>${field.value}</${field.name}>`;
+  }
+}).join('\n')}
+  </extensionElements>`;
+                          
+                          potentialOwnerXml = `<potentialOwner>
+${potentialOwnerContent}
+</potentialOwner>`;
+                        }
+
+                        // Combine both sections
+                        generatedXml = potentialOwnerXml ? `${formDataXml}\n${potentialOwnerXml}` : formDataXml;
+                      } else if (taskType === 'serviceTask') {
+                        generatedXml = `<extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+  <serviceConfiguration xmlns="http://example.org/service">
+    <endpoint>${xmlProperties.serviceTask.endpoint}</endpoint>
+    <method>${xmlProperties.serviceTask.method}</method>
+    <timeout>${xmlProperties.serviceTask.timeout}</timeout>
+    <retryCount>${xmlProperties.serviceTask.retryCount}</retryCount>
+    <headers>
+${xmlProperties.serviceTask.headers.map(header => 
+  header.name ? `      <header name="${header.name}" value="${header.value}"/>` : ''
+).filter(Boolean).join('\n')}
+    </headers>
+  </serviceConfiguration>
+</extensionElements>`;
+                      } else if (taskType === 'scriptTask') {
+                        generatedXml = `<script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+${xmlProperties.scriptTask.scriptCode}
+]]></script>`;
+                      } else if (selectedNode?.type && selectedNode.type.includes('gateway')) {
+                        generatedXml = xmlProperties.gateway.conditions.map(condition => 
+                          condition.flowId ? `<sequenceFlow id="${condition.flowId}" sourceRef="${selectedNode.id}" targetRef="TARGET_REF" name="${condition.name}">
+  <conditionExpression xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xsi:type="tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">${condition.condition}</conditionExpression>
+</sequenceFlow>` : ''
+                        ).filter(Boolean).join('\n');
+                      }
+                      
+                      setEditedXml(formatXML(generatedXml));
+                      setAccordionOpen(0); // Switch to XML Editor tab
+                    }}
+                    variant="contained"
+                    color="primary"
+                  >
+                    Generate XML
+                  </Button>
                   <Button onClick={handleCancel} variant="outlined">
                     Cancel
                   </Button>

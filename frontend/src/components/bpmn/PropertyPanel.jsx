@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import './PropertyPanel.css';import XMLEditor from './XMLEditor';
+import './PropertyPanel.css';
 
-const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate, isOpen, onToggle, readOnly, edges }) => {
+const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate, isOpen, onToggle, readOnly, edges, onXmlEditorOpen }) => {
   const [activeSection, setActiveSection] = useState('general');
   const [nodeData, setNodeData] = useState({
     name: '',
@@ -12,7 +12,6 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
     borderColor: ''
   });
   const [xmlContent, setXmlContent] = useState('');
-  const [isXmlEditorOpen, setIsXmlEditorOpen] = useState(false);
 
   // Update local state when selected element changes
   useEffect(() => {
@@ -57,31 +56,6 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
   const handleXmlChange = (value) => {
     setXmlContent(value);
     // Changes are now stored locally until Save button is clicked
-  };
-
-  const handleXmlUpdate = (updatedXml) => {
-    setXmlContent(updatedXml);
-    setIsXmlEditorOpen(false);
-    // Auto-save when XML is updated from dialog
-    if (selectedNode) {
-      const updatedNode = {
-        ...selectedNode,
-        data: {
-          ...selectedNode.data,
-          originalNestedElements: updatedXml
-        }
-      };
-      onNodeUpdate(updatedNode);
-    } else if (selectedEdge) {
-      const updatedEdge = {
-        ...selectedEdge,
-        data: {
-          ...selectedEdge.data,
-          originalNestedElements: updatedXml
-        }
-      };
-      onEdgeUpdate(updatedEdge);
-    }
   };
 
   const handleInputChange = (field, value) => {
@@ -349,7 +323,6 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
   };
 
   return (
-    <>
     <div className={`property-panel ${isOpen ? 'open' : ''}`}>
       <div className="property-panel-header">
         <h3>Properties</h3>
@@ -371,7 +344,7 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
             <div className="xml-editor-section">
               <button 
                 className="edit-xml-btn"
-                onClick={() => setIsXmlEditorOpen(true)}
+                onClick={() => onXmlEditorOpen && onXmlEditorOpen(getInnerXMLContent())}
               >
                 Edit Properties
               </button>
@@ -548,22 +521,6 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
         </div>
       )}
     </div>
-    
-    {/* XMLEditor rendered outside the property panel container */}
-    <XMLEditor
-      isOpen={isXmlEditorOpen}
-      onClose={() => setIsXmlEditorOpen(false)}
-      xmlContent={xmlContent}
-      onUpdate={handleXmlUpdate}
-      elementType={selectedNode ? selectedNode.type : selectedEdge ? 'sequence flow' : 'element'}
-      selectedNode={selectedNode}
-      selectedEdge={selectedEdge}
-      onNodeUpdate={onNodeUpdate}
-      onEdgeUpdate={onEdgeUpdate}
-      edges={edges}
-      nodeData={nodeData}
-    />
-    </>
   );
 };
 
