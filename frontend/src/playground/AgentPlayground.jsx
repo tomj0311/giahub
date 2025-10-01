@@ -859,33 +859,94 @@ export default function AgentPlayground({ user }) {
                             a: ({ node, ...props }) => (
                               <a {...props} target="_blank" rel="noopener noreferrer" />
                             ),
-                            pre: ({ children, ...props }) => (
-                              <Box sx={{ position: 'relative', '&:hover .copy-btn': { opacity: 1 } }}>
+                            pre: ({ children, ...props }) => {
+                              // Extract language from code element
+                              let language = ''
+                              let codeContent = ''
+                              
+                              if (children?.props?.className) {
+                                language = children.props.className.replace('language-', '')
+                                codeContent = children.props.children || ''
+                              }
+                              
+                              // Get the actual code content from children for copying
+                              const actualCode = typeof children?.props?.children === 'string' 
+                                ? children.props.children 
+                                : children?.toString?.() || ''
+                              
+                              // Create the full code block with backticks for copying
+                              const fullCodeBlock = language 
+                                ? `\`\`\`${language}\n${actualCode}\n\`\`\``
+                                : actualCode
+                              
+                              return (
                                 <Box
                                   component="pre"
                                   {...props}
                                   sx={{ 
+                                    position: 'relative',
                                     p: 1, 
                                     bgcolor: 'action.hover', 
                                     borderRadius: 1, 
                                     overflowX: 'auto', 
                                     fontSize: 13, 
                                     lineHeight: 1.4,
-                                    m: 0
+                                    m: 0,
+                                    '&:hover .copy-btn': { opacity: 1 }
                                   }}
                                 >
+                                  {/* Show ```language before the code */}
+                                  {language && (
+                                    <Box sx={{ 
+                                      fontFamily: 'monospace',
+                                      fontSize: '11px',
+                                      color: 'text.secondary',
+                                      opacity: 0.7,
+                                      mb: 0.5,
+                                      userSelect: 'none'
+                                    }}>
+                                      ```{language}
+                                    </Box>
+                                  )}
+                                  
+                                  {/* Copy button */}
+                                  <IconButton
+                                    className="copy-btn"
+                                    size="small"
+                                    onClick={() => navigator.clipboard.writeText(fullCodeBlock)}
+                                    sx={{ 
+                                      position: 'absolute', 
+                                      top: 4, 
+                                      right: 4,
+                                      opacity: 0, 
+                                      transition: 'opacity 0.2s',
+                                      p: 0.5,
+                                      minWidth: 0,
+                                      width: 20,
+                                      height: 20
+                                    }}
+                                  >
+                                    <ContentCopyIcon sx={{ fontSize: 12 }} />
+                                  </IconButton>
+                                  
                                   {children}
+                                  
+                                  {/* Show closing ``` after the code */}
+                                  {language && (
+                                    <Box sx={{ 
+                                      fontFamily: 'monospace',
+                                      fontSize: '11px',
+                                      color: 'text.secondary',
+                                      opacity: 0.7,
+                                      mt: 0.5,
+                                      userSelect: 'none'
+                                    }}>
+                                      ```
+                                    </Box>
+                                  )}
                                 </Box>
-                                <IconButton
-                                  className="copy-btn"
-                                  size="small"
-                                  onClick={() => navigator.clipboard.writeText(children?.props?.children || '')}
-                                  sx={{ position: 'absolute', top: 4, right: 4, opacity: 0, transition: 'opacity 0.2s' }}
-                                >
-                                  <ContentCopyIcon fontSize="small" />
-                                </IconButton>
-                              </Box>
-                            )
+                              )
+                            }
                           }}
                         >
                           {bpmnData.contentWithoutBPMN || m.content || '...'}
