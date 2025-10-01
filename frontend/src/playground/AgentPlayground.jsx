@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import BPMN from '../components/bpmn/BPMN'
+import DynamicComponent from '../components/dynamic/DynamicComponent'
 import {
   Box,
   Paper,
@@ -68,6 +69,45 @@ const detectBPMN = (content) => {
     }
   }
   return { hasBPMN: false, bpmnXML: null, contentWithoutBPMN: content }
+}
+
+// Simple function to detect and extract JSX code blocks
+const detectJSX = (content) => {
+  if (!content) return { hasJSX: false, jsxCode: null, contentWithoutJSX: content, jsxBlocks: [] }
+  
+  // Look for JSX code blocks with ```jsx or ```react
+  const jsxRegex = /```(?:jsx|react)\s*\n([\s\S]*?)\n```/gi
+  const matches = []
+  let match
+  
+  while ((match = jsxRegex.exec(content)) !== null) {
+    matches.push({
+      fullMatch: match[0],
+      code: match[1].trim(),
+      startIndex: match.index,
+      endIndex: match.index + match[0].length
+    })
+  }
+  
+  if (matches.length > 0) {
+    // For now, take the first JSX block found
+    const firstMatch = matches[0]
+    
+    // Remove JSX blocks from content for markdown rendering
+    let contentWithoutJSX = content
+    matches.forEach(m => {
+      contentWithoutJSX = contentWithoutJSX.replace(m.fullMatch, '')
+    })
+    
+    return {
+      hasJSX: true,
+      jsxCode: firstMatch.code,
+      contentWithoutJSX: contentWithoutJSX.trim(),
+      jsxBlocks: matches
+    }
+  }
+  
+  return { hasJSX: false, jsxCode: null, contentWithoutJSX: content, jsxBlocks: [] }
 }
 
 // Agent Playground using HTTP Server-Sent Events for streaming
@@ -849,10 +889,11 @@ export default function AgentPlayground({ user }) {
                 }}>
                   {(() => {
                     const bpmnData = detectBPMN(m.content)
+                    const jsxData = detectJSX(bpmnData.contentWithoutBPMN)
                     
                     return (
                       <>
-                        {/* Show markdown content */}
+                        {/* Show markdown content (without BPMN and JSX blocks) */}
                         <ReactMarkdown 
                           remarkPlugins={[remarkGfm]}
                           components={{
@@ -949,8 +990,31 @@ export default function AgentPlayground({ user }) {
                             }
                           }}
                         >
-                          {bpmnData.contentWithoutBPMN || m.content || '...'}
+                          {jsxData.contentWithoutJSX || bpmnData.contentWithoutBPMN || m.content || '...'}
                         </ReactMarkdown>
+                        
+                        {/* Show JSX component if detected */}
+                        {jsxData.hasJSX && (
+                          <Box sx={{ mt: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+                            <Box sx={{ 
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              alignItems: 'center',
+                              bgcolor: 'action.hover', 
+                              px: 1, 
+                              py: 0.5, 
+                              borderBottom: '1px solid', 
+                              borderColor: 'divider'
+                            }}>
+                              <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                                JSX Component Preview
+                              </Typography>
+                            </Box>
+                            <Box sx={{ p: 2 }}>
+                              <DynamicComponent componentCode={jsxData.jsxCode} />
+                            </Box>
+                          </Box>
+                        )}
                         
                         {/* Additionally show BPMN diagram if detected */}
                         {bpmnData.hasBPMN && (
