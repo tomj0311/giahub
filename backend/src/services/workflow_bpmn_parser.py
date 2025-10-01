@@ -16,7 +16,7 @@ class EnhancedBpmnTaskParser(SpiffTaskParser):
     
     def parse_extensions(self, node=None):
         """
-        Parse ALL extension elements, including custom namespaces and potentialOwner
+        Parse ALL child elements of the task recursively - completely generic
         """
         if node is None:
             node = self.node
@@ -24,132 +24,89 @@ class EnhancedBpmnTaskParser(SpiffTaskParser):
         # Get SpiffWorkflow extensions first
         extensions = super().parse_extensions(node)
         
-        # Now parse ALL other extension elements
-        all_extensions = self._parse_all_extensions(node)
-        
-        # Parse potentialOwner elements (they are task-level, not in extensionElements)
-        potential_owners = self._parse_potential_owners(node)
-        if potential_owners:
-            all_extensions['potentialOwners'] = potential_owners
+        # Parse ALL child elements of the task recursively
+        all_elements = self._parse_all_child_elements(node)
         
         # Merge them together
-        extensions.update(all_extensions)
+        extensions.update(all_elements)
         
         return extensions
     
-    def _parse_all_extensions(self, node):
+    def _parse_all_child_elements(self, node):
         """
-        Parse all extension elements regardless of namespace
+        Parse ALL child elements of the task node recursively
         """
-        extensions = {}
+        elements = {}
         
-        # Find all extensionElements using DEFAULT_NSMAP
-        xpath = xpath_eval(node, DEFAULT_NSMAP)
-        ext_elements = xpath('./bpmn:extensionElements')
-        
-        if not ext_elements:
-            return extensions
-            
-        ext_element = ext_elements[0]
-        
-        # Parse formData/formField elements
-        form_data = self._parse_form_data(ext_element)
-        if form_data:
-            extensions['formData'] = form_data
-            
-        # Parse ioSpecification elements
-        io_spec = self._parse_io_specification(ext_element)
-        if io_spec:
-            extensions['ioSpecification'] = io_spec
-            
-        # Parse any other custom elements
-        custom_elements = self._parse_custom_elements(ext_element)
-        extensions.update(custom_elements)
-        
-        return extensions
-    
-    def _parse_form_data(self, ext_element):
-        """Parse formData and formField elements"""
-        form_data = {}
-        form_fields = []
-        
-        # Look for formData elements (any namespace)
-        for form_data_elem in ext_element.xpath('.//*[local-name()="formData"]'):
-            # Get formField children
-            for field in form_data_elem.xpath('.//*[local-name()="formField"]'):
-                field_data = {
-                    'id': field.get('id'),
-                    'label': field.get('label', field.get('id')),
-                    'type': field.get('type', 'string'),
-                    'required': field.get('required', 'false')
-                }
-                
-                # Add any other attributes
-                for attr, value in field.attrib.items():
-                    if attr not in ['id', 'label', 'type', 'required']:
-                        field_data[attr] = value
-                        
-                form_fields.append(field_data)
-        
-        # Look for direct formField elements
-        if not form_fields:
-            for field in ext_element.xpath('.//*[local-name()="formField"]'):
-                field_data = {
-                    'id': field.get('id'),
-                    'label': field.get('label', field.get('id')),
-                    'type': field.get('type', 'string'),
-                    'required': field.get('required', 'false')
-                }
-                
-                for attr, value in field.attrib.items():
-                    if attr not in ['id', 'label', 'type', 'required']:
-                        field_data[attr] = value
-                        
-                form_fields.append(field_data)
-        
-        if form_fields:
-            form_data['formFields'] = form_fields
-            
-        return form_data
-    
-    def _parse_io_specification(self, ext_element):
-        """Parse ioSpecification elements"""
-        io_spec = {'inputs': {}, 'outputs': {}}
-        
-        # Look for ioSpecification elements
-        for io_elem in ext_element.xpath('.//*[local-name()="ioSpecification"]'):
-            # Parse inputs
-            for inp in io_elem.xpath('.//*[local-name()="dataInput"]'):
-                param_name = inp.get('name') or inp.get('id')
-                if param_name:
-                    io_spec['inputs'][param_name] = inp.get('value', '')
-            
-            # Parse outputs  
-            for out in io_elem.xpath('.//*[local-name()="dataOutput"]'):
-                param_name = out.get('name') or out.get('id')
-                if param_name:
-                    io_spec['outputs'][param_name] = out.get('name', param_name)
-        
-        return io_spec if io_spec['inputs'] or io_spec['outputs'] else {}
-    
-    def _parse_custom_elements(self, ext_element):
-        """Parse any other custom extension elements"""
-        custom = {}
-        
-        # Get all child elements that aren't already handled
-        handled_elements = {'formData', 'formField', 'ioSpecification', 'properties', 'unitTests', 'serviceTaskOperator'}
-        
-        for child in ext_element:
+        # Parse every child element of the task
+        for child in node:
+            element_data = self._parse_element_recursively(child)
             local_name = etree.QName(child).localname
             
-            if local_name not in handled_elements:
-                # Store the element as text content or attributes
-                if child.text and child.text.strip():
-                    custom[local_name] = child.text.strip()
-                elif child.attrib:
-                    custom[local_name] = dict(child.attrib)
-                    
-        return custom
+            # Skip basic BPMN flow elements that SpiffWorkflow handles
+            if local_name in ['incoming', 'outgoing']:
+                continue
+                
+            # If we already have this element name, make it a list
+            if local_name in elements:
+                if not isinstance(elements[local_name], list):
+                    elements[local_name] = [elements[local_name]]
+                elements[local_name].append(element_data)
+            else:
+                elements[local_name] = element_data
+        
+        return elements
+    
+    def _parse_element_recursively(self, element):
+        """
+        Recursively parse any XML element into a Python structure
+        """
+        result = {}
+        
+        # Get all attributes
+        if element.attrib:
+            result['@attributes'] = dict(element.attrib)
+        
+        # Get text content (including CDATA)
+        if element.text and element.text.strip():
+            result['@text'] = element.text.strip()
+        
+        # Parse all child elements
+        children = {}
+        for child in element:
+            child_name = etree.QName(child).localname
+            child_data = self._parse_element_recursively(child)
+            
+            # If we already have this child name, make it a list
+            if child_name in children:
+                if not isinstance(children[child_name], list):
+                    children[child_name] = [children[child_name]]
+                children[child_name].append(child_data)
+            else:
+                children[child_name] = child_data
+        
+        # Add children to result
+        if children:
+            result.update(children)
+        
+        # If element has no attributes, no text, and only one type of child,
+        # simplify the structure
+        if len(result) == 1:
+            if '@text' in result:
+                return result['@text']
+            elif '@attributes' in result and len(result['@attributes']) == 1:
+                # Single attribute, return its value
+                return list(result['@attributes'].values())[0]
+        
+        # If element has no children and no attributes, just return the text
+        if not children and not element.attrib and element.text:
+            return element.text.strip()
+        
+        # If element is completely empty, return empty dict
+        if not result:
+            return {}
+            
+        return result
     
     def create_task(self):
         """
@@ -208,34 +165,3 @@ class EnhancedBpmnTaskParser(SpiffTaskParser):
         except Exception as e:
             # If there's any error, return empty string rather than failing
             return ""
-    
-    def _parse_potential_owners(self, node):
-        """Parse potentialOwner elements"""
-        owners = []
-        
-        # Find potentialOwner elements using xpath
-        xpath = xpath_eval(node, DEFAULT_NSMAP)
-        potential_owner_elements = xpath('.//bpmn:potentialOwner')
-        
-        # Also try without namespace prefix in case it's not recognized
-        if not potential_owner_elements:
-            potential_owner_elements = node.xpath('.//*[local-name()="potentialOwner"]')
-        
-        for owner_elem in potential_owner_elements:
-            owner_data = {}                
-            
-            # Parse extension elements within potentialOwner
-            ext_elements = owner_elem.xpath('.//*[local-name()="extensionElements"]')
-            if ext_elements:
-                extensions = {}
-                for child in ext_elements[0]:
-                    local_name = etree.QName(child).localname
-                    if child.text and child.text.strip():
-                        extensions[local_name] = child.text.strip()
-                if extensions:
-                    owner_data['extensions'] = extensions
-            
-            if owner_data:
-                owners.append(owner_data)
-                    
-        return owners

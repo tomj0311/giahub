@@ -25,7 +25,7 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
         formFields: [{ id: '', label: '', type: 'string', required: false }],
         jsxCode: ''
       },
-      potentialOwner: {
+      assignee: {
         fields: [{ name: 'dueDate', value: '', type: 'datetime-local', label: 'Due Date' }]
       }
     },
@@ -44,7 +44,7 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
     }
   });
   // Sub-accordion state for UserTask sections
-  const [userTaskAccordion, setUserTaskAccordion] = useState(0); // 0 = formData, 1 = potentialOwner
+  const [userTaskAccordion, setUserTaskAccordion] = useState(0); // 0 = formData, 1 = assignee
 
   // Simple function to update XML from properties
   const updateXmlFromProperties = () => {
@@ -65,30 +65,28 @@ ${xmlProperties.userTask.formData.formFields.map(field =>
   </formData>
 </extensionElements>`;
 
-      // Generate potentialOwner section if any values are set
-      let potentialOwnerXml = '';
-      const potentialOwnerFields = xmlProperties.userTask.potentialOwner.fields.filter(field => field.value.trim());
+      // Generate assignee section if any values are set
+      let assigneeXml = '';
+      const assigneeFields = xmlProperties.userTask.assignee.fields.filter(field => field.value.trim());
       
-      if (potentialOwnerFields.length > 0) {
-        let potentialOwnerContent = `  <extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
-${potentialOwnerFields.map(field => {
+      if (assigneeFields.length > 0) {
+        assigneeXml = `    <assignee>
+${assigneeFields.map(field => {
   if (field.name === 'dueDate') {
-    return `    <dueDate>${field.value}Z</dueDate>`;
+    return `      <dueDate>${field.value}Z</dueDate>`;
   } else if (field.name === 'userEmail') {
-    return `    <userEmail>${field.value}</userEmail>`;
+    return `      <userEmail>${field.value}</userEmail>`;
   } else {
-    return `    <${field.name}>${field.value}</${field.name}>`;
+    return `      <${field.name}>${field.value}</${field.name}>`;
   }
 }).join('\n')}
-  </extensionElements>`;
-        
-        potentialOwnerXml = `<potentialOwner>
-${potentialOwnerContent}
-</potentialOwner>`;
+    </assignee>`;
       }
 
-      // Combine both sections
-      const generatedXml = potentialOwnerXml ? `${formDataXml}\n${potentialOwnerXml}` : formDataXml;
+      // Combine formData and assignee within extensionElements
+      const generatedXml = assigneeXml ? 
+        formDataXml.replace('</extensionElements>', `${assigneeXml}\n</extensionElements>`) : 
+        formDataXml;
       setEditedXml(formatXML(generatedXml));
     } else if (selectedNode?.type && selectedNode.type.includes('gateway')) {
       // Generate gateway sequence flows XML
@@ -127,44 +125,63 @@ ${potentialOwnerContent}
           required: field.getAttribute('required') === 'true'
         }));
         
-        // Parse potentialOwner
-        const potentialOwnerFields = [];
-        const potentialOwner = doc.querySelector('potentialOwner');
-        console.log('🎯 Found potentialOwner:', !!potentialOwner);
+        // Parse assignee
+        const assigneeFields = [];
+        const assignee = doc.querySelector('assignee');
+        console.log('🎯 Found assignee:', !!assignee);
         
-        if (potentialOwner) {
-          // Get extensionElements inside potentialOwner
-          const extensionElements = potentialOwner.querySelector('extensionElements');
-          console.log('📦 Found extensionElements:', !!extensionElements);
-          
-          if (extensionElements) {
-            console.log('🔢 extensionElements children count:', extensionElements.children.length);
-            // Parse ALL child elements, not just specific ones
-            for (let i = 0; i < extensionElements.children.length; i++) {
-              const element = extensionElements.children[i];
-              const tagName = element.tagName;
-              const value = element.textContent;
-              
-              console.log(`🏷️ Found element: ${tagName} = ${value}`);
-              
-              potentialOwnerFields.push({
+        if (assignee) {
+          console.log('🔢 assignee children count:', assignee.children.length);
+          // Parse ALL child elements inside assignee
+          for (let i = 0; i < assignee.children.length; i++) {
+            const element = assignee.children[i];
+            const tagName = element.tagName;
+            const value = element.textContent;
+            
+            console.log(`🏷️ Found element: ${tagName} = ${value}`);
+            
+            // Set appropriate input type based on field name
+            let inputType = 'text';
+            let label = tagName;
+            if (tagName === 'dueDate') {
+              inputType = 'datetime-local';
+              label = 'Due Date';
+              // Remove the 'Z' suffix for datetime-local input
+              const cleanValue = value.endsWith('Z') ? value.slice(0, -1) : value;
+              assigneeFields.push({
+                name: tagName,
+                value: cleanValue,
+                type: inputType,
+                label: label
+              });
+            } else if (tagName === 'userEmail') {
+              inputType = 'email';
+              label = 'User Email';
+              assigneeFields.push({
                 name: tagName,
                 value: value,
-                type: 'text',
+                type: inputType,
+                label: label
+              });
+            } else {
+              assigneeFields.push({
+                name: tagName,
+                value: value,
+                type: inputType,
                 label: tagName
               });
             }
           }
         }
         
-        console.log('📋 Final potentialOwnerFields:', potentialOwnerFields);
+        console.log('📋 Final assigneeFields:', assigneeFields);
         
         // Ensure at least one field exists
-        if (potentialOwnerFields.length === 0) {
-          potentialOwnerFields.push({ name: 'dueDate', value: '', type: 'datetime-local', label: 'Due Date' });
+        if (assigneeFields.length === 0) {
+          assigneeFields.push({ name: 'dueDate', value: '', type: 'datetime-local', label: 'Due Date' });
         }
         
-        console.log('🔄 About to set state with fields:', potentialOwnerFields);
+        console.log('🔄 About to set state with fields:', assigneeFields);
         
         // Update state
         setXmlProperties(prev => ({
@@ -174,8 +191,8 @@ ${potentialOwnerContent}
               formFields: formFields.length > 0 ? formFields : [{ id: '', label: '', type: 'string', required: false }],
               jsxCode: jsxCode
             },
-            potentialOwner: {
-              fields: potentialOwnerFields
+            assignee: {
+              fields: assigneeFields
             }
           }
         }));
@@ -921,7 +938,7 @@ ${potentialOwnerContent}
                           cursor: 'pointer',
                           fontSize: '12px'
                         }}
-                      >Potential Owner</button>
+                      >Assignee</button>
                     </div>
                     
                     {/* Form Data Section */}
@@ -1079,20 +1096,20 @@ ${potentialOwnerContent}
                       </div>
                     )}
                     
-                    {/* Potential Owner Section */}
+                    {/* Assignee Section */}
                     {userTaskAccordion === 1 && (
                       <div style={{ padding: '12px 0' }}>
                         <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 1 }}>
-                          Potential Owner Fields:
+                          Assignee Fields:
                         </Typography>
-                        {xmlProperties.userTask.potentialOwner.fields.map((field, index) => (
+                        {xmlProperties.userTask.assignee.fields.map((field, index) => (
                           <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
                             <TextField
                               size="small"
                               label="Field Name"
                               value={field.name}
                               onChange={(e) => {
-                                const newFields = [...xmlProperties.userTask.potentialOwner.fields];
+                                const newFields = [...xmlProperties.userTask.assignee.fields];
                                 newFields[index].name = e.target.value;
                                 // Auto-update label to match field name
                                 newFields[index].label = e.target.value.charAt(0).toUpperCase() + e.target.value.slice(1);
@@ -1108,7 +1125,7 @@ ${potentialOwnerContent}
                                   ...prev,
                                   userTask: { 
                                     ...prev.userTask, 
-                                    potentialOwner: { fields: newFields }
+                                    assignee: { fields: newFields }
                                   }
                                 }));
                                 updateXmlFromProperties();
@@ -1122,13 +1139,13 @@ ${potentialOwnerContent}
                               type={field.type}
                               value={field.value}
                               onChange={(e) => {
-                                const newFields = [...xmlProperties.userTask.potentialOwner.fields];
+                                const newFields = [...xmlProperties.userTask.assignee.fields];
                                 newFields[index].value = e.target.value;
                                 setXmlProperties(prev => ({
                                   ...prev,
                                   userTask: { 
                                     ...prev.userTask, 
-                                    potentialOwner: { fields: newFields }
+                                    assignee: { fields: newFields }
                                   }
                                 }));
                                 updateXmlFromProperties();
@@ -1138,12 +1155,12 @@ ${potentialOwnerContent}
                             />
                             <button
                               onClick={() => {
-                                const newFields = xmlProperties.userTask.potentialOwner.fields.filter((_, i) => i !== index);
+                                const newFields = xmlProperties.userTask.assignee.fields.filter((_, i) => i !== index);
                                 setXmlProperties(prev => ({
                                   ...prev,
                                   userTask: { 
                                     ...prev.userTask, 
-                                    potentialOwner: { fields: newFields }
+                                    assignee: { fields: newFields }
                                   }
                                 }));
                                 updateXmlFromProperties();
@@ -1156,12 +1173,12 @@ ${potentialOwnerContent}
                         ))}
                         <Button
                           onClick={() => {
-                            const newFields = [...xmlProperties.userTask.potentialOwner.fields, { name: 'dueDate', value: '', type: 'datetime-local', label: 'Due Date' }];
+                            const newFields = [...xmlProperties.userTask.assignee.fields, { name: 'dueDate', value: '', type: 'datetime-local', label: 'Due Date' }];
                             setXmlProperties(prev => ({
                               ...prev,
                               userTask: { 
                                 ...prev.userTask, 
-                                potentialOwner: { fields: newFields }
+                                assignee: { fields: newFields }
                               }
                             }));
                             updateXmlFromProperties();
@@ -1425,30 +1442,28 @@ ${xmlProperties.userTask.formData.formFields.map(field =>
   </formData>
 </extensionElements>`;
 
-                        // Generate potentialOwner section if any values are set
-                        let potentialOwnerXml = '';
-                        const potentialOwnerFields = xmlProperties.userTask.potentialOwner.fields.filter(field => field.value.trim());
+                        // Generate assignee section if any values are set
+                        let assigneeXml = '';
+                        const assigneeFields = xmlProperties.userTask.assignee.fields.filter(field => field.value.trim());
                         
-                        if (potentialOwnerFields.length > 0) {
-                          let potentialOwnerContent = `  <extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
-${potentialOwnerFields.map(field => {
+                        if (assigneeFields.length > 0) {
+                          assigneeXml = `    <assignee>
+${assigneeFields.map(field => {
   if (field.name === 'dueDate') {
-    return `    <dueDate>${field.value}Z</dueDate>`;
+    return `      <dueDate>${field.value}Z</dueDate>`;
   } else if (field.name === 'userEmail') {
-    return `    <userEmail>${field.value}</userEmail>`;
+    return `      <userEmail>${field.value}</userEmail>`;
   } else {
-    return `    <${field.name}>${field.value}</${field.name}>`;
+    return `      <${field.name}>${field.value}</${field.name}>`;
   }
 }).join('\n')}
-  </extensionElements>`;
-                          
-                          potentialOwnerXml = `<potentialOwner>
-${potentialOwnerContent}
-</potentialOwner>`;
+    </assignee>`;
                         }
 
-                        // Combine both sections
-                        generatedXml = potentialOwnerXml ? `${formDataXml}\n${potentialOwnerXml}` : formDataXml;
+                        // Combine formData and assignee within extensionElements
+                        generatedXml = assigneeXml ? 
+                          formDataXml.replace('</extensionElements>', `${assigneeXml}\n</extensionElements>`) : 
+                          formDataXml;
                       } else if (taskType === 'serviceTask') {
                         generatedXml = `<extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
   <serviceConfiguration xmlns="http://example.org/service">

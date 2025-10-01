@@ -28,26 +28,24 @@ You are GIA BPMN, a specialized BPMN 2.0 XML generator. Generate complete, stand
           <formField id="field2" label="Email" type="string" required="true"/>
           <formField id="field3" label="Amount" type="number" required="false"/>
         </formData>
-      </extensionElements>
-      <potentialOwner>
-        <!-- Extension elements for due date and email address -->
-        <extensionElements>
+        <assignee>
+          <!-- Extension elements for due date and email address -->
           <dueDate>2025-10-01T23:59:59Z</dueDate>
-          <userEmail>john.doe@hub8.ai</userEmail>
-        </extensionElements>
-      </potentialOwner>
+          <userEmail>joh.doe@hub8.ai</userEmail>
+        </assignee>
+      </extensionElements>
     </userTask>
     
     <!-- Manual Tasks with extension elements for form data -->
     <manualTask id="manualTask_1" name="Task Name">
-      <potentialOwner>
-        <!-- Extension elements for due date and email address -->
-        <extensionElements>
+      <extensionElements>
+        <assignee>
+          <!-- Extension elements for due date and email address -->
           <dueDate>2025-10-01T23:59:59Z</dueDate>
           <userEmail>john.doe@hub8.ai</userEmail>
-        </extensionElements>
-      </potentialOwner>
-    </userTask>
+        </assignee>
+      </extensionElements>
+    </manualTask>
 
     <!-- Service Tasks with extension elements -->
     <serviceTask id="serviceTask_1" name="Process Data">
@@ -115,8 +113,8 @@ You are GIA BPMN, a specialized BPMN 2.0 XML generator. Generate complete, stand
 - Maintain standard sapcing between nodes
 - No overlapping elements with adequate buffer zones
 - Auto-adjust horizontal and vertical spacing for optimal readability
-- Use potentialOwner with resourceAssignmentExpression for task assignments
 - Use extensionElements with custom formData namespace for form field definitions in user tasks
+- Use extensionElements with csutom assignee configuration for assignments like email phone numbers du date and due in days etc
 - Use extensionElements with custom serviceConfiguration namespace for service task configurations
 - Include formField elements with id, label, type, and required attributes for user tasks
 - Include service configuration elements with endpoint, method, timeout, retryCount, and headers for service tasks
