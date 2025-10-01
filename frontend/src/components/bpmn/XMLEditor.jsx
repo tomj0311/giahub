@@ -214,6 +214,8 @@ ${potentialOwnerContent}
       agentName = 'JSX Component Generator';
     } else if (taskType === 'scriptTask') {
       agentName = 'Python Code Generator';
+    } else if (taskType === 'manualTask') {
+      agentName = 'Python Code Generator'; // or could be JSX Component Generator depending on requirements
     } 
     
     setSelected(agentName);
@@ -349,54 +351,34 @@ ${potentialOwnerContent}
     
     console.log('🔥 FINAL XML TO BE SAVED EXACTLY AS IS:', finalXml);
     
-    // For gateway nodes, ALWAYS update the related sequence flows, not the gateway itself
+    // For gateway nodes, update all sequence flows
     if (selectedNode && selectedNode.type && selectedNode.type.includes('gateway')) {
-      console.log('🚪 GATEWAY DETECTED - Processing multiple flows');
-      // Update all related edges
-      const gatewayId = selectedNode.id;
-      const relatedEdges = edges.filter(edge => 
-        edge.source === gatewayId || edge.target === gatewayId
-      );
-      
-      console.log('🔍 Related edges found:', relatedEdges.length);
-      
-      // Parse the XML content to extract individual sequence flows
       const parser = new DOMParser();
       const tempDoc = parser.parseFromString(`<root>${finalXml}</root>`, 'text/xml');
       const sequenceFlows = tempDoc.querySelectorAll('sequenceFlow');
       
-      console.log('📋 Parsed sequence flows:', sequenceFlows.length);
-      
       sequenceFlows.forEach(flow => {
         const flowId = flow.getAttribute('id');
-        const relatedEdge = relatedEdges.find(edge => edge.id === flowId);
-        console.log(`🔄 Processing flow ${flowId}, found edge:`, !!relatedEdge);
+        const flowName = flow.getAttribute('name') || '';
+        const relatedEdge = edges.find(edge => edge.id === flowId);
         
         if (relatedEdge) {
-          // Extract nested elements
-          const childNodes = flow.childNodes;
+          const serializer = new XMLSerializer();
           let originalNestedElements = '';
-          for (let i = 0; i < childNodes.length; i++) {
-            const child = childNodes[i];
-            if (child.nodeType === Node.ELEMENT_NODE) {
-              originalNestedElements += child.outerHTML;
-            }
-          }
+          Array.from(flow.children).forEach(child => {
+            originalNestedElements += serializer.serializeToString(child);
+          });
           
-          console.log(`📦 Extracted nested elements for ${flowId}:`, originalNestedElements);
-          
-          // Update the edge with new XML
           const updatedEdge = {
             ...relatedEdge,
-            label: flow.getAttribute('name') || '',
+            label: flowName,
             data: {
               ...relatedEdge.data,
               originalNestedElements: originalNestedElements,
-              originalXML: new XMLSerializer().serializeToString(flow)
+              originalXML: serializer.serializeToString(flow)
             }
           };
           
-          console.log(`🚀 CALLING onEdgeUpdate for ${flowId}`);
           onEdgeUpdate(updatedEdge);
         }
       });
@@ -623,20 +605,24 @@ ${potentialOwnerContent}
                 borderRadius: '8px 8px 0 0'
               }}
             >XML Properties</button>
-            <button
-              onClick={() => toggleAccordion(TAB_CODE_GENERATOR)}
-              style={{
-                flex: 1,
-                background: accordionOpen === TAB_CODE_GENERATOR ? 'var(--bg-secondary)' : 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                border: 'none',
-                borderBottom: accordionOpen === TAB_CODE_GENERATOR ? '2px solid var(--accent-color)' : 'none',
-                padding: '10px',
-                fontWeight: accordionOpen === TAB_CODE_GENERATOR ? 'bold' : 'normal',
-                cursor: 'pointer',
-                borderRadius: '8px 8px 0 0'
-              }}
-            >Code Generator</button>
+            {/* Only show Code Generator for userTask, scriptTask, and manualTask */}
+            {((selectedNode?.data?.taskType === 'userTask' || selectedNode?.data?.taskType === 'scriptTask' || selectedNode?.data?.taskType === 'manualTask') || 
+              (elementType === 'userTask' || elementType === 'scriptTask' || elementType === 'manualTask')) && (
+              <button
+                onClick={() => toggleAccordion(TAB_CODE_GENERATOR)}
+                style={{
+                  flex: 1,
+                  background: accordionOpen === TAB_CODE_GENERATOR ? 'var(--bg-secondary)' : 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  border: 'none',
+                  borderBottom: accordionOpen === TAB_CODE_GENERATOR ? '2px solid var(--accent-color)' : 'none',
+                  padding: '10px',
+                  fontWeight: accordionOpen === TAB_CODE_GENERATOR ? 'bold' : 'normal',
+                  cursor: 'pointer',
+                  borderRadius: '8px 8px 0 0'
+                }}
+              >Code Generator</button>
+            )}
             <button
               onClick={() => toggleAccordion(TAB_XML_EDITOR)}
               style={{
@@ -661,7 +647,13 @@ ${potentialOwnerContent}
                   multiline
                   fullWidth
                   value={editedXml}
-                  onChange={(e) => setEditedXml(e.target.value)}
+                  onChange={(e) => {
+                    setEditedXml(e.target.value);
+                    // Parse XML changes back to properties for gateways
+                    if (selectedNode?.type && selectedNode.type.includes('gateway') && e.target.value.trim()) {
+                      parseXmlToProperties(e.target.value);
+                    }
+                  }}
                   placeholder={editedXml === '' ? "No XML content available. You can add custom XML elements here or use the Code Generator tab to create content." : "Enter XML content here..."}
                   sx={{
                     '& .MuiInputBase-input': {
@@ -682,7 +674,10 @@ ${potentialOwnerContent}
                 </Box>
               </>
             )}
-            {accordionOpen === TAB_CODE_GENERATOR && (
+            {/* Only show Code Generator content for userTask, scriptTask, and manualTask */}
+            {accordionOpen === TAB_CODE_GENERATOR && 
+             ((selectedNode?.data?.taskType === 'userTask' || selectedNode?.data?.taskType === 'scriptTask' || selectedNode?.data?.taskType === 'manualTask') || 
+              (elementType === 'userTask' || elementType === 'scriptTask' || elementType === 'manualTask')) && (
               <form onSubmit={handleCgSubmit} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <div style={{ color: 'var(--text-primary)', marginBottom: '10px' }}>
                   Agent: {selected || 'Python Code Generator'}
