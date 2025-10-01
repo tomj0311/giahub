@@ -215,7 +215,7 @@ ${potentialOwnerContent}
     } else if (taskType === 'scriptTask') {
       agentName = 'Python Code Generator';
     } else if (taskType === 'manualTask') {
-      agentName = 'Python Code Generator'; // or could be JSX Component Generator depending on requirements
+      agentName = 'JSX Component Generator'; // or could be JSX Component Generator depending on requirements
     } 
     
     setSelected(agentName);
