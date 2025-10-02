@@ -56,6 +56,7 @@ const WorkflowExecution = lazy(() => import('../workflows/WorkflowExecution'))
 const TaskCompletion = lazy(() => import('../workflows/TaskCompletion'))
 const DynamicComponentLoader = lazy(() => import('../workflows/DynamicComponentLoader'))
 const DynamicFunctionTester = lazy(() => import('../workflows/DynamicFunctionTester'))
+const BpmnElementEditorPage = lazy(() => import('../workflows/BpmnElementEditorPage'))
 const Analytics = lazy(() => import('./Analytics'))
 const BPMN = lazy(() => import('../components/bpmn/BPMN'))
 import RouteTransition from '../components/RouteTransition'
@@ -146,6 +147,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 					label: 'Create Process Diagrams',
 					to: '/dashboard/bpmn',
 					icon: 'GitBranch'
+				},
+				{
+					label: 'BPMN Element Editor',
+					to: '/dashboard/bpmn-editor',
+					icon: 'Edit'
 				},
 				{
 					label: 'Manage Wrokflows',
@@ -741,6 +747,7 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="function-tester" element={<DynamicFunctionTester user={user} />} />
 				<Route path="dynamic" element={<DynamicComponentLoader user={user} />} />
 				<Route path="bpmn" element={<BPMNEditorWrapper />} />
+				<Route path="bpmn-editor" element={<BpmnElementEditorPage />} />
 				<Route path="monitor" element={<WorkflowDashboard user={user} />} />
 				<Route path="workflow-execution" element={<WorkflowExecution user={user} />} />
 				<Route path="manage" element={<BPMN initialTheme={themeKey === 'aurora' ? 'dark' : themeKey === 'ocean' ? 'light' : 'auto'} key={themeKey} style={{ width: '100%', minHeight: '70vh', borderRadius: 8, overflow: 'hidden' }} />} />
