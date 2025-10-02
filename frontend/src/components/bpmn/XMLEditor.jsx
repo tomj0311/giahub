@@ -1458,7 +1458,7 @@ ${assigneeFields.map(field => {
                         </TextField>
                         <TextField
                           size="small"
-                          label="Timeout (ms)"
+                          label="Timeout (seconds)"
                           type="number"
                           value={xmlProperties.serviceTask.api.timeout}
                           onChange={(e) => setXmlProperties(prev => ({
