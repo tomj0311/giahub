@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './PropertyPanel.css';
 
-const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate, isOpen, onToggle, readOnly, edges, onXmlEditorOpen }) => {
+const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate, isOpen, onToggle, readOnly, edges, onBpmnElementEditorOpen }) => {
   const [activeSection, setActiveSection] = useState('general');
   const [nodeData, setNodeData] = useState({
     name: '',
@@ -344,7 +344,12 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
             <div className="xml-editor-section">
               <button 
                 className="edit-xml-btn"
-                onClick={() => onXmlEditorOpen && onXmlEditorOpen(getInnerXMLContent())}
+                onClick={() => {
+                  if (onBpmnElementEditorOpen && (selectedNode || selectedEdge)) {
+                    const elementId = selectedNode ? selectedNode.id : selectedEdge.id;
+                    onBpmnElementEditorOpen(elementId);
+                  }
+                }}
               >
                 Edit Properties
               </button>
@@ -484,29 +489,6 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
                     disabled={readOnly}
                   />
 
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Attributes Section */}
-          <div className="accordion-section">
-            <div 
-              className={`accordion-header ${activeSection === 'attributes' ? 'active' : ''}`}
-              onClick={() => toggleSection('attributes')}
-            >
-              <span>Attributes</span>
-              <span className="accordion-icon">
-                {activeSection === 'attributes' ? '▼' : '▶'}
-              </span>
-            </div>
-            {activeSection === 'attributes' && (
-              <div className="accordion-content">
-                <div className="form-group">
-                  <label htmlFor="element-xml">Inner XML Elements</label>
-                  <div className="xml-preview">
-                    <pre>{xmlContent}</pre>
-                  </div>
                 </div>
               </div>
             )}

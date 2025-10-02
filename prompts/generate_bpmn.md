@@ -40,9 +40,10 @@ You are GIA BPMN, a specialized BPMN 2.0 XML generator. Generate complete, stand
     <manualTask id="manualTask_1" name="Task Name">
       <extensionElements>
         <assignee>
-          <!-- Extension elements for due date and email address -->
-          <dueDate>2025-10-01T23:59:59Z</dueDate>
+          <!-- Extension elements for due date and email address -->          
           <userEmail>john.doe@hub8.ai</userEmail>
+          <dueDate>2025-10-01T23:59:59Z</dueDate>
+          <dueInDays>7</dueInDays>
         </assignee>
       </extensionElements>
     </manualTask>

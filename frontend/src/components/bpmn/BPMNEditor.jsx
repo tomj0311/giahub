@@ -33,7 +33,7 @@ import TextAnnotationNode from './nodes/TextAnnotationNode';
 import ParticipantNode from './nodes/ParticipantNode';
 import LaneNode from './nodes/LaneNode';
 import PropertyPanel from './PropertyPanel';
-import XMLEditor from './XMLEditor';
+import BpmnElementEditor from '../BpmnElementEditor';
 import './BPMNEditor.css';
 
 const nodeTypes = {
@@ -128,6 +128,7 @@ const initialNodes = [
 ];
 
 const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPropertyPanel = true, readOnly = false, initialBPMN = null, taskStatusData = null, onNodeClick: onNodeClickProp = null }) => {
+
   const reactFlowWrapper = useRef(null);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -141,9 +142,17 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   const [userManuallyClosed, setUserManuallyClosed] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   
-  // XMLEditor state
-  const [isXmlEditorOpen, setIsXmlEditorOpen] = useState(false);
-  const [xmlContent, setXmlContent] = useState('');
+  // BpmnElementEditor state
+  const [isBpmnElementEditorOpen, setIsBpmnElementEditorOpen] = useState(false);
+  const [bpmnElementEditorXml, setBpmnElementEditorXml] = useState('');
+  const [selectedElementId, setSelectedElementId] = useState(null);
+  const [currentBpmnXml, setCurrentBpmnXml] = useState(() => {
+    console.log('🏁 Initializing currentBpmnXml with initialBPMN:', {
+      hasInitialBPMN: !!initialBPMN,
+      initialLength: initialBPMN?.length || 0
+    });
+    return initialBPMN || '';
+  });
   
   const { project, fitView } = useReactFlow();
 
@@ -370,6 +379,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
         }
         
       } catch (error) {
+        console.error('Error parsing initial BPMN XML:', error);
         // Show error in diagram
         setNodes([{
           id: 'bpmn-error',
@@ -792,42 +802,31 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
     setSelectedEdge(updatedEdge);
   }, [setEdges, saveToHistory, nodes, readOnly]);
 
-  // XMLEditor handlers
-  const handleXmlEditorOpen = useCallback((content) => {
-    setXmlContent(content || '');
-    setIsXmlEditorOpen(true);
+  // BpmnElementEditor handlers
+  const handleBpmnElementEditorOpen = useCallback((elementId) => {
+    console.log('🚀 Opening BpmnElementEditor for element:', elementId);
+    console.log('📄 currentBpmnXml length:', currentBpmnXml?.length);
+    console.log('📄 initialBPMN length:', initialBPMN?.length);
+    setBpmnElementEditorXml(currentBpmnXml || initialBPMN || '');
+    setSelectedElementId(elementId);
+    setIsBpmnElementEditorOpen(true);
+  }, [currentBpmnXml, initialBPMN]);
+
+  const handleBpmnElementEditorClose = useCallback(() => {
+    setIsBpmnElementEditorOpen(false);
+    setBpmnElementEditorXml('');
+    setSelectedElementId(null);
   }, []);
 
-  const handleXmlEditorClose = useCallback(() => {
-    setIsXmlEditorOpen(false);
-    setXmlContent('');
-  }, []);
-
-  const handleXmlUpdate = useCallback((updatedXml) => {
-    setXmlContent(updatedXml);
-    setIsXmlEditorOpen(false);
-    
-    // Auto-save when XML is updated from dialog
-    if (selectedNode) {
-      const updatedNode = {
-        ...selectedNode,
-        data: {
-          ...selectedNode.data,
-          originalNestedElements: updatedXml
-        }
-      };
-      handleNodeUpdate(updatedNode);
-    } else if (selectedEdge) {
-      const updatedEdge = {
-        ...selectedEdge,
-        data: {
-          ...selectedEdge.data,
-          originalNestedElements: updatedXml
-        }
-      };
-      handleEdgeUpdate(updatedEdge);
+  const handleBpmnElementEditorSave = useCallback((updatedXml) => {
+    // Handle the updated XML from BpmnElementEditor
+    // This could trigger a re-import of the BPMN
+    if (updatedXml) {
+      // You might want to re-parse and update the flow here
+      console.log('Updated XML from BpmnElementEditor:', updatedXml);
     }
-  }, [selectedNode, selectedEdge, handleNodeUpdate, handleEdgeUpdate]);
+    handleBpmnElementEditorClose();
+  }, [handleBpmnElementEditorClose]);
 
   // Delete functionality - handle Delete key press
   const onKeyDown = useCallback((event) => {
@@ -889,12 +888,27 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
     }
   }, [shouldFitView, nodes, fitView, reactFlowInstance]);
 
-  const handleImportBPMN = useCallback((importedNodes, importedEdges) => {
+  const handleImportBPMN = useCallback((importedNodes, importedEdges, originalXmlString = null) => {
+    console.log('📥 handleImportBPMN called with:', {
+      nodesCount: importedNodes?.length,
+      edgesCount: importedEdges?.length,
+      hasOriginalXml: !!originalXmlString,
+      xmlLength: originalXmlString?.length
+    });
+    
     setNodes(importedNodes);
     
     // Apply arrows to imported edges
     const edgesWithArrows = updateEdgesWithArrows(importedEdges);
     setEdges(edgesWithArrows);
+    
+    // Store the original XML string if provided (from paste or import)
+    if (originalXmlString) {
+      console.log('💾 Storing original XML string, length:', originalXmlString.length);
+      setCurrentBpmnXml(originalXmlString);
+    } else {
+      console.log('⚠️ No original XML string provided to store');
+    }
     
     // Save to history after import
     if (!readOnly) {
@@ -924,7 +938,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
     
     // Trigger fit view after nodes are set
     setShouldFitView(true);
-  }, [setNodes, setEdges, setParticipants, updateEdgesWithArrows, saveToHistory, readOnly]);
+  }, [setNodes, setEdges, setParticipants, updateEdgesWithArrows, saveToHistory, readOnly, setCurrentBpmnXml]);
 
   const handleAddParticipant = useCallback((participantName) => {
     const participantId = `participant_${Date.now()}`;
@@ -1132,37 +1146,17 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
             onToggle={handlePropertyPanelToggle}
             readOnly={readOnly}
             edges={edges}
-            onXmlEditorOpen={handleXmlEditorOpen}
+            onBpmnElementEditorOpen={handleBpmnElementEditorOpen}
           />
         )}
         
-        {/* XMLEditor rendered at higher level */}
-        <XMLEditor
-          isOpen={isXmlEditorOpen}
-          onClose={handleXmlEditorClose}
-          xmlContent={xmlContent}
-          onUpdate={handleXmlUpdate}
-          elementType={selectedNode ? selectedNode.type : selectedEdge ? 'sequence flow' : 'element'}
-          selectedNode={selectedNode}
-          selectedEdge={selectedEdge}
-          onNodeUpdate={handleNodeUpdate}
-          onEdgeUpdate={handleEdgeUpdate}
-          edges={edges}
-          nodeData={selectedNode ? {
-            name: selectedNode.data.label || '',
-            id: selectedNode.id || '',
-            versionTag: selectedNode.data.versionTag || '',
-            documentation: selectedNode.data.documentation || '',
-            backgroundColor: selectedNode.style?.backgroundColor || selectedNode.data.backgroundColor || '',
-            borderColor: selectedNode.style?.borderColor || selectedNode.data.borderColor || ''
-          } : selectedEdge ? {
-            name: selectedEdge.data?.label || '',
-            id: selectedEdge.id || '',
-            versionTag: selectedEdge.data?.versionTag || '',
-            documentation: selectedEdge.data?.documentation || '',
-            backgroundColor: selectedEdge.style?.backgroundColor || selectedEdge.data?.backgroundColor || '',
-            borderColor: selectedEdge.style?.borderColor || selectedEdge.data?.borderColor || ''
-          } : {}}
+        {/* BpmnElementEditor */}
+        <BpmnElementEditor
+          xmlContent={bpmnElementEditorXml}
+          onSave={handleBpmnElementEditorSave}
+          onClose={handleBpmnElementEditorClose}
+          isOpen={isBpmnElementEditorOpen}
+          filterElementIds={selectedElementId}
         />
       </div>
     </div>

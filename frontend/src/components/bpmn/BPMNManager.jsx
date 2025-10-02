@@ -1244,7 +1244,7 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false, minioFullPa
         const { nodes: importedNodes, edges: importedEdges } = parseBPMNXML(xmlContent);
 
         if (onImportBPMN) {
-          onImportBPMN(importedNodes, importedEdges);
+          onImportBPMN(importedNodes, importedEdges, xmlContent);
         }
       } catch (error) {
         console.error('BPMN Import Error:', error);
@@ -1277,7 +1277,7 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false, minioFullPa
       const { nodes: importedNodes, edges: importedEdges } = parseBPMNXML(pastedXML);
 
       if (onImportBPMN) {
-        onImportBPMN(importedNodes, importedEdges);
+        onImportBPMN(importedNodes, importedEdges, pastedXML);
         setPastedXML('');
         setShowPasteArea(false);
       }

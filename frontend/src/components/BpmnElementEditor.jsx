@@ -17,6 +17,10 @@ import {
   IconButton,
   Chip,
   Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   ExpandMore,
@@ -27,7 +31,7 @@ import {
   ContentCopy,
 } from '@mui/icons-material';
 
-const BpmnElementEditor = ({ xmlContent, onSave, onClose, isOpen }) => {
+const BpmnElementEditor = ({ xmlContent, onSave, onClose, isOpen, filterElementIds = null }) => {
   const [elements, setElements] = useState([]);
   const [selectedElement, setSelectedElement] = useState(null);
   const [modifiedXml, setModifiedXml] = useState('');
@@ -370,6 +374,23 @@ const BpmnElementEditor = ({ xmlContent, onSave, onClose, isOpen }) => {
     });
   };
 
+  const isLeafObject = (obj) => {
+    if (!obj || typeof obj !== 'object') return false;
+    
+    // Check if all values are strings (leaf object) or if it has typical leaf patterns
+    const values = Object.values(obj);
+    const allStrings = values.every(val => typeof val === 'string');
+    
+    if (allStrings) return true;
+    
+    // Check for common leaf object patterns
+    const keys = Object.keys(obj).map(k => k.toLowerCase());
+    const leafPatterns = ['name', 'value', 'id', 'label', 'type', 'required', 'textcontent'];
+    const hasLeafPattern = keys.some(key => leafPatterns.includes(key));
+    
+    return hasLeafPattern && !values.some(val => typeof val === 'object' && !Array.isArray(val));
+  };
+
   const renderExtensionElement = (elementId, key, value, path = '') => {
     const currentPath = path ? `${path}.${key}` : key;
     
@@ -432,25 +453,36 @@ const BpmnElementEditor = ({ xmlContent, onSave, onClose, isOpen }) => {
                   size="small"
                 />
               ) : typeof item === 'object' ? (
-                <Box sx={{ ml: 1 }}>
-                  {Object.entries(item).map(([itemKey, itemValue]) => (
-                    <TextField
-                      key={itemKey}
-                      label={itemKey.charAt(0).toUpperCase() + itemKey.slice(1)}
-                      value={itemValue || ''}
-                      onChange={(e) => {
-                        const newArray = [...value];
-                        newArray[index] = {
-                          ...newArray[index],
-                          [itemKey]: e.target.value
-                        };
-                        updateExtensionElement(elementId, currentPath, newArray);
-                      }}
-                      fullWidth
-                      size="small"
-                      sx={{ mb: 1 }}
-                    />
-                  ))}
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2 }}>
+                  {Object.entries(item).map(([itemKey, itemValue]) => {
+                    const isTextContent = itemKey.toLowerCase().includes('content') || 
+                                         itemKey.toLowerCase().includes('text') ||
+                                         itemKey.toLowerCase().includes('description') ||
+                                         itemKey.toLowerCase().includes('message');
+                    
+                    return (
+                      <TextField
+                        key={itemKey}
+                        label={itemKey.charAt(0).toUpperCase() + itemKey.slice(1)}
+                        value={itemValue || ''}
+                        onChange={(e) => {
+                          const newArray = [...value];
+                          newArray[index] = {
+                            ...newArray[index],
+                            [itemKey]: e.target.value
+                          };
+                          updateExtensionElement(elementId, currentPath, newArray);
+                        }}
+                        size="small"
+                        multiline={isTextContent}
+                        rows={isTextContent ? 3 : 1}
+                        sx={{ 
+                          gridColumn: isTextContent ? '1 / -1' : 'auto', // Full width for text content
+                          mb: 1 
+                        }}
+                      />
+                    );
+                  })}
                 </Box>
               ) : null}
             </Box>
@@ -461,43 +493,64 @@ const BpmnElementEditor = ({ xmlContent, onSave, onClose, isOpen }) => {
 
     // If value is an object, render as collapsible section with all properties as editable fields
     if (value && typeof value === 'object') {
+      const showAddButton = isLeafObject(value);
+      
       return (
         <Box key={currentPath} sx={{ mb: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
             <Typography variant="subtitle2">
               {key.charAt(0).toUpperCase() + key.slice(1)}
             </Typography>
-            <Button
-              startIcon={<Add />}
-              onClick={() => {
-                // Convert single object to array and add new item
-                const newItem = createDefaultItem(key, [value]);
-                updateExtensionElement(elementId, currentPath, [value, newItem]);
-              }}
-              variant="text"
-              size="small"
-              color="secondary"
-            >
-              Add Another
-            </Button>
+            {showAddButton && (
+              <Button
+                startIcon={<Add />}
+                onClick={() => {
+                  // Convert single object to array and add new item
+                  const newItem = createDefaultItem(key, [value]);
+                  updateExtensionElement(elementId, currentPath, [value, newItem]);
+                }}
+                variant="text"
+                size="small"
+                color="secondary"
+              >
+                Add Another
+              </Button>
+            )}
           </Box>
           <Box sx={{ ml: 2, pl: 2, borderLeft: 2, borderColor: 'grey.300' }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2, mb: 2 }}>
+              {Object.entries(value).map(([subKey, subValue]) => {
+                if (typeof subValue === 'string') {
+                  const isTextContent = subKey.toLowerCase().includes('content') || 
+                                       subKey.toLowerCase().includes('text') ||
+                                       subKey.toLowerCase().includes('description') ||
+                                       subKey.toLowerCase().includes('message');
+                  
+                  return (
+                    <TextField
+                      key={subKey}
+                      label={subKey.charAt(0).toUpperCase() + subKey.slice(1)}
+                      value={subValue || ''}
+                      onChange={(e) => updateExtensionElement(elementId, `${currentPath}.${subKey}`, e.target.value)}
+                      size="small"
+                      multiline={isTextContent}
+                      rows={isTextContent ? 3 : 1}
+                      sx={{ 
+                        gridColumn: isTextContent ? '1 / -1' : 'auto', // Full width for text content
+                        mb: 1 
+                      }}
+                    />
+                  );
+                }
+                return null;
+              })}
+            </Box>
+            {/* Render nested objects separately below the grid */}
             {Object.entries(value).map(([subKey, subValue]) => {
-              if (typeof subValue === 'string') {
-                return (
-                  <TextField
-                    key={subKey}
-                    label={subKey.charAt(0).toUpperCase() + subKey.slice(1)}
-                    value={subValue || ''}
-                    onChange={(e) => updateExtensionElement(elementId, `${currentPath}.${subKey}`, e.target.value)}
-                    fullWidth
-                    size="small"
-                    sx={{ mb: 1 }}
-                  />
-                );
-              } else {
+              if (typeof subValue !== 'string') {
                 return renderExtensionElement(elementId, subKey, subValue, currentPath);
               }
+              return null;
             })}
           </Box>
         </Box>
@@ -630,48 +683,67 @@ const BpmnElementEditor = ({ xmlContent, onSave, onClose, isOpen }) => {
   if (!isOpen) return null;
 
   return (
-    <Box
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      maxWidth="lg"
+      fullWidth
       sx={{
-        position: 'fixed',
-        top: '0',
-        left: '5%',
-        width: '100%',
-        height: 'calc(100vh - 100px)',
-        bgcolor: 'background.paper',
-        border: '2px solid',
-        borderColor: 'primary.main',
-        borderRadius: 2,
-        boxShadow: 24,
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        zIndex: 1300,
+        '& .MuiDialog-paper': {
+          height: 'calc(100vh - 100px)',
+          maxHeight: 'calc(100vh - 100px)',
+          width: '80vw',
+          maxWidth: '1200px',
+        }
       }}
     >
-      {/* Header */}
-      <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h6">BPMN Element Editor</Typography>
-        <Box>
-          <Button
-            variant="contained"
-            startIcon={<Save />}
-            onClick={handleSave}
-            sx={{ mr: 1 }}
-          >
-            Save
-          </Button>
+      <DialogTitle>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box>
+            <Typography variant="h6">BPMN Element Editor</Typography>
+            {filterElementIds && (
+              <Typography variant="caption" color="text.secondary">
+                Filtered: {Array.isArray(filterElementIds) ? filterElementIds.join(', ') : filterElementIds}
+              </Typography>
+            )}
+          </Box>
           <IconButton onClick={onClose}>
             <Close />
           </IconButton>
         </Box>
-      </Box>
+      </DialogTitle>
 
-      {/* Content */}
-      <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-        {elements.length === 0 ? (
-          <Typography color="text.secondary">No editable elements found in XML</Typography>
-        ) : (
-          elements.map((element) => (
+      <DialogContent sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+        {(() => {
+          if (elements.length === 0) {
+            return <Typography color="text.secondary">No editable elements found in XML</Typography>;
+          }
+          
+          const filteredElements = elements.filter((element) => {
+            // If filterElementIds is provided, only show elements with those IDs
+            if (filterElementIds) {
+              if (Array.isArray(filterElementIds)) {
+                return filterElementIds.includes(element.id);
+              } else {
+                return element.id === filterElementIds;
+              }
+            }
+            // If no filter provided, show all elements
+            return true;
+          });
+
+          if (filteredElements.length === 0) {
+            const filterInfo = Array.isArray(filterElementIds) 
+              ? filterElementIds.join(', ') 
+              : filterElementIds;
+            return (
+              <Typography color="text.secondary">
+                No elements found with ID(s): {filterInfo}
+              </Typography>
+            );
+          }
+
+          return filteredElements.map((element) => (
             <Accordion key={element.id} sx={{ mb: 1 }}>
               <AccordionSummary expandIcon={<ExpandMore />}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -787,10 +859,20 @@ const BpmnElementEditor = ({ xmlContent, onSave, onClose, isOpen }) => {
                 </Box>
               </AccordionDetails>
             </Accordion>
-          ))
-        )}
-      </Box>
-    </Box>
+          ));
+        })()}
+      </DialogContent>
+
+      <DialogActions sx={{ p: 2 }}>
+        <Button
+          variant="contained"
+          startIcon={<Save />}
+          onClick={handleSave}
+        >
+          Save
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 };
 
