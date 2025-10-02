@@ -2,7 +2,7 @@
 File Service
 
 This service handles all file-related business logic including file uploads,
-MinIO operations, file validation, and file management.
+storage operations (MinIO or disk), file validation, and file management.
 """
 
 import os
@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any, BinaryIO
 from fastapi import HTTPException, status, UploadFile
 import aiofiles
+from pathlib import Path
 
 from ..utils.log import logger
 
@@ -32,6 +33,20 @@ class FileService:
         ".bpmn",
     }
     MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
+
+    # Storage configuration
+    STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "minio").lower()  # "minio" or "disk"
+    DISK_STORAGE_PATH = os.getenv("DISK_STORAGE_PATH", "/tmp/file_storage")
+
+    @classmethod
+    def get_storage_backend(cls) -> str:
+        """Get the configured storage backend"""
+        return cls.STORAGE_BACKEND
+
+    @classmethod
+    def _get_disk_storage_path(cls, file_path: str) -> str:
+        """Get full disk path for file"""
+        return os.path.join(cls.DISK_STORAGE_PATH, file_path)
 
     @staticmethod
     async def validate_tenant_access(user: dict) -> str:
@@ -77,12 +92,12 @@ class FileService:
             )
 
     @classmethod
-    async def upload_file_to_minio(
+    async def upload_file_to_storage(
         cls, file: UploadFile, tenant_id: str, user_id: str, collection: str, path: str = ""
     ) -> Dict[str, Any]:
-        """Upload file to MinIO storage"""
+        """Upload file to configured storage backend (MinIO or disk)"""
         logger.info(
-            f"[FILE] Uploading file '{file.filename}' for user: {user_id}"
+            f"[FILE] Uploading file '{file.filename}' for user: {user_id} using {cls.STORAGE_BACKEND} storage"
         )
 
         try:
@@ -111,8 +126,11 @@ class FileService:
             # Calculate file hash for deduplication
             file_hash = hashlib.md5(content).hexdigest()
 
-            # Upload to MinIO
-            success = await cls._upload_to_minio(file_path, content)
+            # Upload to configured storage
+            if cls.STORAGE_BACKEND == "disk":
+                success = await cls._upload_to_disk(file_path, content)
+            else:
+                success = await cls._upload_to_minio(file_path, content)
 
             if not success:
                 raise HTTPException(
@@ -126,13 +144,14 @@ class FileService:
                 "file_hash": file_hash,
                 "content_type": file.content_type,
                 "uploaded_at": datetime.utcnow(),
+                "storage_backend": cls.STORAGE_BACKEND,
             }
 
             if warning_message:
                 file_info["warning"] = warning_message
 
             logger.info(
-                f"[FILE] Successfully uploaded file '{file.filename}' to {file_path}"
+                f"[FILE] Successfully uploaded file '{file.filename}' to {file_path} using {cls.STORAGE_BACKEND} storage"
             )
             return file_info
 
@@ -142,11 +161,19 @@ class FileService:
             logger.error(f"[FILE] Failed to upload file '{file.filename}': {e}")
             raise HTTPException(status_code=500, detail="File upload failed")
 
+    # Keep backward compatibility
+    @classmethod
+    async def upload_file_to_minio(
+        cls, file: UploadFile, tenant_id: str, user_id: str, collection: str, path: str = ""
+    ) -> Dict[str, Any]:
+        """Upload file to storage (backward compatibility method)"""
+        return await cls.upload_file_to_storage(file, tenant_id, user_id, collection, path)
+
     @classmethod
     async def upload_multiple_files(
         cls, files: List[UploadFile], tenant_id: str, user_id: str, collection: str, path: str = ""
     ) -> List[Dict[str, Any]]:
-        """Upload multiple files to MinIO storage"""
+        """Upload multiple files to configured storage backend"""
         if not files or all(not file.filename for file in files):
             raise HTTPException(status_code=400, detail="No files provided")
 
@@ -158,7 +185,7 @@ class FileService:
                 continue
 
             try:
-                file_info = await cls.upload_file_to_minio(
+                file_info = await cls.upload_file_to_storage(
                     file, tenant_id, user_id, collection, path
                 )
                 results.append(file_info)
@@ -179,22 +206,30 @@ class FileService:
         return response
 
     @classmethod
-    async def delete_file_from_minio(cls, file_path: str) -> bool:
-        """Delete file from MinIO storage"""
+    async def delete_file_from_storage(cls, file_path: str) -> bool:
+        """Delete file from configured storage backend"""
         try:
-            # Implement actual MinIO deletion
-            success = await cls._delete_from_minio(file_path)
+            if cls.STORAGE_BACKEND == "disk":
+                success = await cls._delete_from_disk(file_path)
+            else:
+                success = await cls._delete_from_minio(file_path)
 
             if success:
-                logger.info(f"[FILE] Successfully deleted file: {file_path}")
+                logger.info(f"[FILE] Successfully deleted file: {file_path} from {cls.STORAGE_BACKEND}")
             else:
-                logger.warning(f"[FILE] Failed to delete file: {file_path}")
+                logger.warning(f"[FILE] Failed to delete file: {file_path} from {cls.STORAGE_BACKEND}")
 
             return success
 
         except Exception as e:
             logger.error(f"[FILE] Error deleting file {file_path}: {e}")
             return False
+
+    # Keep backward compatibility
+    @classmethod
+    async def delete_file_from_minio(cls, file_path: str) -> bool:
+        """Delete file from storage (backward compatibility method)"""
+        return await cls.delete_file_from_storage(file_path)
 
     @classmethod
     async def list_files_in_collection(
@@ -206,8 +241,11 @@ class FileService:
             # Stored objects follow: uploads/{user_id}/{collection}/<filename>
             collection_path = f"uploads/{user_id}/{collection}/"
 
-            # List files from MinIO (placeholder)
-            files = await cls._list_files_in_minio(collection_path)
+            # List files from configured storage
+            if cls.STORAGE_BACKEND == "disk":
+                files = await cls._list_files_in_disk(collection_path)
+            else:
+                files = await cls._list_files_in_minio(collection_path)
 
             return files
 
@@ -217,9 +255,12 @@ class FileService:
 
     @classmethod
     async def get_file_content(cls, file_path: str) -> bytes:
-        """Get file content from MinIO"""
+        """Get file content from configured storage backend"""
         try:
-            content = await cls._get_file_from_minio(file_path)
+            if cls.STORAGE_BACKEND == "disk":
+                content = await cls._get_file_from_disk(file_path)
+            else:
+                content = await cls._get_file_from_minio(file_path)
             return content
 
         except Exception as e:
@@ -259,6 +300,17 @@ class FileService:
 
     @staticmethod
     async def check_file_exists(file_path: str) -> bool:
+        """Check if file exists in configured storage backend"""
+        try:
+            if FileService.STORAGE_BACKEND == "disk":
+                return await FileService._check_file_exists_disk(file_path)
+            else:
+                return await FileService._check_file_exists_minio(file_path)
+        except Exception:
+            return False
+
+    @staticmethod
+    async def _check_file_exists_minio(file_path: str) -> bool:
         """Check if file exists in MinIO"""
         try:
             minio_client = FileService._get_minio_client()
@@ -273,15 +325,26 @@ class FileService:
             return False
 
     @staticmethod
+    async def _check_file_exists_disk(file_path: str) -> bool:
+        """Check if file exists on disk"""
+        try:
+            full_path = FileService._get_disk_storage_path(file_path)
+            return os.path.exists(full_path)
+        except Exception:
+            return False
+
+    @staticmethod
     async def upload_file_content(
         object_name: str, content: bytes, content_type: str = None
     ) -> bool:
-        """Upload file content directly to MinIO with given object name"""
+        """Upload file content directly to configured storage with given object name"""
         try:
             logger.info(f"[FILE] Uploading content to object: {object_name}")
 
-            # Use the internal MinIO upload method
-            success = await FileService._upload_to_minio(object_name, content)
+            if FileService.STORAGE_BACKEND == "disk":
+                success = await FileService._upload_to_disk(object_name, content)
+            else:
+                success = await FileService._upload_to_minio(object_name, content)
 
             if success:
                 logger.info(f"[FILE] Successfully uploaded content to {object_name}")
@@ -294,34 +357,46 @@ class FileService:
             logger.error(f"[FILE] Error uploading content to {object_name}: {e}")
             return False
 
-    # Public MinIO operations for other services
+    # Public storage operations for other services
     @staticmethod
     async def upload_file_content_to_path(file_path: str, content: bytes) -> bool:
-        """Public method to upload content to a specific MinIO path"""
-        return await FileService._upload_to_minio(file_path, content)
+        """Public method to upload content to a specific storage path"""
+        if FileService.STORAGE_BACKEND == "disk":
+            return await FileService._upload_to_disk(file_path, content)
+        else:
+            return await FileService._upload_to_minio(file_path, content)
 
     @staticmethod
     async def delete_file_at_path(file_path: str) -> bool:
-        """Public method to delete a file at a specific MinIO path"""
-        return await FileService._delete_from_minio(file_path)
+        """Public method to delete a file at a specific storage path"""
+        if FileService.STORAGE_BACKEND == "disk":
+            return await FileService._delete_from_disk(file_path)
+        else:
+            return await FileService._delete_from_minio(file_path)
 
     @staticmethod
     async def list_files_at_path(path: str) -> List[str]:
-        """Public method to list files at a specific MinIO path"""
-        return await FileService._list_files_in_minio(path)
+        """Public method to list files at a specific storage path"""
+        if FileService.STORAGE_BACKEND == "disk":
+            return await FileService._list_files_in_disk(path)
+        else:
+            return await FileService._list_files_in_minio(path)
 
     @staticmethod
     async def get_file_content_from_path(file_path: str) -> bytes:
-        """Public method to get file content from a specific MinIO path"""
-        return await FileService._get_file_from_minio(file_path)
+        """Public method to get file content from a specific storage path"""
+        if FileService.STORAGE_BACKEND == "disk":
+            return await FileService._get_file_from_disk(file_path)
+        else:
+            return await FileService._get_file_from_minio(file_path)
 
     @classmethod
     async def delete_all_files_from_collection(
         cls, tenant_id: str, user_id: str, collection: str
     ) -> Dict[str, Any]:
-        """Delete all files from a specific collection in MinIO"""
+        """Delete all files from a specific collection in configured storage"""
         logger.info(
-            f"[FILE] Deleting all files from collection '{collection}' for tenant: {tenant_id}, user: {user_id}"
+            f"[FILE] Deleting all files from collection '{collection}' for tenant: {tenant_id}, user: {user_id} using {cls.STORAGE_BACKEND} storage"
         )
         
         try:
@@ -329,7 +404,10 @@ class FileService:
             collection_path = f"uploads/{user_id}/{collection}/"
             
             # List all files in the collection
-            files = await cls._list_files_in_minio(collection_path)
+            if cls.STORAGE_BACKEND == "disk":
+                files = await cls._list_files_in_disk(collection_path)
+            else:
+                files = await cls._list_files_in_minio(collection_path)
             
             if not files:
                 logger.info(f"[FILE] No files found in collection '{collection}' to delete")
@@ -341,7 +419,11 @@ class FileService:
             # Delete each file
             for file_path in files:
                 try:
-                    success = await cls._delete_from_minio(file_path)
+                    if cls.STORAGE_BACKEND == "disk":
+                        success = await cls._delete_from_disk(file_path)
+                    else:
+                        success = await cls._delete_from_minio(file_path)
+                        
                     if success:
                         deleted_files.append(file_path)
                         logger.debug(f"[FILE] Deleted file: {file_path}")
@@ -460,4 +542,86 @@ class FileService:
 
         except Exception as e:
             logger.error(f"[FILE] MinIO get failed for {file_path}: {e}")
+            return b""
+
+    # Disk storage implementation methods
+    @staticmethod
+    async def _upload_to_disk(file_path: str, content: bytes) -> bool:
+        """Upload content to disk storage"""
+        try:
+            full_path = FileService._get_disk_storage_path(file_path)
+            
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            
+            # Write file to disk
+            async with aiofiles.open(full_path, "wb") as f:
+                await f.write(content)
+
+            logger.info(f"[FILE] Successfully uploaded to disk: {full_path}")
+            return True
+
+        except Exception as e:
+            logger.error(f"[FILE] Disk upload failed for {file_path}: {e}")
+            return False
+
+    @staticmethod
+    async def _delete_from_disk(file_path: str) -> bool:
+        """Delete file from disk storage"""
+        try:
+            full_path = FileService._get_disk_storage_path(file_path)
+            
+            if os.path.exists(full_path):
+                os.remove(full_path)
+                logger.info(f"[FILE] Successfully deleted from disk: {full_path}")
+                return True
+            else:
+                logger.warning(f"[FILE] File not found on disk: {full_path}")
+                return False
+
+        except Exception as e:
+            logger.error(f"[FILE] Disk delete failed for {file_path}: {e}")
+            return False
+
+    @staticmethod
+    async def _list_files_in_disk(path: str) -> List[str]:
+        """List files in disk storage path"""
+        try:
+            full_path = FileService._get_disk_storage_path(path)
+            
+            if not os.path.exists(full_path):
+                return []
+            
+            files = []
+            for root, dirs, filenames in os.walk(full_path):
+                for filename in filenames:
+                    # Get relative path from storage root
+                    file_full_path = os.path.join(root, filename)
+                    relative_path = os.path.relpath(file_full_path, FileService.DISK_STORAGE_PATH)
+                    files.append(relative_path.replace(os.sep, '/'))  # Normalize path separators
+            
+            return files
+
+        except Exception as e:
+            logger.error(f"[FILE] Disk list failed for {path}: {e}")
+            return []
+
+    @staticmethod
+    async def _get_file_from_disk(file_path: str) -> bytes:
+        """Get file content from disk storage"""
+        try:
+            full_path = FileService._get_disk_storage_path(file_path)
+            
+            if not os.path.exists(full_path):
+                logger.error(f"[FILE] File not found on disk: {full_path}")
+                return b""
+            
+            async with aiofiles.open(full_path, "rb") as f:
+                content = await f.read()
+
+            logger.info(f"[FILE] Successfully retrieved from disk: {full_path}")
+            return content
+
+        except Exception as e:
+            logger.error(f"[FILE] Disk get failed for {file_path}: {e}")
             return b""
