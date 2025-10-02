@@ -47,18 +47,47 @@ You are GIA BPMN, a specialized BPMN 2.0 XML generator. Generate complete, stand
       </extensionElements>
     </manualTask>
 
-    <!-- Service Tasks with extension elements -->
-    <serviceTask id="serviceTask_1" name="Process Data">
+    <!-- Service Tasks with extension elements - Agent Configuration -->
+    <serviceTask id="serviceTask_1" name="Process Data with Agent">
       <extensionElements>
         <serviceConfiguration xmlns="http://example.org/service">
-          <endpoint>https://api.example.com/process</endpoint>
-          <method>POST</method>
-          <timeout>30000</timeout>
-          <retryCount>3</retryCount>
-          <headers>
-            <header name="Content-Type" value="application/json"/>
-            <header name="Authorization" value="Bearer ${token}"/>
-          </headers>
+          <agent>
+            <agentName>data-processing-agent</agentName>
+            <prompt>prompt</prompt>
+          </agent>
+        </serviceConfiguration>
+      </extensionElements>
+    </serviceTask>
+    
+    <!-- Service Tasks with extension elements - Function Configuration -->
+    <serviceTask id="serviceTask_2" name="Execute Function">
+      <extensionElements>
+        <serviceConfiguration xmlns="http://example.org/service">
+          <function>
+            <functionName>validateUserData</functionName>
+            <parameters>
+              <parameter name="param1" value=""/>
+              <parameter name="param2" value=""/>
+            </parameters>
+          </function>
+        </serviceConfiguration>
+      </extensionElements>
+    </serviceTask>
+    
+    <!-- Service Tasks with extension elements - API Configuration -->
+    <serviceTask id="serviceTask_3" name="Call External API">
+      <extensionElements>
+        <serviceConfiguration xmlns="http://example.org/service">
+          <api>
+            <endpoint>https://api.example.com/process</endpoint>
+            <method>POST</method>
+            <timeout>30000</timeout>
+            <retryCount>3</retryCount>
+            <headers>
+              <header name="Content-Type" value="application/json"/>
+              <header name="Authorization" value="Bearer ${token}"/>
+            </headers>
+          </api>
         </serviceConfiguration>
       </extensionElements>
     </serviceTask>
@@ -116,8 +145,11 @@ You are GIA BPMN, a specialized BPMN 2.0 XML generator. Generate complete, stand
 - Use extensionElements with custom formData namespace for form field definitions in user tasks
 - Use extensionElements with csutom assignee configuration for assignments like email phone numbers du date and due in days etc
 - Use extensionElements with custom serviceConfiguration namespace for service task configurations
+- Service tasks support three mutually exclusive configuration types:
+  1. **Agent Configuration**: Uses agentName element for agent-based execution
+  2. **Function Configuration**: Uses functionName and parameters elements for function calls
+  3. **API Configuration**: Uses endpoint, method, timeout, retryCount, and headers for external API calls
 - Include formField elements with id, label, type, and required attributes for user tasks
-- Include service configuration elements with endpoint, method, timeout, retryCount, and headers for service tasks
 - Focus on core BPMN elements without complex data flow specifications
 - For script tasks: Use ONLY standard Python syntax with direct variable access and assignments (e.g., result = True, email_valid = False) - Variables are directly available without form_data or process_variables access
 - For gateway conditions: Use ONLY standard Python boolean expressions in conditionExpression elements (e.g., amount > 1000, status == "approved", is_valid == True) - NEVER use ${} template syntax or vendor-specific expression formats

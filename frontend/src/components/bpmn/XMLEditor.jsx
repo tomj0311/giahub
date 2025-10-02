@@ -30,11 +30,22 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
       }
     },
     serviceTask: {
-      endpoint: '',
-      method: 'POST',
-      timeout: '20000',
-      retryCount: '2',
-      headers: [{ name: 'Content-Type', value: 'application/json' }]
+      configurationType: 'api', // 'agent', 'function', or 'api'
+      agent: {
+        agentName: '',
+        prompt: ''
+      },
+      function: {
+        functionName: '',
+        parameters: [{ name: '', value: '' }]
+      },
+      api: {
+        endpoint: '',
+        method: 'POST',
+        timeout: '20000',
+        retryCount: '2',
+        headers: [{ name: 'Content-Type', value: 'application/json' }]
+      }
     },
     scriptTask: {
       scriptCode: ''
@@ -196,6 +207,80 @@ ${assigneeFields.map(field => {
             }
           }
         }));
+      } else if (taskType === 'serviceTask') {
+        // Parse serviceTask configuration
+        const serviceConfig = doc.querySelector('serviceConfiguration');
+        console.log('🔍 Found serviceConfiguration:', !!serviceConfig);
+        
+        if (serviceConfig) {
+          // Check which configuration type exists
+          const agentElement = serviceConfig.querySelector('agent');
+          const functionElement = serviceConfig.querySelector('function');
+          const apiElement = serviceConfig.querySelector('api');
+          
+          let configurationType = 'api'; // default
+          let serviceTaskConfig = {
+            configurationType: 'api',
+            agent: { agentName: '', prompt: '' },
+            function: { functionName: '', parameters: [{ name: '', value: '' }] },
+            api: {
+              endpoint: '',
+              method: 'POST',
+              timeout: '20000',
+              retryCount: '2',
+              headers: [{ name: 'Content-Type', value: 'application/json' }]
+            }
+          };
+          
+          if (agentElement) {
+            console.log('🤖 Found agent configuration');
+            configurationType = 'agent';
+            const agentName = agentElement.querySelector('agentName')?.textContent || '';
+            const prompt = agentElement.querySelector('prompt')?.textContent || '';
+            serviceTaskConfig.configurationType = 'agent';
+            serviceTaskConfig.agent = { agentName, prompt };
+          } else if (functionElement) {
+            console.log('⚙️ Found function configuration');
+            configurationType = 'function';
+            const functionName = functionElement.querySelector('functionName')?.textContent || '';
+            const parameters = Array.from(functionElement.querySelectorAll('parameter')).map(param => ({
+              name: param.getAttribute('name') || '',
+              value: param.getAttribute('value') || ''
+            }));
+            serviceTaskConfig.configurationType = 'function';
+            serviceTaskConfig.function = {
+              functionName,
+              parameters: parameters.length > 0 ? parameters : [{ name: '', value: '' }]
+            };
+          } else if (apiElement) {
+            console.log('🌐 Found API configuration');
+            configurationType = 'api';
+            const endpoint = apiElement.querySelector('endpoint')?.textContent || '';
+            const method = apiElement.querySelector('method')?.textContent || 'POST';
+            const timeout = apiElement.querySelector('timeout')?.textContent || '20000';
+            const retryCount = apiElement.querySelector('retryCount')?.textContent || '2';
+            const headers = Array.from(apiElement.querySelectorAll('header')).map(header => ({
+              name: header.getAttribute('name') || '',
+              value: header.getAttribute('value') || ''
+            }));
+            serviceTaskConfig.configurationType = 'api';
+            serviceTaskConfig.api = {
+              endpoint,
+              method,
+              timeout,
+              retryCount,
+              headers: headers.length > 0 ? headers : [{ name: 'Content-Type', value: 'application/json' }]
+            };
+          }
+          
+          console.log('🔧 Setting serviceTask config:', serviceTaskConfig);
+          
+          // Update state
+          setXmlProperties(prev => ({
+            ...prev,
+            serviceTask: serviceTaskConfig
+          }));
+        }
       } else if (selectedNode?.type && selectedNode.type.includes('gateway')) {
         // Parse gateway sequence flows
         const sequenceFlows = Array.from(doc.querySelectorAll('sequenceFlow')).map(flow => ({
@@ -1198,110 +1283,279 @@ ${assigneeFields.map(field => {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <TextField
                       size="small"
-                      label="Endpoint URL"
-                      value={xmlProperties.serviceTask.endpoint}
-                      onChange={(e) => setXmlProperties(prev => ({
-                        ...prev,
-                        serviceTask: { ...prev.serviceTask, endpoint: e.target.value }
-                      }))}
-                      fullWidth
-                    />
-                    <TextField
-                      size="small"
                       select
-                      label="HTTP Method"
-                      value={xmlProperties.serviceTask.method}
+                      label="Configuration Type"
+                      value={xmlProperties.serviceTask.configurationType}
                       onChange={(e) => setXmlProperties(prev => ({
                         ...prev,
-                        serviceTask: { ...prev.serviceTask, method: e.target.value }
+                        serviceTask: { ...prev.serviceTask, configurationType: e.target.value }
                       }))}
                       SelectProps={{ native: true }}
+                      fullWidth
                     >
-                      <option value="GET">GET</option>
-                      <option value="POST">POST</option>
-                      <option value="PUT">PUT</option>
-                      <option value="DELETE">DELETE</option>
+                      <option value="agent">Agent</option>
+                      <option value="function">Function</option>
+                      <option value="api">API</option>
                     </TextField>
-                    <TextField
-                      size="small"
-                      label="Timeout (ms)"
-                      type="number"
-                      value={xmlProperties.serviceTask.timeout}
-                      onChange={(e) => setXmlProperties(prev => ({
-                        ...prev,
-                        serviceTask: { ...prev.serviceTask, timeout: e.target.value }
-                      }))}
-                    />
-                    <TextField
-                      size="small"
-                      label="Retry Count"
-                      type="number"
-                      value={xmlProperties.serviceTask.retryCount}
-                      onChange={(e) => setXmlProperties(prev => ({
-                        ...prev,
-                        serviceTask: { ...prev.serviceTask, retryCount: e.target.value }
-                      }))}
-                    />
-                    <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
-                      Headers:
-                    </Typography>
-                    {xmlProperties.serviceTask.headers.map((header, index) => (
-                      <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+
+                    {/* Agent Configuration */}
+                    {xmlProperties.serviceTask.configurationType === 'agent' && (
+                      <>
                         <TextField
                           size="small"
-                          label="Name"
-                          value={header.name}
-                          onChange={(e) => {
-                            const newHeaders = [...xmlProperties.serviceTask.headers];
-                            newHeaders[index].name = e.target.value;
-                            setXmlProperties(prev => ({
-                              ...prev,
-                              serviceTask: { ...prev.serviceTask, headers: newHeaders }
-                            }));
-                          }}
-                          sx={{ flex: 1 }}
+                          label="Agent Name"
+                          value={xmlProperties.serviceTask.agent.agentName}
+                          onChange={(e) => setXmlProperties(prev => ({
+                            ...prev,
+                            serviceTask: { 
+                              ...prev.serviceTask, 
+                              agent: { ...prev.serviceTask.agent, agentName: e.target.value }
+                            }
+                          }))}
+                          fullWidth
                         />
                         <TextField
                           size="small"
-                          label="Value"
-                          value={header.value}
-                          onChange={(e) => {
-                            const newHeaders = [...xmlProperties.serviceTask.headers];
-                            newHeaders[index].value = e.target.value;
-                            setXmlProperties(prev => ({
-                              ...prev,
-                              serviceTask: { ...prev.serviceTask, headers: newHeaders }
-                            }));
-                          }}
-                          sx={{ flex: 1 }}
+                          label="Prompt"
+                          value={xmlProperties.serviceTask.agent.prompt}
+                          onChange={(e) => setXmlProperties(prev => ({
+                            ...prev,
+                            serviceTask: { 
+                              ...prev.serviceTask, 
+                              agent: { ...prev.serviceTask.agent, prompt: e.target.value }
+                            }
+                          }))}
+                          fullWidth
                         />
-                        <button
+                      </>
+                    )}
+
+                    {/* Function Configuration */}
+                    {xmlProperties.serviceTask.configurationType === 'function' && (
+                      <>
+                        <TextField
+                          size="small"
+                          label="Function Name"
+                          value={xmlProperties.serviceTask.function.functionName}
+                          onChange={(e) => setXmlProperties(prev => ({
+                            ...prev,
+                            serviceTask: { 
+                              ...prev.serviceTask, 
+                              function: { ...prev.serviceTask.function, functionName: e.target.value }
+                            }
+                          }))}
+                          fullWidth
+                        />
+                        <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
+                          Parameters:
+                        </Typography>
+                        {xmlProperties.serviceTask.function.parameters.map((param, index) => (
+                          <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <TextField
+                              size="small"
+                              label="Name"
+                              value={param.name}
+                              onChange={(e) => {
+                                const newParams = [...xmlProperties.serviceTask.function.parameters];
+                                newParams[index].name = e.target.value;
+                                setXmlProperties(prev => ({
+                                  ...prev,
+                                  serviceTask: { 
+                                    ...prev.serviceTask, 
+                                    function: { ...prev.serviceTask.function, parameters: newParams }
+                                  }
+                                }));
+                              }}
+                              sx={{ flex: 1 }}
+                            />
+                            <TextField
+                              size="small"
+                              label="Value"
+                              value={param.value}
+                              onChange={(e) => {
+                                const newParams = [...xmlProperties.serviceTask.function.parameters];
+                                newParams[index].value = e.target.value;
+                                setXmlProperties(prev => ({
+                                  ...prev,
+                                  serviceTask: { 
+                                    ...prev.serviceTask, 
+                                    function: { ...prev.serviceTask.function, parameters: newParams }
+                                  }
+                                }));
+                              }}
+                              sx={{ flex: 1 }}
+                            />
+                            <button
+                              onClick={() => {
+                                const newParams = xmlProperties.serviceTask.function.parameters.filter((_, i) => i !== index);
+                                setXmlProperties(prev => ({
+                                  ...prev,
+                                  serviceTask: { 
+                                    ...prev.serviceTask, 
+                                    function: { ...prev.serviceTask.function, parameters: newParams }
+                                  }
+                                }));
+                              }}
+                              style={{ background: 'red', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                        <Button
                           onClick={() => {
-                            const newHeaders = xmlProperties.serviceTask.headers.filter((_, i) => i !== index);
+                            const newParams = [...xmlProperties.serviceTask.function.parameters, { name: '', value: '' }];
                             setXmlProperties(prev => ({
                               ...prev,
-                              serviceTask: { ...prev.serviceTask, headers: newHeaders }
+                              serviceTask: { 
+                                ...prev.serviceTask, 
+                                function: { ...prev.serviceTask.function, parameters: newParams }
+                              }
                             }));
                           }}
-                          style={{ background: 'red', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}
+                          variant="outlined"
+                          size="small"
                         >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                    <Button
-                      onClick={() => {
-                        const newHeaders = [...xmlProperties.serviceTask.headers, { name: '', value: '' }];
-                        setXmlProperties(prev => ({
-                          ...prev,
-                          serviceTask: { ...prev.serviceTask, headers: newHeaders }
-                        }));
-                      }}
-                      variant="outlined"
-                      size="small"
-                    >
-                      Add Header
-                    </Button>
+                          Add Parameter
+                        </Button>
+                      </>
+                    )}
+
+                    {/* API Configuration */}
+                    {xmlProperties.serviceTask.configurationType === 'api' && (
+                      <>
+                        <TextField
+                          size="small"
+                          label="Endpoint URL"
+                          value={xmlProperties.serviceTask.api.endpoint}
+                          onChange={(e) => setXmlProperties(prev => ({
+                            ...prev,
+                            serviceTask: { 
+                              ...prev.serviceTask, 
+                              api: { ...prev.serviceTask.api, endpoint: e.target.value }
+                            }
+                          }))}
+                          fullWidth
+                        />
+                        <TextField
+                          size="small"
+                          select
+                          label="HTTP Method"
+                          value={xmlProperties.serviceTask.api.method}
+                          onChange={(e) => setXmlProperties(prev => ({
+                            ...prev,
+                            serviceTask: { 
+                              ...prev.serviceTask, 
+                              api: { ...prev.serviceTask.api, method: e.target.value }
+                            }
+                          }))}
+                          SelectProps={{ native: true }}
+                        >
+                          <option value="GET">GET</option>
+                          <option value="POST">POST</option>
+                          <option value="PUT">PUT</option>
+                          <option value="DELETE">DELETE</option>
+                        </TextField>
+                        <TextField
+                          size="small"
+                          label="Timeout (ms)"
+                          type="number"
+                          value={xmlProperties.serviceTask.api.timeout}
+                          onChange={(e) => setXmlProperties(prev => ({
+                            ...prev,
+                            serviceTask: { 
+                              ...prev.serviceTask, 
+                              api: { ...prev.serviceTask.api, timeout: e.target.value }
+                            }
+                          }))}
+                        />
+                        <TextField
+                          size="small"
+                          label="Retry Count"
+                          type="number"
+                          value={xmlProperties.serviceTask.api.retryCount}
+                          onChange={(e) => setXmlProperties(prev => ({
+                            ...prev,
+                            serviceTask: { 
+                              ...prev.serviceTask, 
+                              api: { ...prev.serviceTask.api, retryCount: e.target.value }
+                            }
+                          }))}
+                        />
+                        <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
+                          Headers:
+                        </Typography>
+                        {xmlProperties.serviceTask.api.headers.map((header, index) => (
+                          <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <TextField
+                              size="small"
+                              label="Name"
+                              value={header.name}
+                              onChange={(e) => {
+                                const newHeaders = [...xmlProperties.serviceTask.api.headers];
+                                newHeaders[index].name = e.target.value;
+                                setXmlProperties(prev => ({
+                                  ...prev,
+                                  serviceTask: { 
+                                    ...prev.serviceTask, 
+                                    api: { ...prev.serviceTask.api, headers: newHeaders }
+                                  }
+                                }));
+                              }}
+                              sx={{ flex: 1 }}
+                            />
+                            <TextField
+                              size="small"
+                              label="Value"
+                              value={header.value}
+                              onChange={(e) => {
+                                const newHeaders = [...xmlProperties.serviceTask.api.headers];
+                                newHeaders[index].value = e.target.value;
+                                setXmlProperties(prev => ({
+                                  ...prev,
+                                  serviceTask: { 
+                                    ...prev.serviceTask, 
+                                    api: { ...prev.serviceTask.api, headers: newHeaders }
+                                  }
+                                }));
+                              }}
+                              sx={{ flex: 1 }}
+                            />
+                            <button
+                              onClick={() => {
+                                const newHeaders = xmlProperties.serviceTask.api.headers.filter((_, i) => i !== index);
+                                setXmlProperties(prev => ({
+                                  ...prev,
+                                  serviceTask: { 
+                                    ...prev.serviceTask, 
+                                    api: { ...prev.serviceTask.api, headers: newHeaders }
+                                  }
+                                }));
+                              }}
+                              style={{ background: 'red', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                        <Button
+                          onClick={() => {
+                            const newHeaders = [...xmlProperties.serviceTask.api.headers, { name: '', value: '' }];
+                            setXmlProperties(prev => ({
+                              ...prev,
+                              serviceTask: { 
+                                ...prev.serviceTask, 
+                                api: { ...prev.serviceTask.api, headers: newHeaders }
+                              }
+                            }));
+                          }}
+                          variant="outlined"
+                          size="small"
+                        >
+                          Add Header
+                        </Button>
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -1465,17 +1719,40 @@ ${assigneeFields.map(field => {
                           formDataXml.replace('</extensionElements>', `${assigneeXml}\n</extensionElements>`) : 
                           formDataXml;
                       } else if (taskType === 'serviceTask') {
+                        const configType = xmlProperties.serviceTask.configurationType;
+                        let configXml = '';
+                        
+                        if (configType === 'agent') {
+                          configXml = `    <agent>
+      <agentName>${xmlProperties.serviceTask.agent.agentName}</agentName>
+      <prompt>${xmlProperties.serviceTask.agent.prompt}</prompt>
+    </agent>`;
+                        } else if (configType === 'function') {
+                          configXml = `    <function>
+      <functionName>${xmlProperties.serviceTask.function.functionName}</functionName>
+      <parameters>
+${xmlProperties.serviceTask.function.parameters.map(param => 
+  param.name ? `        <parameter name="${param.name}" value="${param.value}"/>` : ''
+).filter(Boolean).join('\n')}
+      </parameters>
+    </function>`;
+                        } else if (configType === 'api') {
+                          configXml = `    <api>
+      <endpoint>${xmlProperties.serviceTask.api.endpoint}</endpoint>
+      <method>${xmlProperties.serviceTask.api.method}</method>
+      <timeout>${xmlProperties.serviceTask.api.timeout}</timeout>
+      <retryCount>${xmlProperties.serviceTask.api.retryCount}</retryCount>
+      <headers>
+${xmlProperties.serviceTask.api.headers.map(header => 
+  header.name ? `        <header name="${header.name}" value="${header.value}"/>` : ''
+).filter(Boolean).join('\n')}
+      </headers>
+    </api>`;
+                        }
+                        
                         generatedXml = `<extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
   <serviceConfiguration xmlns="http://example.org/service">
-    <endpoint>${xmlProperties.serviceTask.endpoint}</endpoint>
-    <method>${xmlProperties.serviceTask.method}</method>
-    <timeout>${xmlProperties.serviceTask.timeout}</timeout>
-    <retryCount>${xmlProperties.serviceTask.retryCount}</retryCount>
-    <headers>
-${xmlProperties.serviceTask.headers.map(header => 
-  header.name ? `      <header name="${header.name}" value="${header.value}"/>` : ''
-).filter(Boolean).join('\n')}
-    </headers>
+${configXml}
   </serviceConfiguration>
 </extensionElements>`;
                       } else if (taskType === 'scriptTask') {
