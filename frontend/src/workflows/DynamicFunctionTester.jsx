@@ -385,22 +385,6 @@ const DynamicFunctionTester = () => {
                   </Alert>
                 )}
 
-                {/* Function Signature */}
-                <Accordion>
-                  <AccordionSummary expandIcon={<ExpandMore />}>
-                    <Typography variant="subtitle1">Function Signature</Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <Box sx={{ bgcolor: alpha(theme.palette.grey[500], 0.1), p: 2, borderRadius: 1 }}>
-                      <Typography variant="body2" component="pre" sx={{ fontFamily: 'monospace' }}>
-                        {functionDetails.signature}
-                      </Typography>
-                    </Box>
-                  </AccordionDetails>
-                </Accordion>
-
-                <Divider sx={{ my: 2 }} />
-
                 {/* Parameters Input */}
                 <Grid container spacing={2}>
                   {(() => {
