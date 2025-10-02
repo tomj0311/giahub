@@ -16,6 +16,7 @@ from .tenant import router as tenant_router
 from .workflow_config import router as workflow_config_router
 from .workflow import router as workflow_router
 from .analytics import router as analytics_router
+from .dynamic_execution import router as dynamic_execution_router
 
 __all__ = [
     "auth_router", 
@@ -35,5 +36,6 @@ __all__ = [
     "workflow_config_router",
     "workflow_router",
     "analytics_router",
+    "dynamic_execution_router",
 ]
 

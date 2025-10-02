@@ -23,6 +23,7 @@ import {
 	Building,
 	HelpCircle,
 	Code,
+	TestTube,
 	// New unique icons for the reorganized menu
 	Star,
 	Gamepad2,
@@ -58,6 +59,7 @@ export const iconMap = {
 	GitBranch,
 	Monitor,
 	Code,
+	TestTube,
 	Users,
 	Shield,
 	UserPlus,

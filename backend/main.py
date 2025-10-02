@@ -19,7 +19,7 @@ sys.path.insert(0, str(current_dir))
 sys.path.insert(0, str(project_root))  # Add project root so we can import 'ai' module
 
 from src.db import init_database, close_database
-from src.routes import auth_router, users_router, payments_router, uploads_router, profile_router, roles_router, role_management_router, menu_router, model_config_router, tool_config_router, knowledge_router, agents_router, workflow_config_router, workflow_router, analytics_router
+from src.routes import auth_router, users_router, payments_router, uploads_router, profile_router, roles_router, role_management_router, menu_router, model_config_router, tool_config_router, knowledge_router, agents_router, workflow_config_router, workflow_router, analytics_router, dynamic_execution_router
 from src.routes.agent_runtime import router as agent_runtime_router
 from src.services.rbac_service import init_default_roles
 from src.utils.log import logger
@@ -116,6 +116,7 @@ app.include_router(agents_router, prefix="/api/agents")
 app.include_router(workflow_config_router, prefix="/api/workflows")
 app.include_router(workflow_router, prefix="/api/workflow")
 app.include_router(analytics_router, prefix="/api/analytics")
+app.include_router(dynamic_execution_router, prefix="/api/dynamic")
 # Re-enable Agent Runtime routes (previously disabled) so frontend playground works
 app.include_router(agent_runtime_router)
 app.include_router(payments_router, prefix="/api/payments")

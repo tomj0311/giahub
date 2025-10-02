@@ -55,6 +55,7 @@ const WorkflowDashboard = lazy(() => import('../workflows/WorkflowDashboard'))
 const WorkflowExecution = lazy(() => import('../workflows/WorkflowExecution'))
 const TaskCompletion = lazy(() => import('../workflows/TaskCompletion'))
 const DynamicComponentLoader = lazy(() => import('../workflows/DynamicComponentLoader'))
+const DynamicFunctionTester = lazy(() => import('../workflows/DynamicFunctionTester'))
 const Analytics = lazy(() => import('./Analytics'))
 const BPMN = lazy(() => import('../components/bpmn/BPMN'))
 import RouteTransition from '../components/RouteTransition'
@@ -131,6 +132,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			expandable: true,
 			order: 40,
 			children: [
+				{
+					label: 'Function Tester',
+					to: '/dashboard/function-tester',
+					icon: 'TestTube'
+				},
 				{
 					label: 'Generate UI Components',
 					to: '/dashboard/dynamic',
@@ -732,6 +738,7 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="agent-playground" element={<AgentPlayground user={user} />} />
 				<Route path="analytics" element={<Analytics />} />
 				<Route path="workflows" element={<WorkflowConfig user={user} />} />
+				<Route path="function-tester" element={<DynamicFunctionTester user={user} />} />
 				<Route path="dynamic" element={<DynamicComponentLoader user={user} />} />
 				<Route path="bpmn" element={<BPMNEditorWrapper />} />
 				<Route path="monitor" element={<WorkflowDashboard user={user} />} />
