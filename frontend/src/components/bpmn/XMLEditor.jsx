@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Button, TextField, Typography } from '@mui/material';
+import { Box, Button, TextField, Typography, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { agentRuntimeService } from '../../services/agentRuntimeService';
 import sharedApiService from '../../utils/apiService';
 
 
 const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate, edges, nodeData }) => {
   const [editedXml, setEditedXml] = useState('');
-  const [position, setPosition] = useState({ x: window.innerWidth * 0.25, y: window.innerHeight * 0.2 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const TAB_XML_PROPERTIES = 0;
   const TAB_CODE_GENERATOR = 1;
   const TAB_XML_EDITOR = 2;
@@ -532,39 +529,6 @@ ${assigneeFields.map(field => {
     onClose();
   };
 
-  const startDrag = (e) => {
-    setIsDragging(true);
-    setDragStart({
-      x: e.clientX - position.x,
-      y: e.clientY - position.y
-    });
-  };
-
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      if (isDragging) {
-        setPosition({
-          x: e.clientX - dragStart.x,
-          y: e.clientY - dragStart.y
-        });
-      }
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-    };
-
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [isDragging, dragStart]);
-
-
   if (!isOpen) return null;
 
   // Accordion panel toggler
@@ -643,54 +607,10 @@ ${assigneeFields.map(field => {
   };
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      width: '100vw',
-      height: '100vh',
-      backgroundColor: 'rgba(0,0,0,0.3)',
-      zIndex: 9999
-    }}>
-      <div style={{
-        position: 'absolute',
-        left: position.x-200,
-        top: position.y-100,
-        width: '60vw',
-        height: '70vh',
-        background: 'var(--bg-primary)',
-        border: '1px solid var(--border-color)',
-        borderRadius: '8px',
-        boxShadow: '0 4px 20px var(--shadow)'
-      }}>
-        {/* Header */}
-        <div style={{
-          padding: '12px 16px',
-          background: 'var(--bg-secondary)',
-          borderBottom: '1px solid var(--border-color)',
-          cursor: 'move',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          borderRadius: '8px 8px 0 0'
-        }} onMouseDown={startDrag}>
-          <h3 style={{ 
-            margin: 0, 
-            color: 'var(--text-primary)',
-            fontSize: '15px',
-            fontWeight: '600'
-          }}>Edit XML - {elementType}</h3>
-          <button onClick={handleCancel} style={{
-            background: 'none',
-            border: 'none',
-            fontSize: '20px',
-            cursor: 'pointer',
-            color: 'var(--text-secondary)'
-          }}>×</button>
-        </div>
-
-        {/* Accordion */}
-        <div style={{ padding: 0, height: 'calc(100% - 60px)', display: 'flex', flexDirection: 'column' }}>
+    <Dialog open={isOpen} onClose={onClose} maxWidth="lg" fullWidth>
+      <DialogTitle>Edit XML - {elementType}</DialogTitle>
+      <DialogContent>
+        <Box sx={{ height: '70vh' }}>
           {/* Accordion headers */}
           <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)' }}>
             <button
@@ -766,14 +686,6 @@ ${assigneeFields.map(field => {
                     }
                   }}
                 />
-                <Box sx={{ display: 'flex', gap: 1, mt: 1.5, justifyContent: 'flex-end' }}>
-                  <Button onClick={handleCancel} variant="outlined">
-                    Cancel
-                  </Button>
-                  <Button onClick={handleSave} variant="contained">
-                    SAVE CHANGES
-                  </Button>
-                </Box>
               </>
             )}
             {/* Only show Code Generator content for userTask, scriptTask, and manualTask */}
@@ -1778,19 +1690,17 @@ ${xmlProperties.scriptTask.scriptCode}
                   >
                     Generate XML
                   </Button>
-                  <Button onClick={handleCancel} variant="outlined">
-                    Cancel
-                  </Button>
-                  <Button onClick={handleSave} variant="contained">
-                    SAVE CHANGES
-                  </Button>
                 </Box>
               </>
             )}
           </div>
-        </div>
-      </div>
-    </div>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={handleSave} variant="contained">Save</Button>
+      </DialogActions>
+    </Dialog>
   );
 };
 
