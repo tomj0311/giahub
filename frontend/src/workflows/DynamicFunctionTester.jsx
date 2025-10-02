@@ -61,6 +61,9 @@ const DynamicFunctionTester = () => {
       setFunctionDetails(null);
       setParameters({});
     }
+    // Clear execution results when module changes
+    setResult(null);
+    setError(null);
   }, [selectedModule]);
 
   // Load function details when function is selected

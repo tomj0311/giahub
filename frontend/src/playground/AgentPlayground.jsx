@@ -1448,12 +1448,12 @@ const ChatInputBar = React.memo(function ChatInputBar({
       <Box sx={{ position: 'relative' }}>
         <TextField
           inputRef={inputRef}
-          placeholder={!selected ? 'Select an agent first' : (stagedFiles.length ? `Type your message... (${stagedFiles.length} file(s) ready)` : 'Type your message...')}
+          placeholder={!selected ? 'Select an agent first' : (stagedFiles.length ? `Type your message... (${stagedFiles.length} file(s) ready) • Shift+Enter to send` : 'Type your message... • Shift+Enter to send')}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onPaste={handlePaste}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (e.key === 'Enter' && (e.shiftKey || e.ctrlKey)) {
               e.preventDefault()
               runAgent()
             } else if (e.key === 'ArrowUp' && prompt === '' && lastUserMessage) {
@@ -1464,7 +1464,7 @@ const ChatInputBar = React.memo(function ChatInputBar({
           fullWidth
           multiline
           minRows={1}
-          maxRows={4}
+          maxRows={10}
           disabled={!selected || running}
           size="small"
           autoFocus
