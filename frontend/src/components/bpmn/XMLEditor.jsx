@@ -33,6 +33,7 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selecte
         prompt: ''
       },
       function: {
+        moduleName: '',
         functionName: '',
         parameters: [{ name: '', value: '' }]
       },
@@ -219,7 +220,7 @@ ${assigneeFields.map(field => {
           let serviceTaskConfig = {
             configurationType: 'api',
             agent: { agentName: '', prompt: '' },
-            function: { functionName: '', parameters: [{ name: '', value: '' }] },
+            function: { moduleName: '', functionName: '', parameters: [{ name: '', value: '' }] },
             api: {
               endpoint: '',
               method: 'POST',
@@ -239,16 +240,28 @@ ${assigneeFields.map(field => {
           } else if (functionElement) {
             console.log('⚙️ Found function configuration');
             configurationType = 'function';
-            const functionName = functionElement.querySelector('functionName')?.textContent || '';
-            const parameters = Array.from(functionElement.querySelectorAll('parameter')).map(param => ({
-              name: param.getAttribute('name') || '',
-              value: param.getAttribute('value') || ''
-            }));
+            const moduleName = functionElement.querySelector('moduleName')?.textContent?.trim() || '';
+            const functionName = functionElement.querySelector('functionName')?.textContent?.trim() || '';
+            
+            // Parse parameters - look for <parameters> container with <parameter> children
+            const parametersContainer = functionElement.querySelector('parameters');
+            let parameters = [];
+            
+            if (parametersContainer) {
+              parameters = Array.from(parametersContainer.querySelectorAll('parameter')).map(param => ({
+                name: param.getAttribute('name') || '',
+                value: param.getAttribute('value') || ''
+              }));
+            }
+            
             serviceTaskConfig.configurationType = 'function';
             serviceTaskConfig.function = {
+              moduleName,
               functionName,
               parameters: parameters.length > 0 ? parameters : [{ name: '', value: '' }]
             };
+            
+            console.log('📝 Parsed function config:', serviceTaskConfig.function);
           } else if (apiElement) {
             console.log('🌐 Found API configuration');
             configurationType = 'api';
@@ -1247,6 +1260,19 @@ ${assigneeFields.map(field => {
                       <>
                         <TextField
                           size="small"
+                          label="Module Name"
+                          value={xmlProperties.serviceTask.function.moduleName}
+                          onChange={(e) => setXmlProperties(prev => ({
+                            ...prev,
+                            serviceTask: { 
+                              ...prev.serviceTask, 
+                              function: { ...prev.serviceTask.function, moduleName: e.target.value }
+                            }
+                          }))}
+                          fullWidth
+                        />
+                        <TextField
+                          size="small"
                           label="Function Name"
                           value={xmlProperties.serviceTask.function.functionName}
                           onChange={(e) => setXmlProperties(prev => ({
@@ -1641,6 +1667,7 @@ ${assigneeFields.map(field => {
     </agent>`;
                         } else if (configType === 'function') {
                           configXml = `    <function>
+      <moduleName>${xmlProperties.serviceTask.function.moduleName}</moduleName>
       <functionName>${xmlProperties.serviceTask.function.functionName}</functionName>
       <parameters>
 ${xmlProperties.serviceTask.function.parameters.map(param => 
