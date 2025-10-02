@@ -788,7 +788,7 @@ function WorkflowExecution({ user }) {
               </TableContainer>
             ) : (
               <Box sx={{ p: 4, textAlign: 'center' }}>
-                <Typography color="text.secondary">No workflows found</Typography>
+                <Typography color="text.secondary">No workflow instances found</Typography>
               </Box>
             )}
             

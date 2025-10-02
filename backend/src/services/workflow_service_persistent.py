@@ -84,6 +84,23 @@ class WorkflowServicePersistent:
                             break  # Process one script task at a time
                         except Exception as script_error:
                             logger.error(f"[WORKFLOW] ScriptTask {task.task_spec.bpmn_id} failed: {script_error}")
+                            
+                            # Update workflow data with script error status
+                            script_error_status = {
+                                "instance_id": instance_id,
+                                "completed": workflow.is_completed(),
+                                "needs_user_input": workflow.manual_input_required(),
+                                "current_task_id": cls._get_current_task_id(workflow)
+                            }
+                            
+                            workflow.data.update({
+                                "workflow_status": script_error_status,
+                                "error": str(script_error),
+                                "error_task_id": task.task_spec.bpmn_id,
+                                "error_task_type": "ScriptTask",
+                                "last_updated": datetime.now(UTC).isoformat()
+                            })
+                            
                             await cls.update_workflow_instance(workflow, instance_id, tenant_id)
                             raise HTTPException(status_code=500, detail=f"ScriptTask failed: {str(script_error)}")
                 
@@ -102,12 +119,45 @@ class WorkflowServicePersistent:
                         if task.state == TaskState.READY:
                             task.data["error"] = f"Engine step failed: {str(engine_error)}"
                             task.error()
+                    
+                    # Update workflow data with engine error status
+                    engine_error_status = {
+                        "instance_id": instance_id,
+                        "completed": workflow.is_completed(),
+                        "needs_user_input": workflow.manual_input_required(),
+                        "current_task_id": cls._get_current_task_id(workflow)
+                    }
+                    
+                    workflow.data.update({
+                        "workflow_status": engine_error_status,
+                        "error": str(engine_error),
+                        "error_type": "engine_step",
+                        "error_step": step_count,
+                        "last_updated": datetime.now(UTC).isoformat()
+                    })
+                    
                     await cls.update_workflow_instance(workflow, instance_id, tenant_id)
                     raise HTTPException(status_code=500, detail=f"Workflow engine error: {str(engine_error)}")
                 
                 # ALWAYS update MongoDB after each step
                 await cls.update_workflow_instance(workflow, instance_id, tenant_id)
-                logger.debug(f"[WORKFLOW] MongoDB updated after step {step_count}")
+                
+                # Update task data with current status after each step
+                current_status = {
+                    "instance_id": instance_id,
+                    "completed": workflow.is_completed(),
+                    "needs_user_input": workflow.manual_input_required(),
+                    "current_task_id": cls._get_current_task_id(workflow)
+                }
+                
+                # Update workflow data with current status
+                workflow.data.update({
+                    "workflow_status": current_status,
+                    "last_step_update": datetime.now(UTC).isoformat(),
+                    "step_count": step_count
+                })
+                
+                logger.debug(f"[WORKFLOW] MongoDB updated after step {step_count} with status: {current_status}")
                 
                 # Check if user input needed
                 if workflow.manual_input_required():
@@ -116,6 +166,21 @@ class WorkflowServicePersistent:
                         task = ready_tasks[0]
                         task_type = type(task.task_spec).__name__
                         logger.info(f"[WORKFLOW] Manual input required for {task_type}: {task.task_spec.bpmn_id}")
+                        
+                        # Update workflow data with user input status
+                        user_input_status = {
+                            "instance_id": instance_id,
+                            "completed": workflow.is_completed(),
+                            "needs_user_input": workflow.manual_input_required(),
+                            "current_task_id": cls._get_current_task_id(workflow)
+                        }
+                        
+                        workflow.data.update({
+                            "workflow_status": user_input_status,
+                            "waiting_for_user_input": True,
+                            "current_task_type": task_type,
+                            "last_updated": datetime.now(UTC).isoformat()
+                        })
                         
                         if task_type in ["UserTask", "ManualTask", "NoneTask"]:
                             # Extension elements are now stored in serialized data
@@ -127,6 +192,9 @@ class WorkflowServicePersistent:
                                 await TaskNotificationService.send_task_assignment_emails(task, workflow_id, instance_id)
                             except Exception as e:
                                 logger.error(f"[WORKFLOW] Email notification failed: {e}")
+                            
+                            # Update MongoDB with user input status
+                            await cls.update_workflow_instance(workflow, instance_id, tenant_id)
                             
                             # Stop here - wait for user input
                             break
@@ -141,6 +209,22 @@ class WorkflowServicePersistent:
                                 logger.error(f"[WORKFLOW] ServiceTask {task.task_spec.bpmn_id} failed: {service_error}")
                                 task.data["error"] = str(service_error)
                                 task.error()
+                                
+                                # Update workflow data with error status
+                                error_status = {
+                                    "instance_id": instance_id,
+                                    "completed": workflow.is_completed(),
+                                    "needs_user_input": workflow.manual_input_required(),
+                                    "current_task_id": cls._get_current_task_id(workflow)
+                                }
+                                
+                                workflow.data.update({
+                                    "workflow_status": error_status,
+                                    "error": str(service_error),
+                                    "error_task_id": task.task_spec.bpmn_id,
+                                    "last_updated": datetime.now(UTC).isoformat()
+                                })
+                                
                                 await cls.update_workflow_instance(workflow, instance_id, tenant_id)
                                 # STOP the workflow - don't continue!
                                 raise HTTPException(status_code=500, detail=f"ServiceTask failed: {str(service_error)}")
@@ -159,6 +243,23 @@ class WorkflowServicePersistent:
                             logger.error(f"[WORKFLOW] ServiceTask {task.task_spec.bpmn_id} failed in STARTED state: {service_error}")
                             task.data["error"] = str(service_error)
                             task.error()
+                            
+                            # Update workflow data with error status for STARTED task
+                            error_status = {
+                                "instance_id": instance_id,
+                                "completed": workflow.is_completed(),
+                                "needs_user_input": workflow.manual_input_required(),
+                                "current_task_id": cls._get_current_task_id(workflow)
+                            }
+                            
+                            workflow.data.update({
+                                "workflow_status": error_status,
+                                "error": str(service_error),
+                                "error_task_id": task.task_spec.bpmn_id,
+                                "error_task_state": "STARTED",
+                                "last_updated": datetime.now(UTC).isoformat()
+                            })
+                            
                             await cls.update_workflow_instance(workflow, instance_id, tenant_id)
                             # STOP the workflow - don't continue!
                             raise HTTPException(status_code=500, detail=f"ServiceTask failed: {str(service_error)}")
@@ -167,12 +268,24 @@ class WorkflowServicePersistent:
             await cls.update_workflow_instance(workflow, instance_id, tenant_id)
             logger.info(f"[WORKFLOW] Workflow execution completed after {step_count} steps")
             
-            return {
+            # Update task data with status structure after execution
+            status_data = {
                 "instance_id": instance_id,
                 "completed": workflow.is_completed(),
                 "needs_user_input": workflow.manual_input_required(),
                 "current_task_id": cls._get_current_task_id(workflow)
             }
+            
+            # Update workflow data with status information
+            workflow.data.update({
+                "workflow_status": status_data,
+                "last_updated": datetime.now(UTC).isoformat()
+            })
+            
+            # Save updated workflow data to MongoDB
+            await cls.update_workflow_instance(workflow, instance_id, tenant_id)
+            
+            return status_data
         
         except Exception as e:
             logger.error(f"[WORKFLOW] Error: {e}", exc_info=True)
@@ -776,12 +889,17 @@ class WorkflowServicePersistent:
             bpmn_map = await cls.parse_bpmn(bpmn_xml)
             result = await cls.execute_workflow_steps(workflow, workflow_id, user, instance_id, bpmn_map)
             
-            return {
-                "message": "Task submitted successfully",
+            # Update task data with final status structure
+            final_status = {
                 "instance_id": instance_id,
                 "completed": result["completed"],
                 "needs_user_input": result["needs_user_input"],
                 "current_task_id": result["current_task_id"]
+            }
+            
+            return {
+                "message": "Task submitted successfully",
+                **final_status
             }
             
         except HTTPException:
@@ -844,12 +962,17 @@ class WorkflowServicePersistent:
             # Execute workflow and save to MongoDB
             result = await cls.execute_workflow_steps(workflow, workflow_id, user, bpmn_map=bpmn_map)
             
-            return {
-                "message": "Workflow started successfully",
+            # Return consistent status structure
+            final_status = {
                 "instance_id": result["instance_id"],
                 "completed": result["completed"],
                 "needs_user_input": result["needs_user_input"],
                 "current_task_id": result["current_task_id"]
+            }
+            
+            return {
+                "message": "Workflow started successfully",
+                **final_status
             }
                 
         except HTTPException:
