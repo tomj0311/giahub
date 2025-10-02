@@ -412,37 +412,25 @@ const BpmnElementEditor = ({ xmlContent, onSave, onClose, isOpen, filterElementI
     // Handle arrays
     if (Array.isArray(value)) {
       return (
-        <Box key={currentPath} sx={{ mb: 2 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+        <div key={currentPath} style={{ marginBottom: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
             <Typography variant="subtitle2">
-              {key.charAt(0).toUpperCase() + key.slice(1)} ({value.length} items)
+              {key.charAt(0).toUpperCase() + key.slice(1)} ({value.length})
             </Typography>
             <Button
               startIcon={<Add />}
               onClick={() => addToArray(elementId, currentPath, createDefaultItem(key, value))}
-              variant="outlined"
+              variant="text"
               size="small"
             >
-              Add {key.slice(0, -1) || 'Item'}
+              Add
             </Button>
-          </Box>
+          </div>
           {value.map((item, index) => (
-            <Box key={index} sx={{ mb: 2, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                <Typography variant="body2" color="text.secondary">
-                  {key} {index + 1}
-                </Typography>
-                <IconButton
-                  onClick={() => removeFromArray(elementId, currentPath, index)}
-                  color="error"
-                  size="small"
-                >
-                  <Delete />
-                </IconButton>
-              </Box>
+            <div key={index} style={{ display: 'flex', gap: '8px', marginBottom: '4px', alignItems: 'flex-start' }}>
               {typeof item === 'string' ? (
                 <TextField
-                  label="Value"
+                  label={`${key} ${index + 1}`}
                   value={item}
                   onChange={(e) => {
                     const newArray = [...value];
@@ -453,107 +441,81 @@ const BpmnElementEditor = ({ xmlContent, onSave, onClose, isOpen, filterElementI
                   size="small"
                 />
               ) : typeof item === 'object' ? (
-                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2 }}>
-                  {Object.entries(item).map(([itemKey, itemValue]) => {
-                    const isTextContent = itemKey.toLowerCase().includes('content') || 
-                                         itemKey.toLowerCase().includes('text') ||
-                                         itemKey.toLowerCase().includes('description') ||
-                                         itemKey.toLowerCase().includes('message');
-                    
-                    return (
-                      <TextField
-                        key={itemKey}
-                        label={itemKey.charAt(0).toUpperCase() + itemKey.slice(1)}
-                        value={itemValue || ''}
-                        onChange={(e) => {
-                          const newArray = [...value];
-                          newArray[index] = {
-                            ...newArray[index],
-                            [itemKey]: e.target.value
-                          };
-                          updateExtensionElement(elementId, currentPath, newArray);
-                        }}
-                        size="small"
-                        multiline={isTextContent}
-                        rows={isTextContent ? 3 : 1}
-                        sx={{ 
-                          gridColumn: isTextContent ? '1 / -1' : 'auto', // Full width for text content
-                          mb: 1 
-                        }}
-                      />
-                    );
-                  })}
-                </Box>
+                <div style={{ display: 'flex', gap: '8px', flex: 1, flexWrap: 'wrap' }}>
+                  {Object.entries(item).map(([itemKey, itemValue]) => (
+                    <TextField
+                      key={itemKey}
+                      label={itemKey.charAt(0).toUpperCase() + itemKey.slice(1)}
+                      value={itemValue || ''}
+                      onChange={(e) => {
+                        const newArray = [...value];
+                        newArray[index] = {
+                          ...newArray[index],
+                          [itemKey]: e.target.value
+                        };
+                        updateExtensionElement(elementId, currentPath, newArray);
+                      }}
+                      size="small"
+                      style={{ minWidth: '150px', flex: 1 }}
+                    />
+                  ))}
+                </div>
               ) : null}
-            </Box>
+              <IconButton
+                onClick={() => removeFromArray(elementId, currentPath, index)}
+                color="error"
+                size="small"
+              >
+                <Delete />
+              </IconButton>
+            </div>
           ))}
-        </Box>
+        </div>
       );
     }
 
-    // If value is an object, render as collapsible section with all properties as editable fields
+    // If value is an object, render fields inline
     if (value && typeof value === 'object') {
-      const showAddButton = isLeafObject(value);
-      
       return (
-        <Box key={currentPath} sx={{ mb: 2 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-            <Typography variant="subtitle2">
-              {key.charAt(0).toUpperCase() + key.slice(1)}
-            </Typography>
-            {showAddButton && (
-              <Button
-                startIcon={<Add />}
-                onClick={() => {
-                  // Convert single object to array and add new item
-                  const newItem = createDefaultItem(key, [value]);
-                  updateExtensionElement(elementId, currentPath, [value, newItem]);
-                }}
-                variant="text"
-                size="small"
-                color="secondary"
-              >
-                Add Another
-              </Button>
-            )}
-          </Box>
-          <Box sx={{ ml: 2, pl: 2, borderLeft: 2, borderColor: 'grey.300' }}>
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2, mb: 2 }}>
-              {Object.entries(value).map(([subKey, subValue]) => {
-                if (typeof subValue === 'string') {
-                  const isTextContent = subKey.toLowerCase().includes('content') || 
-                                       subKey.toLowerCase().includes('text') ||
-                                       subKey.toLowerCase().includes('description') ||
-                                       subKey.toLowerCase().includes('message');
-                  
-                  return (
-                    <TextField
-                      key={subKey}
-                      label={subKey.charAt(0).toUpperCase() + subKey.slice(1)}
-                      value={subValue || ''}
-                      onChange={(e) => updateExtensionElement(elementId, `${currentPath}.${subKey}`, e.target.value)}
-                      size="small"
-                      multiline={isTextContent}
-                      rows={isTextContent ? 3 : 1}
-                      sx={{ 
-                        gridColumn: isTextContent ? '1 / -1' : 'auto', // Full width for text content
-                        mb: 1 
-                      }}
-                    />
-                  );
-                }
-                return null;
-              })}
-            </Box>
-            {/* Render nested objects separately below the grid */}
+        <div key={currentPath} style={{ marginBottom: '8px' }}>
+          <Typography variant="subtitle2" style={{ marginBottom: '4px' }}>
+            {key.charAt(0).toUpperCase() + key.slice(1)}
+          </Typography>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {Object.entries(value).map(([subKey, subValue]) => {
-              if (typeof subValue !== 'string') {
-                return renderExtensionElement(elementId, subKey, subValue, currentPath);
+              if (typeof subValue === 'string') {
+                const isTextContent = subKey.toLowerCase().includes('content') || 
+                                     subKey.toLowerCase().includes('text') ||
+                                     subKey.toLowerCase().includes('description') ||
+                                     subKey.toLowerCase().includes('message');
+                
+                return (
+                  <TextField
+                    key={subKey}
+                    label={subKey.charAt(0).toUpperCase() + subKey.slice(1)}
+                    value={subValue || ''}
+                    onChange={(e) => updateExtensionElement(elementId, `${currentPath}.${subKey}`, e.target.value)}
+                    size="small"
+                    multiline={isTextContent}
+                    rows={isTextContent ? 2 : 1}
+                    style={{ 
+                      minWidth: isTextContent ? '300px' : '150px',
+                      flex: isTextContent ? '1 1 100%' : '1'
+                    }}
+                  />
+                );
               }
               return null;
             })}
-          </Box>
-        </Box>
+          </div>
+          {/* Render nested objects */}
+          {Object.entries(value).map(([subKey, subValue]) => {
+            if (typeof subValue !== 'string') {
+              return renderExtensionElement(elementId, subKey, subValue, currentPath);
+            }
+            return null;
+          })}
+        </div>
       );
     }
 
@@ -698,19 +660,19 @@ const BpmnElementEditor = ({ xmlContent, onSave, onClose, isOpen, filterElementI
       }}
     >
       <DialogTitle>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
             <Typography variant="h6">BPMN Element Editor</Typography>
             {filterElementIds && (
               <Typography variant="caption" color="text.secondary">
                 Filtered: {Array.isArray(filterElementIds) ? filterElementIds.join(', ') : filterElementIds}
               </Typography>
             )}
-          </Box>
+          </div>
           <IconButton onClick={onClose}>
             <Close />
           </IconButton>
-        </Box>
+        </div>
       </DialogTitle>
 
       <DialogContent sx={{ flex: 1, overflow: 'auto', p: 2 }}>
@@ -744,19 +706,23 @@ const BpmnElementEditor = ({ xmlContent, onSave, onClose, isOpen, filterElementI
           }
 
           return filteredElements.map((element) => (
-            <Accordion key={element.id} sx={{ mb: 1 }}>
+            <Accordion 
+              key={element.id} 
+              sx={{ mb: 1 }}
+              defaultExpanded={!!filterElementIds}
+            >
               <AccordionSummary expandIcon={<ExpandMore />}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Chip 
                     label={element.type} 
                     size="small" 
                     color="primary" 
                     variant="outlined"
                   />
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <div>
                     <Typography variant="subtitle1">{element.name || 'Unnamed Element'}</Typography>
                     <Typography variant="caption" color="text.secondary">ID: {element.id}</Typography>
-                  </Box>
+                  </div>
                   <IconButton
                     size="small"
                     onClick={(e) => {
@@ -766,10 +732,10 @@ const BpmnElementEditor = ({ xmlContent, onSave, onClose, isOpen, filterElementI
                   >
                     <ContentCopy fontSize="small" />
                   </IconButton>
-                </Box>
+                </div>
               </AccordionSummary>
               <AccordionDetails>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   {/* Basic Properties */}
                   <TextField
                     label="Name"
@@ -781,17 +747,17 @@ const BpmnElementEditor = ({ xmlContent, onSave, onClose, isOpen, filterElementI
 
                   {/* Extension Elements - Generic Renderer */}
                   {element.extensionElements && (
-                    <Box>
+                    <div>
                       <Typography variant="h6" gutterBottom>Extension Elements</Typography>
                       {Object.entries(element.extensionElements).map(([key, value]) => 
                         renderExtensionElement(element.id, key, value)
                       )}
-                    </Box>
+                    </div>
                   )}
 
                   {/* Script Task */}
                   {element.type === 'scriptTask' && element.script && (
-                    <Box>
+                    <div>
                       <Typography variant="subtitle2" gutterBottom>Script</Typography>
                       <FormControl fullWidth size="small" sx={{ mb: 1 }}>
                         <InputLabel>Script Format</InputLabel>
@@ -813,19 +779,19 @@ const BpmnElementEditor = ({ xmlContent, onSave, onClose, isOpen, filterElementI
                           script: { ...element.script, content: e.target.value }
                         })}
                         multiline
-                        rows={8}
+                        rows={6}
                         fullWidth
                         sx={{ fontFamily: 'monospace' }}
                       />
-                    </Box>
+                    </div>
                   )}
 
                   {/* Gateway Conditions */}
                   {element.type.includes('Gateway') && element.conditions && (
-                    <Box>
+                    <div>
                       <Typography variant="subtitle2" gutterBottom>Sequence Flow Conditions</Typography>
                       {element.conditions.map((condition, index) => (
-                        <Box key={condition.id} sx={{ mb: 2, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                        <div key={condition.id} style={{ marginBottom: '12px', padding: '12px', border: '1px solid #e0e0e0', borderRadius: '4px' }}>
                           <TextField
                             label="Flow Name"
                             value={condition.name}
@@ -852,11 +818,11 @@ const BpmnElementEditor = ({ xmlContent, onSave, onClose, isOpen, filterElementI
                             rows={2}
                             sx={{ fontFamily: 'monospace' }}
                           />
-                        </Box>
+                        </div>
                       ))}
-                    </Box>
+                    </div>
                   )}
-                </Box>
+                </div>
               </AccordionDetails>
             </Accordion>
           ));
