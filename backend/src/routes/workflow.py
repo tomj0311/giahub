@@ -20,7 +20,7 @@ _INCOMPLETE_CACHE = {}
 _INCOMPLETE_CACHE_TTL = float(os.getenv("INCOMPLETE_CACHE_TTL", "0.5"))  # seconds
 
 
-async def _run_workflow_background(workflow_id: str, initial_data: dict, user: dict):
+async def _run_workflow_background(workflow_id: str, initial_data: dict, user: dict = Depends(verify_token_middleware)):
     """Run workflow in background"""
     try:
         result = await WorkflowServicePersistent.run_workflow(workflow_id, initial_data, user)
@@ -75,7 +75,7 @@ async def get_incomplete_workflows(
             return cached["data"]
 
         incomplete_workflows = await WorkflowServicePersistent.list_workflows_paginated(
-            workflow_id, page, size, status="incomplete"
+            workflow_id, page, size, status="incomplete", user=user
         )
         response_data = {
             "success": True,
@@ -113,7 +113,7 @@ async def get_all_workflows(
             return cached["data"]
 
         workflows = await WorkflowServicePersistent.list_workflows_paginated(
-            workflow_id, page, size, status=status
+            workflow_id, page, size, status=status, user=user
         )
         response_data = {
             "success": True,
@@ -230,7 +230,7 @@ async def update_task_data(
 ):
     """Update task data"""
     result = await WorkflowServicePersistent.update_serialized_task_data(
-        workflow_id, instance_id, task_id, new_data
+        workflow_id, instance_id, task_id, new_data, user
     )
     return {"success": result}
 

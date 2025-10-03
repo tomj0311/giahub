@@ -12,7 +12,7 @@ from starlette.middleware.sessions import SessionMiddleware
 import uvicorn
 from dotenv import load_dotenv
 
-# Add current directory to Python path for imports
+# Add current directory to Python path .for imports
 current_dir = Path(__file__).parent
 project_root = current_dir.parent  # Go up to gia_platform root
 sys.path.insert(0, str(current_dir))

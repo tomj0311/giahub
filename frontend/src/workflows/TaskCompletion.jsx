@@ -77,11 +77,26 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
             const firstTask = pendingTasks[0];
             const taskSpec = instanceData.serialized_data?.spec?.task_specs?.[firstTask.taskSpec];
             
+            // Extract form fields from the correct structure
+            let formFields = [];
+            if (taskSpec?.extensions?.extensionElements?.formData?.formField) {
+              const formField = taskSpec.extensions.extensionElements.formData.formField;
+              // Handle both single form field and array of form fields
+              formFields = Array.isArray(formField) ? formField : [formField];
+              console.log('Found form fields in extensionElements:', formFields);
+            } else if (taskSpec?.extensions?.formData?.formFields) {
+              // Fallback to the old structure if it exists
+              formFields = taskSpec.extensions.formData.formFields;
+              console.log('Found form fields in legacy structure:', formFields);
+            } else {
+              console.log('No form fields found in task spec:', taskSpec);
+            }
+
             setTaskData({
               taskId: firstTask.taskId,
               taskSpec: firstTask.taskSpec,
               taskName: taskSpec?.bpmn_name || taskSpec?.name || firstTask.taskSpec,
-              formFields: taskSpec?.extensions?.formData?.formFields || [],
+              formFields: formFields,
               instanceData
             });
           } else {
@@ -92,7 +107,21 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
               
               if (specificTaskSpec) {
                 const workflowData = instanceData.serialized_data?.data || instanceData.data || {};
-                const formFields = specificTaskSpec.extensions?.formData?.formFields || [];
+                
+                // Extract form fields from the correct structure
+                let formFields = [];
+                if (specificTaskSpec.extensions?.extensionElements?.formData?.formField) {
+                  const formField = specificTaskSpec.extensions.extensionElements.formData.formField;
+                  // Handle both single form field and array of form fields
+                  formFields = Array.isArray(formField) ? formField : [formField];
+                  console.log('Found form fields in extensionElements (specific task):', formFields);
+                } else if (specificTaskSpec.extensions?.formData?.formFields) {
+                  // Fallback to the old structure if it exists
+                  formFields = specificTaskSpec.extensions.formData.formFields;
+                  console.log('Found form fields in legacy structure (specific task):', formFields);
+                } else {
+                  console.log('No form fields found in specific task spec:', specificTaskSpec);
+                }
                 
                 // Create form fields with values from workflow data
                 const fieldsWithData = formFields.map(field => ({

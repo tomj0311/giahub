@@ -59,17 +59,17 @@ class WorkflowServicePersistent:
                 logger.debug(f"[WORKFLOW] Executing step {step_count}")
                 
                 # Log current task states before execution
-                ready_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY]
+                pending_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY or TaskState.ERROR or TaskState.WAITING]
                 started_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.STARTED]
                 completed_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.COMPLETED]
                 
-                logger.debug(f"[WORKFLOW] Before step {step_count}: Ready={len(ready_tasks)}, Started={len(started_tasks)}, Completed={len(completed_tasks)}")
+                logger.debug(f"[WORKFLOW] Before step {step_count}: Ready={len(pending_tasks)}, Started={len(started_tasks)}, Completed={len(completed_tasks)}")
                 
                 # Check for ScriptTasks in READY state and handle them separately
-                ready_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY]
+                pending_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY]
                 script_tasks_handled = False
                 
-                for task in ready_tasks:
+                for task in pending_tasks:
                     task_type = type(task.task_spec).__name__
                     if task_type == "NoneTask":
                         # NoneTask should not be executed - let SpiffWorkflow handle it according to standard
@@ -161,9 +161,9 @@ class WorkflowServicePersistent:
                 
                 # Check if user input needed
                 if workflow.manual_input_required():
-                    ready_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY]
-                    if ready_tasks:
-                        task = ready_tasks[0]
+                    pending_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY]
+                    if pending_tasks:
+                        task = pending_tasks[0]
                         task_type = type(task.task_spec).__name__
                         logger.info(f"[WORKFLOW] Manual input required for {task_type}: {task.task_spec.bpmn_id}")
                         
@@ -236,7 +236,7 @@ class WorkflowServicePersistent:
                     if task_type == "ServiceTask":
                         logger.info(f"[WORKFLOW] Handling ServiceTask in STARTED state: {task.task_spec.bpmn_id}")
                         try:
-                            await cls.handle_service_task(task, bpmn_map, user)
+                            await cls.handle_service_task(task, user)
                             await cls.update_workflow_instance(workflow, instance_id, tenant_id)
                             break  # Process one service task at a time
                         except Exception as service_error:
@@ -334,42 +334,16 @@ class WorkflowServicePersistent:
         return dct
 
     @classmethod
-    async def handle_service_task(cls, task, bpmn_map, user):
+    async def handle_service_task(cls, task, user):
         """Handle ServiceTask by reading ioSpecification and calling external API"""
         try:
             bpmn_id = task.task_spec.bpmn_id
             logger.info(f"[WORKFLOW] Handling ServiceTask: {bpmn_id}")
             
-            # Get ioSpecification from task spec's io_specification attribute
-            io_spec = {'inputs': {}, 'outputs': {}}
-            if hasattr(task.task_spec, 'io_specification') and task.task_spec.io_specification:
-                # Extract inputs and outputs from BpmnIoSpecification object
-                io_spec_obj = task.task_spec.io_specification
-                if hasattr(io_spec_obj, 'data_inputs'):
-                    for data_input in io_spec_obj.data_inputs:
-                        io_spec['inputs'][data_input.bpmn_id] = data_input.bpmn_name or data_input.bpmn_id
-                if hasattr(io_spec_obj, 'data_outputs'):
-                    for data_output in io_spec_obj.data_outputs:
-                        io_spec['outputs'][data_output.bpmn_id] = data_output.bpmn_name or data_output.bpmn_id
-                logger.debug(f"[WORKFLOW] Using ioSpecification from task spec: {io_spec}")
-            else:
-                logger.debug(f"[WORKFLOW] No ioSpecification found for ServiceTask {bpmn_id}")
-                # Use default empty specification
-            
-            # Also get extensions for additional service task configuration
-            extensions = {}
-            if hasattr(task.task_spec, 'extensions') and task.task_spec.extensions:
-                extensions = task.task_spec.extensions
-                logger.debug(f"[WORKFLOW] Task extensions: {extensions}")
-            
             # Call external API with parameters from both ioSpec inputs and extensions
             try:
-                # Use inputs from ioSpecification, but also include extension data if needed
-                api_params = io_spec.get('inputs', {})
-                if extensions:
-                    api_params.update(extensions)
                     
-                response_data = await cls.call_external_api(api_params, user)
+                response_data = await cls.call_external_api(task, user)
                 if response_data is None:
                     raise ValueError("External API returned None")
                 
@@ -386,9 +360,6 @@ class WorkflowServicePersistent:
             if response:
                 # Update task data with response
                 task.data.update(response)
-                
-                # Map response data to specified outputs in ioSpecification
-                await cls.map_outputs_to_task(task, io_spec.get('outputs', {}), response)
                 
                 task.complete()
                 logger.info(f"[WORKFLOW] ServiceTask {bpmn_id} completed successfully")
@@ -595,7 +566,7 @@ class WorkflowServicePersistent:
             )
 
     @staticmethod
-    async def list_workflows_paginated(workflow_id: str, page: int = 1, size: int = 8, status: str = "all"):
+    async def list_workflows_paginated(workflow_id: str, page: int = 1, size: int = 8, status: str = "all", user: dict = None):
         """List workflows with pagination and status filter"""
         logger.debug(f"[WORKFLOW] Listing workflows for: {workflow_id}, page: {page}, size: {size}, status: {status}")
         try:
@@ -655,7 +626,7 @@ class WorkflowServicePersistent:
 
     @staticmethod
     async def get_workflow_instance(
-        workflow_id: str, instance_id: str, tenant_id: Optional[str] = None
+        workflow_id: str, instance_id: str, tenant_id: Optional[str] = None, user: dict = None
     ):
         """Get specific workflow instance by instance_id"""
         logger.debug(
@@ -711,7 +682,7 @@ class WorkflowServicePersistent:
 
     @staticmethod
     async def delete_workflow_instance(
-        workflow_id: str, instance_id: str, tenant_id: Optional[str] = None
+        workflow_id: str, instance_id: str, tenant_id: Optional[str] = None, user: dict = None
     ):
         """Delete specific workflow instance by instance_id"""
         logger.debug(
@@ -843,7 +814,7 @@ class WorkflowServicePersistent:
             workflow = serializer.deserialize_json(json.dumps(instance["serialized_data"]))
             
             # Find current task and complete it
-            ready_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY]
+            ready_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY or t.state == TaskState.STARTED or t.state == TaskState.ERROR]
             if not ready_tasks:
                 raise HTTPException(status_code=400, detail="No ready tasks found")
                 

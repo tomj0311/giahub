@@ -63,9 +63,9 @@ class EnhancedBpmnTaskParser(SpiffTaskParser):
         """
         result = {}
         
-        # Get all attributes
+        # Get all attributes - flatten them directly into result instead of @attributes
         if element.attrib:
-            result['@attributes'] = dict(element.attrib)
+            result.update(dict(element.attrib))
         
         # Get text content (including CDATA)
         if element.text and element.text.strip():
@@ -89,14 +89,9 @@ class EnhancedBpmnTaskParser(SpiffTaskParser):
         if children:
             result.update(children)
         
-        # If element has no attributes, no text, and only one type of child,
-        # simplify the structure
-        if len(result) == 1:
-            if '@text' in result:
-                return result['@text']
-            elif '@attributes' in result and len(result['@attributes']) == 1:
-                # Single attribute, return its value
-                return list(result['@attributes'].values())[0]
+        # If element has no children and only text, just return the text
+        if len(result) == 1 and '@text' in result:
+            return result['@text']
         
         # If element has no children and no attributes, just return the text
         if not children and not element.attrib and element.text:
