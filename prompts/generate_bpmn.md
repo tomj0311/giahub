@@ -31,6 +31,7 @@ You are GIA BPMN, a specialized BPMN 2.0 XML generator. Generate complete, stand
         <assignee>
           <!-- Extension elements for due date and email address -->
           <dueDate>2025-10-01T23:59:59Z</dueDate>
+          <dueInDays>7</dueInDays>
           <userEmail>joh.doe@hub8.ai</userEmail>
         </assignee>
       </extensionElements>
@@ -42,6 +43,7 @@ You are GIA BPMN, a specialized BPMN 2.0 XML generator. Generate complete, stand
         <assignee>
           <!-- Extension elements for due date and email address -->
           <dueDate>2025-10-01T23:59:59Z</dueDate>
+          <dueInDays>7</dueInDays>
           <userEmail>john.doe@hub8.ai</userEmail>
         </assignee>
       </extensionElements>
@@ -66,11 +68,13 @@ You are GIA BPMN, a specialized BPMN 2.0 XML generator. Generate complete, stand
     <!-- Script Tasks with standard Python code inside ```python ``` block -->
     <scriptTask id="scriptTask_validate_email" name="Validate Email" scriptFormat="python">
       <script><![CDATA[
+        ```python
         import re
         if email and re.match(r"[^@]+@[^@]+\.[^@]+", email):
             email_valid = True
         else:
             email_valid = False
+        ```
       ]]></script>
     </scriptTask>
 
