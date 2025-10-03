@@ -155,7 +155,7 @@ async def get_workflow_instance(
 async def _submit_task_background(workflow_id: str, instance_id: str, task_id: str, task_data: dict, user: dict):
     """Submit task in background"""
     try:
-        result = await WorkflowServicePersistent.submit_user_task_and_continue(
+        result = await WorkflowServicePersistent.handle_user_task(
             workflow_id, instance_id, task_id, task_data, user
         )
         logger.info(f"Task {task_id} completed in background")

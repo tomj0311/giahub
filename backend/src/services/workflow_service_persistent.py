@@ -41,7 +41,7 @@ class WorkflowServicePersistent:
     """Service for handling BPMN workflow execution and management with state persistence"""
     
     @classmethod
-    async def execute_workflow_steps(cls, workflow, workflow_id, user, instance_id=None, bpmn_map=None):
+    async def execute_workflow_steps(cls, workflow, workflow_id, user, instance_id=None):
         """SIMPLE: Execute workflow one step at a time, always update MongoDB"""
         try:
             tenant_id = await cls.validate_tenant_access(user)
@@ -59,16 +59,8 @@ class WorkflowServicePersistent:
                 logger.debug(f"[WORKFLOW] Executing step {step_count}")
                 
                 # Log current task states before execution
-                pending_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY or TaskState.ERROR or TaskState.WAITING]
-                started_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.STARTED]
-                completed_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.COMPLETED]
-                
-                logger.debug(f"[WORKFLOW] Before step {step_count}: Ready={len(pending_tasks)}, Started={len(started_tasks)}, Completed={len(completed_tasks)}")
-                
-                # Check for ScriptTasks in READY state and handle them separately
-                pending_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY]
-                script_tasks_handled = False
-                
+                pending_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY or TaskState.ERROR or TaskState.WAITING or TaskState.STARTED]
+                                
                 for task in pending_tasks:
                     task_type = type(task.task_spec).__name__
                     if task_type == "NoneTask":
@@ -80,7 +72,6 @@ class WorkflowServicePersistent:
                         logger.info(f"[WORKFLOW] Handling ScriptTask separately: {task.task_spec.bpmn_id}")
                         try:
                             await cls.handle_script_task(task)
-                            script_tasks_handled = True
                             break  # Process one script task at a time
                         except Exception as script_error:
                             logger.error(f"[WORKFLOW] ScriptTask {task.task_spec.bpmn_id} failed: {script_error}")
@@ -103,13 +94,37 @@ class WorkflowServicePersistent:
                             
                             await cls.update_workflow_instance(workflow, instance_id, tenant_id)
                             raise HTTPException(status_code=500, detail=f"ScriptTask failed: {str(script_error)}")
-                
-                # If we handled a script task, skip do_engine_steps and continue to next iteration
-                if script_tasks_handled:
-                    await cls.update_workflow_instance(workflow, instance_id, tenant_id)
-                    continue
-                
-                # Execute workflow engine steps with error handling (for non-script tasks)
+                    elif task_type == "ServiceTask":
+                        logger.info(f"[WORKFLOW] Handling ServiceTask in STARTED state: {task.task_spec.bpmn_id}")
+                        try:
+                            await cls.handle_service_task(task, user)
+                            await cls.update_workflow_instance(workflow, instance_id, tenant_id)
+                            break  # Process one service task at a time
+                        except Exception as service_error:
+                            logger.error(f"[WORKFLOW] ServiceTask {task.task_spec.bpmn_id} failed in STARTED state: {service_error}")
+                            task.data["error"] = str(service_error)
+                            task.error()
+                            
+                            # Update workflow data with error status for STARTED task
+                            error_status = {
+                                "instance_id": instance_id,
+                                "completed": workflow.is_completed(),
+                                "needs_user_input": workflow.manual_input_required(),
+                                "current_task_id": cls._get_current_task_id(workflow)
+                            }
+                            
+                            workflow.data.update({
+                                "workflow_status": error_status,
+                                "error": str(service_error),
+                                "error_task_id": task.task_spec.bpmn_id,
+                                "error_task_state": "STARTED",
+                                "last_updated": datetime.now(UTC).isoformat()
+                            })
+                            
+                            await cls.update_workflow_instance(workflow, instance_id, tenant_id)
+                            # STOP the workflow - don't continue!
+                            raise HTTPException(status_code=500, detail=f"ServiceTask failed: {str(service_error)}")
+
                 try:
                     workflow.do_engine_steps()
                 except Exception as engine_error:
@@ -184,86 +199,16 @@ class WorkflowServicePersistent:
                         
                         if task_type in ["UserTask", "ManualTask", "NoneTask"]:
                             # Extension elements are now stored in serialized data
-                            # No need for separate storage - just wait for user input
                             logger.debug(f"[WORKFLOW] Waiting for user input for {task_type}: {task.task_spec.bpmn_id}")
                             
-                            # Send task assignment emails if extensions contain email addresses
                             try:
                                 await TaskNotificationService.send_task_assignment_emails(task, workflow_id, instance_id)
                             except Exception as e:
                                 logger.error(f"[WORKFLOW] Email notification failed: {e}")
                             
-                            # Update MongoDB with user input status
                             await cls.update_workflow_instance(workflow, instance_id, tenant_id)
-                            
-                            # Stop here - wait for user input
                             break
-                        
-                        elif task_type == "ServiceTask":
-                            # Handle ServiceTask in READY state
-                            try:
-                                await cls.handle_service_task(task, bpmn_map, user)
-                                await cls.update_workflow_instance(workflow, instance_id, tenant_id)
-                                continue  # Continue processing after handling service task
-                            except Exception as service_error:
-                                logger.error(f"[WORKFLOW] ServiceTask {task.task_spec.bpmn_id} failed: {service_error}")
-                                task.data["error"] = str(service_error)
-                                task.error()
-                                
-                                # Update workflow data with error status
-                                error_status = {
-                                    "instance_id": instance_id,
-                                    "completed": workflow.is_completed(),
-                                    "needs_user_input": workflow.manual_input_required(),
-                                    "current_task_id": cls._get_current_task_id(workflow)
-                                }
-                                
-                                workflow.data.update({
-                                    "workflow_status": error_status,
-                                    "error": str(service_error),
-                                    "error_task_id": task.task_spec.bpmn_id,
-                                    "last_updated": datetime.now(UTC).isoformat()
-                                })
-                                
-                                await cls.update_workflow_instance(workflow, instance_id, tenant_id)
-                                # STOP the workflow - don't continue!
-                                raise HTTPException(status_code=500, detail=f"ServiceTask failed: {str(service_error)}")
-                
-                # Check for ServiceTask in STARTED state
-                started_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.STARTED]
-                for task in started_tasks:
-                    task_type = type(task.task_spec).__name__
-                    if task_type == "ServiceTask":
-                        logger.info(f"[WORKFLOW] Handling ServiceTask in STARTED state: {task.task_spec.bpmn_id}")
-                        try:
-                            await cls.handle_service_task(task, user)
-                            await cls.update_workflow_instance(workflow, instance_id, tenant_id)
-                            break  # Process one service task at a time
-                        except Exception as service_error:
-                            logger.error(f"[WORKFLOW] ServiceTask {task.task_spec.bpmn_id} failed in STARTED state: {service_error}")
-                            task.data["error"] = str(service_error)
-                            task.error()
-                            
-                            # Update workflow data with error status for STARTED task
-                            error_status = {
-                                "instance_id": instance_id,
-                                "completed": workflow.is_completed(),
-                                "needs_user_input": workflow.manual_input_required(),
-                                "current_task_id": cls._get_current_task_id(workflow)
-                            }
-                            
-                            workflow.data.update({
-                                "workflow_status": error_status,
-                                "error": str(service_error),
-                                "error_task_id": task.task_spec.bpmn_id,
-                                "error_task_state": "STARTED",
-                                "last_updated": datetime.now(UTC).isoformat()
-                            })
-                            
-                            await cls.update_workflow_instance(workflow, instance_id, tenant_id)
-                            # STOP the workflow - don't continue!
-                            raise HTTPException(status_code=500, detail=f"ServiceTask failed: {str(service_error)}")
-            
+                                    
             # Final MongoDB update
             await cls.update_workflow_instance(workflow, instance_id, tenant_id)
             logger.info(f"[WORKFLOW] Workflow execution completed after {step_count} steps")
@@ -290,48 +235,6 @@ class WorkflowServicePersistent:
         except Exception as e:
             logger.error(f"[WORKFLOW] Error: {e}", exc_info=True)
             raise
-
-    @staticmethod
-    def handle_user_task(task, form_map: Dict[str, List[Dict[str, str]]] | None = None):
-        """
-        Handle UserTask by prompting for form fields and ManualTask with simple confirmation.
-        """
-        logger.info(f"Handling user task: {task.task_spec.name}")
-        dct = {}
-
-        # Handle ManualTask - just needs confirmation
-        if task.task_spec.__class__.__name__ == "ManualTask":
-            return {
-                "confirmation": {
-                    "field_id": "manual_confirmation",
-                    "label": "Confirm to proceed",
-                    "type": "boolean",
-                    "value": None,
-                    "required": True,
-                }
-            }
-
-        # Handle UserTask with form fields
-        bpmn_id = getattr(task.task_spec, "bpmn_id", None)
-        fields = []
-        if form_map and bpmn_id and bpmn_id in form_map:
-            fields = form_map[bpmn_id]
-
-        if fields:
-            for field in fields:
-                label = field.get("label") or field.get("id")
-                # Store form field definition instead of prompting for input
-                dct[field.get("id") or label] = {
-                    "field_id": field.get("id"),
-                    "label": label,
-                    "type": field.get("type", str),
-                    "value": None,  # Will be filled by frontend
-                    "required": field.get("requirwed", False),
-                }
-        else:
-            logger.warning("No form metadata found for user task")
-
-        return dct
 
     @classmethod
     async def handle_service_task(cls, task, user):
@@ -726,22 +629,6 @@ class WorkflowServicePersistent:
             )
         return tenant_id
 
-    @staticmethod
-    async def parse_bpmn(
-        bpmn_xml: str,
-    ) -> Dict[str, List[Dict[str, str]]]:
-        """Extract simple formData/formField definitions by BPMN node id.
-
-        - Supports tags named 'formData'/'formField' regardless of namespace.
-        - Returns mapping: node_id -> list of {id,label,type} dicts.
-        """
-        try:
-            bpmn_map = {"root": etree.fromstring(bpmn_xml.encode("utf-8"))}
-            return bpmn_map
-        
-        except Exception:
-            return {}
-
     @classmethod
     def _get_current_task_id(cls, workflow):
         """Get current task ID if waiting for user input"""
@@ -795,7 +682,7 @@ class WorkflowServicePersistent:
             raise HTTPException(status_code=500, detail=str(e))
 
     @classmethod
-    async def submit_user_task_and_continue(
+    async def handle_user_task(
         cls,
         workflow_id: str,
         instance_id: str,
@@ -827,8 +714,6 @@ class WorkflowServicePersistent:
                 current_task.data.update(task_data)
                 workflow.data.update(task_data)  # Also update workflow global data
                 
-                # Form data is now stored in serialized workflow data, no separate storage needed
-                
                 # Complete the task
                 current_task.complete()
                 logger.info(f"[WORKFLOW] Task {task_id} completed successfully")
@@ -846,19 +731,11 @@ class WorkflowServicePersistent:
             test_json = test_serializer.serialize_json(workflow)
             test_data = json.loads(test_json)
             
-            # Find our completed task in serialized data
-            for task_uuid, serialized_task in test_data.get('tasks', {}).items():
-                if serialized_task.get('task_spec') == task_id:
-                    logger.debug(f"[WORKFLOW] SERIALIZED TASK {task_id} data: {serialized_task.get('data', {})}")
-                    break
-            
             # Update MongoDB immediately after completing task
             await cls.update_workflow_instance(workflow, instance_id, tenant_id)
             
             # Continue workflow execution
-            bpmn_xml = await cls.get_bpmn_xml(workflow_id, user)
-            bpmn_map = await cls.parse_bpmn(bpmn_xml)
-            result = await cls.execute_workflow_steps(workflow, workflow_id, user, instance_id, bpmn_map)
+            result = await cls.execute_workflow_steps(workflow, workflow_id, user, instance_id)
             
             # Update task data with final status structure
             final_status = {
@@ -888,7 +765,6 @@ class WorkflowServicePersistent:
         try:
             # Get BPMN XML
             bpmn_xml = await cls.get_bpmn_xml(workflow_id, user)
-            bpmn_map = await cls.parse_bpmn(bpmn_xml)
             
             # Create workflow with enhanced parser
             script_engine = PythonScriptEngine()
@@ -931,7 +807,7 @@ class WorkflowServicePersistent:
                 workflow.data.update(initial_data)
             
             # Execute workflow and save to MongoDB
-            result = await cls.execute_workflow_steps(workflow, workflow_id, user, bpmn_map=bpmn_map)
+            result = await cls.execute_workflow_steps(workflow, workflow_id, user)
             
             # Return consistent status structure
             final_status = {
