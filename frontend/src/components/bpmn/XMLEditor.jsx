@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Button, TextField, Typography, Dialog, DialogTitle, DialogContent, DialogActions, useTheme } from '@mui/material';
 import { agentRuntimeService } from '../../services/agentRuntimeService';
-import sharedApiService from '../../utils/apiService';
 
 
-const XMLEditor = ({ isOpen, onClose, xmlContent, onUpdate, elementType, selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate, edges, nodeData }) => {
+const XMLEditor = ({ isOpen, onClose, xmlContent, elementType, selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate, edges, nodeData }) => {
   const theme = useTheme();
   const [editedXml, setEditedXml] = useState('');
   const TAB_XML_PROPERTIES = 0;
@@ -86,6 +85,12 @@ ${assigneeFields.map(field => {
         formDataXml.replace('</extensionElements>', `${assigneeXml}\n</extensionElements>`) : 
         formDataXml;
       setEditedXml(formatXML(generatedXml));
+    } else if (taskType === 'scriptTask') {
+      // Generate script task XML
+      const scriptXml = `<script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'}
+]]></script>`;
+      setEditedXml(formatXML(scriptXml));
     } else if (selectedNode?.type && selectedNode.type.includes('gateway')) {
       // Generate gateway sequence flows XML
       const validConditions = xmlProperties.gateway.conditions.filter(condition =>
@@ -240,6 +245,34 @@ ${assigneeFields.map(field => {
             serviceTask: serviceTaskConfig
           }));
         }
+      } else if (taskType === 'scriptTask') {
+        // Parse scriptTask - extract CDATA content from script element
+        const scriptElement = doc.querySelector('script');
+        let scriptCode = '';
+        
+        if (scriptElement) {
+          console.log('🔍 Found script element for scriptTask');
+          // Check for CDATA content
+          for (let i = 0; i < scriptElement.childNodes.length; i++) {
+            const node = scriptElement.childNodes[i];
+            if (node.nodeType === 4) { // CDATASection
+              scriptCode = node.data.trim();
+              console.log('📝 Found CDATA script content:', scriptCode);
+              break;
+            }
+          }
+          // If no CDATA, try text content
+          if (!scriptCode) {
+            scriptCode = scriptElement.textContent?.trim() || '';
+            console.log('📝 Found text script content:', scriptCode);
+          }
+        }
+        
+        // Update state
+        setXmlProperties(prev => ({
+          ...prev,
+          scriptTask: { scriptCode: scriptCode }
+        }));
       } else if (selectedNode?.type && selectedNode.type.includes('gateway')) {
         // Parse gateway sequence flows
         const sequenceFlows = Array.from(doc.querySelectorAll('sequenceFlow')).map(flow => ({
@@ -326,13 +359,6 @@ ${assigneeFields.map(field => {
     }
   }, [xmlContent, elementType, selectedNode]);
 
-  // Watch for changes in editedXml and update properties - REMOVED AUTO PARSING
-  // useEffect(() => {
-  //   if (editedXml && accordionOpen === 3) { 
-  //     parseXmlToProperties(editedXml);
-  //   }
-  // }, [editedXml, accordionOpen]);
-
   const formatXML = (xml) => {
     if (!xml) return '';
     
@@ -389,16 +415,6 @@ ${assigneeFields.map(field => {
     });
     
     return result;
-  };
-
-  const handleUpdate = () => {
-    onUpdate(editedXml);
-    onClose();
-  };
-
-  const handleCancel = () => {
-    setEditedXml(xmlContent || '');
-    onClose();
   };
 
   const handleSave = () => {
@@ -1265,10 +1281,17 @@ ${assigneeFields.map(field => {
                       fullWidth
                       label="Script Code"
                       value={xmlProperties.scriptTask.scriptCode}
-                      onChange={(e) => setXmlProperties(prev => ({
-                        ...prev,
-                        scriptTask: { ...prev.scriptTask, scriptCode: e.target.value }
-                      }))}
+                      onChange={(e) => {
+                        setXmlProperties(prev => ({
+                          ...prev,
+                          scriptTask: { ...prev.scriptTask, scriptCode: e.target.value }
+                        }));
+                        // Update XML when script code changes
+                        const updatedXml = `<script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+${e.target.value}
+]]></script>`;
+                        setEditedXml(formatXML(updatedXml));
+                      }}
                       sx={{
                         '& .MuiInputBase-input': {
                           fontFamily: 'monospace',
