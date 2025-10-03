@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Button, TextField, Typography, Dialog, DialogTitle, DialogContent, DialogActions, useTheme } from '@mui/material';
+import { Box, Button, TextField, Typography, Dialog, DialogTitle, DialogContent, DialogActions, useTheme, FormControl, InputLabel, Select, MenuItem, CircularProgress } from '@mui/material';
 import { agentRuntimeService } from '../../services/agentRuntimeService';
+import { apiCall } from '../../config/api';
 
 
 const XMLEditor = ({ isOpen, onClose, xmlContent, elementType, selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate, edges, nodeData }) => {
@@ -42,6 +43,13 @@ const XMLEditor = ({ isOpen, onClose, xmlContent, elementType, selectedNode, sel
   });
   // Sub-accordion state for UserTask sections
   const [userTaskAccordion, setUserTaskAccordion] = useState(0); // 0 = formData, 1 = assignee
+
+  // Dynamic function states for serviceTask
+  const [modules, setModules] = useState([]);
+  const [functions, setFunctions] = useState({});
+  const [functionDetails, setFunctionDetails] = useState(null);
+  const [loadingModules, setLoadingModules] = useState(false);
+  const [loadingFunctions, setLoadingFunctions] = useState(false);
 
   // Simple function to update XML from properties
   const updateXmlFromProperties = () => {
@@ -314,6 +322,86 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
     
     setSelected(agentName);
   }, [elementType, selectedNode]);
+
+  // Load modules when component mounts for serviceTask
+  useEffect(() => {
+    const taskType = selectedNode?.data?.taskType || elementType;
+    if (taskType === 'serviceTask') {
+      loadModules();
+    }
+  }, [elementType, selectedNode]);
+
+  // Load functions when module is selected
+  useEffect(() => {
+    if (xmlProperties.serviceTask.function.moduleName && modules.length > 0) {
+      loadFunctions(xmlProperties.serviceTask.function.moduleName);
+    }
+  }, [xmlProperties.serviceTask.function.moduleName, modules]);
+
+  // Load function details when function is selected
+  useEffect(() => {
+    if (xmlProperties.serviceTask.function.functionName && functions[xmlProperties.serviceTask.function.functionName]) {
+      const funcDetails = functions[xmlProperties.serviceTask.function.functionName];
+      setFunctionDetails(funcDetails);
+      
+      // Update parameters based on function signature
+      if (funcDetails.parameters) {
+        const initialParams = [];
+        Object.keys(funcDetails.parameters).forEach(paramName => {
+          initialParams.push({
+            name: paramName,
+            value: funcDetails.parameters[paramName].default || ''
+          });
+        });
+        setXmlProperties(prev => ({
+          ...prev,
+          serviceTask: {
+            ...prev.serviceTask,
+            function: {
+              ...prev.serviceTask.function,
+              parameters: initialParams
+            }
+          }
+        }));
+      }
+    }
+  }, [xmlProperties.serviceTask.function.functionName, functions]);
+
+  const loadModules = async () => {
+    setLoadingModules(true);
+    try {
+      const response = await apiCall('/api/dynamic/modules');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      if (data.success) {
+        setModules(data.data);
+      }
+    } catch (err) {
+      console.error('Error loading modules:', err);
+    } finally {
+      setLoadingModules(false);
+    }
+  };
+
+  const loadFunctions = async (moduleName) => {
+    setLoadingFunctions(true);
+    try {
+      const response = await apiCall(`/api/dynamic/modules/${moduleName}/functions`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      if (data.success) {
+        setFunctions(data.data);
+      }
+    } catch (err) {
+      console.error('Error loading functions:', err);
+    } finally {
+      setLoadingFunctions(false);
+    }
+  };
 
   useEffect(() => {
     console.log('🚀 XMLEditor useEffect triggered with xmlContent:', xmlContent);
@@ -1171,33 +1259,74 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                 {/* ServiceTask Properties */}
                 {(selectedNode?.data?.taskType || elementType) === 'serviceTask' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {/* Function Configuration - No dropdown needed, only function type */}
-                    <TextField
-                      size="small"
-                      label="Module Name"
-                      value={xmlProperties.serviceTask.function.moduleName}
-                      onChange={(e) => setXmlProperties(prev => ({
-                        ...prev,
-                        serviceTask: { 
-                          ...prev.serviceTask, 
-                          function: { ...prev.serviceTask.function, moduleName: e.target.value }
-                        }
-                      }))}
-                      fullWidth
-                    />
-                    <TextField
-                      size="small"
-                      label="Function Name"
-                      value={xmlProperties.serviceTask.function.functionName}
-                      onChange={(e) => setXmlProperties(prev => ({
-                        ...prev,
-                        serviceTask: { 
-                          ...prev.serviceTask, 
-                          function: { ...prev.serviceTask.function, functionName: e.target.value }
-                        }
-                      }))}
-                      fullWidth
-                    />
+                    {/* Module Selection */}
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Module</InputLabel>
+                      <Select
+                        value={xmlProperties.serviceTask.function.moduleName}
+                        onChange={(e) => setXmlProperties(prev => ({
+                          ...prev,
+                          serviceTask: { 
+                            ...prev.serviceTask, 
+                            function: { 
+                              ...prev.serviceTask.function, 
+                              moduleName: e.target.value,
+                              functionName: '', // Reset function when module changes
+                              parameters: []
+                            }
+                          }
+                        }))}
+                        label="Module"
+                        disabled={loadingModules}
+                      >
+                        {modules.map((module) => (
+                          <MenuItem key={module} value={module}>
+                            {module}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                      {loadingModules && (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
+                          <CircularProgress size={16} />
+                        </Box>
+                      )}
+                    </FormControl>
+
+                    {/* Function Selection */}
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Function</InputLabel>
+                      <Select
+                        value={xmlProperties.serviceTask.function.functionName}
+                        onChange={(e) => setXmlProperties(prev => ({
+                          ...prev,
+                          serviceTask: { 
+                            ...prev.serviceTask, 
+                            function: { ...prev.serviceTask.function, functionName: e.target.value }
+                          }
+                        }))}
+                        label="Function"
+                        disabled={!xmlProperties.serviceTask.function.moduleName || loadingFunctions}
+                      >
+                        {Object.keys(functions).map((funcName) => (
+                          <MenuItem key={funcName} value={funcName}>
+                            {funcName}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                      {loadingFunctions && (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
+                          <CircularProgress size={16} />
+                        </Box>
+                      )}
+                    </FormControl>
+
+                    {/* Function Documentation */}
+                    {functionDetails && functionDetails.docstring && (
+                      <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '11px', fontStyle: 'italic', p: 1, bgcolor: 'rgba(0,0,0,0.05)', borderRadius: 1 }}>
+                        {functionDetails.docstring}
+                      </Typography>
+                    )}
+
                     <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
                       Parameters:
                     </Typography>
@@ -1219,10 +1348,13 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                             }));
                           }}
                           sx={{ flex: 1 }}
+                          disabled={functionDetails && functionDetails.parameters} // Disable if auto-generated
                         />
                         <TextField
                           size="small"
-                          label="Value"
+                          label={functionDetails && functionDetails.parameters && functionDetails.parameters[param.name] ? 
+                            `Value - ${functionDetails.parameters[param.name].type.replace('<class \'', '').replace('\'>', '')}${functionDetails.parameters[param.name].required ? ' (required)' : ' (optional)'}` : 
+                            'Value'}
                           value={param.value}
                           onChange={(e) => {
                             const newParams = [...xmlProperties.serviceTask.function.parameters];
@@ -1249,27 +1381,30 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                             }));
                           }}
                           style={{ background: 'red', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}
+                          disabled={functionDetails && functionDetails.parameters} // Disable if auto-generated
                         >
                           ×
                         </button>
                       </div>
                     ))}
-                    <Button
-                      onClick={() => {
-                        const newParams = [...xmlProperties.serviceTask.function.parameters, { name: '', value: '' }];
-                        setXmlProperties(prev => ({
-                          ...prev,
-                          serviceTask: { 
-                            ...prev.serviceTask, 
-                            function: { ...prev.serviceTask.function, parameters: newParams }
-                          }
-                        }));
-                      }}
-                      variant="outlined"
-                      size="small"
-                    >
-                      Add Parameter
-                    </Button>
+                    {(!functionDetails || !functionDetails.parameters) && (
+                      <Button
+                        onClick={() => {
+                          const newParams = [...xmlProperties.serviceTask.function.parameters, { name: '', value: '' }];
+                          setXmlProperties(prev => ({
+                            ...prev,
+                            serviceTask: { 
+                              ...prev.serviceTask, 
+                              function: { ...prev.serviceTask.function, parameters: newParams }
+                            }
+                          }));
+                        }}
+                        variant="outlined"
+                        size="small"
+                      >
+                        Add Parameter
+                      </Button>
+                    )}
                   </div>
                 )}
 
