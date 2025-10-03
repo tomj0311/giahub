@@ -331,12 +331,49 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
     }
   }, [elementType, selectedNode]);
 
+  // Auto-select first module when modules are loaded
+  useEffect(() => {
+    if (modules.length > 0 && !xmlProperties.serviceTask.function.moduleName) {
+      const firstModule = modules[0];
+      setXmlProperties(prev => ({
+        ...prev,
+        serviceTask: {
+          ...prev.serviceTask,
+          function: {
+            ...prev.serviceTask.function,
+            moduleName: firstModule,
+            functionName: '', // Reset function when module changes
+            parameters: []
+          }
+        }
+      }));
+    }
+  }, [modules, xmlProperties.serviceTask.function.moduleName]);
+
   // Load functions when module is selected
   useEffect(() => {
     if (xmlProperties.serviceTask.function.moduleName && modules.length > 0) {
       loadFunctions(xmlProperties.serviceTask.function.moduleName);
     }
   }, [xmlProperties.serviceTask.function.moduleName, modules]);
+
+  // Auto-select first function when functions are loaded
+  useEffect(() => {
+    const functionNames = Object.keys(functions);
+    if (functionNames.length > 0 && !xmlProperties.serviceTask.function.functionName) {
+      const firstFunction = functionNames[0];
+      setXmlProperties(prev => ({
+        ...prev,
+        serviceTask: {
+          ...prev.serviceTask,
+          function: {
+            ...prev.serviceTask.function,
+            functionName: firstFunction
+          }
+        }
+      }));
+    }
+  }, [functions, xmlProperties.serviceTask.function.functionName]);
 
   // Load function details when function is selected
   useEffect(() => {
@@ -673,7 +710,7 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
   };
 
   return (
-    <Dialog open={isOpen} onClose={onClose} maxWidth="lg" fullWidth>
+    <Dialog open={isOpen} onClose={onClose} maxWidth="xl" fullWidth>
       <DialogTitle>Edit XML - {elementType}</DialogTitle>
       <DialogContent>
         <Box sx={{ height: '70vh' }}>
@@ -1259,66 +1296,71 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                 {/* ServiceTask Properties */}
                 {(selectedNode?.data?.taskType || elementType) === 'serviceTask' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {/* Module Selection */}
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Module</InputLabel>
-                      <Select
-                        value={xmlProperties.serviceTask.function.moduleName}
-                        onChange={(e) => setXmlProperties(prev => ({
-                          ...prev,
-                          serviceTask: { 
-                            ...prev.serviceTask, 
-                            function: { 
-                              ...prev.serviceTask.function, 
-                              moduleName: e.target.value,
-                              functionName: '', // Reset function when module changes
-                              parameters: []
-                            }
-                          }
-                        }))}
-                        label="Module"
-                        disabled={loadingModules}
-                      >
-                        {modules.map((module) => (
-                          <MenuItem key={module} value={module}>
-                            {module}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                      {loadingModules && (
-                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
-                          <CircularProgress size={16} />
-                        </Box>
-                      )}
-                    </FormControl>
-
-                    {/* Function Selection */}
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Function</InputLabel>
-                      <Select
-                        value={xmlProperties.serviceTask.function.functionName}
-                        onChange={(e) => setXmlProperties(prev => ({
-                          ...prev,
-                          serviceTask: { 
-                            ...prev.serviceTask, 
-                            function: { ...prev.serviceTask.function, functionName: e.target.value }
-                          }
-                        }))}
-                        label="Function"
-                        disabled={!xmlProperties.serviceTask.function.moduleName || loadingFunctions}
-                      >
-                        {Object.keys(functions).map((funcName) => (
-                          <MenuItem key={funcName} value={funcName}>
-                            {funcName}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                      {loadingFunctions && (
-                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
-                          <CircularProgress size={16} />
-                        </Box>
-                      )}
-                    </FormControl>
+                    {/* Module and Function Selection in one line */}
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1 }}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel>Module</InputLabel>
+                          <Select
+                            value={xmlProperties.serviceTask.function.moduleName}
+                            onChange={(e) => setXmlProperties(prev => ({
+                              ...prev,
+                              serviceTask: { 
+                                ...prev.serviceTask, 
+                                function: { 
+                                  ...prev.serviceTask.function, 
+                                  moduleName: e.target.value,
+                                  functionName: '', // Reset function when module changes
+                                  parameters: []
+                                }
+                              }
+                            }))}
+                            label="Module"
+                            disabled={loadingModules}
+                          >
+                            {modules.map((module) => (
+                              <MenuItem key={module} value={module}>
+                                {module}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                          {loadingModules && (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
+                              <CircularProgress size={16} />
+                            </Box>
+                          )}
+                        </FormControl>
+                      </div>
+                      
+                      <div style={{ flex: 1 }}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel>Function</InputLabel>
+                          <Select
+                            value={xmlProperties.serviceTask.function.functionName}
+                            onChange={(e) => setXmlProperties(prev => ({
+                              ...prev,
+                              serviceTask: { 
+                                ...prev.serviceTask, 
+                                function: { ...prev.serviceTask.function, functionName: e.target.value }
+                              }
+                            }))}
+                            label="Function"
+                            disabled={!xmlProperties.serviceTask.function.moduleName || loadingFunctions}
+                          >
+                            {Object.keys(functions).map((funcName) => (
+                              <MenuItem key={funcName} value={funcName}>
+                                {funcName}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                          {loadingFunctions && (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
+                              <CircularProgress size={16} />
+                            </Box>
+                          )}
+                        </FormControl>
+                      </div>
+                    </div>
 
                     {/* Function Documentation */}
                     {functionDetails && functionDetails.docstring && (
@@ -1618,12 +1660,14 @@ ${xmlProperties.scriptTask.scriptCode}
               </>
             )}
           </div>
+          
+          {/* Action buttons in the middle */}
+          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 3, mb: 2, p: 2, borderTop: '1px solid var(--border-color)', pt: 2 }}>
+            <Button onClick={onClose} variant="outlined">Cancel</Button>
+            <Button onClick={handleSave} variant="contained">Save</Button>
+          </Box>
         </Box>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={handleSave} variant="contained">Save</Button>
-      </DialogActions>
     </Dialog>
   );
 };
