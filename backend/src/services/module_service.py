@@ -14,7 +14,7 @@ class ModuleService:
     """Service for discovering and managing dynamic function modules."""
     
     def __init__(self):
-        self.modules_directory = Path(__file__).parent.parent / "modules"
+        self.modules_directory = Path(__file__).parent / "modules"
         self.loaded_modules = {}
     
     def discover_modules(self) -> List[str]:
