@@ -6,18 +6,43 @@
 export const captureNestedElements = (element) => {
   if (!element) return '';
   
-  // Create a temporary container to parse and filter the innerHTML
-  const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = element.innerHTML || '';
-  
-  // Remove incoming and outgoing elements since they'll be generated dynamically
-  const incomingElements = tempDiv.querySelectorAll('incoming, bpmn\\:incoming, bpmn2\\:incoming');
-  const outgoingElements = tempDiv.querySelectorAll('outgoing, bpmn\\:outgoing, bpmn2\\:outgoing');
-  
-  incomingElements.forEach(el => el.remove());
-  outgoingElements.forEach(el => el.remove());
-  
-  return tempDiv.innerHTML || '';
+  try {
+    // Use XMLSerializer to preserve exact XML case and structure
+    const serializer = new XMLSerializer();
+    let xmlContent = '';
+    
+    // Serialize each child element individually to preserve XML structure
+    Array.from(element.childNodes).forEach(child => {
+      // Skip incoming/outgoing elements since they'll be generated dynamically
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        const tagName = child.tagName.toLowerCase();
+        if (tagName !== 'incoming' && tagName !== 'outgoing' && 
+            !tagName.includes(':incoming') && !tagName.includes(':outgoing')) {
+          xmlContent += serializer.serializeToString(child);
+        }
+      } else if (child.nodeType === Node.TEXT_NODE && child.textContent.trim()) {
+        // Preserve text content
+        xmlContent += child.textContent;
+      }
+    });
+    
+    return xmlContent;
+  } catch (error) {
+    console.warn('Failed to capture nested elements with XMLSerializer, falling back to innerHTML:', error);
+    
+    // Fallback to original method if XMLSerializer fails
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = element.innerHTML || '';
+    
+    // Remove incoming and outgoing elements since they'll be generated dynamically
+    const incomingElements = tempDiv.querySelectorAll('incoming, bpmn\\:incoming, bpmn2\\:incoming');
+    const outgoingElements = tempDiv.querySelectorAll('outgoing, bpmn\\:outgoing, bpmn2\\:outgoing');
+    
+    incomingElements.forEach(el => el.remove());
+    outgoingElements.forEach(el => el.remove());
+    
+    return tempDiv.innerHTML || '';
+  }
 };
 
 // Helper function to escape XML characters
