@@ -718,7 +718,8 @@ class AgentRuntimeService:
                 # Collect agent response content for conversation saving
                 if response.get("type") == "agent_chunk" and response.get("payload", {}).get("content"):
                     agent_response_content += response["payload"]["content"]
-                elif response.get("type") == "agent_run_complete":
+                elif response.get("type") == "agent_response":
+                    agent_response_content += response["payload"]["content"]
                     completed = True
                     
                 yield response
