@@ -2,11 +2,22 @@
 // This function parses BPMN 2.0 XML and converts it to React Flow compatible nodes and edges
 
 // Helper function to capture nested XML elements for preservation
+// Excludes incoming/outgoing flow references since they're generated dynamically
 export const captureNestedElements = (element) => {
   if (!element) return '';
   
-  // Simple: just return innerHTML to capture EVERYTHING
-  return element.innerHTML || '';
+  // Create a temporary container to parse and filter the innerHTML
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = element.innerHTML || '';
+  
+  // Remove incoming and outgoing elements since they'll be generated dynamically
+  const incomingElements = tempDiv.querySelectorAll('incoming, bpmn\\:incoming, bpmn2\\:incoming');
+  const outgoingElements = tempDiv.querySelectorAll('outgoing, bpmn\\:outgoing, bpmn2\\:outgoing');
+  
+  incomingElements.forEach(el => el.remove());
+  outgoingElements.forEach(el => el.remove());
+  
+  return tempDiv.innerHTML || '';
 };
 
 // Helper function to escape XML characters
