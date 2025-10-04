@@ -60,45 +60,55 @@ class EnhancedBpmnTaskParser(SpiffTaskParser):
     def _parse_element_recursively(self, element):
         """
         Recursively parse any XML element into a Python structure
+        FIXED TO HANDLE THE ACTUAL XML STRUCTURE WITH FUNCTION/PARAMETERS
         """
-        result = {}
+        # Get element name
+        element_name = etree.QName(element).localname
         
-        # Get all attributes - flatten them directly into result instead of @attributes
+        # Start with attributes as base
+        result = {}
         if element.attrib:
             result.update(dict(element.attrib))
         
-        # Get text content (including CDATA)
-        if element.text and element.text.strip():
-            result['@text'] = element.text.strip()
+        # Get direct text content (not from children)
+        direct_text = element.text.strip() if element.text else ""
         
         # Parse all child elements
-        children = {}
+        child_elements = {}
         for child in element:
             child_name = etree.QName(child).localname
-            child_data = self._parse_element_recursively(child)
+            child_result = self._parse_element_recursively(child)
             
-            # If we already have this child name, make it a list
-            if child_name in children:
-                if not isinstance(children[child_name], list):
-                    children[child_name] = [children[child_name]]
-                children[child_name].append(child_data)
+            # Handle multiple children with same name
+            if child_name in child_elements:
+                if not isinstance(child_elements[child_name], list):
+                    child_elements[child_name] = [child_elements[child_name]]
+                child_elements[child_name].append(child_result)
             else:
-                children[child_name] = child_data
+                child_elements[child_name] = child_result
         
-        # Add children to result
-        if children:
-            result.update(children)
-        
-        # If element has no children and only text, just return the text
-        if len(result) == 1 and '@text' in result:
-            return result['@text']
-        
-        # If element has no children and no attributes, just return the text
-        if not children and not element.attrib and element.text:
-            return element.text.strip()
-        
-        # If element is completely empty, return empty dict
-        if not result:
+        # Determine what to return based on content
+        if child_elements and result:
+            # Has both children and attributes
+            result.update(child_elements)
+            if direct_text:
+                result['_text'] = direct_text
+            return result
+        elif child_elements:
+            # Has only children - return children structure
+            if direct_text:
+                child_elements['_text'] = direct_text
+            return child_elements
+        elif result:
+            # Has only attributes
+            if direct_text:
+                result['_text'] = direct_text
+            return result
+        elif direct_text:
+            # Has only text
+            return direct_text
+        else:
+            # Empty element
             return {}
             
         return result
