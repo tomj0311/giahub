@@ -19,7 +19,7 @@ sys.path.insert(0, str(current_dir))
 sys.path.insert(0, str(project_root))  # Add project root so we can import 'ai' module
 
 from src.db import init_database, close_database
-from src.routes import auth_router, users_router, payments_router, uploads_router, profile_router, roles_router, role_management_router, menu_router, model_config_router, tool_config_router, knowledge_router, agents_router, workflow_config_router, workflow_router, analytics_router, dynamic_execution_router
+from src.routes import auth_router, users_router, payments_router, uploads_router, profile_router, roles_router, role_management_router, model_config_router, tool_config_router, knowledge_router, agents_router, workflow_config_router, workflow_router, analytics_router, dynamic_execution_router
 from src.routes.agent_runtime import router as agent_runtime_router
 from src.services.rbac_service import init_default_roles
 from src.utils.log import logger
@@ -108,7 +108,6 @@ app.include_router(users_router, prefix="/api/users")
 app.include_router(profile_router)
 app.include_router(roles_router)
 app.include_router(role_management_router, prefix="/api/rbac")
-app.include_router(menu_router)
 app.include_router(model_config_router, prefix="/api/models")
 app.include_router(tool_config_router, prefix="/api/tools")
 app.include_router(knowledge_router, prefix="/api/knowledge")

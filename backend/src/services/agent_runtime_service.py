@@ -581,6 +581,8 @@ class AgentRuntimeService:
     async def _save_conversation_to_history(cls, conv_id: str, agent_name: str, user_prompt: str, agent_response: str, user: Dict[str, Any], completed: bool = True):
         """Save conversation to history automatically after agent execution"""
         try:
+            logger.info(f"Saving conversation {conv_id}")
+            
             tenant_id = user.get("tenantId")
             if not tenant_id:
                 logger.warning("No tenant_id found, cannot save conversation to history")
@@ -618,6 +620,7 @@ class AgentRuntimeService:
                 {"conversation_id": conv_id}, 
                 tenant_id=tenant_id
             )
+            logger.info(f"Existing conversation found: {bool(existing)}")
             
             if existing:
                 # Update existing conversation by appending new messages
@@ -639,16 +642,16 @@ class AgentRuntimeService:
                         "title": title or existing.get("title", "Conversation")
                     }
                     
-                    await MongoStorageService.update_one(
+                    result = await MongoStorageService.update_one(
                         "conversations",
                         {"conversation_id": conv_id},
                         update_data,
                         tenant_id=tenant_id
                     )
                     
-                    logger.info(f"Updated existing conversation {conv_id} with new messages")
+                    logger.info(f"Updated conversation {conv_id}, result: {result}")
                 else:
-                    logger.debug(f"User message already exists in conversation {conv_id}, skipping duplicate")
+                    logger.info(f"Duplicate message skipped for {conv_id}")
             else:
                 # Create new conversation
                 conversation_data = {
@@ -664,16 +667,18 @@ class AgentRuntimeService:
                     "updated_at": datetime.utcnow()
                 }
                 
-                await MongoStorageService.insert_one(
+                logger.info(f"Saving conversation data: conv_id={conv_id}, tenant={tenant_id}, user={user_id}, messages_count={len(messages)}")
+                
+                result = await MongoStorageService.insert_one(
                     "conversations", 
                     conversation_data, 
                     tenant_id=tenant_id
                 )
                 
-                logger.info(f"Created new conversation {conv_id} in history")
+                logger.info(f"Created new conversation {conv_id}, result: {result}")
                 
         except Exception as e:
-            logger.error(f"Failed to save conversation to history: {e}")
+            logger.error(f"Failed to save conversation {conv_id}: {e}")
 
     @classmethod
     async def execute_agent(cls, agent_name: str, prompt: str, user: Dict[str, Any], conv_id: Optional[str] = None, cancel_event: Optional[asyncio.Event] = None, stream: bool = True) -> AsyncGenerator[Dict[str, Any], None]:

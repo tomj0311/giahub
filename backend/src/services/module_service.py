@@ -14,7 +14,7 @@ class ModuleService:
     """Service for discovering and managing dynamic function modules."""
     
     def __init__(self):
-        self.modules_directory = Path(__file__).parent / "modules"
+        self.modules_directory = Path(__file__).parent.parent / "modules"
         self.loaded_modules = {}
     
     def discover_modules(self) -> List[str]:
@@ -105,6 +105,35 @@ class ModuleService:
             result = function_callable(**kwargs)
             
             logger.info(f"Executed {module_name}.{function_name} successfully")
+            return result
+        except Exception as e:
+            logger.error(f"Error executing {module_name}.{function_name}: {e}")
+            raise
+
+    async def execute_function_async(self, module_name: str, function_name: str, **kwargs) -> Any:
+        """Execute a function from a module asynchronously."""
+        import asyncio
+        import inspect
+        
+        try:
+            functions = self.get_module_functions(module_name)
+            
+            if function_name not in functions:
+                available = list(functions.keys())
+                raise ValueError(f"Function '{function_name}' not found. Available: {available}")
+            
+            function_callable = functions[function_name]["callable"]
+            
+            # Check if function is async
+            if inspect.iscoroutinefunction(function_callable):
+                # Function is async, await it directly
+                result = await function_callable(**kwargs)
+            else:
+                # Function is sync, run it in a thread pool to avoid blocking
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(None, lambda: function_callable(**kwargs))
+            
+            logger.info(f"Executed {module_name}.{function_name} successfully (async)")
             return result
         except Exception as e:
             logger.error(f"Error executing {module_name}.{function_name}: {e}")

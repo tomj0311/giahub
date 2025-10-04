@@ -51,6 +51,11 @@ const DynamicFunctionTester = () => {
     loadModules();
   }, []);
 
+  // Get token from localStorage
+  const getToken = () => {
+    return localStorage.getItem('token');
+  };
+
   // Load functions when module is selected
   useEffect(() => {
     if (selectedModule) {
@@ -81,7 +86,9 @@ const DynamicFunctionTester = () => {
         const params = funcDetails.parameters;
         console.log('🔍 Available parameters:', params);
         Object.keys(params).forEach(paramName => {
-          initialParams[paramName] = params[paramName].default || '';
+          const defaultValue = params[paramName].default;
+          // Only use default if it's not null, None, or 'null' string
+          initialParams[paramName] = (defaultValue && defaultValue !== null && defaultValue !== 'null' && defaultValue !== 'None') ? defaultValue : '';
           console.log(`📝 Adding parameter: ${paramName} with default: ${params[paramName].default}`);
         });
       }
@@ -96,7 +103,10 @@ const DynamicFunctionTester = () => {
   const testDirectAPI = async () => {
     console.log('🧪 Testing direct API call...');
     try {
-      const response = await fetch('http://localhost:4000/api/dynamic/modules');
+      const token = getToken();
+      const response = await fetch('http://localhost:4000/api/dynamic/modules', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
       const data = await response.json();
       console.log('📥 Direct API response:', data);
       alert('Direct API response: ' + JSON.stringify(data, null, 2));
@@ -111,7 +121,10 @@ const DynamicFunctionTester = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await apiCall('/api/dynamic/modules');
+      const token = getToken();
+      const response = await apiCall('/api/dynamic/modules', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
       console.log('📥 Modules response:', response);
       
       if (!response.ok) {
@@ -141,7 +154,10 @@ const DynamicFunctionTester = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await apiCall(`/api/dynamic/modules/${moduleName}/functions`);
+      const token = getToken();
+      const response = await apiCall(`/api/dynamic/modules/${moduleName}/functions`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
       console.log('📥 Functions response:', response);
       
       if (!response.ok) {
@@ -205,6 +221,7 @@ const DynamicFunctionTester = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(getToken() ? { 'Authorization': `Bearer ${getToken()}` } : {})
         },
         body: JSON.stringify({
           module_name: selectedModule,

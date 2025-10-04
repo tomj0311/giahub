@@ -385,9 +385,12 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
       if (funcDetails.parameters) {
         const initialParams = [];
         Object.keys(funcDetails.parameters).forEach(paramName => {
+          const defaultValue = funcDetails.parameters[paramName].default;
+          // Only use default if it's not null, None, or 'null' string
+          const finalValue = (defaultValue && defaultValue !== null && defaultValue !== 'null' && defaultValue !== 'None') ? defaultValue : '';
           initialParams.push({
             name: paramName,
-            value: funcDetails.parameters[paramName].default || ''
+            value: finalValue
           });
         });
         setXmlProperties(prev => ({
@@ -407,7 +410,9 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
   const loadModules = async () => {
     setLoadingModules(true);
     try {
-      const response = await apiCall('/api/dynamic/modules');
+      const response = await apiCall('/api/dynamic/modules', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -425,7 +430,9 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
   const loadFunctions = async (moduleName) => {
     setLoadingFunctions(true);
     try {
-      const response = await apiCall(`/api/dynamic/modules/${moduleName}/functions`);
+      const response = await apiCall(`/api/dynamic/modules/${moduleName}/functions`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }

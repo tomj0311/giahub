@@ -2,10 +2,11 @@
 Dynamic execution API routes.
 """
 from typing import Dict, Any
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
 from ..services.module_service import ModuleService
+from ..utils.auth import verify_token_middleware
 from ..utils.log import logger
 
 router = APIRouter()
@@ -19,7 +20,7 @@ class ExecuteRequest(BaseModel):
 
 
 @router.get("/modules")
-async def get_modules():
+async def get_modules(user: dict = Depends(verify_token_middleware)):
     """Get all available modules."""
     try:
         modules = module_service.discover_modules()
@@ -30,7 +31,7 @@ async def get_modules():
 
 
 @router.get("/modules/{module_name}/functions")
-async def get_module_functions(module_name: str):
+async def get_module_functions(module_name: str, user: dict = Depends(verify_token_middleware)):
     """Get functions in a specific module."""
     try:
         functions = module_service.get_module_functions(module_name)
@@ -51,13 +52,17 @@ async def get_module_functions(module_name: str):
 
 
 @router.post("/execute")
-async def execute_function(request: ExecuteRequest):
+async def execute_function(request: ExecuteRequest, user: dict = Depends(verify_token_middleware)):
     """Execute a function dynamically."""
     try:
-        result = module_service.execute_function(
+        # Add user to parameters so agent_executor gets it
+        parameters_with_user = request.parameters.copy()
+        parameters_with_user["user"] = user
+        
+        result = await module_service.execute_function_async(
             module_name=request.module_name,
             function_name=request.function_name,
-            **request.parameters
+            **parameters_with_user
         )
         return {"success": True, "data": result}
     except FileNotFoundError:
