@@ -93,8 +93,33 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false, minioFullPa
     const processId = originalProcessId;
 
     // Separate message flows from sequence flows
-    const sequenceFlows = edges.filter(edge => !edge.data?.isMessageFlow);
-    const messageFlows = edges.filter(edge => edge.data?.isMessageFlow);
+    const allSequenceFlows = edges.filter(edge => !edge.data?.isMessageFlow);
+    const allMessageFlows = edges.filter(edge => edge.data?.isMessageFlow);
+    
+    // Create a set of all existing node IDs for fast lookup
+    const existingNodeIds = new Set(nodes.map(node => node.id));
+    
+    // Filter out sequence flows that reference non-existent nodes
+    const sequenceFlows = allSequenceFlows.filter(flow => {
+      const sourceExists = existingNodeIds.has(flow.source);
+      const targetExists = existingNodeIds.has(flow.target);
+      if (!sourceExists || !targetExists) {
+        console.warn(`🚨 Filtering out sequence flow ${flow.id}: source ${flow.source} exists: ${sourceExists}, target ${flow.target} exists: ${targetExists}`);
+        return false;
+      }
+      return true;
+    });
+    
+    // Filter out message flows that reference non-existent nodes
+    const messageFlows = allMessageFlows.filter(flow => {
+      const sourceExists = existingNodeIds.has(flow.source);
+      const targetExists = existingNodeIds.has(flow.target);
+      if (!sourceExists || !targetExists) {
+        console.warn(`🚨 Filtering out message flow ${flow.id}: source ${flow.source} exists: ${sourceExists}, target ${flow.target} exists: ${targetExists}`);
+        return false;
+      }
+      return true;
+    });
 
     let xml = `<?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
@@ -307,7 +332,7 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false, minioFullPa
     }
 
     // Generate diagram information
-    xml += generateDiagramXML(collaborationId, processId, participantNodes.length > 0);
+    xml += generateDiagramXML(collaborationId, processId, participantNodes.length > 0, sequenceFlows, messageFlows);
 
     xml += `</definitions>`;
 
@@ -566,7 +591,7 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false, minioFullPa
   };
 
   // Helper function to generate diagram XML
-  const generateDiagramXML = (collaborationId, processId, hasCollaboration) => {
+  const generateDiagramXML = (collaborationId, processId, hasCollaboration, sequenceFlows, messageFlows) => {
     let xml;
     if (hasCollaboration) {
       // Extract the base ID from collaboration (remove 'Collaboration_' prefix)
@@ -853,8 +878,9 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false, minioFullPa
       xml += `</bpmndi:BPMNShape>`;
     });
 
-    // Add edges for sequence flows and message flows
-    edges.forEach(edge => {
+    // Add edges for sequence flows and message flows (using filtered edges)
+    const validEdges = [...sequenceFlows, ...messageFlows];
+    validEdges.forEach(edge => {
       const sourceNode = nodes.find(n => n.id === edge.source);
       const targetNode = nodes.find(n => n.id === edge.target);
 

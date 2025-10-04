@@ -108,7 +108,9 @@ const generateBpmnId = (elementType) => {
     group: 'Group',
     textAnnotation: 'TextAnnotation',
     participant: 'Participant',
-    lane: 'Lane'
+    lane: 'Lane',
+    sequenceFlow: 'SequenceFlow',
+    messageFlow: 'MessageFlow'
   };
   
   const bpmnType = bpmnTypeMap[elementType] || 'Element';
@@ -409,6 +411,20 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
 
   // Enhanced onNodesChange to handle participant movement and child node movement
   const onNodesChangeWithBoundsUpdate = useCallback((changes) => {
+    // Check if any nodes are being removed
+    const removedNodes = changes.filter(change => change.type === 'remove');
+    const removedNodeIds = removedNodes.map(change => change.id);
+    
+    // If nodes are being removed, also remove connected edges
+    if (removedNodeIds.length > 0) {
+      setEdges(currentEdges => {
+        const newEdges = currentEdges.filter(edge => 
+          !removedNodeIds.includes(edge.source) && !removedNodeIds.includes(edge.target)
+        );
+        return newEdges;
+      });
+    }
+    
     setNodes(currentNodes => {
       let newNodes = applyNodeChanges(changes, currentNodes);
       
@@ -537,7 +553,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
       
       return newNodes;
     });
-  }, [updateParticipantBoundsData, saveToHistory, edges, readOnly]);
+  }, [updateParticipantBoundsData, saveToHistory, edges, readOnly, setEdges]);
 
   const onConnect = useCallback(
     (params) => {
@@ -558,12 +574,17 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
         }
       }
 
+      // Generate a short BPMN-compliant ID for the edge
+      const edgeType = isMessageFlow ? 'messageFlow' : 'sequenceFlow';
+      const edgeId = getId(edgeType);
+
       const newEdge = {
         ...params,
+        id: edgeId, // Use our generated short ID instead of ReactFlow's auto-generated one
         type: 'smoothstep',
         data: {
           ...(isMessageFlow ? { isMessageFlow: true } : {}),
-          originalXML: `<sequenceFlow id="${params.id || 'generated'}" sourceRef="${params.source}" targetRef="${params.target}" />`
+          originalXML: `<${edgeType} id="${edgeId}" sourceRef="${params.source}" targetRef="${params.target}" />`
         },
       };
       
@@ -832,18 +853,35 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   // Delete functionality - handle Delete key press
   const onKeyDown = useCallback((event) => {
     if (event.key === 'Delete' || event.key === 'Backspace') {
+      // Get the IDs of nodes that will be deleted
+      const deletedNodeIds = nodes.filter((node) => node.selected).map((node) => node.id);
+      
       setNodes((nds) => {
         const newNodes = nds.filter((node) => !node.selected);
         if (!readOnly && newNodes.length !== nds.length) {
-          setTimeout(() => saveToHistory(newNodes, edges), 0);
+          // We'll save to history after both nodes and edges are updated
         }
         return newNodes;
       });
+      
       setEdges((eds) => {
-        const newEdges = eds.filter((edge) => !edge.selected);
-        if (!readOnly && newEdges.length !== eds.length) {
-          setTimeout(() => saveToHistory(nodes, newEdges), 0);
+        // Remove selected edges AND edges connected to deleted nodes
+        const newEdges = eds.filter((edge) => {
+          // Remove if edge is selected
+          if (edge.selected) return false;
+          // Remove if edge is connected to any deleted node
+          if (deletedNodeIds.includes(edge.source) || deletedNodeIds.includes(edge.target)) return false;
+          return true;
+        });
+        
+        // Save to history only once after both nodes and edges are updated
+        if (!readOnly && (deletedNodeIds.length > 0 || newEdges.length !== eds.length)) {
+          setTimeout(() => {
+            const finalNodes = nodes.filter((node) => !node.selected);
+            saveToHistory(finalNodes, newEdges);
+          }, 0);
         }
+        
         return newEdges;
       });
     }
