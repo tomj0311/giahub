@@ -92,84 +92,69 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
       if (result.success) {
         const instanceData = result.data.data;
         
-        // FIRST: Check if a specific task ID was provided (user clicked on a completed task node)
+        // FIRST: Check if a specific COMPLETED task ID was provided (user clicked on a GREEN completed task node)
         if (propTaskId && instanceData.serialized_data?.tasks) {
-          console.log('=== LOADING SPECIFIC TASK NODE ===');
+          console.log('=== CHECKING SPECIFIC TASK NODE ===');
           console.log('Clicked Task ID (propTaskId):', propTaskId);
           
           const taskSpecs = instanceData.serialized_data?.spec?.task_specs || {};
           const specificTaskSpec = taskSpecs[propTaskId];
           const allTasks = instanceData.serialized_data?.tasks || {};
           
-          console.log('All available tasks:', Object.keys(allTasks));
-          console.log('Looking for task with task_spec =', propTaskId);
-          
           // Find the actual task instance by matching task_spec property
           let taskInstance = null;
           for (const [taskInstanceId, task] of Object.entries(allTasks)) {
-            console.log(`Checking task instance ${taskInstanceId}: task_spec = ${task.task_spec}, state = ${task.state}`);
             if (task.task_spec === propTaskId) {
               taskInstance = task;
-              console.log('✅ Found matching task instance:', taskInstanceId, 'with state:', task.state);
+              console.log('✅ Found task instance:', taskInstanceId, 'State:', task.state, '(16=READY/PENDING, 64=COMPLETED)');
               break;
             }
           }
           
+          // Show data based on task state
           if (specificTaskSpec && taskInstance) {
-            console.log('=== TASK NODE DETAILS ===');
+            const taskState = taskInstance.state;
+            console.log('=== TASK STATE HANDLING ===');
             console.log('Task name:', specificTaskSpec.bpmn_name || specificTaskSpec.name);
-            console.log('Task instance ID:', taskInstance.id);
-            console.log('Task state:', taskInstance.state, '(64 = COMPLETED, 16 = READY)');
-            console.log('Task instance data:', taskInstance.data);
+            console.log('Task state:', taskState, '(16=READY, 64=COMPLETED, 128=ERROR/FAILED)');
             
-            // Extract form field IDs from the task spec
-            let formFieldIds = [];
-            if (specificTaskSpec?.extensions?.extensionElements?.formData?.formField) {
-              const formField = specificTaskSpec.extensions.extensionElements.formData.formField;
-              const formFields = Array.isArray(formField) ? formField : [formField];
-              formFieldIds = formFields.map(f => f.id);
-              console.log('Form field IDs from spec:', formFieldIds);
-            }
-            
-            // Get data from the task INSTANCE's data property
+            // Get ALL data from the task INSTANCE's data property - NO FILTERING
             const taskInstanceData = taskInstance.data || {};
-            console.log('Raw task instance data:', taskInstanceData);
             
-            // Filter to only include the form fields if they exist
-            const filteredTaskData = {};
-            if (formFieldIds.length > 0) {
-              formFieldIds.forEach(fieldId => {
-                if (taskInstanceData.hasOwnProperty(fieldId)) {
-                  filteredTaskData[fieldId] = taskInstanceData[fieldId];
-                }
+            // State 16 = READY/PENDING - Show JSX form if exists, else fallback
+            if (taskState === 16) {
+              console.log('=== TASK IS READY (16) - SHOWING FORM ===');
+              // This will fall through to the pending tasks logic below
+              // which will extract JSX script or show fallback form fields
+            } 
+            // Any other state (64=COMPLETED, 128=ERROR, etc.) - Show ALL task data
+            else {
+              console.log('=== TASK IS NOT READY - SHOWING ALL DATA ===');
+              console.log('Complete task instance data (NO FILTERING):', taskInstanceData);
+              
+              // Set task data for display (NON-READY states) - SHOW ALL DATA
+              setTaskData({
+                taskId: propTaskId,
+                taskSpec: propTaskId,
+                taskName: specificTaskSpec.bpmn_name || specificTaskSpec.name || propTaskId,
+                completedTaskData: taskInstanceData, // ALL DATA, NO FILTERING
+                instanceData,
+                isCompleted: true,
+                taskState: taskState
               });
-              console.log('Filtered task data (only form fields):', filteredTaskData);
-            } else {
-              // If no form fields defined, show all data from task instance
-              Object.assign(filteredTaskData, taskInstanceData);
-              console.log('Using all task data (no form fields defined):', filteredTaskData);
+              setLoading(false);
+              return; // Exit early, don't process pending tasks
             }
-            
-            // Set task data for display
-            setTaskData({
-              taskId: propTaskId,
-              taskSpec: propTaskId,
-              taskName: specificTaskSpec.bpmn_name || specificTaskSpec.name || propTaskId,
-              completedTaskData: filteredTaskData,
-              instanceData,
-              isCompleted: taskInstance.state === 64 // State 64 means COMPLETED
-            });
-          } else {
-            console.error('❌ Task not found!');
-            console.error('Requested task spec:', propTaskId);
-            console.error('Available task specs:', Object.keys(taskSpecs));
-            console.error('Task instance found:', !!taskInstance);
-            console.error('Task spec found:', !!specificTaskSpec);
+          } else if (!taskInstance || !specificTaskSpec) {
+            console.error('❌ Task not found:', propTaskId);
             setError(`Task '${propTaskId}' not found in workflow.`);
+            setLoading(false);
+            return;
           }
-        } 
-        // SECOND: If no specific task requested, find pending tasks
-        else if (instanceData.serialized_data?.tasks) {
+        }
+        
+        // SECOND: Find pending tasks (or if propTaskId was provided but task is PENDING)
+        if (instanceData.serialized_data?.tasks && (!taskData || !taskData.isCompleted)) {
           const tasks = instanceData.serialized_data.tasks;
           const pendingTasks = Object.entries(tasks)
             .filter(([taskId, task]) => task.state === 16) // READY state
