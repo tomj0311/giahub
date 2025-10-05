@@ -37,7 +37,7 @@ def _normalize_recipients(recipients: Union[str, List[str]]) -> List[str]:
     return []
 
 
-def send_email(
+def _send_email(
     to: Union[str, List[str]],
     subject: str,
     html_content: str = None,
@@ -164,7 +164,7 @@ def send_simple_email(
     Returns:
         Dictionary with status and message
     """
-    return send_email(
+    return _send_email(
         to=to,
         subject=subject,
         text_content=message
@@ -195,7 +195,7 @@ def send_html_email(
     import re
     text_body = re.sub('<[^<]+?>', '', html_body)
     
-    return send_email(
+    return _send_email(
         to=to,
         subject=subject,
         html_content=html_body,
@@ -271,7 +271,7 @@ def send_notification_email(
 This is an automated notification. Please do not reply to this email.
     """
     
-    return send_email(
+    return _send_email(
         to=to,
         subject=title,
         html_content=html_content,
