@@ -512,7 +512,7 @@ class WorkflowServicePersistent:
 
     @staticmethod
     async def save_workflow_state(workflow, workflow_id, tenant_id=None, instance_id=None):
-        """Serialize and save workflow state to MongoDB"""
+        """Serialize and save workflow state to MongoDB using upsert"""
         logger.debug(f"[WORKFLOW] Saving workflow state for workflow_id='{workflow_id}' (tenant='{tenant_id}')")
         try:
             if not instance_id:
@@ -527,11 +527,31 @@ class WorkflowServicePersistent:
                 "instance_id": instance_id,
                 "serialized_data": json.loads(serialized_json),
                 "user_task": [],
-                "created_at": datetime.now(UTC),
             }
 
-            await MongoStorageService.insert_one("workflowInstances", data, tenant_id)
-            logger.info(f"[WORKFLOW] Workflow state saved to MongoDB - instance: {instance_id}")
+            # Use upsert to either insert new or update existing document
+            filter_dict = {"instance_id": instance_id}
+            
+            # Add created_at only for new documents (will be set via $setOnInsert)
+            update_data = {
+                "$set": {
+                    "workflow_id": workflow_id,
+                    "serialized_data": data["serialized_data"],
+                    "user_task": data["user_task"],
+                },
+                "$setOnInsert": {
+                    "created_at": datetime.now(UTC),
+                }
+            }
+            
+            await MongoStorageService.update_one(
+                "workflowInstances", 
+                filter_dict, 
+                update_data, 
+                tenant_id, 
+                upsert=True
+            )
+            logger.info(f"[WORKFLOW] Workflow state upserted to MongoDB - instance: {instance_id}")
             return instance_id
 
         except HTTPException:
