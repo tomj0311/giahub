@@ -60,7 +60,9 @@ class WorkflowServicePersistent:
                 ready_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY]
                 started_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.STARTED]
                 all_tasks = ready_tasks + started_tasks
-                                
+
+                custom_task_handled = False
+
                 for task in all_tasks:
                     task_type = type(task.task_spec).__name__
                     if task_type == "NoneTask":
@@ -72,6 +74,7 @@ class WorkflowServicePersistent:
                         logger.info(f"[WORKFLOW] Handling ScriptTask: {task.task_spec.bpmn_id}")
                         try:
                             await cls.handle_script_task(workflow, task, user)
+                            custom_task_handled = True
                             break  # Process one script task at a time
                         except Exception as script_error:
                             logger.error(f"[WORKFLOW] ScriptTask {task.task_spec.bpmn_id} failed: {script_error}")
@@ -83,11 +86,17 @@ class WorkflowServicePersistent:
                             try:
                                 await cls.handle_service_task(workflow, task, user)
                                 await cls._update_workflow_status(workflow, instance_id, tenant_id)
+                                custom_task_handled = True
                                 break  # Process one service task at a time
                             except Exception as service_error:
                                 logger.error(f"[WORKFLOW] ServiceTask {task.task_spec.bpmn_id} failed: {service_error}")
                                 await cls._handle_task_error(workflow, instance_id, tenant_id, task, service_error, "ServiceTask")
                                 raise HTTPException(status_code=500, detail=f"ServiceTask failed: {str(service_error)}")
+
+                # If we handled a custom task, continue to next iteration
+                if custom_task_handled:
+                    await cls._update_workflow_status(workflow, instance_id, tenant_id)
+                    continue
 
                 try:
                     workflow.do_engine_steps()
@@ -101,7 +110,7 @@ class WorkflowServicePersistent:
                 logger.debug(f"[WORKFLOW] Updated after step {step_count} with status: {current_status}")
                 
                 # Check if user input needed
-                if workflow.manual_input_required():
+                if task_type in ["UserTask", "ManualTask", "NoneTask"]:
                     ready_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY]
                     if ready_tasks:
                         task = ready_tasks[0]
@@ -114,15 +123,14 @@ class WorkflowServicePersistent:
                             "current_task_type": task_type
                         })
                         
-                        if task_type in ["UserTask", "ManualTask", "NoneTask"]:
-                            logger.debug(f"[WORKFLOW] Waiting for user input for {task_type}: {task.task_spec.bpmn_id}")
+                        logger.debug(f"[WORKFLOW] Waiting for user input for {task_type}: {task.task_spec.bpmn_id}")
                             
-                            try:
-                                await TaskNotificationService.send_task_assignment_emails(task, workflow_id, instance_id)
-                            except Exception as e:
-                                logger.error(f"[WORKFLOW] Email notification failed: {e}")
+                        try:
+                            await TaskNotificationService.send_task_assignment_emails(task, workflow_id, instance_id)
+                        except Exception as e:
+                            logger.error(f"[WORKFLOW] Email notification failed: {e}")
                             
-                            break
+                        break
                                     
             # Final update
             await cls._update_workflow_status(workflow, instance_id, tenant_id)
@@ -241,20 +249,72 @@ class WorkflowServicePersistent:
         })
 
     @classmethod
+    def _extract_python_code(cls, raw_script):
+        """Extract Python code - strip markdown code fences if present and format properly"""
+        import re
+        import textwrap
+        
+        # Try to extract code from markdown code blocks (optional backticks)
+        pattern = r'```(?:python)?\s*\n(.*?)\n\s*```'
+        matches = re.findall(pattern, raw_script, re.DOTALL)
+        
+        if matches:
+            # Join all code blocks with newlines
+            code = '\n'.join(matches)
+            logger.debug(f"[WORKFLOW] Extracted code from markdown blocks: {len(code)} characters")
+        else:
+            # No markdown blocks found, use raw script as-is
+            logger.debug(f"[WORKFLOW] No markdown blocks found, using raw script")
+            code = raw_script
+        
+        # Remove common leading whitespace to dedent the code
+        code = textwrap.dedent(code).strip()
+        logger.debug(f"[WORKFLOW] Formatted code ready for execution: {len(code)} characters")
+        return code
+
+    @classmethod
     async def handle_script_task(cls, workflow, task, user):
-        """Handle ScriptTask execution"""
+        """Handle ScriptTask execution - extract code from ```python``` blocks"""
         try:
             bpmn_id = task.task_spec.bpmn_id
-            logger.info(f"[WORKFLOW] Executing ScriptTask: {bpmn_id}")
+            logger.info(f"[WORKFLOW] Handling ScriptTask: {bpmn_id}")
             
-            # Execute the script using SpiffWorkflow's script engine
-            if hasattr(task.task_spec, 'script') and task.task_spec.script:
-                # The script engine should already be configured on the workflow
-                task.run()
-                logger.info(f"[WORKFLOW] ScriptTask {bpmn_id} completed successfully")
-            else:
+            # Get script code
+            raw_script = getattr(task.task_spec, 'script', None)
+            if not raw_script:
                 logger.warning(f"[WORKFLOW] ScriptTask {bpmn_id} has no script to execute")
                 task.complete()
+                return
+            
+            # Extract code from ```python``` blocks
+            code = cls._extract_python_code(raw_script)
+            if not code:
+                logger.warning(f"[WORKFLOW] No Python code found in script for {bpmn_id}")
+                task.complete()
+                return
+            
+            # Pass local variables from task.data
+            local_vars = dict(task.data)
+            initial_vars = set(local_vars.keys())
+            
+            logger.debug(f"[WORKFLOW] Executing code with variables: {list(local_vars.keys())}")
+            
+            # Execute the code locally (supports imports)
+            exec(code, {}, local_vars)
+            
+            # Grab output variables (new/changed only)
+            output_vars = {}
+            for key, value in local_vars.items():
+                if key not in initial_vars or local_vars[key] != task.data.get(key):
+                    if not key.startswith('_'):  # Skip private vars
+                        output_vars[key] = value
+            
+            # Serialize into one object and update task.data
+            task.data.update(output_vars)
+            workflow.data.update(output_vars)  # Also update workflow global data
+            task.complete()
+            
+            logger.info(f"[WORKFLOW] ScriptTask {bpmn_id} completed with outputs: {list(output_vars.keys())}")
                 
         except Exception as e:
             logger.error(f"[WORKFLOW] Error handling ScriptTask {task.task_spec.bpmn_id}: {e}")
@@ -400,10 +460,7 @@ class WorkflowServicePersistent:
             
             # Update task data and complete the task
             try:
-                # Serialize response data before updating task.data
-                response = {f'{task_id}_response': task_data, 'timestamp': datetime.now(UTC).isoformat()}
-                
-                current_task.data.update(response)
+                current_task.data.update(task_data)
                 workflow.data.update(task_data)  # Also update workflow global data
                 current_task.complete()
                 logger.info(f"[WORKFLOW] Task {task_id} completed successfully")
@@ -706,8 +763,7 @@ class WorkflowServicePersistent:
             # Get BPMN XML
             bpmn_xml = await cls.get_bpmn_xml(workflow_id, user)
             
-            # Create workflow with enhanced parser
-            script_engine = PythonScriptEngine()
+            # Create workflow with disabled script engine (we handle scripts manually)
             parser = BpmnParser()
             
             # Register our enhanced task parser for all task types
@@ -737,7 +793,7 @@ class WorkflowServicePersistent:
             spec = parser.get_spec(process_ids[0])
             subprocess_specs = parser.get_subprocess_specs(process_ids[0], specs={})
             
-            workflow = BpmnWorkflow(spec, subprocess_specs=subprocess_specs, script_engine=script_engine)
+            workflow = BpmnWorkflow(spec, subprocess_specs=subprocess_specs)
             
             # Set initial data
             if initial_data:

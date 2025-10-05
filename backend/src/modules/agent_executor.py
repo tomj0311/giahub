@@ -18,8 +18,8 @@ async def run_agent(agent_name: str, prompt: str, user: dict = None, conv_id: st
         from src.services.agent_runtime_service import AgentRuntimeService
         
         if user is None:
-            user = {"id": "user1", "tenantId": "tenant1"}
-
+            raise ValueError("User information must be provided")
+        
         result = ""
         async for response in AgentRuntimeService.execute_agent(agent_name, prompt, user, conv_id, stream=False):
             # Handle both dict and string responses
