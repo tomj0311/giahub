@@ -317,6 +317,9 @@ class WorkflowServicePersistent:
                         else:
                             logger.warning(f"[WORKFLOW] Skipping non-serializable variable '{key}' of type {type(value).__name__}")
             
+            # Add timestamp to output variables
+            output_vars[f'{bpmn_id}_timestamp'] = datetime.now(UTC).isoformat()
+            
             # Serialize into one object and update task.data
             task.data.update(output_vars)
             workflow.data.update(output_vars)  # Also update workflow global data
@@ -398,11 +401,15 @@ class WorkflowServicePersistent:
                                     
             # Handle the response
             if response_data:
-                # Serialize response data before updating task.data
-                response = {f'{bpmn_id}_response': response_data, f'{bpmn_id}_timestamp': datetime.now(UTC).isoformat()}
+                # Serialize response data before updating task.data with timestamp
+                response = {
+                    f'{bpmn_id}_response': response_data, 
+                    f'{bpmn_id}_timestamp': datetime.now(UTC).isoformat()
+                }
                 
                 # Update task data with structured response
                 task.data.update(response)
+                workflow.data.update(response)  # Also update workflow global data
                 task.complete()
             else:
                 # Empty response - treat as error
@@ -465,8 +472,14 @@ class WorkflowServicePersistent:
             
             # Update task data and complete the task
             try:
-                current_task.data.update(task_data)
-                workflow.data.update(task_data)         # Also update workflow global data
+                # Add timestamp to task data
+                task_data_with_timestamp = {
+                    **task_data,
+                    f"{task_id}_timestamp": datetime.now(UTC).isoformat()
+                }
+                
+                current_task.data.update(task_data_with_timestamp)
+                workflow.data.update(task_data_with_timestamp)  # Also update workflow global data
                 current_task.complete()
                 logger.info(f"[WORKFLOW] Task {task_id} completed successfully")
                 

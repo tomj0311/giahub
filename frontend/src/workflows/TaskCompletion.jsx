@@ -143,45 +143,58 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
             if (propTaskId) {
               const taskSpecs = instanceData.serialized_data?.spec?.task_specs || {};
               const specificTaskSpec = taskSpecs[propTaskId];
+              const allTasks = instanceData.serialized_data?.tasks || {};
               
-              if (specificTaskSpec) {
-                const workflowData = instanceData.serialized_data?.data || instanceData.data || {};
-                
-                // Extract script data if available
-                let scriptCode = null;
-                if (specificTaskSpec?.extensions?.extensionElements?.formData?.scriptData?.script) {
-                  const rawScript = specificTaskSpec.extensions.extensionElements.formData.scriptData.script;
-                  scriptCode = extractJSXFromMarkdown(rawScript);
-                  console.log('Extracted JSX script (specific task):', scriptCode ? 'Found' : 'Not found');
+              // Find the actual task instance by matching task_spec property
+              let completedTaskInstance = null;
+              for (const [taskInstanceId, taskInstance] of Object.entries(allTasks)) {
+                if (taskInstance.task_spec === propTaskId) {
+                  completedTaskInstance = taskInstance;
+                  break;
                 }
+              }
+              
+              if (specificTaskSpec && completedTaskInstance) {
+                console.log('=== DEBUG: Completed Task ===');
+                console.log('Complete task instance:', completedTaskInstance);
+                console.log('Task spec:', specificTaskSpec);
+                console.log('Task instance data:', completedTaskInstance.data);
                 
-                // Extract form fields from the correct structure
-                let formFields = [];
-                if (specificTaskSpec.extensions?.extensionElements?.formData?.formField) {
+                // Extract form field IDs from the task spec
+                let formFieldIds = [];
+                if (specificTaskSpec?.extensions?.extensionElements?.formData?.formField) {
                   const formField = specificTaskSpec.extensions.extensionElements.formData.formField;
-                  // Handle both single form field and array of form fields
-                  formFields = Array.isArray(formField) ? formField : [formField];
-                  console.log('Found form fields in extensionElements (specific task):', formFields);
-                } else if (specificTaskSpec.extensions?.formData?.formFields) {
-                  // Fallback to the old structure if it exists
-                  formFields = specificTaskSpec.extensions.formData.formFields;
-                  console.log('Found form fields in legacy structure (specific task):', formFields);
-                } else {
-                  console.log('No form fields found in specific task spec:', specificTaskSpec);
+                  const formFields = Array.isArray(formField) ? formField : [formField];
+                  formFieldIds = formFields.map(f => f.id);
+                  console.log('Form field IDs from spec:', formFieldIds);
                 }
                 
-                // Create form fields with values from workflow data
-                const fieldsWithData = formFields.map(field => ({
-                  ...field,
-                  value: workflowData[field.id] || 'Not provided'
-                }));
+                // Get data from the task INSTANCE's data property
+                const taskInstanceData = completedTaskInstance.data || {};
+                console.log('Task instance data:', taskInstanceData);
                 
+                // Filter to only include the form fields
+                const filteredTaskData = {};
+                if (formFieldIds.length > 0) {
+                  formFieldIds.forEach(fieldId => {
+                    if (taskInstanceData.hasOwnProperty(fieldId)) {
+                      filteredTaskData[fieldId] = taskInstanceData[fieldId];
+                    }
+                  });
+                } else {
+                  // If no form fields defined, show all data from task instance
+                  Object.assign(filteredTaskData, taskInstanceData);
+                }
+                
+                console.log('Final filtered task data:', filteredTaskData);
+                
+                // For completed tasks, just show the data that was submitted
+                // Don't show form fields, show the actual data
                 setTaskData({
                   taskId: propTaskId,
                   taskSpec: propTaskId,
                   taskName: specificTaskSpec.bpmn_name || specificTaskSpec.name || propTaskId,
-                  formFields: fieldsWithData,
-                  scriptCode: scriptCode, // Add the extracted script
+                  completedTaskData: filteredTaskData,
                   instanceData,
                   isCompleted: true
                 });
@@ -373,61 +386,62 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
                 <DynamicComponent 
                   componentCode={taskData.scriptCode}
                 />
-              ) : taskData.formFields.length > 0 ? (
+              ) : taskData.isCompleted && taskData.completedTaskData ? (
+                // Show completed task data as key-value pairs
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {taskData.isCompleted ? (
-                    // Show completed task data in read-only mode
-                    taskData.formFields.map((field) => (
-                      <TextField
-                        key={field.id}
-                        fullWidth
-                        label={field.label || field.id}
-                        value={field.value || 'Not provided'}
-                        InputProps={{ readOnly: true }}
-                        variant="outlined"
-                      />
-                    ))
-                  ) : (
-                    // Show editable form fields for pending tasks
-                    taskData.formFields.map((field) => (
-                      <Box key={field.id}>
-                        {field.type === 'boolean' ? (
-                          <FormControlLabel
-                            control={
-                              <Checkbox
-                                checked={formData[field.id] || false}
-                                onChange={(e) => handleFormChange(field.id, e.target.checked)}
-                              />
-                            }
-                            label={field.label || field.id}
-                          />
-                        ) : (
-                          <TextField
-                            fullWidth
-                            label={field.label || field.id}
-                            value={formData[field.id] || ''}
-                            onChange={(e) => handleFormChange(field.id, e.target.value)}
-                            required={field.required === 'true' || field.required === true}
-                            type={field.type === 'number' ? 'number' : 'text'}
-                            variant="outlined"
-                          />
-                        )}
-                      </Box>
-                    ))
-                  )}
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>
+                    Task Data:
+                  </Typography>
+                  {Object.entries(taskData.completedTaskData).map(([key, value]) => (
+                    <Box key={key} sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                        {key}
+                      </Typography>
+                      <Typography variant="body1" sx={{ mt: 0.5 }}>
+                        {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              ) : taskData.formFields && taskData.formFields.length > 0 ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {/* Show editable form fields for pending tasks */}
+                  {taskData.formFields.map((field) => (
+                    <Box key={field.id}>
+                      {field.type === 'boolean' ? (
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={formData[field.id] || false}
+                              onChange={(e) => handleFormChange(field.id, e.target.checked)}
+                            />
+                          }
+                          label={field.label || field.id}
+                        />
+                      ) : (
+                        <TextField
+                          fullWidth
+                          label={field.label || field.id}
+                          value={formData[field.id] || ''}
+                          onChange={(e) => handleFormChange(field.id, e.target.value)}
+                          required={field.required === 'true' || field.required === true}
+                          type={field.type === 'number' ? 'number' : 'text'}
+                          variant="outlined"
+                        />
+                      )}
+                    </Box>
+                  ))}
 
-                  {!taskData.isCompleted && (
-                    <Button
-                      variant="contained"
-                      size="large"
-                      onClick={() => handleSubmit()}
-                      disabled={submitting}
-                      startIcon={submitting ? <CircularProgress size={16} /> : null}
-                      sx={{ mt: 2, alignSelf: 'flex-end' }}
-                    >
-                      {submitting ? 'Submitting...' : 'Submit Task'}
-                    </Button>
-                  )}
+                  <Button
+                    variant="contained"
+                    size="large"
+                    onClick={() => handleSubmit()}
+                    disabled={submitting}
+                    startIcon={submitting ? <CircularProgress size={16} /> : null}
+                    sx={{ mt: 2, alignSelf: 'flex-end' }}
+                  >
+                    {submitting ? 'Submitting...' : 'Submit Task'}
+                  </Button>
                 </Box>
               ) : (
                 <Box>
