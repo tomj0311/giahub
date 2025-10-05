@@ -306,12 +306,16 @@ class WorkflowServicePersistent:
             # Execute the code locally (supports imports)
             exec(code, {}, local_vars)
             
-            # Grab output variables (new/changed only)
+            # Grab output variables (new/changed only) - FILTER for JSON-serializable types only
             output_vars = {}
             for key, value in local_vars.items():
                 if key not in initial_vars or local_vars[key] != task.data.get(key):
                     if not key.startswith('_'):  # Skip private vars
-                        output_vars[f'{bpmn_id}_{key}'] = value
+                        # Only include JSON-serializable types
+                        if isinstance(value, (str, int, float, bool, list, dict)):
+                            output_vars[f'{bpmn_id}_{key}'] = value
+                        else:
+                            logger.warning(f"[WORKFLOW] Skipping non-serializable variable '{key}' of type {type(value).__name__}")
             
             # Serialize into one object and update task.data
             task.data.update(output_vars)
@@ -323,13 +327,10 @@ class WorkflowServicePersistent:
         except Exception as e:
             logger.error(f"[WORKFLOW] Error handling ScriptTask {task.task_spec.bpmn_id}: {e}")
             bpmn_id = task.task_spec.bpmn_id
-            task_name = getattr(task.task_spec, 'bpmn_name', bpmn_id)
             
             # Structure error response
             error_response = {
                 bpmn_id: {
-                    'bpmn_name': task_name,
-                    'response': None,
                     'error': str(e),
                     'date': datetime.now(UTC).isoformat()
                 }
@@ -411,7 +412,7 @@ class WorkflowServicePersistent:
                 error_response = {
                     bpmn_id: {
                         'error': "Empty response from service",
-                        'date': datetime.now(UTC).isoformat()
+                        'timestamp': datetime.now(UTC).isoformat()
                     }
                 }
                 task.data.update(error_response)
@@ -426,7 +427,7 @@ class WorkflowServicePersistent:
             error_response = {
                 bpmn_id: {
                     'error': str(e),
-                    'date': datetime.now(UTC).isoformat()
+                    'timestamp': datetime.now(UTC).isoformat()
                 }
             }
             task.data.update(error_response)
@@ -465,29 +466,28 @@ class WorkflowServicePersistent:
             # Update task data and complete the task
             try:
                 current_task.data.update(task_data)
-                workflow.data.update(task_data)  # Also update workflow global data
+                workflow.data.update(task_data)         # Also update workflow global data
                 current_task.complete()
                 logger.info(f"[WORKFLOW] Task {task_id} completed successfully")
                 
             except Exception as task_error:
                 logger.error(f"[WORKFLOW] Error completing task {task_id}: {task_error}")
-                task_name = getattr(current_task.task_spec, 'bpmn_name', task_id)
                 
                 # Structure error response
                 error_response = {
                     task_id: {
-                        'bpmn_name': task_name,
-                        'response': None,
                         'error': str(task_error),
-                        'date': datetime.now(UTC).isoformat()
+                        'timestamp': datetime.now(UTC).isoformat()
                     }
                 }
                 current_task.data.update(error_response)
                 current_task.error()
+
                 await cls._update_workflow_status(workflow, instance_id, tenant_id, extra_data={
                     "error": str(task_error),
                     "error_type": "task_completion"
                 })
+
                 raise HTTPException(status_code=500, detail=f"Task completion failed: {str(task_error)}")
             
             # Update status after completing task
