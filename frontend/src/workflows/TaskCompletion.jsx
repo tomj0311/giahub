@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { ArrowLeft, CheckCircle } from 'lucide-react';
 import sharedApiService from '../utils/apiService';
+import DynamicComponent from '../components/dynamic/DynamicComponent';
 
 function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInstanceId, taskId: propTaskId, isDialog = false, onClose, onSuccess }) {
   const { workflowId: paramWorkflowId, instanceId: paramInstanceId } = useParams();
@@ -32,6 +33,19 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
   const [taskData, setTaskData] = useState(null);
   const [formData, setFormData] = useState({});
 
+  // Helper function to extract JSX code from markdown blocks
+  const extractJSXFromMarkdown = (script) => {
+    if (!script) return null;
+    
+    // Match ```jsx ... ``` blocks
+    const jsxMatch = script.match(/```jsx\s*([\s\S]*?)\s*```/);
+    if (jsxMatch && jsxMatch[1]) {
+      return jsxMatch[1].trim();
+    }
+    
+    return null;
+  };
+
   const token = useMemo(() => user?.token || localStorage.getItem('token'), [user?.token]);
   const headers = useMemo(
     () => ({
@@ -44,6 +58,22 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
   useEffect(() => {
     loadTaskData();
   }, [workflowId, instanceId]);
+
+  // Listen for form submission events from dynamic component
+  useEffect(() => {
+    const handleDynamicFormSubmit = (event) => {
+      console.log('📨 Received workflowFormSubmit event from dynamic component:', event.detail);
+      if (event.detail && taskData) {
+        handleSubmit(event.detail);
+      }
+    };
+
+    window.addEventListener('workflowFormSubmit', handleDynamicFormSubmit);
+    
+    return () => {
+      window.removeEventListener('workflowFormSubmit', handleDynamicFormSubmit);
+    };
+  }, [taskData, workflowId, instanceId]);
 
   const loadTaskData = async () => {
     try {
@@ -77,6 +107,14 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
             const firstTask = pendingTasks[0];
             const taskSpec = instanceData.serialized_data?.spec?.task_specs?.[firstTask.taskSpec];
             
+            // Extract script data if available
+            let scriptCode = null;
+            if (taskSpec?.extensions?.extensionElements?.formData?.scriptData?.script) {
+              const rawScript = taskSpec.extensions.extensionElements.formData.scriptData.script;
+              scriptCode = extractJSXFromMarkdown(rawScript);
+              console.log('Extracted JSX script:', scriptCode ? 'Found' : 'Not found');
+            }
+            
             // Extract form fields from the correct structure
             let formFields = [];
             if (taskSpec?.extensions?.extensionElements?.formData?.formField) {
@@ -97,6 +135,7 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
               taskSpec: firstTask.taskSpec,
               taskName: taskSpec?.bpmn_name || taskSpec?.name || firstTask.taskSpec,
               formFields: formFields,
+              scriptCode: scriptCode, // Add the extracted script
               instanceData
             });
           } else {
@@ -107,6 +146,14 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
               
               if (specificTaskSpec) {
                 const workflowData = instanceData.serialized_data?.data || instanceData.data || {};
+                
+                // Extract script data if available
+                let scriptCode = null;
+                if (specificTaskSpec?.extensions?.extensionElements?.formData?.scriptData?.script) {
+                  const rawScript = specificTaskSpec.extensions.extensionElements.formData.scriptData.script;
+                  scriptCode = extractJSXFromMarkdown(rawScript);
+                  console.log('Extracted JSX script (specific task):', scriptCode ? 'Found' : 'Not found');
+                }
                 
                 // Extract form fields from the correct structure
                 let formFields = [];
@@ -134,6 +181,7 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
                   taskSpec: propTaskId,
                   taskName: specificTaskSpec.bpmn_name || specificTaskSpec.name || propTaskId,
                   formFields: fieldsWithData,
+                  scriptCode: scriptCode, // Add the extracted script
                   instanceData,
                   isCompleted: true
                 });
@@ -165,16 +213,34 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
     }));
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (submittedData = null) => {
+    console.log('🚀 handleSubmit called!');
+    console.log('📦 submittedData:', submittedData);
+    console.log('📝 formData:', formData);
+    console.log('🔧 taskData:', taskData);
+    
     try {
       setSubmitting(true);
       setError('');
 
+      // Use submitted data from dynamic component if provided, otherwise use formData
+      const dataToSubmit = submittedData !== null ? submittedData : formData;
+      
+      console.log('✅ Data to submit:', dataToSubmit);
+      console.log('🎯 Task spec:', taskData.taskSpec);
+      console.log('🌐 Workflow ID:', workflowId);
+      console.log('🔑 Instance ID:', instanceId);
+
       const submissionData = {
-        data: formData,
+        data: dataToSubmit,
         task_id: taskData.taskSpec
       };
 
+      console.log('📨 Submission payload:', JSON.stringify(submissionData, null, 2));
+      console.log('🔗 API URL:', `/api/workflow/workflows/${workflowId}/instances/${instanceId}/submit-task`);
+      console.log('🔐 Headers:', headers);
+
+      console.log('⏳ Making API request...');
       const result = await sharedApiService.makeRequest(
         `/api/workflow/workflows/${workflowId}/instances/${instanceId}/submit-task`,
         {
@@ -185,7 +251,10 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
         { workflowId, instanceId, action: 'submit_task' }
       );
 
+      console.log('📬 API Response:', result);
+
       if (result.success) {
+        console.log('✨ Task submitted successfully!');
         setSuccess(true);
         // Call onSuccess callback if provided (dialog mode)
         if (onSuccess) {
@@ -194,12 +263,15 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
           }, 1500); // Show success message briefly before closing
         }
       } else {
+        console.error('❌ API returned success=false:', result);
         setError('Failed to submit task.');
       }
     } catch (err) {
-      console.error('Failed to submit task:', err);
+      console.error('💥 Exception in handleSubmit:', err);
+      console.error('💥 Error stack:', err.stack);
       setError('Failed to submit task.');
     } finally {
+      console.log('🏁 Setting submitting to false');
       setSubmitting(false);
     }
   };
@@ -296,7 +368,12 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
                 Instance: {instanceId} | Task: {taskData.taskSpec}
               </Typography>
 
-              {taskData.formFields.length > 0 ? (
+              {/* Render dynamic component if script is available */}
+              {taskData.scriptCode && !taskData.isCompleted ? (
+                <DynamicComponent 
+                  componentCode={taskData.scriptCode}
+                />
+              ) : taskData.formFields.length > 0 ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {taskData.isCompleted ? (
                     // Show completed task data in read-only mode
@@ -340,18 +417,16 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
                   )}
 
                   {!taskData.isCompleted && (
-                    <>
-                      <Button
-                        variant="contained"
-                        size="large"
-                        onClick={handleSubmit}
-                        disabled={submitting}
-                        startIcon={submitting ? <CircularProgress size={16} /> : null}
-                        sx={{ mt: 2, alignSelf: 'flex-end' }}
-                      >
-                        {submitting ? 'Submitting...' : 'Submit Task'}
-                      </Button>
-                    </>
+                    <Button
+                      variant="contained"
+                      size="large"
+                      onClick={() => handleSubmit()}
+                      disabled={submitting}
+                      startIcon={submitting ? <CircularProgress size={16} /> : null}
+                      sx={{ mt: 2, alignSelf: 'flex-end' }}
+                    >
+                      {submitting ? 'Submitting...' : 'Submit Task'}
+                    </Button>
                   )}
                 </Box>
               ) : (
@@ -364,7 +439,7 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
                     <Button
                       variant="contained"
                       size="large"
-                      onClick={handleSubmit}
+                      onClick={() => handleSubmit()}
                       disabled={submitting}
                       startIcon={submitting ? <CircularProgress size={16} /> : null}
                     >

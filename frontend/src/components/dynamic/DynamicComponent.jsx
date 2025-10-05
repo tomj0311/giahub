@@ -55,7 +55,7 @@ const loadBabel = () => {
 };
 
 // Dynamic component loader using Babel for JSX compilation
-const DynamicComponent = ({ componentCode, children }) => {
+const DynamicComponent = ({ componentCode, onSubmit, submitting, children }) => {
   // removed input code debug log
   
   const [component, setComponent] = React.useState(null);
@@ -168,6 +168,16 @@ const DynamicComponent = ({ componentCode, children }) => {
           useRef: React.useRef,
           useContext: React.useContext,
           useReducer: React.useReducer,
+          // Helper function to submit workflow form data
+          submitWorkflowForm: (data) => {
+            console.log('📤 submitWorkflowForm called with:', data);
+            const event = new CustomEvent('workflowFormSubmit', {
+              detail: data,
+              bubbles: true,
+              composed: true
+            });
+            window.dispatchEvent(event);
+          },
           // MUI Components
           Box: MUIComponents.Box,
           Card: MUIComponents.Card,
@@ -379,6 +389,8 @@ const DynamicComponent = ({ componentCode, children }) => {
   }
 
   if (component) {
+    console.log('🎨 DynamicComponent rendering - submitWorkflowForm is available in component context');
+    
     return React.createElement(ComponentErrorBoundary, null,
       React.createElement(component)
     );

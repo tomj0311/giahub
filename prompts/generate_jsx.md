@@ -92,6 +92,9 @@ const ExampleComponent = () => {
     setErrors({});
 
     try {
+      // IMPORTANT Submit the form data using the global submitWorkflowForm function
+      submitWorkflowForm(formData);
+      
       setSuccess(true);
       setFormData({ username: '', email: '', amount: '' });
     } catch {
