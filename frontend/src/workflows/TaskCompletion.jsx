@@ -344,18 +344,8 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
     }}>
       <Box sx={{ maxWidth: 600, mx: 'auto', pt: isDialog ? 1 : 4 }}>
         {/* Header */}
-        {!isDialog && (
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-            <Typography variant="h4" fontWeight="bold">
-              Complete Task
-            </Typography>
-          </Box>
-        )}
         {isDialog && (
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-            <Typography variant="h5" fontWeight="bold">
-              Complete Task
-            </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', mb: 2 }}>
             <Button onClick={onClose} color="inherit">
               ×
             </Button>
@@ -371,13 +361,6 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
         {taskData && (
           <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                {taskData.taskName}
-              </Typography>
-              <Typography color="text.secondary" sx={{ mb: 3 }}>
-                Instance: {instanceId} | Task: {taskData.taskSpec}
-              </Typography>
-
               {/* Render dynamic component if script is available */}
               {taskData.scriptCode && !taskData.isCompleted ? (
                 <DynamicComponent 

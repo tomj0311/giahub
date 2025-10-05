@@ -208,10 +208,8 @@ class WorkflowServicePersistent:
         # Structure error response
         error_response = {
             bpmn_id: {
-                'bpmn_name': task_name,
-                'response': None,
                 'error': str(error),
-                'date': datetime.now(UTC).isoformat()
+                'timestamp': datetime.now(UTC).isoformat()
             }
         }
         task.data.update(error_response)
