@@ -45,15 +45,42 @@ const DynamicFunctionTester = () => {
   const [executing, setExecuting] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
 
-  // Load modules on component mount
+  // Load modules and current user on component mount
   useEffect(() => {
     loadModules();
+    loadCurrentUser();
   }, []);
 
   // Get token from localStorage
   const getToken = () => {
     return localStorage.getItem('token');
+  };
+
+  // Load current user information
+  const loadCurrentUser = async () => {
+    try {
+      const token = getToken();
+      if (!token) {
+        console.log('⚠️ No token found, skipping user load');
+        return;
+      }
+
+      const response = await apiCall('/auth/me', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('👤 Current user loaded:', data);
+        setCurrentUser(data);
+      } else {
+        console.warn('⚠️ Failed to load current user');
+      }
+    } catch (err) {
+      console.error('🚨 Error loading current user:', err);
+    }
   };
 
   // Load functions when module is selected
@@ -203,7 +230,16 @@ const DynamicFunctionTester = () => {
       // Convert parameters to appropriate types
       const processedParams = {};
       Object.entries(parameters).forEach(([key, value]) => {
-        if (value !== '') {
+        // Check if this is a 'user' parameter and value is empty
+        if (key.toLowerCase() === 'user' && (!value || value === '')) {
+          // Automatically pass the current user object
+          if (currentUser) {
+            console.log('🔄 Auto-filling user parameter with current user:', currentUser);
+            processedParams[key] = currentUser;
+          } else {
+            console.warn('⚠️ User parameter is empty but no current user available');
+          }
+        } else if (value !== '') {
           // Try to parse as number if it looks like one
           if (!isNaN(value) && !isNaN(parseFloat(value))) {
             processedParams[key] = parseFloat(value);
@@ -216,6 +252,8 @@ const DynamicFunctionTester = () => {
           }
         }
       });
+
+      console.log('📤 Sending parameters:', processedParams);
 
       const response = await apiCall('/api/dynamic/execute', {
         method: 'POST',
