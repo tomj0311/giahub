@@ -33,6 +33,7 @@ async def run_agent(agent_name: str, prompt: str, user: dict = None, conv_id: st
             else:
                 # Convert whatever it is to string
                 result += str(response)
+                
         return result
         
     finally:

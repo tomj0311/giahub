@@ -307,7 +307,7 @@ class WorkflowServicePersistent:
             for key, value in local_vars.items():
                 if key not in initial_vars or local_vars[key] != task.data.get(key):
                     if not key.startswith('_'):  # Skip private vars
-                        output_vars[key] = value
+                        output_vars[f'{bpmn_id}_{key}'] = value
             
             # Serialize into one object and update task.data
             task.data.update(output_vars)
@@ -394,7 +394,7 @@ class WorkflowServicePersistent:
             # Handle the response
             if response_data:
                 # Serialize response data before updating task.data
-                response = {f'{bpmn_id}_response': response_data, 'timestamp': datetime.now(UTC).isoformat()}
+                response = {f'{bpmn_id}_response': response_data, f'{bpmn_id}_timestamp': datetime.now(UTC).isoformat()}
                 
                 # Update task data with structured response
                 task.data.update(response)
