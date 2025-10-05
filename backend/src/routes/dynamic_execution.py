@@ -56,13 +56,12 @@ async def execute_function(request: ExecuteRequest, user: dict = Depends(verify_
     """Execute a function dynamically."""
     try:
         # Add user to parameters so agent_executor gets it
-        parameters_with_user = request.parameters.copy()
-        parameters_with_user["user"] = user
+        parameters = request.parameters.copy()
         
         result = await module_service.execute_function_async(
             module_name=request.module_name,
             function_name=request.function_name,
-            **parameters_with_user
+            **parameters
         )
         return {"success": True, "data": result}
     except FileNotFoundError:
