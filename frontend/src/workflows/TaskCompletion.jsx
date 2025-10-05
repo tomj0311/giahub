@@ -92,8 +92,84 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
       if (result.success) {
         const instanceData = result.data.data;
         
-        // Find pending tasks
-        if (instanceData.serialized_data?.tasks) {
+        // FIRST: Check if a specific task ID was provided (user clicked on a completed task node)
+        if (propTaskId && instanceData.serialized_data?.tasks) {
+          console.log('=== LOADING SPECIFIC TASK NODE ===');
+          console.log('Clicked Task ID (propTaskId):', propTaskId);
+          
+          const taskSpecs = instanceData.serialized_data?.spec?.task_specs || {};
+          const specificTaskSpec = taskSpecs[propTaskId];
+          const allTasks = instanceData.serialized_data?.tasks || {};
+          
+          console.log('All available tasks:', Object.keys(allTasks));
+          console.log('Looking for task with task_spec =', propTaskId);
+          
+          // Find the actual task instance by matching task_spec property
+          let taskInstance = null;
+          for (const [taskInstanceId, task] of Object.entries(allTasks)) {
+            console.log(`Checking task instance ${taskInstanceId}: task_spec = ${task.task_spec}, state = ${task.state}`);
+            if (task.task_spec === propTaskId) {
+              taskInstance = task;
+              console.log('✅ Found matching task instance:', taskInstanceId, 'with state:', task.state);
+              break;
+            }
+          }
+          
+          if (specificTaskSpec && taskInstance) {
+            console.log('=== TASK NODE DETAILS ===');
+            console.log('Task name:', specificTaskSpec.bpmn_name || specificTaskSpec.name);
+            console.log('Task instance ID:', taskInstance.id);
+            console.log('Task state:', taskInstance.state, '(64 = COMPLETED, 16 = READY)');
+            console.log('Task instance data:', taskInstance.data);
+            
+            // Extract form field IDs from the task spec
+            let formFieldIds = [];
+            if (specificTaskSpec?.extensions?.extensionElements?.formData?.formField) {
+              const formField = specificTaskSpec.extensions.extensionElements.formData.formField;
+              const formFields = Array.isArray(formField) ? formField : [formField];
+              formFieldIds = formFields.map(f => f.id);
+              console.log('Form field IDs from spec:', formFieldIds);
+            }
+            
+            // Get data from the task INSTANCE's data property
+            const taskInstanceData = taskInstance.data || {};
+            console.log('Raw task instance data:', taskInstanceData);
+            
+            // Filter to only include the form fields if they exist
+            const filteredTaskData = {};
+            if (formFieldIds.length > 0) {
+              formFieldIds.forEach(fieldId => {
+                if (taskInstanceData.hasOwnProperty(fieldId)) {
+                  filteredTaskData[fieldId] = taskInstanceData[fieldId];
+                }
+              });
+              console.log('Filtered task data (only form fields):', filteredTaskData);
+            } else {
+              // If no form fields defined, show all data from task instance
+              Object.assign(filteredTaskData, taskInstanceData);
+              console.log('Using all task data (no form fields defined):', filteredTaskData);
+            }
+            
+            // Set task data for display
+            setTaskData({
+              taskId: propTaskId,
+              taskSpec: propTaskId,
+              taskName: specificTaskSpec.bpmn_name || specificTaskSpec.name || propTaskId,
+              completedTaskData: filteredTaskData,
+              instanceData,
+              isCompleted: taskInstance.state === 64 // State 64 means COMPLETED
+            });
+          } else {
+            console.error('❌ Task not found!');
+            console.error('Requested task spec:', propTaskId);
+            console.error('Available task specs:', Object.keys(taskSpecs));
+            console.error('Task instance found:', !!taskInstance);
+            console.error('Task spec found:', !!specificTaskSpec);
+            setError(`Task '${propTaskId}' not found in workflow.`);
+          }
+        } 
+        // SECOND: If no specific task requested, find pending tasks
+        else if (instanceData.serialized_data?.tasks) {
           const tasks = instanceData.serialized_data.tasks;
           const pendingTasks = Object.entries(tasks)
             .filter(([taskId, task]) => task.state === 16) // READY state
@@ -139,71 +215,7 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
               instanceData
             });
           } else {
-            // If a specific task ID was provided, show data for that task
-            if (propTaskId) {
-              const taskSpecs = instanceData.serialized_data?.spec?.task_specs || {};
-              const specificTaskSpec = taskSpecs[propTaskId];
-              const allTasks = instanceData.serialized_data?.tasks || {};
-              
-              // Find the actual task instance by matching task_spec property
-              let completedTaskInstance = null;
-              for (const [taskInstanceId, taskInstance] of Object.entries(allTasks)) {
-                if (taskInstance.task_spec === propTaskId) {
-                  completedTaskInstance = taskInstance;
-                  break;
-                }
-              }
-              
-              if (specificTaskSpec && completedTaskInstance) {
-                console.log('=== DEBUG: Completed Task ===');
-                console.log('Complete task instance:', completedTaskInstance);
-                console.log('Task spec:', specificTaskSpec);
-                console.log('Task instance data:', completedTaskInstance.data);
-                
-                // Extract form field IDs from the task spec
-                let formFieldIds = [];
-                if (specificTaskSpec?.extensions?.extensionElements?.formData?.formField) {
-                  const formField = specificTaskSpec.extensions.extensionElements.formData.formField;
-                  const formFields = Array.isArray(formField) ? formField : [formField];
-                  formFieldIds = formFields.map(f => f.id);
-                  console.log('Form field IDs from spec:', formFieldIds);
-                }
-                
-                // Get data from the task INSTANCE's data property
-                const taskInstanceData = completedTaskInstance.data || {};
-                console.log('Task instance data:', taskInstanceData);
-                
-                // Filter to only include the form fields
-                const filteredTaskData = {};
-                if (formFieldIds.length > 0) {
-                  formFieldIds.forEach(fieldId => {
-                    if (taskInstanceData.hasOwnProperty(fieldId)) {
-                      filteredTaskData[fieldId] = taskInstanceData[fieldId];
-                    }
-                  });
-                } else {
-                  // If no form fields defined, show all data from task instance
-                  Object.assign(filteredTaskData, taskInstanceData);
-                }
-                
-                console.log('Final filtered task data:', filteredTaskData);
-                
-                // For completed tasks, just show the data that was submitted
-                // Don't show form fields, show the actual data
-                setTaskData({
-                  taskId: propTaskId,
-                  taskSpec: propTaskId,
-                  taskName: specificTaskSpec.bpmn_name || specificTaskSpec.name || propTaskId,
-                  completedTaskData: filteredTaskData,
-                  instanceData,
-                  isCompleted: true
-                });
-              } else {
-                setError(`Task '${propTaskId}' not found in workflow.`);
-              }
-            } else {
-              setError('No pending tasks found for this workflow instance.');
-            }
+            setError('No pending tasks found for this workflow instance.');
           }
         } else {
           setError('Invalid workflow instance data.');
