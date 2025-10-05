@@ -47,8 +47,12 @@ class WorkflowServicePersistent:
             
             # Create instance if new
             if not instance_id:
-                instance_id = await cls.save_workflow_state(workflow, workflow_id, tenant_id)
+                instance_id = await cls.save_workflow_state(workflow, workflow_id, tenant_id, instance_id=instance_id)
                 logger.debug(f"[WORKFLOW] Created new instance: {instance_id}")
+            else:
+                # Save initial state with provided instance_id
+                await cls.save_workflow_state(workflow, workflow_id, tenant_id, instance_id=instance_id)
+                logger.debug(f"[WORKFLOW] Saved instance: {instance_id}")
                 
             # Process until completion or user input needed
             step_count = 0
@@ -507,11 +511,12 @@ class WorkflowServicePersistent:
             raise HTTPException(status_code=500, detail=str(e))
 
     @staticmethod
-    async def save_workflow_state(workflow, workflow_id, tenant_id=None):
+    async def save_workflow_state(workflow, workflow_id, tenant_id=None, instance_id=None):
         """Serialize and save workflow state to MongoDB"""
         logger.debug(f"[WORKFLOW] Saving workflow state for workflow_id='{workflow_id}' (tenant='{tenant_id}')")
         try:
-            instance_id = uuid.uuid4().hex[:6]
+            if not instance_id:
+                instance_id = uuid.uuid4().hex[:6]
 
             serializer = BpmnWorkflowSerializer()
             serialized_json = serializer.serialize_json(workflow)
@@ -754,7 +759,7 @@ class WorkflowServicePersistent:
             raise HTTPException(status_code=500, detail=str(e))
 
     @classmethod
-    async def run_workflow(cls, workflow_id: str, initial_data: Dict[str, Any], user: Dict[str, Any]):
+    async def run_workflow(cls, workflow_id: str, initial_data: Dict[str, Any], user: Dict[str, Any], instance_id: str = None):
         """Create and start new workflow, save to MongoDB"""
         tenant_id = await cls.validate_tenant_access(user)
         logger.info(f"[WORKFLOW] Starting new workflow {workflow_id}")
@@ -799,8 +804,8 @@ class WorkflowServicePersistent:
             if initial_data:
                 workflow.data.update(initial_data)
             
-            # Execute workflow and save to MongoDB
-            result = await cls.execute_workflow_steps(workflow, workflow_id, user)
+            # Execute workflow and save to MongoDB - pass instance_id if provided
+            result = await cls.execute_workflow_steps(workflow, workflow_id, user, instance_id=instance_id)
             
             return {
                 "message": "Workflow started successfully",

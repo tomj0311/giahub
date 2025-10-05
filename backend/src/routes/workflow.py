@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from datetime import datetime
 import time
 import os
+import uuid
 
 from ..utils.auth import verify_token_middleware
 from ..services.workflow_service_persistent import WorkflowServicePersistent
@@ -20,13 +21,13 @@ _INCOMPLETE_CACHE = {}
 _INCOMPLETE_CACHE_TTL = float(os.getenv("INCOMPLETE_CACHE_TTL", "0.5"))  # seconds
 
 
-async def _run_workflow_background(workflow_id: str, initial_data: dict, user: dict = Depends(verify_token_middleware)):
+async def _run_workflow_background(workflow_id: str, instance_id: str, initial_data: dict, user: dict):
     """Run workflow in background"""
     try:
-        result = await WorkflowServicePersistent.run_workflow(workflow_id, initial_data, user)
-        logger.info(f"Workflow {workflow_id} completed in background")
+        result = await WorkflowServicePersistent.run_workflow(workflow_id, initial_data, user, instance_id=instance_id)
+        logger.info(f"Workflow {workflow_id} instance {instance_id} completed in background")
     except Exception as e:
-        logger.error(f"Background workflow {workflow_id} failed: {str(e)}")
+        logger.error(f"Background workflow {workflow_id} instance {instance_id} failed: {str(e)}")
 
 @router.post("/workflows/{workflow_id}/start")
 async def start_workflow_by_workflow_id(
@@ -46,10 +47,18 @@ async def start_workflow_by_workflow_id(
         "started_at": str(datetime.now())
     })
     
-    # Start workflow in background
-    background_tasks.add_task(_run_workflow_background, workflow_id, initial_data, user)
+    # Generate instance_id first
+    instance_id = uuid.uuid4().hex[:6]
     
-    return {"success": True, "message": "Workflow started in background", "workflow_id": workflow_id}
+    # Start workflow in background with instance_id
+    background_tasks.add_task(_run_workflow_background, workflow_id, instance_id, initial_data, user)
+    
+    return {
+        "success": True,
+        "message": "Workflow started in background",
+        "workflow_id": workflow_id,
+        "instance_id": instance_id
+    }
 
 
 @router.get("/workflows/health")
