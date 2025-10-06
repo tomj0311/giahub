@@ -438,9 +438,9 @@ function WorkflowUI({ user }) {
         
         {/* Left Pane - Workflow Info */}
         <Box sx={{ 
-          width: '300px', 
-          minWidth: '300px',
-          maxWidth: '300px',
+          width: '400px', 
+          minWidth: '400px',
+          maxWidth: '400px',
           borderRight: '1px solid', 
           borderColor: 'divider',
           display: 'flex',
@@ -451,7 +451,7 @@ function WorkflowUI({ user }) {
         }}>
           {workflowId && (
             <Paper sx={{ p: 2 }}>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                 Workflow ID
               </Typography>
               <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
@@ -462,7 +462,7 @@ function WorkflowUI({ user }) {
 
           {instanceId && (
             <Paper sx={{ p: 2 }}>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                 Instance ID
               </Typography>
               <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
