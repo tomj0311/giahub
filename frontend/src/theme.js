@@ -522,9 +522,21 @@ export function buildTheme(key) {
       MuiCard: {
         styleOverrides: {
           root: {
-            backgroundColor: '#151515',
+            backgroundColor: theme.palette.background.paper,
             border: '1px solid rgba(255, 255, 255, 0.12)',
             boxShadow: '0 6px 28px -12px #000, 0 0 0 1px rgba(255, 255, 255, 0.04)'
+          }
+        }
+      },
+      MuiBox: {
+        styleOverrides: {
+          root: {
+            // Ensure Box has same background as Paper/Card when needed
+            '&.MuiBox-background-paper': {
+              backgroundColor: theme.palette.background.paper,
+              border: '1px solid rgba(255, 255, 255, 0.10)',
+              boxShadow: '0 6px 28px -12px #000, 0 0 0 1px rgba(255, 255, 255, 0.04)'
+            }
           }
         }
       },

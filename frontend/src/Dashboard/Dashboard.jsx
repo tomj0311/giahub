@@ -642,13 +642,13 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 				<Toolbar />
 				<Box sx={{
 					width: '100%',
-					// Conditional styling for BPMN and workflow-execution routes
-					...(location.pathname === '/dashboard/bpmn' || location.pathname === '/dashboard/workflow-execution' ? {
-						// Full width with minimal padding
+					// Conditional styling for BPMN, workflow-execution, and workflow-ui routes
+					...(location.pathname === '/dashboard/bpmn' || location.pathname === '/dashboard/workflow-execution' || location.pathname === '/dashboard/workflow-ui' ? {
+						// Full width with NO padding
 						maxWidth: 'none',
 						mx: 0,
-						px: 2,    // Add minimal horizontal padding (8px)
-						py: 2     // Add minimal vertical padding (8px)
+						px: 0,
+						py: 0
 					} : {
 						// Standard layout for other routes
 						maxWidth: '1200px', // Consistent max width for all components
