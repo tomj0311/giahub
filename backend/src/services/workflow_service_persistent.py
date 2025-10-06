@@ -311,7 +311,7 @@ class WorkflowServicePersistent:
                     if not key.startswith('_'):  # Skip private vars
                         # Only include JSON-serializable types
                         if isinstance(value, (str, int, float, bool, list, dict)):
-                            output_vars[f'{bpmn_id}_{key}'] = value
+                            output_vars[f'{key}'] = value
                         else:
                             logger.warning(f"[WORKFLOW] Skipping non-serializable variable '{key}' of type {type(value).__name__}")
             
@@ -587,7 +587,14 @@ class WorkflowServicePersistent:
         """Update existing workflow instance in MongoDB"""
         try:
             serializer = BpmnWorkflowSerializer()
-            serialized_json = serializer.serialize_json(workflow)
+            try:
+                serialized_json = serializer.serialize_json(workflow)
+            except TypeError as e:
+                logger.error(f"[WORKFLOW] JSON serialization error: {e}")
+                # Use default=str to handle non-serializable objects
+                dct = serializer.to_dict(workflow)
+                dct[serializer.VERSION_KEY] = serializer.VERSION
+                serialized_json = json.dumps(dct, default=str)
 
             update_data = {
                 "serialized_data": json.loads(serialized_json),
