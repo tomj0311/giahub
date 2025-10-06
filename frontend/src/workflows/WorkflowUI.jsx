@@ -20,7 +20,7 @@ import { CheckCircle, XCircle, Clock, AlertTriangle, ArrowLeft, Play } from 'luc
 import sharedApiService from '../utils/apiService';
 import TaskCompletion from './TaskCompletion';
 
-const POLL_INTERVAL = 2000;
+const POLL_INTERVAL = 1000;
 const MAX_POLL_DURATION = 30000;
 
 function WorkflowUI({ user }) {
