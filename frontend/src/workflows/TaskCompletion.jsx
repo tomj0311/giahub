@@ -79,6 +79,13 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
       setLoading(true);
       setError('');
 
+      // propTaskId MUST be provided
+      if (!propTaskId) {
+        setError('No task ID provided');
+        setLoading(false);
+        return;
+      }
+
       const result = await sharedApiService.makeRequest(
         `/api/workflow/workflows/${workflowId}/instances/${instanceId}`,
         {
@@ -90,132 +97,90 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
 
       if (result.success) {
         const instanceData = result.data.data;
+        const taskSpecs = instanceData.serialized_data?.spec?.task_specs || {};
+        const allTasks = instanceData.serialized_data?.tasks || {};
         
-        // If propTaskId is provided from WorkflowUI, we are in embedded mode
-        // DO NOT show completed task data - only show READY tasks for editing
-        const isEmbeddedMode = !!propTaskId;
-        
-        // FIRST: Check if a specific task ID was provided (clicked from diagram)
-        if (propTaskId && instanceData.serialized_data?.tasks && !isEmbeddedMode) {
-          console.log('=== CHECKING SPECIFIC TASK NODE (STANDALONE) ===');
-          console.log('Clicked Task ID (propTaskId):', propTaskId);
-          
-          const taskSpecs = instanceData.serialized_data?.spec?.task_specs || {};
-          const specificTaskSpec = taskSpecs[propTaskId];
-          const allTasks = instanceData.serialized_data?.tasks || {};
-          
-          // Find the actual task instance by matching task_spec property
-          let taskInstance = null;
-          for (const [taskInstanceId, task] of Object.entries(allTasks)) {
-            if (task.task_spec === propTaskId) {
-              taskInstance = task;
-              console.log('✅ Found task instance:', taskInstanceId, 'State:', task.state, '(16=READY/PENDING, 64=COMPLETED)');
-              break;
-            }
-          }
-          
-          // Show data based on task state (ONLY in standalone mode, not embedded)
-          if (specificTaskSpec && taskInstance) {
-            const taskState = taskInstance.state;
-            console.log('=== TASK STATE HANDLING ===');
-            console.log('Task name:', specificTaskSpec.bpmn_name || specificTaskSpec.name);
-            console.log('Task state:', taskState, '(16=READY, 64=COMPLETED, 128=ERROR/FAILED)');
-            
-            // Get ALL data from the task INSTANCE's data property
-            const taskInstanceData = taskInstance.data || {};
-            
-            // State 16 = READY/PENDING - Show JSX form if exists, else fallback
-            if (taskState === 16) {
-              console.log('=== TASK IS READY (16) - SHOWING FORM ===');
-              // Fall through to pending tasks logic below
-            } 
-            // Any other state (64=COMPLETED, 128=ERROR, etc.) - Show ALL task data
-            else {
-              console.log('=== TASK IS NOT READY - SHOWING ALL DATA ===');
-              console.log('Complete task instance data (NO FILTERING):', taskInstanceData);
-              
-              // Set task data for display (NON-READY states) - SHOW ALL DATA
-              setTaskData({
-                taskId: propTaskId,
-                taskSpec: propTaskId,
-                taskName: specificTaskSpec.bpmn_name || specificTaskSpec.name || propTaskId,
-                completedTaskData: taskInstanceData,
-                instanceData,
-                isCompleted: true,
-                taskState: taskState
-              });
-              setLoading(false);
-              return; // Exit early, don't process pending tasks
-            }
-          } else if (!taskInstance || !specificTaskSpec) {
-            console.error('❌ Task not found:', propTaskId);
-            setError(`Task '${propTaskId}' not found in workflow.`);
-            setLoading(false);
-            return;
+        // Get the task spec for the provided taskId
+        const specificTaskSpec = taskSpecs[propTaskId];
+        if (!specificTaskSpec) {
+          console.error('❌ Task spec not found:', propTaskId);
+          setError(`Task spec '${propTaskId}' not found in workflow.`);
+          setLoading(false);
+          return;
+        }
+
+        // Find the actual task instance by matching task_spec property
+        let taskInstance = null;
+        for (const [taskInstanceId, task] of Object.entries(allTasks)) {
+          if (task.task_spec === propTaskId) {
+            taskInstance = task;
+            console.log('✅ Found task instance:', taskInstanceId, 'State:', task.state, '(16=READY, 64=COMPLETED)');
+            break;
           }
         }
+
+        if (!taskInstance) {
+          console.error('❌ Task instance not found for:', propTaskId);
+          setError(`Task instance for '${propTaskId}' not found.`);
+          setLoading(false);
+          return;
+        }
+
+        const taskState = taskInstance.state;
+        const taskInstanceData = taskInstance.data || {};
         
-        // SECOND: Find READY/PENDING tasks only (state 16)
-        if (instanceData.serialized_data?.tasks) {
-          const tasks = instanceData.serialized_data.tasks;
-          const pendingTasks = Object.entries(tasks)
-            .filter(([taskId, task]) => task.state === 16) // READY state ONLY
-            .map(([taskId, task]) => ({
-              taskId,
-              taskSpec: task.task_spec,
-              task: task
-            }));
+        console.log('=== TASK STATE HANDLING ===');
+        console.log('Task ID:', propTaskId);
+        console.log('Task name:', specificTaskSpec.bpmn_name || specificTaskSpec.name);
+        console.log('Task state:', taskState, '(16=READY, 64=COMPLETED, 128=ERROR/FAILED)');
 
-          if (pendingTasks.length > 0) {
-            const firstTask = pendingTasks[0];
-            const taskSpec = instanceData.serialized_data?.spec?.task_specs?.[firstTask.taskSpec];
-            
-            // Extract script data if available
-            let scriptCode = null;
-            if (taskSpec?.extensions?.extensionElements?.formData?.scriptData?.script) {
-              const rawScript = taskSpec.extensions.extensionElements.formData.scriptData.script;
-              scriptCode = extractJSXFromMarkdown(rawScript);
-              console.log('Extracted JSX script:', scriptCode ? 'Found' : 'Not found');
-            }
-            
-            // Extract form fields from the correct structure
-            let formFields = [];
-            if (taskSpec?.extensions?.extensionElements?.formData?.formField) {
-              const formField = taskSpec.extensions.extensionElements.formData.formField;
-              // Handle both single form field and array of form fields
-              formFields = Array.isArray(formField) ? formField : [formField];
-              console.log('Found form fields in extensionElements:', formFields);
-            } else if (taskSpec?.extensions?.formData?.formFields) {
-              // Fallback to the old structure if it exists
-              formFields = taskSpec.extensions.formData.formFields;
-              console.log('Found form fields in legacy structure:', formFields);
-            } else {
-              console.log('No form fields found in task spec:', taskSpec);
-            }
-
-            setTaskData({
-              taskId: firstTask.taskId,
-              taskSpec: firstTask.taskSpec,
-              taskName: taskSpec?.bpmn_name || taskSpec?.name || firstTask.taskSpec,
-              formFields: formFields,
-              scriptCode: scriptCode, // Add the extracted script
-              instanceData,
-              isCompleted: false // NOT completed - this is a READY task for editing
-            });
-          } else {
-            // No pending tasks - workflow might be completed or has error
-            console.log('⚠️ No READY tasks found');
-            
-            // If embedded in WorkflowUI (propTaskId exists), don't show error
-            // Let WorkflowUI handle the workflow state (completed/error)
-            if (!propTaskId) {
-              setError('No pending tasks found for this workflow instance.');
-            } else {
-              console.log('📍 Embedded mode - letting WorkflowUI handle workflow state');
-            }
+        // State 16 = READY - Show form for user input
+        if (taskState === 16) {
+          console.log('=== TASK IS READY (16) - SHOWING FORM ===');
+          
+          // Extract script data if available
+          let scriptCode = null;
+          if (specificTaskSpec?.extensions?.extensionElements?.formData?.scriptData?.script) {
+            const rawScript = specificTaskSpec.extensions.extensionElements.formData.scriptData.script;
+            scriptCode = extractJSXFromMarkdown(rawScript);
+            console.log('Extracted JSX script:', scriptCode ? 'Found' : 'Not found');
           }
-        } else {
-          setError('Invalid workflow instance data.');
+          
+          // Extract form fields from the correct structure
+          let formFields = [];
+          if (specificTaskSpec?.extensions?.extensionElements?.formData?.formField) {
+            const formField = specificTaskSpec.extensions.extensionElements.formData.formField;
+            formFields = Array.isArray(formField) ? formField : [formField];
+            console.log('Found form fields:', formFields);
+          } else if (specificTaskSpec?.extensions?.formData?.formFields) {
+            formFields = specificTaskSpec.extensions.formData.formFields;
+            console.log('Found form fields (legacy):', formFields);
+          }
+
+          setTaskData({
+            taskId: propTaskId,
+            taskSpec: propTaskId,
+            taskName: specificTaskSpec.bpmn_name || specificTaskSpec.name || propTaskId,
+            formFields: formFields,
+            scriptCode: scriptCode,
+            instanceData,
+            isCompleted: false
+          });
+        } 
+        // Any other state (64=COMPLETED, 128=ERROR, etc.) - Show task data
+        else {
+          console.log('=== TASK IS NOT READY - SHOWING DATA ===');
+          console.log('Task data:', taskInstanceData);
+          
+          setTaskData({
+            taskId: propTaskId,
+            taskSpec: propTaskId,
+            taskName: specificTaskSpec.bpmn_name || specificTaskSpec.name || propTaskId,
+            completedTaskData: taskInstanceData,
+            instanceData,
+            isCompleted: true,
+            taskState: taskState
+          });
         }
       } else {
         setError('Failed to load task data.');
@@ -316,13 +281,6 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
     );
   }
 
-  // If embedded in WorkflowUI and no task data, don't render anything
-  // Let WorkflowUI handle the state
-  if (propTaskId && !taskData && !error) {
-    console.log('📍 Embedded mode with no task data - rendering nothing');
-    return null;
-  }
-
   return (
     <Box sx={{ 
       minHeight: isDialog ? 'auto' : '100vh',
@@ -414,8 +372,8 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
                     </Button>
                   </Box>
                 </Box>
-              ) : taskData.isCompleted && taskData.completedTaskData && !propTaskId ? (
-                // ONLY show completed task data if NOT embedded in WorkflowUI (no propTaskId from WorkflowUI)
+              ) : taskData.isCompleted && taskData.completedTaskData ? (
+                // Show completed task data
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>
                     Task Data:
