@@ -36,6 +36,7 @@ function WorkflowUI({ user }) {
   const [workflowId, setWorkflowId] = useState(null);
   const [instanceId, setInstanceId] = useState(null);
   const [pendingTaskId, setPendingTaskId] = useState(null);
+  const [readyTaskData, setReadyTaskData] = useState(null); // Store complete ready task data
   
   // Workflow selector
   const [workflows, setWorkflows] = useState([]);
@@ -255,7 +256,11 @@ function WorkflowUI({ user }) {
         if (readyTask) {
           console.log('✅ Found ready task:', readyTask[1].task_spec);
           clearInterval(pollInterval.current);
-          setPendingTaskId(readyTask[1].task_spec);
+          
+          // Store complete task data to avoid race condition
+          const taskSpec = readyTask[1].task_spec;
+          setReadyTaskData({ taskSpec });
+          setPendingTaskId(taskSpec);
           setState('task_ready');
           return;
         }
@@ -302,6 +307,7 @@ function WorkflowUI({ user }) {
 
   const handleTaskSuccess = () => {
     setPendingTaskId(null);
+    setReadyTaskData(null);
     setState('running');
     pollStatus(workflowId, instanceId);
   };
@@ -512,12 +518,13 @@ function WorkflowUI({ user }) {
             </Box>
           )}
 
-          {state === 'task_ready' && pendingTaskId && (
+          {state === 'task_ready' && readyTaskData && (
             <TaskCompletion
+              key={readyTaskData.taskSpec} // Force re-render with new task
               user={user}
               workflowId={workflowId}
               instanceId={instanceId}
-              taskId={pendingTaskId}
+              taskId={readyTaskData.taskSpec}
               isDialog={false}
               onSuccess={handleTaskSuccess}
             />
