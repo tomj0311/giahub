@@ -15,7 +15,7 @@ import json
 import uuid
 from datetime import datetime
 from typing import List, Dict, Any, AsyncGenerator, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Form, File, UploadFile
 from fastapi.responses import StreamingResponse
 
 from ..utils.auth import verify_token_middleware
@@ -23,6 +23,7 @@ from ..utils.log import logger
 from ..utils.mongo_storage import MongoStorageService
 from ..services.agent_service import AgentService
 from ..services.agent_runtime_service import AgentRuntimeService
+from ..services.file_service import FileService
 
 router = APIRouter(prefix="/api/agent-runtime", tags=["agent-runtime"]) 
 
@@ -67,15 +68,23 @@ async def stream_agent_response(
 
 
 @router.post("/run")
-async def run_agent(body: Dict[str, Any], user: dict = Depends(verify_token_middleware)):
-    """Stream agent responses using Server-Sent Events.
+async def run_agent(
+    agent_name: str = Form(...),
+    prompt: str = Form(...),
+    conv_id: Optional[str] = Form(None),
+    files: List[UploadFile] = File(default=[]),
+    user: dict = Depends(verify_token_middleware)
+):
+    """Stream agent responses using Server-Sent Events with optional file uploads.
 
-    body: { agent_name, prompt, conv_id }
+    Form data:
+    - agent_name: Name of the agent to run
+    - prompt: User prompt/message
+    - conv_id: Optional conversation ID
+    - files: Optional list of files to upload
     """
-    agent_name = (body.get("agent_name") or body.get("file") or "").strip()
-    prompt = (body.get("prompt") or "").strip()
-    # Get conversation ID from frontend
-    conv_id = body.get("conv_id") or body.get("session_collection")
+    agent_name = agent_name.strip()
+    prompt = prompt.strip()
     
     if not agent_name:
         raise HTTPException(status_code=400, detail="agent_name is required")
@@ -92,6 +101,41 @@ async def run_agent(body: Dict[str, Any], user: dict = Depends(verify_token_midd
     
     user_id = user.get("id") or user.get("userId")
     
+    # Handle file uploads if provided
+    uploaded_file_names = []
+    if files and len(files) > 0:
+        # Filter out empty files
+        valid_files = [f for f in files if f.filename and f.size > 0]
+        
+        if valid_files:
+            logger.info(f"[AGENT_RUNTIME] Processing {len(valid_files)} uploaded files")
+            
+            # Use conversation ID as collection name for file storage
+            collection_name = conv_id or f"conv_{uuid.uuid4()}"
+            if not conv_id:
+                conv_id = collection_name
+            
+            try:
+                # Upload files using FileService
+                for file in valid_files:
+                    file_info = await FileService.upload_file_to_storage(
+                        file=file,
+                        tenant_id=tenant_id,
+                        user_id=user_id,
+                        collection=collection_name
+                    )
+                    uploaded_file_names.append(file_info["filename"])
+                    logger.info(f"[AGENT_RUNTIME] Successfully uploaded file: {file_info['filename']}")
+                
+                logger.info(f"[AGENT_RUNTIME] All files uploaded successfully: {uploaded_file_names}")
+                
+            except Exception as e:
+                logger.error(f"[AGENT_RUNTIME] File upload failed: {str(e)}")
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"File upload failed: {str(e)}"
+                )
+    
     return StreamingResponse(
         stream_agent_response(
             agent_name=agent_name,
@@ -100,8 +144,8 @@ async def run_agent(body: Dict[str, Any], user: dict = Depends(verify_token_midd
             user_id=user_id,
             tenant_id=tenant_id
         ),
-    # SSE media type so browsers treat stream correctly
-    media_type="text/event-stream",
+        # SSE media type so browsers treat stream correctly
+        media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",

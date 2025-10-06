@@ -326,101 +326,6 @@ export default function AgentPlayground({ user }) {
     setStagedFiles(prev => [...prev, ...newStaged])
   }
 
-  // Save knowledge collection with embedder strategy from selected agent
-  const saveKnowledgeCollection = async (collectionName, files) => {
-    try {
-      if (!selected) {
-        throw new Error('No agent selected for knowledge collection')
-      }
-
-      // Get agent configuration to extract model_id
-      const agentConfig = await agentService.getAgent(selected, token)
-      
-      // Extract model_id from agent's model configuration
-      const modelId = agentConfig?.model?.id
-      if (!modelId) {
-        throw new Error('No model_id found in agent configuration')
-      }
-
-      // Use user ID as ownerId instead of random UUID
-      const ownerId = user?.userId
-      
-      // Generate vector collection name
-      const vectorCollectionName = `${collectionName}_${ownerId}`
-      
-      // Store the vector collection name for later use
-      setVectorCollectionName(vectorCollectionName)
-      
-      // Get current timestamp
-      const currentTime = Date.now()
-      
-      // Create collection payload with model_id from agent
-      const payload = {
-        collection: collectionName,
-        tenantId: user?.tenant_id || user?.tenantId || 'default-tenant', // Use user's tenant ID
-        category: 'Runtime',
-        created_at: currentTime,
-        overwrite: false,
-        ownerId: ownerId,
-        updated_at: new Date().toISOString(),
-        model_id: modelId, // Use model_id from agent instead of hardcoded embedder
-        files: files ? files.map(f => f.name) : [],
-        vector_collection: vectorCollectionName // Use the stored vector collection name
-      }
-      
-      
-      // First save the collection configuration
-      const res = await agentRuntimeService.saveKnowledgeCollection(payload, token)
-      
-      // Then upload files if any
-      if (files && files.length > 0) {
-        // Create upload payload matching the existing structure
-        const uploadPayload = {
-          collection: collectionName,
-          category: "Runtime",
-          tenantId: payload.tenantId,
-          ownerId: payload.ownerId,
-          model_id: payload.model_id, // Use model_id instead of embedder
-          overwrite: payload.overwrite || false,
-          created_at: payload.created_at,
-          updated_at: payload.updated_at,
-          vector_collection: payload.vector_collection
-        }
-        
-        await agentRuntimeService.uploadKnowledge(collectionName, files, token, uploadPayload)
-      }
-      
-      return res
-    } catch (e) {
-      console.error('Failed to save knowledge collection:', e)
-      throw e
-    }
-  }
-
-  // Upload knowledge files to backend and mark as uploaded (legacy function, now handled in runAgent)
-  const uploadStagedFiles = async () => {
-    if (stagedFiles.length === 0) return []
-    if (!sessionCollection) setSessionCollection(genUuidHex())
-    setUploading(true)
-    try {
-      const files = stagedFiles.map(sf => sf.file)
-      const collectionName = currentConversationId || `conv_${Date.now()}`
-      
-      // Save knowledge collection with files
-      await saveKnowledgeCollection(collectionName, files)
-      
-      const names = files.map(f => f.name)
-      setUploadedFiles(prev => [...prev, ...names])
-      setStagedFiles([])
-      return names
-    } catch (e) {
-      console.error('Upload failed', e)
-      return []
-    } finally {
-      setUploading(false)
-    }
-  }
-
   const cancelChat = useCallback(() => {
     if (abortController) {
       // HTTP cancellation
@@ -492,31 +397,20 @@ export default function AgentPlayground({ user }) {
       // Continue with original prompt if agent config fails
     }
 
-    // upload files with conversation ID as collection name
+    // Prepare files for upload (convert staged files to actual File objects)
+    let filesToUpload = []
     let currentUploadedFiles = uploadedFiles
-    if (stagedFiles.length) {
-      try {
-        // Override the collection name in uploadStagedFiles to use conversation ID
-        const collectionName = convId
-        setUploading(true)
-        const files = stagedFiles.map(sf => sf.file)
-        
-        // Save knowledge collection with files using the proper payload structure
-        await saveKnowledgeCollection(collectionName, files)
-        
-        const names = files.map(f => f.name)
-        const newUploadedFiles = [...uploadedFiles, ...names]
-        setUploadedFiles(newUploadedFiles)
-        currentUploadedFiles = newUploadedFiles // Use updated files for conversation save
-        setStagedFiles([])
-        setUploading(false)
-      } catch (e) {
-        console.error('Upload failed', e)
-        setUploading(false)
-      }
+    
+    if (stagedFiles.length > 0) {
+      setUploading(true)
+      filesToUpload = stagedFiles.map(sf => sf.file)
+      
+      // Update uploaded files list for UI
+      const names = stagedFiles.map(sf => sf.name)
+      currentUploadedFiles = [...uploadedFiles, ...names]
+      setUploadedFiles(currentUploadedFiles)
+      setStagedFiles([])
     }
-
-    // Note: Conversation saving is now handled automatically by the backend
 
     // Add placeholder message for agent response
     const agentMsgId = Date.now()
@@ -529,7 +423,7 @@ export default function AgentPlayground({ user }) {
     try {
       let finalMessages = messagesWithPlaceholder
 
-      // Use HTTP SSE for streaming
+      // Use HTTP SSE for streaming with multipart form data if files are present
       const httpController = new AbortController()
       setAbortController(httpController)
 
@@ -540,11 +434,17 @@ export default function AgentPlayground({ user }) {
           conv_id: convId
         },
         token,
-        httpController.signal
+        httpController.signal,
+        filesToUpload // Pass files to the service
       )
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      // Mark uploading as complete after successful request start
+      if (stagedFiles.length > 0) {
+        setUploading(false)
       }
 
       const reader = response.body?.getReader()
@@ -624,6 +524,7 @@ export default function AgentPlayground({ user }) {
       })
     } finally {
       setRunning(false)
+      setUploading(false)
       setAbortController(null)
     }
   }, [selected, prompt, stagedFiles, uploadedFiles, messages, currentConversationId, sessionCollection, vectorCollectionName, token])

@@ -2,24 +2,79 @@ import { apiCall } from '../config/api'
 
 export const agentRuntimeService = {
 
-  async runAgentStream(body, token, abortSignal = null) {
-    const res = await apiCall(`/api/agent-runtime/run`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
-      body: JSON.stringify(body),
-      signal: abortSignal
-    })
-
-    return res // Return the Response object for manual stream handling
+  async runAgentStream(body, token, abortSignal = null, files = []) {
+    // Check if we have files to upload
+    if (files && files.length > 0) {
+      // Use FormData for multipart upload
+      const formData = new FormData()
+      
+      // Add form fields
+      formData.append('agent_name', body.agent_name || '')
+      formData.append('prompt', body.prompt || '')
+      if (body.conv_id) {
+        formData.append('conv_id', body.conv_id)
+      }
+      
+      // Add files
+      files.forEach(file => {
+        formData.append('files', file)
+      })
+      
+      const res = await apiCall(`/api/agent-runtime/run`, {
+        method: 'POST',
+        headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+        body: formData,
+        signal: abortSignal
+      })
+      
+      return res
+    } else {
+      // Use JSON for requests without files
+      const res = await apiCall(`/api/agent-runtime/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+        body: JSON.stringify(body),
+        signal: abortSignal
+      })
+      
+      return res
+    }
   },
 
-  async runStream(body, token, onEvent, abortSignal = null) {
-    const res = await apiCall(`/api/agent-runtime/run`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
-      body: JSON.stringify(body),
-      signal: abortSignal
-    })
+  async runStream(body, token, onEvent, abortSignal = null, files = []) {
+    // Check if we have files to upload
+    let res
+    if (files && files.length > 0) {
+      // Use FormData for multipart upload
+      const formData = new FormData()
+      
+      // Add form fields
+      formData.append('agent_name', body.agent_name || '')
+      formData.append('prompt', body.prompt || '')
+      if (body.conv_id) {
+        formData.append('conv_id', body.conv_id)
+      }
+      
+      // Add files
+      files.forEach(file => {
+        formData.append('files', file)
+      })
+      
+      res = await apiCall(`/api/agent-runtime/run`, {
+        method: 'POST',
+        headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+        body: formData,
+        signal: abortSignal
+      })
+    } else {
+      // Use JSON for requests without files
+      res = await apiCall(`/api/agent-runtime/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+        body: JSON.stringify(body),
+        signal: abortSignal
+      })
+    }
 
     if (!res.ok) {
       const j = await res.json().catch(() => ({}))
