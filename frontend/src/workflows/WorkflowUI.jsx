@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -12,548 +12,310 @@ import {
   alpha,
   Chip,
   Button,
-  Grid,
   TextField,
   Autocomplete,
+  IconButton,
 } from '@mui/material';
 import { CheckCircle, XCircle, Clock, AlertTriangle, ArrowLeft, Play } from 'lucide-react';
 import sharedApiService from '../utils/apiService';
 import TaskCompletion from './TaskCompletion';
 
-const POLL_INTERVAL = 2000; // Poll every 2 seconds
-const MAX_POLL_DURATION = 30000; // 30 seconds max polling
+const POLL_INTERVAL = 2000;
+const MAX_POLL_DURATION = 30000;
 
 function WorkflowUI({ user }) {
-  console.log('🚀🚀🚀 WORKFLOW UI COMPONENT IS RENDERING 🚀🚀🚀');
-  console.log('User prop:', user);
-  
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const theme = useTheme();
   
   const workflowName = searchParams.get('workflow');
-  console.log('Workflow name from URL:', workflowName);
   
-  const [loading, setLoading] = useState(true);
+  // Simple state
+  const [state, setState] = useState('idle'); // idle, loading, running, task_ready, completed, failed
   const [error, setError] = useState('');
   const [workflowId, setWorkflowId] = useState(null);
   const [instanceId, setInstanceId] = useState(null);
-  const [instanceData, setInstanceData] = useState(null);
   const [pendingTaskId, setPendingTaskId] = useState(null);
-  const [workflowState, setWorkflowState] = useState('starting'); // starting, running, ready, completed, failed, timeout
-  const [pollingCount, setPollingCount] = useState(0);
   
-  // Workflow selector states
-  const [availableWorkflows, setAvailableWorkflows] = useState([]);
+  // Workflow selector
+  const [workflows, setWorkflows] = useState([]);
   const [selectedWorkflow, setSelectedWorkflow] = useState(null);
-  const [loadingWorkflows, setLoadingWorkflows] = useState(false);
   
-  const pollingIntervalRef = useRef(null);
-  const startTimeRef = useRef(null);
+  const pollInterval = useRef(null);
+  const hasStarted = useRef(false);
+  const token = user?.token || localStorage.getItem('token');
 
-  const token = useMemo(() => user?.token || localStorage.getItem('token'), [user?.token]);
-  const headers = useMemo(
-    () => ({
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    }),
-    [token]
-  );
-
-  // Cleanup polling on unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
+      if (pollInterval.current) clearInterval(pollInterval.current);
     };
   }, []);
 
-  // Start workflow when component mounts
+  // Initialize
   useEffect(() => {
-    if (workflowName) {
-      startWorkflow();
-    } else {
-      // Load available workflows for selection
-      loadAvailableWorkflows();
+    if (workflowName && !hasStarted.current) {
+      hasStarted.current = true;
+      
+      // Check if we have instance ID in URL params
+      const urlInstanceId = searchParams.get('instance');
+      if (urlInstanceId) {
+        console.log('📍 Found instance ID in URL:', urlInstanceId);
+        // Load existing instance instead of starting new one
+        loadExistingInstance(urlInstanceId);
+      } else {
+        startWorkflow();
+      }
+    } else if (!workflowName) {
+      loadWorkflows();
     }
   }, [workflowName]);
 
-  const loadAvailableWorkflows = async () => {
+  const loadExistingInstance = async (instId) => {
     try {
-      setLoadingWorkflows(true);
-      setLoading(false); // Not loading the main workflow, just the list
-      
-      console.log('📋 Loading available workflows...');
-      
-      const result = await sharedApiService.makeRequest(
+      setState('loading');
+      setError('');
+      setInstanceId(instId);
+
+      // Get workflow config to find workflow ID
+      const configResult = await sharedApiService.makeRequest(
         '/api/workflows/configs',
         {
           method: 'GET',
-          headers,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
         },
         { action: 'get_configs' }
       );
 
-      console.log('📋 API Response:', result);
+      const workflow = configResult.data.configurations?.find(w => w.name === workflowName);
+      if (!workflow) throw new Error(`Workflow "${workflowName}" not found`);
 
-      if (result.success) {
-        const configs = result.data.configurations || [];
-        console.log('📋 Available workflows:', configs);
-        setAvailableWorkflows(configs);
-        if (configs.length === 0) {
-          setError('No workflows available. Please create a workflow first.');
-        }
-      } else {
-        setError('Failed to load available workflows');
-      }
+      const wfId = workflow.id || workflow.workflow_id || workflow._id;
+      setWorkflowId(wfId);
+
+      setState('running');
+      pollStatus(wfId, instId);
+
     } catch (err) {
-      console.error('❌ Failed to load workflows:', err);
-      setError('Failed to load available workflows: ' + err.message);
-    } finally {
-      setLoadingWorkflows(false);
+      setError(err.message);
+      setState('failed');
     }
   };
 
-  const handleWorkflowSelect = () => {
-    if (selectedWorkflow) {
-      // Update URL with selected workflow name
-      setSearchParams({ workflow: selectedWorkflow.name });
+  const loadWorkflows = async () => {
+    try {
+      setState('loading');
+      const result = await sharedApiService.makeRequest(
+        '/api/workflows/configs',
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        },
+        { action: 'get_configs' }
+      );
+
+      if (result.success) {
+        setWorkflows(result.data.configurations || []);
+        setState('idle');
+      } else {
+        setError('Failed to load workflows');
+        setState('failed');
+      }
+    } catch (err) {
+      setError(err.message);
+      setState('failed');
     }
   };
 
   const startWorkflow = async () => {
     try {
-      setLoading(true);
+      setState('loading');
       setError('');
-      setWorkflowState('starting');
-      startTimeRef.current = Date.now();
 
-      console.log('🚀 Starting workflow:', workflowName);
-
-      // First, get the workflow configuration to find the workflow ID
+      // Get workflow config
       const configResult = await sharedApiService.makeRequest(
         '/api/workflows/configs',
         {
           method: 'GET',
-          headers,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
         },
         { action: 'get_configs' }
       );
 
-      if (!configResult.success) {
-        throw new Error('Failed to fetch workflow configurations');
-      }
+      const workflow = configResult.data.configurations?.find(w => w.name === workflowName);
+      if (!workflow) throw new Error(`Workflow "${workflowName}" not found`);
 
-      // Find the workflow by name
-      const configs = configResult.data.configurations || [];
-      const workflow = configs.find(w => w.name === workflowName);
+      const wfId = workflow.id || workflow.workflow_id || workflow._id;
+      setWorkflowId(wfId);
 
-      if (!workflow) {
-        throw new Error(`Workflow "${workflowName}" not found`);
-      }
-
-      const foundWorkflowId = workflow.id || workflow.workflow_id || workflow._id;
-      if (!foundWorkflowId) {
-        throw new Error(`Workflow "${workflowName}" has no valid ID`);
-      }
-      
-      setWorkflowId(foundWorkflowId);
-
-      console.log('✅ Found workflow ID:', foundWorkflowId);
-
-      // Start the workflow
+      // Start workflow
       const startResult = await sharedApiService.makeRequest(
-        `/api/workflow/workflows/${foundWorkflowId}/start`,
+        `/api/workflow/workflows/${wfId}/start`,
         {
           method: 'POST',
-          headers,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify({
-            initial_data: {
-              workflow_name: workflowName,
-              started_from: 'workflow_ui',
-            }
+            initial_data: { workflow_name: workflowName }
           }),
         },
-        { workflowId: foundWorkflowId, action: 'start_workflow' }
+        { workflowId: wfId, action: 'start_workflow' }
       );
 
-      if (!startResult.success) {
-        throw new Error('Failed to start workflow');
-      }
-
-      const newInstanceId = startResult.data.instance_id;
-      setInstanceId(newInstanceId);
-      setWorkflowState('running');
-
-      console.log('✅ Workflow started with instance ID:', newInstanceId);
-
-      // Start polling for the instance status
-      startPolling(foundWorkflowId, newInstanceId);
-
-    } catch (err) {
-      console.error('❌ Failed to start workflow:', err);
-      setError(err.message || 'Failed to start workflow');
-      setWorkflowState('failed');
-      setLoading(false);
-    }
-  };
-
-  const startPolling = (wfId, instId) => {
-    console.log('📡 Starting to poll for instance:', instId);
-    
-    // Clear any existing polling interval
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-    }
-
-    // Initial check
-    checkInstanceStatus(wfId, instId);
-
-    // Set up polling interval
-    pollingIntervalRef.current = setInterval(() => {
-      const elapsed = Date.now() - startTimeRef.current;
+      const instId = startResult.data.instance_id;
+      setInstanceId(instId);
       
-      if (elapsed > MAX_POLL_DURATION) {
-        console.log('⏰ Polling timeout reached');
-        clearInterval(pollingIntervalRef.current);
-        setWorkflowState('timeout');
-        setLoading(false);
-        return;
-      }
+      // IMMEDIATELY update URL with instance ID to prevent duplicates on refresh
+      setSearchParams({ workflow: workflowName, instance: instId });
+      
+      setState('running');
 
-      checkInstanceStatus(wfId, instId);
-      setPollingCount(prev => prev + 1);
-    }, POLL_INTERVAL);
-  };
-
-  const checkInstanceStatus = async (wfId, instId) => {
-    try {
-      console.log('🔍 Checking instance status:', instId);
-
-      const result = await sharedApiService.makeRequest(
-        `/api/workflow/workflows/${wfId}/instances/${instId}`,
-        {
-          method: 'GET',
-          headers,
-        },
-        { workflowId: wfId, instanceId: instId, action: 'get_instance', timestamp: Date.now() }
-      );
-
-      if (!result.success) {
-        console.warn('Failed to get instance data');
-        return;
-      }
-
-      const instance = result.data.data;
-      setInstanceData(instance);
-
-      // Check for pending tasks (state 16 = READY)
-      const tasks = instance.serialized_data?.tasks || {};
-      const pendingTasks = Object.entries(tasks)
-        .filter(([taskId, task]) => task.state === 16)
-        .map(([taskId, task]) => ({
-          taskId,
-          taskSpec: task.task_spec,
-          task: task
-        }));
-
-      if (pendingTasks.length > 0) {
-        console.log('✅ Found pending task:', pendingTasks[0].taskSpec);
-        setPendingTaskId(pendingTasks[0].taskSpec);
-        setWorkflowState('ready');
-        setLoading(false);
-        
-        // Stop polling - we found a task
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-        }
-        return;
-      }
-
-      // Check if workflow is complete
-      const workflowStatus = instance.serialized_data?.workflow?.state;
-      if (workflowStatus === 64) { // COMPLETED state
-        console.log('✅ Workflow completed');
-        setWorkflowState('completed');
-        setLoading(false);
-        
-        // Stop polling
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-        }
-        return;
-      }
-
-      // Check for error state (128 or other error states)
-      if (workflowStatus === 128 || workflowStatus === 256) {
-        console.log('❌ Workflow failed');
-        setWorkflowState('failed');
-        setLoading(false);
-        
-        // Stop polling
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-        }
-        return;
-      }
-
-      console.log('⏳ Workflow still running, status:', workflowStatus);
+      // Start polling
+      pollStatus(wfId, instId);
 
     } catch (err) {
-      console.error('❌ Error checking instance status:', err);
+      setError(err.message);
+      setState('failed');
     }
+  };
+
+  const pollStatus = (wfId, instId) => {
+    if (pollInterval.current) clearInterval(pollInterval.current);
+
+    const startTime = Date.now();
+    
+    const check = async () => {
+      try {
+        console.log('🔍 Polling instance:', instId);
+        
+        // Invalidate cache to get fresh data
+        sharedApiService.invalidateCache(`/api/workflow/workflows/${wfId}/instances/${instId}`);
+        
+        const result = await sharedApiService.makeRequest(
+          `/api/workflow/workflows/${wfId}/instances/${instId}`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          },
+          { workflowId: wfId, instanceId: instId, timestamp: Date.now(), bypassCache: true }
+        );
+
+        if (!result.success) {
+          console.error('❌ Failed to get instance data');
+          return;
+        }
+
+        const instance = result.data.data;
+        const tasks = instance.serialized_data?.tasks || {};
+        const workflowData = instance.serialized_data?.data || {};
+        
+        console.log('📊 Tasks:', Object.keys(tasks).length);
+        console.log('📊 Completed:', instance.serialized_data?.completed);
+        
+        // FIRST: Check for ANY failed task (state 128 = FAILED)
+        const failedTask = Object.entries(tasks).find(([taskId, task]) => {
+          console.log(`  Task ${task.task_spec}: state=${task.state}`);
+          return task.state === 128;
+        });
+        
+        if (failedTask) {
+          const [taskId, task] = failedTask;
+          console.log('❌ Found failed task:', task.task_spec);
+          clearInterval(pollInterval.current);
+          
+          // Try to get error message from task data or workflow data
+          const errorMsg = task.data?.error || 
+                          task.data?.error_message || 
+                          workflowData.error || 
+                          workflowData.error_message ||
+                          `Task "${task.task_spec}" failed during execution`;
+          
+          setState('failed');
+          setError(errorMsg);
+          return;
+        }
+
+        // Check for ready tasks (state 16 = READY)
+        const readyTask = Object.entries(tasks).find(([taskId, task]) => task.state === 16);
+        
+        if (readyTask) {
+          console.log('✅ Found ready task:', readyTask[1].task_spec);
+          clearInterval(pollInterval.current);
+          setPendingTaskId(readyTask[1].task_spec);
+          setState('task_ready');
+          return;
+        }
+
+        // Check if completed
+        const workflowState = instance.serialized_data?.workflow?.state;
+        const isCompleted = instance.serialized_data?.completed === true;
+        
+        console.log('📊 Workflow state:', workflowState, 'Completed:', isCompleted);
+        
+        if (workflowState === 64 || isCompleted) {
+          console.log('✅ Workflow completed');
+          clearInterval(pollInterval.current);
+          setState('completed');
+          return;
+        }
+
+        // Check if workflow itself is in failed state
+        if (workflowState === 128 || workflowState === 256) {
+          console.log('❌ Workflow failed');
+          clearInterval(pollInterval.current);
+          const errorMsg = workflowData.error || workflowData.error_message || 'Workflow execution failed';
+          setState('failed');
+          setError(errorMsg);
+          return;
+        }
+
+        // Check timeout
+        if (Date.now() - startTime > MAX_POLL_DURATION) {
+          console.log('⏰ Polling timeout');
+          clearInterval(pollInterval.current);
+          setState('failed');
+          setError('Workflow polling timeout - no task became ready within 30 seconds');
+        }
+      } catch (err) {
+        console.error('❌ Poll error:', err);
+        // Don't stop polling on error, just log it
+      }
+    };
+
+    check();
+    pollInterval.current = setInterval(check, POLL_INTERVAL);
   };
 
   const handleTaskSuccess = () => {
-    console.log('✅ Task submitted successfully, resuming polling...');
-    setWorkflowState('running');
     setPendingTaskId(null);
-    
-    // Resume polling to check for completion or next task
-    if (workflowId && instanceId) {
-      startPolling(workflowId, instanceId);
-    }
-  };
-
-  const renderLeftPanel = () => {
-    return (
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 2,
-          p: 3,
-          height: '100%',
-        }}
-      >
-        <Box>
-          <Button
-            startIcon={<ArrowLeft size={16} />}
-            onClick={() => navigate('/dashboard/monitor')}
-            sx={{ mb: 2 }}
-          >
-            Back to Workflows
-          </Button>
-          
-          <Typography variant="h5" fontWeight="bold" gutterBottom>
-            {workflowName || 'Workflow'}
-          </Typography>
-          
-          <Chip
-            icon={getStateIcon()}
-            label={getStateLabel()}
-            color={getStateColor()}
-            sx={{ mt: 1 }}
-          />
-        </Box>
-
-        {workflowId && (
-          <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.paper, 0.5) }}>
-            <Typography variant="caption" color="text.secondary">
-              Workflow ID
-            </Typography>
-            <Typography variant="body2" fontWeight="mono">
-              {workflowId}
-            </Typography>
-          </Paper>
-        )}
-
-        {instanceId && (
-          <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.paper, 0.5) }}>
-            <Typography variant="caption" color="text.secondary">
-              Instance ID
-            </Typography>
-            <Typography variant="body2" fontWeight="mono">
-              {instanceId}
-            </Typography>
-          </Paper>
-        )}
-
-        {pollingCount > 0 && workflowState === 'running' && (
-          <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.info.main, 0.1) }}>
-            <Typography variant="caption" color="text.secondary">
-              Status Checks
-            </Typography>
-            <Typography variant="body2">
-              {pollingCount} checks
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-              Checking every {POLL_INTERVAL / 1000}s (max {MAX_POLL_DURATION / 1000}s)
-            </Typography>
-          </Paper>
-        )}
-      </Box>
-    );
-  };
-
-  const renderRightPanel = () => {
-    if (loading && workflowState === 'starting') {
-      return (
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-            gap: 2,
-          }}
-        >
-          <CircularProgress size={60} />
-          <Typography variant="h6" color="text.secondary">
-            Starting workflow...
-          </Typography>
-        </Box>
-      );
-    }
-
-    if (workflowState === 'running') {
-      return (
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-            gap: 2,
-          }}
-        >
-          <CircularProgress size={60} />
-          <Typography variant="h6" color="text.secondary">
-            Workflow is running...
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Waiting for tasks or completion
-          </Typography>
-        </Box>
-      );
-    }
-
-    if (error || workflowState === 'failed') {
-      return (
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-            gap: 2,
-            p: 3,
-          }}
-        >
-          <XCircle size={64} color={theme.palette.error.main} />
-          <Typography variant="h5" color="error">
-            Workflow Failed
-          </Typography>
-          <Alert severity="error" sx={{ maxWidth: 500 }}>
-            {error || 'The workflow encountered an error during execution'}
-          </Alert>
-          <Button
-            variant="contained"
-            onClick={() => navigate('/dashboard/monitor')}
-            sx={{ mt: 2 }}
-          >
-            Back to Workflows
-          </Button>
-        </Box>
-      );
-    }
-
-    if (workflowState === 'timeout') {
-      return (
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-            gap: 2,
-            p: 3,
-          }}
-        >
-          <AlertTriangle size={64} color={theme.palette.warning.main} />
-          <Typography variant="h5" color="warning.main">
-            Polling Timeout
-          </Typography>
-          <Alert severity="warning" sx={{ maxWidth: 500 }}>
-            The workflow did not complete or show a ready task within {MAX_POLL_DURATION / 1000} seconds.
-            The workflow may still be running in the background.
-          </Alert>
-          <Button
-            variant="contained"
-            onClick={() => navigate('/dashboard/monitor')}
-            sx={{ mt: 2 }}
-          >
-            Back to Workflows
-          </Button>
-        </Box>
-      );
-    }
-
-    if (workflowState === 'completed') {
-      return (
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-            gap: 2,
-            p: 3,
-          }}
-        >
-          <CheckCircle size={64} color={theme.palette.success.main} />
-          <Typography variant="h5" color="success.main">
-            Workflow Completed!
-          </Typography>
-          <Alert severity="success" sx={{ maxWidth: 500 }}>
-            The workflow has completed successfully without any user tasks.
-          </Alert>
-          <Button
-            variant="contained"
-            onClick={() => navigate('/dashboard/monitor')}
-            sx={{ mt: 2 }}
-          >
-            Back to Workflows
-          </Button>
-        </Box>
-      );
-    }
-
-    if (workflowState === 'ready' && workflowId && instanceId && pendingTaskId) {
-      return (
-        <Box sx={{ height: '100%', overflow: 'auto' }}>
-          <TaskCompletion
-            user={user}
-            workflowId={workflowId}
-            instanceId={instanceId}
-            taskId={pendingTaskId}
-            isDialog={false}
-            onSuccess={handleTaskSuccess}
-          />
-        </Box>
-      );
-    }
-
-    return null;
+    setState('running');
+    pollStatus(workflowId, instanceId);
   };
 
   const getStateIcon = () => {
-    switch (workflowState) {
-      case 'starting':
+    switch (state) {
+      case 'loading':
       case 'running':
         return <Clock size={16} />;
-      case 'ready':
+      case 'task_ready':
         return <AlertTriangle size={16} />;
       case 'completed':
         return <CheckCircle size={16} />;
       case 'failed':
-      case 'timeout':
         return <XCircle size={16} />;
       default:
         return <Clock size={16} />;
@@ -561,121 +323,85 @@ function WorkflowUI({ user }) {
   };
 
   const getStateLabel = () => {
-    switch (workflowState) {
-      case 'starting':
+    switch (state) {
+      case 'loading':
         return 'Starting...';
       case 'running':
         return 'Running';
-      case 'ready':
+      case 'task_ready':
         return 'Task Ready';
       case 'completed':
         return 'Completed';
       case 'failed':
         return 'Failed';
-      case 'timeout':
-        return 'Timeout';
       default:
-        return 'Unknown';
+        return 'Idle';
     }
   };
 
   const getStateColor = () => {
-    switch (workflowState) {
-      case 'starting':
+    switch (state) {
+      case 'loading':
       case 'running':
         return 'info';
-      case 'ready':
+      case 'task_ready':
         return 'warning';
       case 'completed':
         return 'success';
       case 'failed':
-      case 'timeout':
         return 'error';
       default:
         return 'default';
     }
   };
 
-  // Show workflow selector if no workflow is selected
+  // Workflow selector screen
   if (!workflowName) {
     return (
-      <Box
-        sx={{
-          minHeight: '100vh',
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: theme.custom?.backgroundGradient || theme.palette.background.default,
-          p: 3,
-        }}
-      >
-        <Card sx={{ maxWidth: 600, width: '100%' }}>
-          <CardContent sx={{ p: 4 }}>
-            <Box sx={{ mb: 3 }}>
-              <Button
-                startIcon={<ArrowLeft size={16} />}
-                onClick={() => navigate('/dashboard/monitor')}
-                sx={{ mb: 2 }}
-              >
-                Back to Workflows
-              </Button>
-              
-              <Typography variant="h4" fontWeight="bold" gutterBottom>
-                Run Workflow
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Select a workflow to execute
-              </Typography>
-            </Box>
+      <Box sx={{ p: 3 }}>
+        {/* Header */}
+        <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
+          <IconButton onClick={() => navigate('/dashboard/monitor')}>
+            <ArrowLeft />
+          </IconButton>
+          <Typography variant="h5" fontWeight="bold">
+            Run Workflow
+          </Typography>
+        </Box>
 
-            {loadingWorkflows ? (
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 4 }}>
+        <Card sx={{ maxWidth: 600 }}>
+          <CardContent sx={{ p: 4 }}>
+            {state === 'loading' ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', py: 4 }}>
                 <CircularProgress size={40} />
-                <Typography sx={{ ml: 2 }}>Loading workflows...</Typography>
+                <Typography sx={{ ml: 2 }}>Loading...</Typography>
               </Box>
             ) : error ? (
-              <Alert severity="error" sx={{ mb: 3 }}>
-                {error}
-              </Alert>
+              <Alert severity="error">{error}</Alert>
             ) : (
               <>
                 <Autocomplete
-                  options={availableWorkflows}
-                  getOptionLabel={(option) => option.name || 'Unnamed Workflow'}
+                  options={workflows}
+                  getOptionLabel={(option) => option.name || 'Unnamed'}
                   value={selectedWorkflow}
-                  onChange={(event, newValue) => setSelectedWorkflow(newValue)}
+                  onChange={(_, newValue) => setSelectedWorkflow(newValue)}
                   renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Select Workflow"
-                      placeholder="Choose a workflow to run"
-                      variant="outlined"
-                    />
-                  )}
-                  renderOption={(props, option) => (
-                    <li {...props}>
-                      <Box>
-                        <Typography variant="body1">
-                          {option.name || 'Unnamed Workflow'}
-                        </Typography>
-                        {option.description && (
-                          <Typography variant="caption" color="text.secondary">
-                            {option.description}
-                          </Typography>
-                        )}
-                      </Box>
-                    </li>
+                    <TextField {...params} label="Select Workflow" variant="outlined" />
                   )}
                   sx={{ mb: 3 }}
                 />
-
                 <Button
                   variant="contained"
                   size="large"
                   fullWidth
                   startIcon={<Play size={20} />}
-                  onClick={handleWorkflowSelect}
+                  onClick={() => {
+                    if (selectedWorkflow) {
+                      // Reset hasStarted ref to allow workflow to start
+                      hasStarted.current = false;
+                      setSearchParams({ workflow: selectedWorkflow.name });
+                    }
+                  }}
                   disabled={!selectedWorkflow}
                 >
                   Start Workflow
@@ -688,37 +414,186 @@ function WorkflowUI({ user }) {
     );
   }
 
+  // Main workflow screen
   return (
-    <Box
-      sx={{
-        height: '100vh',
-        width: '100%',
-        display: 'flex',
-        background: theme.custom?.backgroundGradient || theme.palette.background.default,
-      }}
-    >
-      {/* Left Panel - Info/Status */}
-      <Box
-        sx={{
-          width: '30%',
-          minWidth: 300,
-          borderRight: `1px solid ${theme.palette.divider}`,
-          bgcolor: alpha(theme.palette.background.paper, 0.3),
-          backdropFilter: 'blur(10px)',
-          overflow: 'auto',
-        }}
-      >
-        {renderLeftPanel()}
+    <Box sx={{ p: 0, height: '100%', width: '100%', overflow: 'hidden' }}>
+      {/* Header */}
+      <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid', borderColor: 'divider' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <IconButton onClick={() => {
+            hasStarted.current = false;
+            setSearchParams({});
+          }}>
+            <ArrowLeft />
+          </IconButton>
+          <Typography variant="h5" fontWeight="bold">
+            {workflowName}
+          </Typography>
+          <Chip icon={getStateIcon()} label={getStateLabel()} color={getStateColor()} />
+        </Box>
       </Box>
 
-      {/* Right Panel - Task Completion or Status */}
-      <Box
-        sx={{
+      {/* Two Column Layout */}
+      <Box sx={{ display: 'flex', height: 'calc(100vh - 185px)', width: '100%', overflow: 'hidden' }}>
+        
+        {/* Left Pane - Workflow Info */}
+        <Box sx={{ 
+          width: '300px', 
+          minWidth: '300px',
+          maxWidth: '300px',
+          borderRight: '1px solid', 
+          borderColor: 'divider',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          p: 3,
+          gap: 2,
+        }}>
+          {workflowId && (
+            <Paper sx={{ p: 2 }}>
+              <Typography variant="caption" color="text.secondary">
+                Workflow ID
+              </Typography>
+              <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
+                {workflowId}
+              </Typography>
+            </Paper>
+          )}
+
+          {instanceId && (
+            <Paper sx={{ p: 2 }}>
+              <Typography variant="caption" color="text.secondary">
+                Instance ID
+              </Typography>
+              <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
+                {instanceId}
+              </Typography>
+            </Paper>
+          )}
+        </Box>
+
+        {/* Right Pane - Main Content */}
+        <Box sx={{ 
           flex: 1,
+          display: 'flex', 
+          flexDirection: 'column', 
           overflow: 'auto',
-        }}
-      >
-        {renderRightPanel()}
+          minWidth: 0
+        }}>
+          {state === 'loading' && (
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                gap: 2,
+              }}
+            >
+              <CircularProgress size={60} />
+              <Typography variant="h6">Starting workflow...</Typography>
+            </Box>
+          )}
+
+          {state === 'running' && (
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                gap: 2,
+              }}
+            >
+              <CircularProgress size={60} />
+              <Typography variant="h6">Workflow running...</Typography>
+            </Box>
+          )}
+
+          {state === 'task_ready' && pendingTaskId && (
+            <TaskCompletion
+              user={user}
+              workflowId={workflowId}
+              instanceId={instanceId}
+              taskId={pendingTaskId}
+              isDialog={false}
+              onSuccess={handleTaskSuccess}
+            />
+          )}
+
+          {state === 'completed' && (
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                gap: 2,
+                p: 3,
+              }}
+            >
+              <CheckCircle size={64} color={theme.palette.success.main} />
+              <Typography variant="h5" color="success.main">
+                Workflow Completed!
+              </Typography>
+              <Button variant="contained" onClick={() => {
+                hasStarted.current = false;
+                setSearchParams({});
+              }}>
+                Back to Workflows
+              </Button>
+            </Box>
+          )}
+
+          {state === 'failed' && (
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                gap: 2,
+                p: 3,
+              }}
+            >
+              <XCircle size={64} color={theme.palette.error.main} />
+              <Typography variant="h5" color="error" gutterBottom>
+                Workflow Failed
+              </Typography>
+              <Alert severity="error" sx={{ maxWidth: 600, width: '100%' }}>
+                <Typography variant="body1" gutterBottom fontWeight="bold">
+                  Error Details:
+                </Typography>
+                <Typography 
+                  variant="body2" 
+                  component="pre" 
+                  sx={{ 
+                    whiteSpace: 'pre-wrap', 
+                    wordBreak: 'break-word',
+                    fontFamily: 'monospace',
+                    mt: 1 
+                  }}
+                >
+                  {error || 'The workflow encountered an error during execution'}
+                </Typography>
+              </Alert>
+              <Button 
+                variant="contained" 
+                onClick={() => {
+                  hasStarted.current = false;
+                  setSearchParams({});
+                }}
+                sx={{ mt: 2 }}
+              >
+                Back to Workflows
+              </Button>
+            </Box>
+          )}
+        </Box>
       </Box>
     </Box>
   );
