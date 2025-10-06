@@ -99,8 +99,6 @@ const DynamicComponent = ({ componentCode, onSubmit, submitting, children }) => 
 
         console.log('Original code length:', componentCode.length);
         console.log('Cleaned code length:', cleanedCode.length);
-        console.log('First 200 chars of cleaned code:', cleanedCode.substring(0, 200));
-        console.log('Last 200 chars of cleaned code:', cleanedCode.substring(cleanedCode.length - 200));
 
         // Extract component name from cleaned code
         const componentMatch = cleanedCode.match(/const\s+(\w+)\s*=/);
@@ -168,9 +166,9 @@ const DynamicComponent = ({ componentCode, onSubmit, submitting, children }) => 
           useRef: React.useRef,
           useContext: React.useContext,
           useReducer: React.useReducer,
-          // Helper function to submit workflow form data
+          // Helper function to submit form data
           submitWorkflowForm: (data) => {
-            console.log('📤 submitWorkflowForm called with:', data);
+            console.log('📤 Form submit called with:', data);
             const event = new CustomEvent('workflowFormSubmit', {
               detail: data,
               bubbles: true,
@@ -389,7 +387,7 @@ const DynamicComponent = ({ componentCode, onSubmit, submitting, children }) => 
   }
 
   if (component) {
-    console.log('🎨 DynamicComponent rendering - submitWorkflowForm is available in component context');
+    console.log('🎨 DynamicComponent rendering - form submit handler available');
     
     return React.createElement(ComponentErrorBoundary, null,
       React.createElement(component)
