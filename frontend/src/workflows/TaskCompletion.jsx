@@ -91,9 +91,13 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
       if (result.success) {
         const instanceData = result.data.data;
         
-        // FIRST: Check if a specific COMPLETED task ID was provided (user clicked on a GREEN completed task node)
-        if (propTaskId && instanceData.serialized_data?.tasks) {
-          console.log('=== CHECKING SPECIFIC TASK NODE ===');
+        // If propTaskId is provided from WorkflowUI, we are in embedded mode
+        // DO NOT show completed task data - only show READY tasks for editing
+        const isEmbeddedMode = !!propTaskId;
+        
+        // FIRST: Check if a specific task ID was provided (clicked from diagram)
+        if (propTaskId && instanceData.serialized_data?.tasks && !isEmbeddedMode) {
+          console.log('=== CHECKING SPECIFIC TASK NODE (STANDALONE) ===');
           console.log('Clicked Task ID (propTaskId):', propTaskId);
           
           const taskSpecs = instanceData.serialized_data?.spec?.task_specs || {};
@@ -110,21 +114,20 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
             }
           }
           
-          // Show data based on task state
+          // Show data based on task state (ONLY in standalone mode, not embedded)
           if (specificTaskSpec && taskInstance) {
             const taskState = taskInstance.state;
             console.log('=== TASK STATE HANDLING ===');
             console.log('Task name:', specificTaskSpec.bpmn_name || specificTaskSpec.name);
             console.log('Task state:', taskState, '(16=READY, 64=COMPLETED, 128=ERROR/FAILED)');
             
-            // Get ALL data from the task INSTANCE's data property - NO FILTERING
+            // Get ALL data from the task INSTANCE's data property
             const taskInstanceData = taskInstance.data || {};
             
             // State 16 = READY/PENDING - Show JSX form if exists, else fallback
             if (taskState === 16) {
               console.log('=== TASK IS READY (16) - SHOWING FORM ===');
-              // This will fall through to the pending tasks logic below
-              // which will extract JSX script or show fallback form fields
+              // Fall through to pending tasks logic below
             } 
             // Any other state (64=COMPLETED, 128=ERROR, etc.) - Show ALL task data
             else {
@@ -136,7 +139,7 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
                 taskId: propTaskId,
                 taskSpec: propTaskId,
                 taskName: specificTaskSpec.bpmn_name || specificTaskSpec.name || propTaskId,
-                completedTaskData: taskInstanceData, // ALL DATA, NO FILTERING
+                completedTaskData: taskInstanceData,
                 instanceData,
                 isCompleted: true,
                 taskState: taskState
@@ -152,11 +155,11 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
           }
         }
         
-        // SECOND: Find pending tasks (or if propTaskId was provided but task is PENDING)
-        if (instanceData.serialized_data?.tasks && (!taskData || !taskData.isCompleted)) {
+        // SECOND: Find READY/PENDING tasks only (state 16)
+        if (instanceData.serialized_data?.tasks) {
           const tasks = instanceData.serialized_data.tasks;
           const pendingTasks = Object.entries(tasks)
-            .filter(([taskId, task]) => task.state === 16) // READY state
+            .filter(([taskId, task]) => task.state === 16) // READY state ONLY
             .map(([taskId, task]) => ({
               taskId,
               taskSpec: task.task_spec,
@@ -196,10 +199,20 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
               taskName: taskSpec?.bpmn_name || taskSpec?.name || firstTask.taskSpec,
               formFields: formFields,
               scriptCode: scriptCode, // Add the extracted script
-              instanceData
+              instanceData,
+              isCompleted: false // NOT completed - this is a READY task for editing
             });
           } else {
-            setError('No pending tasks found for this workflow instance.');
+            // No pending tasks - workflow might be completed or has error
+            console.log('⚠️ No READY tasks found');
+            
+            // If embedded in WorkflowUI (propTaskId exists), don't show error
+            // Let WorkflowUI handle the workflow state (completed/error)
+            if (!propTaskId) {
+              setError('No pending tasks found for this workflow instance.');
+            } else {
+              console.log('📍 Embedded mode - letting WorkflowUI handle workflow state');
+            }
           }
         } else {
           setError('Invalid workflow instance data.');
@@ -264,13 +277,19 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
 
       if (result.success) {
         console.log('✨ Task submitted successfully!');
-        // Call onSuccess callback if provided (dialog mode)
+        
+        // ALWAYS call onSuccess to notify parent (WorkflowUI) to hide TaskCompletion and poll
         if (onSuccess) {
+          console.log('📢 Calling onSuccess callback to notify WorkflowUI');
           onSuccess();
+        } else if (!isDialog) {
+          // If not in dialog mode and no callback, navigate back
+          navigate(-1);
         }
       } else {
         console.error('❌ API returned success=false:', result);
-        setError('Failed to submit task.');
+        const errorMessage = result.error || result.message || 'Failed to submit task.';
+        setError(errorMessage);
       }
     } catch (err) {
       console.error('💥 Exception in handleSubmit:', err);
@@ -295,6 +314,13 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
         <Typography sx={{ ml: 2 }}>Loading task...</Typography>
       </Box>
     );
+  }
+
+  // If embedded in WorkflowUI and no task data, don't render anything
+  // Let WorkflowUI handle the state
+  if (propTaskId && !taskData && !error) {
+    console.log('📍 Embedded mode with no task data - rendering nothing');
+    return null;
   }
 
   return (
@@ -325,31 +351,14 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
         {taskData && (
           <Card>
             <CardContent>
-              {/* Render dynamic component if script is available */}
+              {/* Render dynamic component if script is available AND task is not completed */}
               {taskData.scriptCode && !taskData.isCompleted ? (
                 <DynamicComponent 
                   componentCode={taskData.scriptCode}
                 />
-              ) : taskData.isCompleted && taskData.completedTaskData ? (
-                // Show completed task data as key-value pairs
+              ) : taskData.formFields && taskData.formFields.length > 0 && !taskData.isCompleted ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>
-                    Task Data:
-                  </Typography>
-                  {Object.entries(taskData.completedTaskData).map(([key, value]) => (
-                    <Box key={key} sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold' }}>
-                        {key}
-                      </Typography>
-                      <Typography variant="body1" sx={{ mt: 0.5 }}>
-                        {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
-                      </Typography>
-                    </Box>
-                  ))}
-                </Box>
-              ) : taskData.formFields && taskData.formFields.length > 0 ? (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {/* Show editable form fields for pending tasks */}
+                  {/* Show editable form fields for READY/PENDING tasks only */}
                   {taskData.formFields.map((field) => (
                     <Box key={field.id}>
                       {field.type === 'boolean' ? (
@@ -387,7 +396,7 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
                     {submitting ? 'Submitting...' : 'Submit Task'}
                   </Button>
                 </Box>
-              ) : (
+              ) : !taskData.isCompleted ? (
                 <Box>
                   <Typography color="text.secondary" sx={{ mb: 2 }}>
                     This task requires confirmation to proceed.
@@ -405,7 +414,24 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
                     </Button>
                   </Box>
                 </Box>
-              )}
+              ) : taskData.isCompleted && taskData.completedTaskData && !propTaskId ? (
+                // ONLY show completed task data if NOT embedded in WorkflowUI (no propTaskId from WorkflowUI)
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>
+                    Task Data:
+                  </Typography>
+                  {Object.entries(taskData.completedTaskData).map(([key, value]) => (
+                    <Box key={key} sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                        {key}
+                      </Typography>
+                      <Typography variant="body1" sx={{ mt: 0.5 }}>
+                        {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              ) : null}
             </CardContent>
           </Card>
         )}

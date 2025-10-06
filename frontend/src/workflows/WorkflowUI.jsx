@@ -55,6 +55,9 @@ function WorkflowUI({ user }) {
 
   // Initialize
   useEffect(() => {
+    // ALWAYS load workflows on mount
+    loadWorkflows();
+    
     if (workflowName && !hasStarted.current) {
       hasStarted.current = true;
       
@@ -67,8 +70,6 @@ function WorkflowUI({ user }) {
       } else {
         startWorkflow();
       }
-    } else if (!workflowName) {
-      loadWorkflows();
     }
   }, [workflowName]);
 
@@ -221,24 +222,27 @@ function WorkflowUI({ user }) {
         }
 
         const instance = result.data.data;
-        const tasks = instance.serialized_data?.tasks || {};
         const workflowData = instance.serialized_data?.data || {};
+        const tasks = instance.serialized_data?.tasks || {};
         
-        console.log('📊 Tasks:', Object.keys(tasks).length);
-        console.log('📊 Completed:', instance.serialized_data?.completed);
+        // CHECK 1: Is workflow complete? (Only check the completed flag!)
+        const isCompleted = instance.serialized_data?.completed === true || 
+                           workflowData.workflow_status?.completed === true;
         
-        // FIRST: Check for ANY failed task (state 128 = FAILED)
-        const failedTask = Object.entries(tasks).find(([taskId, task]) => {
-          console.log(`  Task ${task.task_spec}: state=${task.state}`);
-          return task.state === 128;
-        });
+        if (isCompleted) {
+          console.log('✅ Workflow completed successfully!');
+          clearInterval(pollInterval.current);
+          setState('completed');
+          return;
+        }
         
+        // CHECK 2: Any failed task (state 128)?
+        const failedTask = Object.entries(tasks).find(([taskId, task]) => task.state === 128);
         if (failedTask) {
           const [taskId, task] = failedTask;
           console.log('❌ Found failed task:', task.task_spec);
           clearInterval(pollInterval.current);
           
-          // Try to get error message from task data or workflow data
           const errorMsg = task.data?.error || 
                           task.data?.error_message || 
                           workflowData.error || 
@@ -249,51 +253,23 @@ function WorkflowUI({ user }) {
           setError(errorMsg);
           return;
         }
-
-        // Check for ready tasks (state 16 = READY)
-        const readyTask = Object.entries(tasks).find(([taskId, task]) => task.state === 16);
+        
+        // CHECK 3: Check for ready tasks (only UserTask or ManualTask)
+        const readyTask = Object.entries(tasks).find(([taskId, task]) => {
+          const taskSpec = task.task_spec?.toLowerCase() || '';
+          return task.state === 16 && (taskSpec.includes('usertask') || taskSpec.includes('manualtask'));
+        });
         
         if (readyTask) {
-          console.log('✅ Found ready task:', readyTask[1].task_spec);
+          const [taskId, task] = readyTask;
+          console.log('✅ Found ready task:', task.task_spec);
           clearInterval(pollInterval.current);
           
-          // Store complete task data to avoid race condition
-          const taskSpec = readyTask[1].task_spec;
-          setReadyTaskData({ taskSpec });
-          setPendingTaskId(taskSpec);
+          // Store task data and show TaskCompletion
+          setReadyTaskData({ taskSpec: task.task_spec });
+          setPendingTaskId(task.task_spec);
           setState('task_ready');
           return;
-        }
-
-        // Check if completed
-        const workflowState = instance.serialized_data?.workflow?.state;
-        const isCompleted = instance.serialized_data?.completed === true;
-        
-        console.log('📊 Workflow state:', workflowState, 'Completed:', isCompleted);
-        
-        if (workflowState === 64 || isCompleted) {
-          console.log('✅ Workflow completed');
-          clearInterval(pollInterval.current);
-          setState('completed');
-          return;
-        }
-
-        // Check if workflow itself is in failed state
-        if (workflowState === 128 || workflowState === 256) {
-          console.log('❌ Workflow failed');
-          clearInterval(pollInterval.current);
-          const errorMsg = workflowData.error || workflowData.error_message || 'Workflow execution failed';
-          setState('failed');
-          setError(errorMsg);
-          return;
-        }
-
-        // Check timeout
-        if (Date.now() - startTime > MAX_POLL_DURATION) {
-          console.log('⏰ Polling timeout');
-          clearInterval(pollInterval.current);
-          setState('failed');
-          setError('Workflow polling timeout - no task became ready within 30 seconds');
         }
       } catch (err) {
         console.error('❌ Poll error:', err);
@@ -361,81 +337,19 @@ function WorkflowUI({ user }) {
     }
   };
 
-  // Workflow selector screen
-  if (!workflowName) {
-    return (
-      <Box sx={{ p: 3 }}>
-        {/* Header */}
-        <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-          <IconButton onClick={() => navigate('/dashboard/monitor')}>
-            <ArrowLeft />
-          </IconButton>
-          <Typography variant="h5" fontWeight="bold">
-            Run Workflow
-          </Typography>
-        </Box>
-
-        <Card sx={{ maxWidth: 600 }}>
-          <CardContent sx={{ p: 4 }}>
-            {state === 'loading' ? (
-              <Box sx={{ display: 'flex', alignItems: 'center', py: 4 }}>
-                <CircularProgress size={40} />
-                <Typography sx={{ ml: 2 }}>Loading...</Typography>
-              </Box>
-            ) : error ? (
-              <Alert severity="error">{error}</Alert>
-            ) : (
-              <>
-                <Autocomplete
-                  options={workflows}
-                  getOptionLabel={(option) => option.name || 'Unnamed'}
-                  value={selectedWorkflow}
-                  onChange={(_, newValue) => setSelectedWorkflow(newValue)}
-                  renderInput={(params) => (
-                    <TextField {...params} label="Select Workflow" variant="outlined" />
-                  )}
-                  sx={{ mb: 3 }}
-                />
-                <Button
-                  variant="contained"
-                  size="large"
-                  fullWidth
-                  startIcon={<Play size={20} />}
-                  onClick={() => {
-                    if (selectedWorkflow) {
-                      // Reset hasStarted ref to allow workflow to start
-                      hasStarted.current = false;
-                      setSearchParams({ workflow: selectedWorkflow.name });
-                    }
-                  }}
-                  disabled={!selectedWorkflow}
-                >
-                  Start Workflow
-                </Button>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </Box>
-    );
-  }
-
   // Main workflow screen
   return (
     <Box sx={{ p: 0, height: '100%', width: '100%', overflow: 'hidden' }}>
       {/* Header */}
       <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid', borderColor: 'divider' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <IconButton onClick={() => {
-            hasStarted.current = false;
-            setSearchParams({});
-          }}>
+          <IconButton onClick={() => navigate('/dashboard/monitor')}>
             <ArrowLeft />
           </IconButton>
           <Typography variant="h5" fontWeight="bold">
-            {workflowName}
+            {workflowName || 'Run Workflow'}
           </Typography>
-          <Chip icon={getStateIcon()} label={getStateLabel()} color={getStateColor()} />
+          {workflowName && <Chip icon={getStateIcon()} label={getStateLabel()} color={getStateColor()} />}
         </Box>
       </Box>
 
@@ -451,30 +365,79 @@ function WorkflowUI({ user }) {
           borderColor: 'divider',
           display: 'flex',
           flexDirection: 'column',
-          overflow: 'hidden',
+          overflow: 'auto',
           p: 3,
           gap: 2,
         }}>
-          {workflowId && (
-            <Paper sx={{ p: 2 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                Workflow ID
-              </Typography>
-              <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
-                {workflowId}
-              </Typography>
-            </Paper>
+          {/* Workflow Selector - ALWAYS VISIBLE */}
+          <Typography variant="h6" gutterBottom>
+            Select a Workflow
+          </Typography>
+          {state === 'loading' && workflows.length === 0 ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', py: 4 }}>
+              <CircularProgress size={40} />
+              <Typography sx={{ ml: 2 }}>Loading...</Typography>
+            </Box>
+          ) : (
+            <>
+              <Autocomplete
+                options={workflows}
+                getOptionLabel={(option) => option.name || 'Unnamed'}
+                value={selectedWorkflow}
+                onChange={(_, newValue) => setSelectedWorkflow(newValue)}
+                renderInput={(params) => (
+                  <TextField {...params} label="Select Workflow" variant="outlined" />
+                )}
+                sx={{ mb: 2 }}
+              />
+              <Button
+                variant="contained"
+                size="large"
+                fullWidth
+                startIcon={<Play size={20} />}
+                onClick={() => {
+                  if (selectedWorkflow) {
+                    // Reset hasStarted ref to allow workflow to start
+                    hasStarted.current = false;
+                    setSearchParams({ workflow: selectedWorkflow.name });
+                  }
+                }}
+                disabled={!selectedWorkflow}
+              >
+                Start Workflow
+              </Button>
+            </>
           )}
 
-          {instanceId && (
-            <Paper sx={{ p: 2 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                Instance ID
+          {/* Workflow Info - Show when workflow is running */}
+          {workflowName && (
+            <>
+              <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
+                Running Workflow
               </Typography>
-              <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
-                {instanceId}
-              </Typography>
-            </Paper>
+              
+              {workflowId && (
+                <Paper sx={{ p: 2 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                    Workflow ID
+                  </Typography>
+                  <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
+                    {workflowId}
+                  </Typography>
+                </Paper>
+              )}
+
+              {instanceId && (
+                <Paper sx={{ p: 2 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                    Instance ID
+                  </Typography>
+                  <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
+                    {instanceId}
+                  </Typography>
+                </Paper>
+              )}
+            </>
           )}
         </Box>
 
@@ -486,7 +449,25 @@ function WorkflowUI({ user }) {
           overflow: 'auto',
           minWidth: 0
         }}>
-          {state === 'loading' && (
+          {!workflowName && (
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                gap: 2,
+                p: 3,
+              }}
+            >
+              <Typography variant="h6" color="text.secondary">
+                Select a workflow from the left panel to get started
+              </Typography>
+            </Box>
+          )}
+
+          {workflowName && state === 'loading' && (
             <Box
               sx={{
                 display: 'flex',
@@ -502,7 +483,7 @@ function WorkflowUI({ user }) {
             </Box>
           )}
 
-          {state === 'running' && (
+          {workflowName && state === 'running' && (
             <Box
               sx={{
                 display: 'flex',
@@ -518,10 +499,10 @@ function WorkflowUI({ user }) {
             </Box>
           )}
 
-          {state === 'task_ready' && readyTaskData && (
+          {workflowName && state === 'task_ready' && readyTaskData && (
             <TaskCompletion
               key={readyTaskData.taskSpec} // Force re-render with new task
-              user={user}
+               user={user}
               workflowId={workflowId}
               instanceId={instanceId}
               taskId={readyTaskData.taskSpec}
@@ -530,7 +511,7 @@ function WorkflowUI({ user }) {
             />
           )}
 
-          {state === 'completed' && (
+          {workflowName && state === 'completed' && (
             <Box
               sx={{
                 display: 'flex',
@@ -547,15 +528,26 @@ function WorkflowUI({ user }) {
                 Workflow Completed!
               </Typography>
               <Button variant="contained" onClick={() => {
+                // Reset all state
                 hasStarted.current = false;
+                setWorkflowId(null);
+                setInstanceId(null);
+                setPendingTaskId(null);
+                setReadyTaskData(null);
+                setState('idle');
+                setError('');
+                if (pollInterval.current) clearInterval(pollInterval.current);
+                
+                // Clear URL and reload workflows
                 setSearchParams({});
+                loadWorkflows();
               }}>
                 Back to Workflows
               </Button>
             </Box>
           )}
 
-          {state === 'failed' && (
+          {workflowName && state === 'failed' && (
             <Box
               sx={{
                 display: 'flex',
@@ -591,8 +583,19 @@ function WorkflowUI({ user }) {
               <Button 
                 variant="contained" 
                 onClick={() => {
+                  // Reset all state
                   hasStarted.current = false;
+                  setWorkflowId(null);
+                  setInstanceId(null);
+                  setPendingTaskId(null);
+                  setReadyTaskData(null);
+                  setState('idle');
+                  setError('');
+                  if (pollInterval.current) clearInterval(pollInterval.current);
+                  
+                  // Clear URL and reload workflows
                   setSearchParams({});
+                  loadWorkflows();
                 }}
                 sx={{ mt: 2 }}
               >
