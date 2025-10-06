@@ -645,11 +645,10 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 					width: '100%',
 					// Conditional styling for BPMN, workflow-execution, and workflow-ui routes
 					...(location.pathname === '/dashboard/bpmn' || location.pathname === '/dashboard/workflow-execution' || location.pathname === '/dashboard/workflow-ui' ? {
-						// Full width with NO padding
+						// Full width with minimal padding
 						maxWidth: 'none',
 						mx: 0,
-						px: 0,
-						py: 0
+						p: 2
 					} : {
 						// Standard layout for other routes
 						maxWidth: '1200px', // Consistent max width for all components

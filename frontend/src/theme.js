@@ -20,7 +20,7 @@ const themeDefinitions = {
       success: { main: '#00796b' },
       background: {
         default: '#f8f9fa',
-        paper: '#ffffff'
+        paper: '#fafafa'
       },
       text: {
         primary: '#000000',
@@ -50,7 +50,7 @@ const themeDefinitions = {
       error: { main: '#ff3f5d' },
       background: {
         default: '#000000', // Pure black from CSS
-        paper: '#121212' // Solid dark background for dialogs
+        paper: '#1e1e1e' // Solid dark background for dialogs
       },
       text: {
         primary: '#ffffff', // White text
@@ -277,7 +277,7 @@ export function buildTheme(key) {
         backgroundImage: 'none',
         background: theme.palette.mode === 'dark'
           ? theme.palette.background.paper // Solid background for dark mode
-          : '#ffffff', // Solid white for light mode
+          : theme.palette.background.paper, // Use palette for consistency
         border: theme.palette.mode === 'dark' 
           ? '1px solid rgba(255, 255, 255, 0.08)' // Border color from CSS
           : '1px solid rgba(0, 0, 0, 0.08)',
