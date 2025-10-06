@@ -24,6 +24,7 @@ from ..utils.mongo_storage import MongoStorageService
 from ..services.agent_service import AgentService
 from ..services.agent_runtime_service import AgentRuntimeService
 from ..services.file_service import FileService
+from ..services.vector_service import VectorService
 
 router = APIRouter(prefix="/api/agent-runtime", tags=["agent-runtime"]) 
 
@@ -128,6 +129,50 @@ async def run_agent(
                     logger.info(f"[AGENT_RUNTIME] Successfully uploaded file: {file_info['filename']}")
                 
                 logger.info(f"[AGENT_RUNTIME] All files uploaded successfully: {uploaded_file_names}")
+                
+                # Index uploaded files using VectorService
+                try:
+                    logger.info(f"[AGENT_RUNTIME] Starting vector indexing for collection: {collection_name}")
+                    
+                    # Get agent configuration to extract model_id
+                    model_id = None
+                    try:
+                        agent_doc = await AgentService.get_agent_by_name(agent_name, user)
+                        if agent_doc and "model" in agent_doc and isinstance(agent_doc["model"], dict):
+                            model_id = agent_doc["model"].get("id")
+                            if model_id:
+                                logger.info(f"[AGENT_RUNTIME] Found model_id from agent config: {model_id}")
+                            else:
+                                logger.warning(f"[AGENT_RUNTIME] No model id found in agent model config for {agent_name}")
+                        else:
+                            logger.warning(f"[AGENT_RUNTIME] No model config found in agent config for {agent_name}")
+                    except Exception as e:
+                        logger.error(f"[AGENT_RUNTIME] Failed to get agent config: {str(e)}")
+                    
+                    # Create payload for vector indexing
+                    vector_payload = {
+                        "collection": collection_name,
+                    }
+                    
+                    # Add model_id if available
+                    if model_id:
+                        vector_payload["model_id"] = model_id
+                    
+                    indexing_success = await VectorService.index_knowledge_files(
+                        user=user,
+                        collection=collection_name,
+                        payload=vector_payload
+                    )
+                    
+                    if indexing_success:
+                        logger.info(f"[AGENT_RUNTIME] Successfully indexed files in vector database for collection: {collection_name}")
+                    else:
+                        logger.warning(f"[AGENT_RUNTIME] Vector indexing completed with some issues for collection: {collection_name}")
+                        
+                except Exception as e:
+                    logger.error(f"[AGENT_RUNTIME] Vector indexing failed: {str(e)}")
+                    # Don't fail the entire request if indexing fails - files are still uploaded
+                    logger.warning("[AGENT_RUNTIME] Continuing without vector indexing due to indexing failure")
                 
             except Exception as e:
                 logger.error(f"[AGENT_RUNTIME] File upload failed: {str(e)}")
