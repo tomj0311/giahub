@@ -73,7 +73,7 @@ async def run_agent(
     agent_name: str = Form(...),
     prompt: str = Form(...),
     conv_id: Optional[str] = Form(None),
-    files: List[UploadFile] = File(default=[]),
+    files: Optional[List[UploadFile]] = File(None),
     user: dict = Depends(verify_token_middleware)
 ):
     """Stream agent responses using Server-Sent Events with optional file uploads.
@@ -102,11 +102,14 @@ async def run_agent(
     
     user_id = user.get("id") or user.get("userId")
     
-    # Handle file uploads if provided
+    # Handle file uploads if provided (completely optional)
     uploaded_file_names = []
-    if files and len(files) > 0:
-        # Filter out empty files
-        valid_files = [f for f in files if f.filename and f.size > 0]
+    if files:
+        # Filter out empty files safely
+        valid_files = []
+        for f in files:
+            if f and hasattr(f, 'filename') and f.filename and hasattr(f, 'size') and f.size > 0:
+                valid_files.append(f)
         
         if valid_files:
             logger.info(f"[AGENT_RUNTIME] Processing {len(valid_files)} uploaded files")
