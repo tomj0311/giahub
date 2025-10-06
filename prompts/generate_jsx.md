@@ -28,9 +28,10 @@ Forms, Tables, Dashboards, Modals, Navigation, Cards, Charts, Authentication, Fi
 
 **Validation:** Include real-time form validation with error states and user feedback
 
-**API Integration:** DO NOT USE ANY API CALLS
-
 **Accessibility:** Add ARIA labels, roles, keyboard navigation, and semantic structure
+
+**Important:**  Submit the form data using the global submitWorkflowForm function instead of calling any api 
+submitWorkflowForm(formData)
 
 <output_specifications>
 **Primary Output: Complete React JSX Component**

@@ -218,23 +218,77 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
       console.log('🌐 Workflow ID:', workflowId);
       console.log('🔑 Instance ID:', instanceId);
 
-      const submissionData = {
-        data: dataToSubmit,
-        task_id: taskData.taskSpec
-      };
+      // Check if dataToSubmit is a FormData object (for file uploads)
+      const isFormDataSubmission = dataToSubmit instanceof FormData;
+      console.log('📎 Is FormData submission:', isFormDataSubmission);
 
-      console.log('📨 Submission payload:', JSON.stringify(submissionData, null, 2));
-      console.log('🔗 API URL:', `/api/workflow/workflows/${workflowId}/instances/${instanceId}/submit-task`);
-      console.log('🔐 Headers:', headers);
+      let requestOptions;
+      
+      if (isFormDataSubmission) {
+        // Handle multipart/form-data submission (with files)
+        const formDataToSend = new FormData();
+        
+        // Add task_id as form field
+        formDataToSend.append('task_id', taskData.taskSpec);
+        
+        // Extract files and regular data from submitted FormData
+        const regularData = {};
+        const filesToUpload = [];
+        
+        for (const [key, value] of dataToSubmit.entries()) {
+          if (value instanceof File) {
+            // Collect files to upload
+            filesToUpload.push({ key, file: value });
+            console.log(`📎 Found file: ${key} = ${value.name}`);
+          } else {
+            // Regular form data
+            regularData[key] = value;
+            console.log(`📝 Found data: ${key} = ${value}`);
+          }
+        }
+        
+        // Add regular data as JSON string
+        formDataToSend.append('data', JSON.stringify(regularData));
+        
+        // Add files with sequential naming expected by backend
+        filesToUpload.forEach((item, index) => {
+          formDataToSend.append('files', item.file);
+          console.log(`📎 Appending file ${index}: ${item.file.name}`);
+        });
+        
+        console.log('📨 Sending multipart form data with', filesToUpload.length, 'files');
+        
+        // For multipart/form-data, don't set Content-Type header (browser will set it with boundary)
+        const multipartHeaders = { ...headers };
+        delete multipartHeaders['Content-Type'];
+        
+        requestOptions = {
+          method: 'POST',
+          headers: multipartHeaders,
+          body: formDataToSend,
+        };
+      } else {
+        // Handle regular JSON submission
+        const submissionData = {
+          data: dataToSubmit,
+          task_id: taskData.taskSpec
+        };
 
-      console.log('⏳ Making API request...');
-      const result = await sharedApiService.makeRequest(
-        `/api/workflow/workflows/${workflowId}/instances/${instanceId}/submit-task`,
-        {
+        console.log('📨 Submission payload:', JSON.stringify(submissionData, null, 2));
+        
+        requestOptions = {
           method: 'POST',
           headers,
           body: JSON.stringify(submissionData),
-        },
+        };
+      }
+
+      console.log('🔗 API URL:', `/api/workflow/workflows/${workflowId}/instances/${instanceId}/submit-task`);
+      console.log('⏳ Making API request...');
+      
+      const result = await sharedApiService.makeRequest(
+        `/api/workflow/workflows/${workflowId}/instances/${instanceId}/submit-task`,
+        requestOptions,
         { workflowId, instanceId, action: 'submit_task' }
       );
 

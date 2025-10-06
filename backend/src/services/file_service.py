@@ -21,6 +21,10 @@ class FileService:
 
     # Allowed file types and size limits
     ALLOWED_EXTENSIONS = {
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
         ".pdf",
         ".txt",
         ".doc",

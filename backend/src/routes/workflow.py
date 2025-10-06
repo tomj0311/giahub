@@ -2,16 +2,18 @@
 Workflow CRUD routes - refactored to use WorkflowService
 """
 
-from fastapi import APIRouter, Depends, status, Query, HTTPException, BackgroundTasks
-from typing import Dict, Any, Optional
+from fastapi import APIRouter, Depends, status, Query, HTTPException, BackgroundTasks, UploadFile, File, Form
+from typing import Dict, Any, Optional, List
 from pydantic import BaseModel
 from datetime import datetime
 import time
 import os
 import uuid
+import json
 
 from ..utils.auth import verify_token_middleware
 from ..services.workflow_service_persistent import WorkflowServicePersistent
+from ..services.file_service import FileService
 from ..utils.log import logger
 
 router = APIRouter(tags=["workflows"])
@@ -40,15 +42,17 @@ async def start_workflow_by_workflow_id(
     # Add tenant info to initial data
     initial_data = request.get('initial_data', {})
     tenant_id = user.get('tenantId') or user.get('tenant_id')
+    
+    # Generate instance_id first
+    instance_id = uuid.uuid4().hex[:6]
+
     initial_data.update({
         "workflow_id": workflow_id,
+        "instance_id": instance_id,
         "tenant_id": tenant_id,
         "started_by": user.get('username') or user.get('email', 'unknown'),
         "started_at": str(datetime.now())
     })
-    
-    # Generate instance_id first
-    instance_id = uuid.uuid4().hex[:6]
     
     # Start workflow in background with instance_id
     background_tasks.add_task(_run_workflow_background, workflow_id, instance_id, initial_data, user)
@@ -175,26 +179,57 @@ async def _submit_task_background(workflow_id: str, instance_id: str, task_id: s
 async def submit_user_task(
     workflow_id: str,
     instance_id: str,
-    request: dict,
-    background_tasks: BackgroundTasks,
+    task_id: str = Form(...),
+    data: str = Form("{}"),
+    files: List[UploadFile] = File(None),
+    background_tasks: BackgroundTasks = None,
     user: dict = Depends(verify_token_middleware)
 ):
-    """Submit user task data and continue workflow"""
+    """Submit user task data and continue workflow (with optional file uploads)"""
     try:
-        # Extract task_id and task_data from request
-        task_id = request.get("task_id")
-        task_data = request.get("data", {})
+        # Parse task_data from form
+        task_data = json.loads(data) if data else {}
         
-        if not task_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="task_id is required in request body"
-            )
+        # Handle file uploads if present
+        if files and any(f.filename for f in files):
+            user_id = user.get('userId') or user.get('user_id') or user.get('id', 'unknown')
+            tenant_id = await FileService.validate_tenant_access(user)
+            
+            # Upload files to: uploads/{user_id}/{workflow_id}/{instance_id}/
+            upload_path = f"uploads/{user_id}/{workflow_id}/{instance_id}"
+            
+            uploaded_files = []
+            for file in files:
+                if not file.filename:
+                    continue
+                try:
+                    file_info = await FileService.upload_file_to_storage(
+                        file, tenant_id, user_id, workflow_id, path=upload_path
+                    )
+                    uploaded_files.append({
+                        "filename": file_info["filename"],
+                        "file_path": file_info["file_path"],
+                        "file_size": file_info["file_size"],
+                        "content_type": file_info.get("content_type")
+                    })
+                    logger.info(f"Uploaded file: {file_info['filename']} to {file_info['file_path']}")
+                except Exception as e:
+                    logger.error(f"Failed to upload file {file.filename}: {str(e)}")
+            
+            # Add file references to task_data
+            if uploaded_files:
+                task_data["uploaded_files"] = uploaded_files
         
         # Submit task in background
         background_tasks.add_task(_submit_task_background, workflow_id, instance_id, task_id, task_data, user)
         
         return {"success": True, "message": "Task submitted in background", "task_id": task_id}
+    except json.JSONDecodeError:
+        logger.error(f"Invalid JSON in data field")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid JSON format in data field"
+        )
     except Exception as e:
         logger.error(f"Error executing task: {e}")
         raise HTTPException(
