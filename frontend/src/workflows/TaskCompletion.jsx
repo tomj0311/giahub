@@ -29,7 +29,6 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
   const [taskData, setTaskData] = useState(null);
   const [formData, setFormData] = useState({});
 
@@ -265,12 +264,9 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
 
       if (result.success) {
         console.log('✨ Task submitted successfully!');
-        setSuccess(true);
         // Call onSuccess callback if provided (dialog mode)
         if (onSuccess) {
-          setTimeout(() => {
-            onSuccess();
-          }, 1500); // Show success message briefly before closing
+          onSuccess();
         }
       } else {
         console.error('❌ API returned success=false:', result);
@@ -297,39 +293,6 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
       }}>
         <CircularProgress size={40} />
         <Typography sx={{ ml: 2 }}>Loading task...</Typography>
-      </Box>
-    );
-  }
-
-  if (success) {
-    return (
-      <Box sx={{ 
-        minHeight: isDialog ? '400px' : '100vh', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        background: isDialog ? 'transparent' : (theme.custom?.backgroundGradient || theme.palette.background.default),
-        p: 2
-      }}>
-        <Card sx={{ maxWidth: 500, width: '100%' }}>
-          <CardContent sx={{ textAlign: 'center', p: 4 }}>
-            <CheckCircle size={64} color={theme.palette.success.main} style={{ marginBottom: 16 }} />
-            <Typography variant="h5" gutterBottom>
-              Task Completed Successfully!
-            </Typography>
-            <Typography color="text.secondary" sx={{ mb: 3 }}>
-              Your task has been submitted and the workflow will continue processing.
-            </Typography>
-            {!isDialog && (
-              <Button 
-                variant="contained" 
-                onClick={() => navigate('/dashboard')}
-              >
-                Go to Dashboard
-              </Button>
-            )}
-          </CardContent>
-        </Card>
       </Box>
     );
   }
