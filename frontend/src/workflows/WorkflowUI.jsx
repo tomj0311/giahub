@@ -569,7 +569,7 @@ function WorkflowUI({ user }) {
             >
               <XCircle size={64} color={theme.palette.error.main} />
               <Typography variant="h5" color="error" gutterBottom>
-                Workflow Failed
+                Failed
               </Typography>
               <Alert severity="error" sx={{ maxWidth: 600, width: '100%' }}>
                 <Typography variant="body1" gutterBottom fontWeight="bold">
@@ -596,7 +596,7 @@ function WorkflowUI({ user }) {
                 }}
                 sx={{ mt: 2 }}
               >
-                Back to Workflows
+                Back
               </Button>
             </Box>
           )}

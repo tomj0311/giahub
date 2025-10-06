@@ -61,7 +61,7 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
   // Listen for form submission events from dynamic component
   useEffect(() => {
     const handleDynamicFormSubmit = (event) => {
-      console.log('📨 Received workflowFormSubmit event from dynamic component:', event.detail);
+      console.log('📨 Received FormSubmit event from dynamic component:', event.detail);
       if (event.detail && taskData) {
         handleSubmit(event.detail);
       }
