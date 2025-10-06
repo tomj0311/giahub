@@ -34,3 +34,7 @@ redis==5.0.1
 celery==5.3.4
 
 duckduckgo-search>=6.2.0,<9.0.0
+
+# Twilio Communication Services
+twilio==8.10.0
+sendgrid==6.10.0
