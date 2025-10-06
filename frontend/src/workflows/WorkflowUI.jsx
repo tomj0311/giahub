@@ -89,7 +89,7 @@ function WorkflowUI({ user }) {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
         },
-        { action: 'get_configs' }
+        { action: 'get_configs', bypassCache: true }
       );
 
       const workflow = configResult.data.configurations?.find(w => w.name === workflowName);
@@ -119,7 +119,7 @@ function WorkflowUI({ user }) {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
         },
-        { action: 'get_configs' }
+        { action: 'get_configs', bypassCache: true }
       );
 
       if (result.success) {
@@ -150,7 +150,7 @@ function WorkflowUI({ user }) {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
         },
-        { action: 'get_configs' }
+        { action: 'get_configs', bypassCache: true }
       );
 
       const workflow = configResult.data.configurations?.find(w => w.name === workflowName);
@@ -172,7 +172,7 @@ function WorkflowUI({ user }) {
             initial_data: { workflow_name: workflowName }
           }),
         },
-        { workflowId: wfId, action: 'start_workflow' }
+        { workflowId: wfId, action: 'start_workflow', bypassCache: true }
       );
 
       const instId = startResult.data.instance_id;
@@ -200,9 +200,6 @@ function WorkflowUI({ user }) {
     const check = async () => {
       try {
         console.log('🔍 Polling instance:', instId);
-        
-        // Invalidate cache to get fresh data
-        sharedApiService.invalidateCache(`/api/workflow/workflows/${wfId}/instances/${instId}`);
         
         const result = await sharedApiService.makeRequest(
           `/api/workflow/workflows/${wfId}/instances/${instId}`,
@@ -286,6 +283,22 @@ function WorkflowUI({ user }) {
     setReadyTaskData(null);
     setState('running');
     pollStatus(workflowId, instanceId);
+  };
+
+  const handleResetWorkflow = () => {
+    // Reset all state
+    hasStarted.current = false;
+    setWorkflowId(null);
+    setInstanceId(null);
+    setPendingTaskId(null);
+    setReadyTaskData(null);
+    setState('idle');
+    setError('');
+    if (pollInterval.current) clearInterval(pollInterval.current);
+    
+    // Clear URL and reload workflows
+    setSearchParams({});
+    loadWorkflows();
   };
 
   const getStateIcon = () => {
@@ -525,25 +538,8 @@ function WorkflowUI({ user }) {
             >
               <CheckCircle size={64} color={theme.palette.success.main} />
               <Typography variant="h5" color="success.main">
-                Workflow Completed!
+                Success!
               </Typography>
-              <Button variant="contained" onClick={() => {
-                // Reset all state
-                hasStarted.current = false;
-                setWorkflowId(null);
-                setInstanceId(null);
-                setPendingTaskId(null);
-                setReadyTaskData(null);
-                setState('idle');
-                setError('');
-                if (pollInterval.current) clearInterval(pollInterval.current);
-                
-                // Clear URL and reload workflows
-                setSearchParams({});
-                loadWorkflows();
-              }}>
-                Back to Workflows
-              </Button>
             </Box>
           )}
 
@@ -561,7 +557,7 @@ function WorkflowUI({ user }) {
             >
               <XCircle size={64} color={theme.palette.error.main} />
               <Typography variant="h5" color="error" gutterBottom>
-                Failed
+                Failure
               </Typography>
               <Alert severity="error" sx={{ maxWidth: 600, width: '100%' }}>
                 <Typography variant="body1" gutterBottom fontWeight="bold">
@@ -577,27 +573,19 @@ function WorkflowUI({ user }) {
                     mt: 1 
                   }}
                 >
-                  {error || 'The workflow encountered an error during execution'}
+                  {error || 'An error occurred during execution'}
                 </Typography>
               </Alert>
+            </Box>
+          )}
+
+          {/* Single Back button for both completed and failed states */}
+          {workflowName && (state === 'completed' || state === 'failed') && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
               <Button 
                 variant="contained" 
-                onClick={() => {
-                  // Reset all state
-                  hasStarted.current = false;
-                  setWorkflowId(null);
-                  setInstanceId(null);
-                  setPendingTaskId(null);
-                  setReadyTaskData(null);
-                  setState('idle');
-                  setError('');
-                  if (pollInterval.current) clearInterval(pollInterval.current);
-                  
-                  // Clear URL and reload workflows
-                  setSearchParams({});
-                  loadWorkflows();
-                }}
-                sx={{ mt: 2 }}
+                onClick={handleResetWorkflow}
+                size="large"
               >
                 Back
               </Button>

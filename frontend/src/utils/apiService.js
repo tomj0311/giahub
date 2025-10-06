@@ -40,7 +40,15 @@ class SharedApiService {
      * @returns {Promise} API response
      */
     async makeRequest(endpoint, options = {}, params = {}) {
-        const requestKey = this.getRequestKey(endpoint, params);
+        // Extract bypassCache flag and remove it from params for key generation
+        const { bypassCache, ...cacheParams } = params;
+        const requestKey = this.getRequestKey(endpoint, cacheParams);
+        
+        // If bypassCache is true, skip all caching logic
+        if (bypassCache) {
+            console.log('🚫 Bypassing cache for:', endpoint);
+            return this._executeRequest(endpoint, options);
+        }
         
         // Return cached result if valid
         if (this.isCacheValid(requestKey)) {
