@@ -329,7 +329,7 @@ function WorkflowUI({ user }) {
       case 'running':
         return 'Running';
       case 'task_ready':
-        return 'Task Ready';
+        return 'Ready';
       case 'completed':
         return 'Completed';
       case 'failed':
