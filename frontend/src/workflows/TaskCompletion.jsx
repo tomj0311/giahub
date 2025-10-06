@@ -303,9 +303,10 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
       background: isDialog ? 'transparent' : (theme.custom?.backgroundGradient || theme.palette.background.default),
       p: 2,
       overflow: 'auto',
-      maxHeight: isDialog ? '80vh' : 'none'
+      maxHeight: isDialog ? '80vh' : 'none',
+      width: '100%'
     }}>
-      <Box sx={{ maxWidth: 600, mx: 'auto', pt: isDialog ? 1 : 4 }}>
+      <Box sx={{ maxWidth: isDialog ? 600 : '100%', mx: isDialog ? 'auto' : 0, pt: isDialog ? 1 : 0, width: '100%' }}>
         {/* Header */}
         {isDialog && (
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', mb: 2 }}>
