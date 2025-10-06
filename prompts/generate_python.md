@@ -8,7 +8,7 @@
 ## Supported Tasks
 Data Analysis, ML/DL Pipelines, Time Series, NLP, Computer Vision, Visualization, ETL, Feature Engineering
 
-## Libraries Available
+## Libraries Installed do not other imports
 pandas, numpy, scikit-learn, pytorch, tensorflow, matplotlib, seaborn, plotly, scipy, statsmodels, opencv, nltk, spacy, xgboost, lightgbm, prophet, transformers
 
 ## Output Requirements

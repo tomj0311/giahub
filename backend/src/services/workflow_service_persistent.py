@@ -36,6 +36,20 @@ from .workflow_notification_service import TaskNotificationService
 logger.debug("[WORKFLOW] Persistent service module loaded")
 
 
+def _clean_data_for_serialization(data):
+    """Recursively clean data to make it JSON serializable - convert ObjectId to string"""
+    if isinstance(data, dict):
+        return {k: _clean_data_for_serialization(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [_clean_data_for_serialization(item) for item in data]
+    elif isinstance(data, ObjectId):
+        return str(data)
+    elif isinstance(data, datetime):
+        return data.isoformat()
+    else:
+        return data
+
+
 class WorkflowServicePersistent:
     """Service for handling BPMN workflow execution and management with state persistence"""
     @classmethod
@@ -529,6 +543,9 @@ class WorkflowServicePersistent:
             if not instance_id:
                 instance_id = uuid.uuid4().hex[:6]
 
+            # Clean workflow data before serialization
+            workflow.data = _clean_data_for_serialization(workflow.data)
+
             serializer = BpmnWorkflowSerializer()
             serialized_json = serializer.serialize_json(workflow)
             logger.debug(f"[WORKFLOW] Workflow serialized (chars={len(serialized_json)}) for instance='{instance_id}'")
@@ -586,15 +603,11 @@ class WorkflowServicePersistent:
     async def update_workflow_instance(workflow, instance_id, tenant_id=None):
         """Update existing workflow instance in MongoDB"""
         try:
+            # Clean workflow data before serialization
+            workflow.data = _clean_data_for_serialization(workflow.data)
+            
             serializer = BpmnWorkflowSerializer()
-            try:
-                serialized_json = serializer.serialize_json(workflow)
-            except TypeError as e:
-                logger.error(f"[WORKFLOW] JSON serialization error: {e}")
-                # Use default=str to handle non-serializable objects
-                dct = serializer.to_dict(workflow)
-                dct[serializer.VERSION_KEY] = serializer.VERSION
-                serialized_json = json.dumps(dct, default=str)
+            serialized_json = serializer.serialize_json(workflow)
 
             update_data = {
                 "serialized_data": json.loads(serialized_json),
