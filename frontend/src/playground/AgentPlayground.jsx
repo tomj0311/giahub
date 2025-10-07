@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import BPMN from '../components/bpmn/BPMN'
 import DynamicComponent from '../components/dynamic/DynamicComponent'
+import FilePreview from '../components/FilePreview'
 import {
   Box,
   Paper,
@@ -366,7 +367,12 @@ export default function AgentPlayground({ user }) {
     if (!selected || !prompt.trim()) return
     setRunning(true)
 
-    const userMsg = { role: 'user', content: prompt, ts: Date.now() }
+    const userMsg = { 
+      role: 'user', 
+      content: prompt, 
+      ts: Date.now(),
+      files: stagedFiles.length > 0 ? stagedFiles : undefined
+    }
     const newMessages = [...messages, userMsg]
     setMessages(newMessages)
     
@@ -409,7 +415,8 @@ export default function AgentPlayground({ user }) {
       const names = stagedFiles.map(sf => sf.name)
       currentUploadedFiles = [...uploadedFiles, ...names]
       setUploadedFiles(currentUploadedFiles)
-      setStagedFiles([])
+      // Don't clear staged files - keep preview visible
+      // setStagedFiles([])
     }
 
     // Add placeholder message for agent response
@@ -739,20 +746,22 @@ export default function AgentPlayground({ user }) {
       paddingBottom: `${inputHeight}px`
     }}>
       <Paper variant="section" elevation={0} square sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, background: 'transparent', boxShadow: 'none', border: 'none' }}>
-        {/* Messages area */}
         <Box
           ref={scrollRef}
           sx={{ p: isSmall ? 1 : 2, overflow: 'visible', display: 'flex', flexDirection: 'column', gap: 1, mb: 4 }}
         >
           {messages.map((m, idx) => (
-            <Box key={idx} sx={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
+            <React.Fragment key={idx}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
               <Typography variant="caption" sx={{ opacity: 0.6, fontSize: 11, textTransform: 'uppercase' }}>
                 {m.role}{m.streaming ? ' (streaming...)' : ''}
               </Typography>
               {m.role === 'user' ? (
-                <Typography variant="body2" dir="auto" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxWidth: '90ch', unicodeBidi: 'plaintext' }}>
-                  {m.content}
-                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'flex-end', maxWidth: '90ch' }}>
+                  <Typography variant="body2" dir="auto" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', unicodeBidi: 'plaintext' }}>
+                    {m.content}
+                  </Typography>
+                </Box>
               ) : (
                 <Box dir="auto" sx={{
                   fontSize: 15,
@@ -978,7 +987,9 @@ export default function AgentPlayground({ user }) {
                 </Box>
               )}
             </Box>
+          </React.Fragment>
           ))}
+          
           {!autoScroll && !atBottom && messages.length > 0 && (
             <Box sx={{ position: 'sticky', bottom: 4, alignSelf: 'center' }}>
               <Tooltip title="Jump to latest" arrow placement="top" disableInteractive>
