@@ -12,67 +12,31 @@ const GatewayNode = ({ data }) => {
 
   return (
     <div className="gateway-node">
-      {/* LEFT SIDE - Both source and target */}
+      {/* INPUT SIDES - LEFT and TOP (target handles only) */}
       <Handle
         type="target"
         position={Position.Left}
-        id="gateway-input"
+        id="gateway-input-left"
         className="handle"
-        style={{ left: '-8px', top: '45%' }}
+        style={{ left: '-8px', top: '50%' }}
         isConnectable={true}
       />
-      <Handle
-        type="source"
-        position={Position.Left}
-        id="gateway-left-source"
-        className="handle"
-        style={{ left: '-8px', top: '55%' }}
-        isConnectable={true}
-      />
-      
-      {/* TOP SIDE - Both source and target */}
       <Handle
         type="target"
         position={Position.Top}
         id="gateway-input-top"
         className="handle"
-        style={{ top: '-8px', left: '45%' }}
-        isConnectable={true}
-      />
-      <Handle
-        type="source"
-        position={Position.Top}
-        id="gateway-top-source"
-        className="handle"
-        style={{ top: '-8px', left: '55%' }}
+        style={{ top: '-8px', left: '50%' }}
         isConnectable={true}
       />
       
-      {/* RIGHT SIDE - Both source and target */}
-      <Handle
-        type="target"
-        position={Position.Right}
-        id="gateway-right-target"
-        className="handle"
-        style={{ right: '-8px', top: '45%' }}
-        isConnectable={true}
-      />
+      {/* OUTPUT SIDES - RIGHT and BOTTOM (source handles only) */}
       <Handle
         type="source"
         position={Position.Right}
-        id="gateway-output"
+        id="gateway-output-right"
         className="handle"
-        style={{ right: '-8px', top: '55%' }}
-        isConnectable={true}
-      />
-      
-      {/* BOTTOM SIDE - Both source and target */}
-      <Handle
-        type="target"
-        position={Position.Bottom}
-        id="gateway-bottom-target"
-        className="handle"
-        style={{ bottom: '-8px', left: '45%' }}
+        style={{ right: '-8px', top: '50%' }}
         isConnectable={true}
       />
       <Handle
@@ -80,7 +44,25 @@ const GatewayNode = ({ data }) => {
         position={Position.Bottom}
         id="gateway-output-bottom"
         className="handle"
-        style={{ bottom: '-8px', left: '55%' }}
+        style={{ bottom: '-8px', left: '50%' }}
+        isConnectable={true}
+      />
+      
+      {/* Additional output handles for multiple paths from gateway */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="gateway-output-right-alt"
+        className="handle"
+        style={{ right: '-8px', top: '35%' }}
+        isConnectable={true}
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="gateway-output-bottom-alt"
+        className="handle"
+        style={{ bottom: '-8px', left: '35%' }}
         isConnectable={true}
       />
       

@@ -26,7 +26,7 @@ _INCOMPLETE_CACHE_TTL = float(os.getenv("INCOMPLETE_CACHE_TTL", "0.5"))  # secon
 async def _run_workflow_background(workflow_id: str, instance_id: str, initial_data: dict, user: dict):
     """Run workflow in background"""
     try:
-        result = await WorkflowServicePersistent.run_workflow(workflow_id, initial_data, user, instance_id=instance_id)
+        await WorkflowServicePersistent.run_workflow(workflow_id, initial_data, user, instance_id=instance_id)
         logger.info(f"Workflow {workflow_id} instance {instance_id} completed in background")
     except Exception as e:
         logger.error(f"Background workflow {workflow_id} instance {instance_id} failed: {str(e)}")
