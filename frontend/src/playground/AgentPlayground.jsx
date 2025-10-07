@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import BPMN from '../components/bpmn/BPMN'
 import DynamicComponent from '../components/dynamic/DynamicComponent'
+import FilePreview from '../components/FilePreview'
 import {
   Box,
   Paper,
@@ -135,6 +136,10 @@ export default function AgentPlayground({ user }) {
   const [stagedFiles, setStagedFiles] = useState([])
   const [uploadedFiles, setUploadedFiles] = useState([])
   const [uploading, setUploading] = useState(false)
+
+  // File preview
+  const [previewFile, setPreviewFile] = useState(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   // Session collection for uploaded knowledge (uuid-like hex)
   const [sessionCollection, setSessionCollection] = useState(() => genUuidHex())
@@ -1022,6 +1027,8 @@ export default function AgentPlayground({ user }) {
             clearChat={clearChat}
             onHeightChange={handleInputHeightChange}
             containerEl={mainContainerRef.current}
+            setPreviewFile={setPreviewFile}
+            setPreviewOpen={setPreviewOpen}
           />, portalRef.current
         )}
       </Paper>
@@ -1137,6 +1144,37 @@ export default function AgentPlayground({ user }) {
           <Button onClick={() => setHistoryOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      {/* File Preview Dialog */}
+      <Dialog 
+        open={previewOpen} 
+        onClose={() => setPreviewOpen(false)} 
+        fullWidth 
+        maxWidth="md"
+        PaperProps={{
+          sx: {
+            height: '80vh',
+            maxHeight: '80vh'
+          }
+        }}
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            File Preview
+            {previewFile && (
+              <Typography variant="caption" color="text.secondary">
+                {previewFile.name}
+              </Typography>
+            )}
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers sx={{ p: 1 }}>
+          {previewFile && <FilePreview file={previewFile} />}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPreviewOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }
@@ -1172,7 +1210,9 @@ const ChatInputBar = React.memo(function ChatInputBar({
   openHistory,
   clearChat,
   onHeightChange,
-  containerEl
+  containerEl,
+  setPreviewFile,
+  setPreviewOpen
 }) {
   const containerRef = useRef(null)
   const inputRef = useRef(null)
@@ -1417,7 +1457,26 @@ const ChatInputBar = React.memo(function ChatInputBar({
         </label>
 
         {stagedFiles.map((f, idx) => (
-          <Chip key={`${f.name}-${idx}`} size="small" color="primary" variant="outlined" label={f.name.length > 15 ? f.name.slice(0, 12) + '...' : f.name} onDelete={() => setStagedFiles(prev => prev.filter((_, i) => i !== idx))} sx={{ height: 20, fontSize: '10px' }} />
+          <Chip 
+            key={`${f.name}-${idx}`} 
+            size="small" 
+            color="primary" 
+            variant="outlined" 
+            label={f.name.length > 15 ? f.name.slice(0, 12) + '...' : f.name} 
+            onClick={() => {
+              setPreviewFile(f.file)
+              setPreviewOpen(true)
+            }}
+            onDelete={() => setStagedFiles(prev => prev.filter((_, i) => i !== idx))} 
+            sx={{ 
+              height: 20, 
+              fontSize: '10px',
+              cursor: 'pointer',
+              '&:hover': {
+                backgroundColor: 'primary.light'
+              }
+            }} 
+          />
         ))}
         {uploadedFiles.map((name, idx) => (
           <Chip key={`up-${name}-${idx}`} size="small" color="success" variant="filled" label={name.length > 15 ? name.slice(0, 12) + '...' : name} sx={{ height: 20, fontSize: '10px' }} />
