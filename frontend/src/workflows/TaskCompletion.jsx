@@ -31,6 +31,7 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
   const [error, setError] = useState('');
   const [taskData, setTaskData] = useState(null);
   const [formData, setFormData] = useState({});
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // Helper function to extract JSX code from markdown blocks
   const extractJSXFromMarkdown = (script) => {
@@ -198,6 +199,31 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
       ...prev,
       [fieldId]: value
     }));
+    
+    // Clear error for this field when user starts typing
+    if (fieldErrors[fieldId]) {
+      setFieldErrors(prev => ({
+        ...prev,
+        [fieldId]: null
+      }));
+    }
+  };
+
+  // Simple validation function
+  const validateRequired = () => {
+    const errors = {};
+    if (taskData?.formFields) {
+      taskData.formFields.forEach(field => {
+        const isRequired = field.required === 'true' || field.required === true;
+        if (isRequired) {
+          const value = formData[field.id];
+          if (!value || (typeof value === 'string' && value.trim() === '')) {
+            errors[field.id] = `${field.label || field.id} is required`;
+          }
+        }
+      });
+    }
+    return errors;
   };
 
   const handleSubmit = async (submittedData = null) => {
@@ -205,6 +231,16 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
     console.log('📦 submittedData:', submittedData);
     console.log('📝 formData:', formData);
     console.log('🔧 taskData:', taskData);
+    
+    // Validate required fields if using form fields (not dynamic component)
+    if (submittedData === null && taskData?.formFields?.length > 0) {
+      const errors = validateRequired();
+      if (Object.keys(errors).length > 0) {
+        setFieldErrors(errors);
+        setError('Please fill in all required fields.');
+        return;
+      }
+    }
     
     try {
       setSubmitting(true);
@@ -268,18 +304,26 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
           body: formDataToSend,
         };
       } else {
-        // Handle regular JSON submission
-        const submissionData = {
-          data: dataToSubmit,
-          task_id: taskData.taskSpec
-        };
-
-        console.log('📨 Submission payload:', JSON.stringify(submissionData, null, 2));
+        // Handle regular form submission (no files)
+        const formDataToSend = new FormData();
+        
+        // Add task_id as form field
+        formDataToSend.append('task_id', taskData.taskSpec);
+        
+        // Add data as JSON string
+        formDataToSend.append('data', JSON.stringify(dataToSubmit));
+        
+        console.log('📨 Sending form data without files');
+        console.log('📝 Data:', JSON.stringify(dataToSubmit, null, 2));
+        
+        // For form-data, don't set Content-Type header (browser will set it)
+        const formHeaders = { ...headers };
+        delete formHeaders['Content-Type'];
         
         requestOptions = {
           method: 'POST',
-          headers,
-          body: JSON.stringify(submissionData),
+          headers: formHeaders,
+          body: formDataToSend,
         };
       }
 
@@ -397,6 +441,8 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
                           type="datetime-local"
                           variant="outlined"
                           InputLabelProps={{ shrink: true }}
+                          error={!!fieldErrors[field.id]}
+                          helperText={fieldErrors[field.id]}
                         />
                       ) : (
                         <TextField
@@ -407,6 +453,8 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
                           required={field.required === 'true' || field.required === true}
                           type={field.type === 'number' ? 'number' : 'text'}
                           variant="outlined"
+                          error={!!fieldErrors[field.id]}
+                          helperText={fieldErrors[field.id]}
                         />
                       )}
                     </Box>
