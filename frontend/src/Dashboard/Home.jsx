@@ -476,7 +476,7 @@ export default function Home({ user }) {
       {/* Welcome Section */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold' }}>
-          Welcome back, {user?.name || 'User'}! 🤖
+          Welcome back, {user?.name || 'User'}!
         </Typography>
         <Typography variant="body1" color="text.secondary">
           Manage your AI agents and track recent conversations.

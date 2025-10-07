@@ -190,16 +190,6 @@ const AgentPerformanceTable = ({ agents, loading }) => {
       }}>
         <CardContent sx={{ p: theme.spacing(3) }}>
           <Box display="flex" alignItems="center" mb={2} sx={{ width: '100%' }}>
-            <Avatar sx={{ 
-              backgroundColor: alpha(theme.palette.primary.main, 0.1),
-              color: theme.palette.primary.main,
-              mr: 2,
-              width: 32,
-              height: 32,
-              flexShrink: 0
-            }}>
-              <BarChart3 size={16} />
-            </Avatar>
             <Typography 
               variant="h6" 
               sx={{ 
@@ -367,16 +357,6 @@ const RecentConversationsTable = ({ conversations, loading }) => {
       }}>
         <CardContent sx={{ p: theme.spacing(3) }}>
           <Box display="flex" alignItems="center" mb={2} sx={{ width: '100%' }}>
-            <Avatar sx={{ 
-              backgroundColor: alpha(theme.palette.secondary.main, 0.1),
-              color: theme.palette.secondary.main,
-              mr: 2,
-              width: 32,
-              height: 32,
-              flexShrink: 0
-            }}>
-              <Activity size={16} />
-            </Avatar>
             <Typography 
               variant="h6" 
               sx={{ 
@@ -677,16 +657,6 @@ const Analytics = () => {
       <Fade in={true} timeout={theme.transitions.duration.enteringScreen}>
         <Box>
           <Box display="flex" alignItems="center" mb={theme.custom?.layout?.section || 4} sx={{ width: '100%' }}>
-            <Avatar sx={{ 
-              backgroundColor: alpha(theme.palette.primary.main, 0.1),
-              color: theme.palette.primary.main,
-              mr: 2,
-              width: 32,
-              height: 32,
-              flexShrink: 0
-            }}>
-              <TrendingUp size={16} />
-            </Avatar>
             <Typography 
               variant="h4" 
               sx={{

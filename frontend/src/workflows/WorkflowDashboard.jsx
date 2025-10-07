@@ -293,7 +293,7 @@ export default function WorkflowDashboard({ user }) {
       {/* Welcome Section */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold' }}>
-          Workflow Dashboard 🔄
+          Workflow Dashboard
         </Typography>
         <Typography variant="body1" color="text.secondary">
           Manage your BPMN workflows and process configurations.

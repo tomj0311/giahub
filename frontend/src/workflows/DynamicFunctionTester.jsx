@@ -322,7 +322,7 @@ const DynamicFunctionTester = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
           <Functions sx={{ mr: 2, color: theme.palette.primary.main }} />
           <Typography variant="h4" component="h1" fontWeight="bold">
-            🧪 Dynamic Function Tester
+            Dynamic Function Tester
           </Typography>
         </Box>
         <Typography variant="body1" color="text.secondary">
