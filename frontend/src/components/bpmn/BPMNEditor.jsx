@@ -560,18 +560,53 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
       const sourceNode = nodes.find(n => n.id === params.source);
       const targetNode = nodes.find(n => n.id === params.target);
       
-      // Determine if this should be a message flow based on nodes being in different participants
-      let isMessageFlow = false;
+      // BPMN 2.0 Validation Rules (Simple)
       if (sourceNode && targetNode) {
+        // Rule 1: Start events can only have outgoing flows (already handled by handles)
+        // Rule 2: End events can only have incoming flows (already handled by handles)
+        
+        // Rule 3: Check for duplicate connections
+        const existingConnection = edges.find(edge => 
+          edge.source === params.source && edge.target === params.target
+        );
+        if (existingConnection) {
+          console.warn('BPMN Rule: Duplicate connection not allowed');
+          return; // Block duplicate connections
+        }
+        
+        // Rule 4: Prevent self-loops on non-gateway elements
+        if (params.source === params.target) {
+          console.warn('BPMN Rule: Self-loops not allowed');
+          return;
+        }
+        
+        // Rule 5: Message flows only between different participants
         const sourceParticipant = sourceNode.parentNode || sourceNode.data?.participantId;
         const targetParticipant = targetNode.parentNode || targetNode.data?.participantId;
         
-        // If nodes are in different participants or one has a participant and the other doesn't
+        let isMessageFlow = false;
         if ((sourceParticipant && targetParticipant && sourceParticipant !== targetParticipant) ||
             (sourceParticipant && !targetParticipant) ||
             (!sourceParticipant && targetParticipant)) {
           isMessageFlow = true;
         }
+        
+        // Rule 6: Sequence flows only within same participant
+        if (!isMessageFlow && sourceParticipant && targetParticipant && sourceParticipant !== targetParticipant) {
+          console.warn('BPMN Rule: Use message flows between different participants');
+          isMessageFlow = true; // Auto-correct to message flow
+        }
+      }
+
+      // Determine flow type
+      const sourceParticipant = sourceNode?.parentNode || sourceNode?.data?.participantId;
+      const targetParticipant = targetNode?.parentNode || targetNode?.data?.participantId;
+      
+      let isMessageFlow = false;
+      if ((sourceParticipant && targetParticipant && sourceParticipant !== targetParticipant) ||
+          (sourceParticipant && !targetParticipant) ||
+          (!sourceParticipant && targetParticipant)) {
+        isMessageFlow = true;
       }
 
       // Generate a short BPMN-compliant ID for the edge
@@ -580,7 +615,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
 
       const newEdge = {
         ...params,
-        id: edgeId, // Use our generated short ID instead of ReactFlow's auto-generated one
+        id: edgeId,
         type: 'smoothstep',
         data: {
           ...(isMessageFlow ? { isMessageFlow: true } : {}),
@@ -600,7 +635,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
         return finalEdges;
       });
     },
-    [setEdges, nodes, updateEdgesWithArrows],
+    [setEdges, nodes, updateEdgesWithArrows, edges, saveToHistory, readOnly],
   );
 
   const onDragOver = useCallback((event) => {
