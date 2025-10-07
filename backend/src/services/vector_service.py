@@ -238,22 +238,36 @@ class VectorService:
                             continue
                         
                         if file_ext in ['.pdf']:
-                            knowledge_base = PDFKnowledgeBase(path=str(temp_path), vector_db=vector_db)
+                            try:
+                                knowledge_base = PDFKnowledgeBase(path=str(temp_path), vector_db=vector_db)
+                            except Exception as e:
+                                logger.warning(f"[VECTOR] PDF processing failed for {filename}, falling back to text processing: {e}")
+                                knowledge_base = TextKnowledgeBase(path=str(temp_path), vector_db=vector_db)
                         elif file_ext in ['.docx', '.doc']:
                             knowledge_base = DocxKnowledgeBase(path=str(temp_path), vector_db=vector_db)
                         elif file_ext in ['.txt', '.py', '.js', '.json', '.csv']:
                             knowledge_base = TextKnowledgeBase(path=str(temp_path), vector_db=vector_db)
                         else:
-                            # Use combined knowledge base for unknown types
-                            pdf_kb = PDFKnowledgeBase(path=str(temp_path), vector_db=vector_db)
+                            # Use combined knowledge base for unknown types, but handle PDF failures gracefully
                             text_kb = TextKnowledgeBase(path=str(temp_path), vector_db=vector_db)
                             docx_kb = DocxKnowledgeBase(path=str(temp_path), vector_db=vector_db)
-                            knowledge_base = CombinedKnowledgeBase(sources=[pdf_kb, text_kb, docx_kb], vector_db=vector_db)
+                            sources = [text_kb, docx_kb]
+                            
+                            try:
+                                pdf_kb = PDFKnowledgeBase(path=str(temp_path), vector_db=vector_db)
+                                sources.insert(0, pdf_kb)  # Add PDF processing if available
+                            except Exception as e:
+                                logger.warning(f"[VECTOR] PDF processing not available for {filename}, using text/docx only: {e}")
+                            
+                            knowledge_base = CombinedKnowledgeBase(sources=sources, vector_db=vector_db)
                         
                         if knowledge_base:
-                            logger.info(f"[VECTOR] Loading file {filename} using knowledge base")
-                            knowledge_base.load(recreate=False, upsert=True)
-                            logger.info(f"[VECTOR] Successfully indexed {filename}")
+                            try:
+                                logger.info(f"[VECTOR] Loading file {filename} using knowledge base")
+                                knowledge_base.load(recreate=False, upsert=True)
+                                logger.info(f"[VECTOR] Successfully indexed {filename}")
+                            except Exception as e:
+                                logger.error(f"[VECTOR] Failed to load knowledge base for {filename}: {e}")
                         else:
                             logger.error(f"[VECTOR] No suitable knowledge base found for {filename}")
                 

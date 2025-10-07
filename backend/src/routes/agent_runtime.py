@@ -73,7 +73,7 @@ async def run_agent(
     agent_name: str = Form(...),
     prompt: str = Form(...),
     conv_id: Optional[str] = Form(None),
-    files: Optional[List[UploadFile]] = File(None),
+    files: List[UploadFile] = File(default=[]),
     user: dict = Depends(verify_token_middleware)
 ):
     """Stream agent responses using Server-Sent Events with optional file uploads.
