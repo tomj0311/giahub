@@ -1115,6 +1115,7 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                               <option value="string">String</option>
                               <option value="number">Number</option>
                               <option value="boolean">Boolean</option>
+                              <option value="datetime">DateTime</option>
                             </TextField>
                             <label style={{ display: 'flex', alignItems: 'center', fontSize: '12px' }}>
                               <input

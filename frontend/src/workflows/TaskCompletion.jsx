@@ -387,6 +387,17 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
                           }
                           label={field.label || field.id}
                         />
+                      ) : field.type === 'datetime' || field.type === 'DateTime' ? (
+                        <TextField
+                          fullWidth
+                          label={field.label || field.id}
+                          value={formData[field.id] || ''}
+                          onChange={(e) => handleFormChange(field.id, e.target.value)}
+                          required={field.required === 'true' || field.required === true}
+                          type="datetime-local"
+                          variant="outlined"
+                          InputLabelProps={{ shrink: true }}
+                        />
                       ) : (
                         <TextField
                           fullWidth
