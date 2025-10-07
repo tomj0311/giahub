@@ -370,6 +370,10 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
                 />
               ) : taskData.formFields && taskData.formFields.length > 0 && !taskData.isCompleted ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {/* Task heading */}
+                  <Typography variant="h5" component="h2" sx={{ mb: 2, fontWeight: 'bold' }}>
+                    {taskData.taskName}
+                  </Typography>
                   {/* Show editable form fields for READY/PENDING tasks only */}
                   {taskData.formFields.map((field) => (
                     <Box key={field.id}>
@@ -410,6 +414,10 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
                 </Box>
               ) : !taskData.isCompleted ? (
                 <Box>
+                  {/* Task heading */}
+                  <Typography variant="h5" component="h2" sx={{ mb: 2, fontWeight: 'bold' }}>
+                    {taskData.taskName}
+                  </Typography>
                   <Typography color="text.secondary" sx={{ mb: 2 }}>
                     This task requires confirmation to proceed.
                   </Typography>
