@@ -416,6 +416,8 @@ class AgentRuntimeService:
                         response_audio = getattr(response, 'response_audio', None)
                         has_audio = (audio_list and isinstance(audio_list, list) and len(audio_list) > 0) or response_audio
                         
+                        logger.info(f"🎵 Response {response_count}: audio_list={bool(audio_list)}, response_audio={bool(response_audio)}, has_audio={has_audio}")
+                        
                         if not content and not has_audio:
                             # Skip this chunk if it has no content and no audio
                             continue
@@ -448,14 +450,16 @@ class AgentRuntimeService:
                                 
                                 # Update the count of sent audio chunks
                                 sent_audio_count = len(audio_list)
-                                logger.debug(f"🎵 Sending {len(new_audio_items)} new audio chunks (total sent: {sent_audio_count})")
+                                logger.info(f"🎵 ✅ Added {len(new_audio_items)} audio chunks to payload")
                         
                         if response_audio:
                             if isinstance(response_audio, dict):
                                 chunk_payload["response_audio"] = response_audio
                             else:
                                 chunk_payload["response_audio"] = str(response_audio)
+                            logger.info(f"🎵 ✅ Added response_audio to payload")
                         
+                        logger.info(f"🎵 Yielding chunk with keys: {list(chunk_payload.keys())}")
                         yield {"type": "agent_chunk", "payload": chunk_payload, "timestamp": asyncio.get_event_loop().time()}
                         await asyncio.sleep(0)
                         
