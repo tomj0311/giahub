@@ -187,10 +187,102 @@ const detectBase64Images = (content) => {
   }
 }
 
+// Utility function to convert PCM16 base64 to WAV base64
+const pcm16ToWav = (base64Pcm16, sampleRate = 24000, numChannels = 1) => {
+  try {
+    // Decode base64 to binary
+    const pcmData = atob(base64Pcm16)
+    const pcmBytes = new Uint8Array(pcmData.length)
+    for (let i = 0; i < pcmData.length; i++) {
+      pcmBytes[i] = pcmData.charCodeAt(i)
+    }
+    
+    // Calculate sizes
+    const dataSize = pcmBytes.length
+    const fileSize = 44 + dataSize // WAV header is 44 bytes
+    const byteRate = sampleRate * numChannels * 2 // 2 bytes per sample (16-bit)
+    const blockAlign = numChannels * 2
+    
+    // Create WAV file buffer
+    const wavBuffer = new ArrayBuffer(fileSize)
+    const view = new DataView(wavBuffer)
+    
+    // Write WAV header
+    // "RIFF" chunk descriptor
+    view.setUint32(0, 0x52494646, false) // "RIFF"
+    view.setUint32(4, fileSize - 8, true) // File size - 8
+    view.setUint32(8, 0x57415645, false) // "WAVE"
+    
+    // "fmt " sub-chunk
+    view.setUint32(12, 0x666d7420, false) // "fmt "
+    view.setUint32(16, 16, true) // Subchunk1Size (16 for PCM)
+    view.setUint16(20, 1, true) // AudioFormat (1 for PCM)
+    view.setUint16(22, numChannels, true) // NumChannels
+    view.setUint32(24, sampleRate, true) // SampleRate
+    view.setUint32(28, byteRate, true) // ByteRate
+    view.setUint16(32, blockAlign, true) // BlockAlign
+    view.setUint16(34, 16, true) // BitsPerSample
+    
+    // "data" sub-chunk
+    view.setUint32(36, 0x64617461, false) // "data"
+    view.setUint32(40, dataSize, true) // Subchunk2Size
+    
+    // Copy PCM data
+    const wavData = new Uint8Array(wavBuffer)
+    wavData.set(pcmBytes, 44)
+    
+    // Convert to base64
+    let binary = ''
+    const bytes = new Uint8Array(wavBuffer)
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i])
+    }
+    return btoa(binary)
+  } catch (error) {
+    console.error('Failed to convert PCM16 to WAV:', error)
+    return null
+  }
+}
+
 // Simple Audio Player Component
-const AudioPlayer = ({ audioData }) => {
+const AudioPlayer = ({ audioChunks }) => {
   const [isPlaying, setIsPlaying] = useState(false)
+  const [audioSrc, setAudioSrc] = useState(null)
   const audioRef = useRef(null)
+  const hasPlayedRef = useRef(false) // Track if audio has been played
+  const lastChunkCountRef = useRef(0) // Track last processed chunk count
+
+  // Combine all PCM16 chunks into one audio file
+  useEffect(() => {
+    if (!audioChunks || audioChunks.length === 0) return
+
+    console.log('🎵 Combining', audioChunks.length, 'audio chunks')
+    
+    // Combine all PCM16 data chunks
+    let combinedPcm = ''
+    for (const chunk of audioChunks) {
+      if (chunk.data) {
+        combinedPcm += chunk.data
+      }
+    }
+
+    if (combinedPcm) {
+      const wavBase64 = pcm16ToWav(combinedPcm)
+      if (wavBase64) {
+        setAudioSrc(`data:audio/wav;base64,${wavBase64}`)
+        lastChunkCountRef.current = audioChunks.length
+      }
+    }
+  }, [audioChunks])
+
+  // Auto-play when audio is ready (only once when first created)
+  useEffect(() => {
+    if (audioSrc && audioRef.current && !hasPlayedRef.current) {
+      console.log('🎵 Playing combined audio')
+      hasPlayedRef.current = true
+      audioRef.current.play().catch(e => console.error('Play failed:', e))
+    }
+  }, [audioSrc])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -222,33 +314,8 @@ const AudioPlayer = ({ audioData }) => {
     }
   }
 
-  // Determine audio source
-  let audioSrc = null
-  let transcript = null
-  
-  // OpenAI response_audio format: { id, data, expires_at, transcript }
-  if (audioData.data) {
-    audioSrc = `data:audio/wav;base64,${audioData.data}`
-    transcript = audioData.transcript
-  }
-  // Standard format: { base64_audio, url }
-  else if (audioData.base64_audio) {
-    // Detect format from base64 header or default to mp3
-    let mimeType = 'audio/mpeg'
-    if (audioData.base64_audio.startsWith('//M')) {
-      mimeType = 'audio/mpeg' // MP3
-    } else if (audioData.base64_audio.startsWith('UklGR')) {
-      mimeType = 'audio/wav' // WAV
-    } else if (audioData.base64_audio.startsWith('T2dn')) {
-      mimeType = 'audio/ogg' // OGG
-    }
-    audioSrc = `data:${mimeType};base64,${audioData.base64_audio}`
-  } else if (audioData.url) {
-    audioSrc = audioData.url
-  }
-
   if (!audioSrc) {
-    return <Typography variant="caption" color="error">No audio source available</Typography>
+    return null
   }
 
   return (
@@ -284,7 +351,7 @@ const AudioPlayer = ({ audioData }) => {
       <Box sx={{ flex: 1 }}>
         <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, fontWeight: 600 }}>
           <VolumeUpIcon fontSize="inherit" />
-          Audio Response {audioData.length && `(${audioData.length})`}
+          Audio Response
         </Typography>
       </Box>
     </Box>
@@ -667,15 +734,39 @@ export default function AgentPlayground({ user }) {
                     return updated
                   })
                   
-                  // Store audio data if present
+                  // Store audio data if present - accumulate audio chunks
                   if (event.payload.audio || event.payload.response_audio) {
-                    setMessageAudio(prev => ({
-                      ...prev,
-                      [agentMsgId]: {
-                        audio: event.payload.audio || prev[agentMsgId]?.audio,
-                        response_audio: event.payload.response_audio || prev[agentMsgId]?.response_audio
+                    const newAudioCount = event.payload.audio?.length || 0
+                    console.log('🎵 [FRONTEND] Received new audio chunks:', newAudioCount)
+                    setMessageAudio(prev => {
+                      const existingAudio = prev[agentMsgId] || { audio: [], response_audio: null }
+                      
+                      // Accumulate audio chunks if it's an array
+                      let updatedAudio = existingAudio.audio || []
+                      if (event.payload.audio) {
+                        if (Array.isArray(event.payload.audio)) {
+                          updatedAudio = [...updatedAudio, ...event.payload.audio]
+                        } else {
+                          updatedAudio = [...updatedAudio, event.payload.audio]
+                        }
                       }
-                    }))
+                      
+                      // Update response_audio (typically only one)
+                      let updatedResponseAudio = existingAudio.response_audio
+                      if (event.payload.response_audio) {
+                        updatedResponseAudio = event.payload.response_audio
+                      }
+                      
+                      const newAudioState = {
+                        ...prev,
+                        [agentMsgId]: {
+                          audio: updatedAudio.length > 0 ? updatedAudio : undefined,
+                          response_audio: updatedResponseAudio
+                        }
+                      }
+                      console.log('🎵 [FRONTEND] Total accumulated audio items:', updatedAudio.length)
+                      return newAudioState
+                    })
                   }
                 } else if (event.type === 'agent_response' && event.payload?.content) {
                   // Handle non-streaming response (complete response at once)
@@ -1236,20 +1327,18 @@ export default function AgentPlayground({ user }) {
                 {/* Audio Player - Show if this message has audio */}
                 {(() => {
                   const audioData = messageAudio[m.ts]
-                  if (!audioData) return null
-                  if (!audioData.audio && !audioData.response_audio) return null
+                  
+                  if (!audioData) {
+                    return null
+                  }
+                  if (!audioData.audio && !audioData.response_audio) {
+                    return null
+                  }
                   
                   return (
                     <Box sx={{ mt: 1 }}>
-                      {audioData.audio && audioData.audio.map((audioItem, audioIdx) => (
-                        <Box key={audioIdx} sx={{ mb: 1 }}>
-                          <AudioPlayer audioData={audioItem} />
-                        </Box>
-                      ))}
-                      {audioData.response_audio && (
-                        <Box sx={{ mb: 1 }}>
-                          <AudioPlayer audioData={audioData.response_audio} />
-                        </Box>
+                      {audioData.audio && Array.isArray(audioData.audio) && (
+                        <AudioPlayer audioChunks={audioData.audio} />
                       )}
                     </Box>
                   )

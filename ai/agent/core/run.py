@@ -158,11 +158,22 @@ def _run(
     if self.stream:
         model_response = ModelResponse(content="")
         for model_response_chunk in self.model.response_stream(messages=messages_for_model):
+            # Handle content chunks
             if model_response_chunk.event == ModelResponseEvent.assistant_response.value:
                 if model_response_chunk.content is not None and model_response.content is not None:
                     model_response.content += model_response_chunk.content
                     self.run_response.content = model_response_chunk.content
                     self.run_response.created_at = model_response_chunk.created_at
+                    yield self.run_response
+                
+                # Handle audio chunks (content may be None for audio-only chunks)
+                if model_response_chunk.audio is not None:
+                    if self.run_response.audio is None:
+                        self.run_response.audio = []
+                        logger.info(f"🎵 [AGENT] Audio streaming started")
+                    self.run_response.audio.append(model_response_chunk.audio)
+                    self.run_response.response_audio = model_response_chunk.audio
+                    # Yield the response with audio data even if there's no content
                     yield self.run_response
 
             elif model_response_chunk.event == ModelResponseEvent.tool_call_started.value:

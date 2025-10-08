@@ -117,9 +117,7 @@ class OpenAIChat(Model):
         """
         Returns client parameters for OpenAI API.
         """
-        params = get_client_params(self)
-        logger.debug(f"Generated OpenAI client parameters: {params}")
-        return params
+        return get_client_params(self)
 
     def get_client(self) -> OpenAIClient:
         """
@@ -129,22 +127,13 @@ class OpenAIChat(Model):
             OpenAIClient: An instance of the OpenAI client.
         """
         if self.client:
-            logger.debug("Using existing OpenAI client")
             return self.client
 
         client_params: Dict[str, Any] = self.get_client_params()
-        # Log parameters safely, especially API key
-        log_params = client_params.copy()
-        if "api_key" in log_params:
-            log_params["api_key"] = f"***{log_params['api_key'][-4:]}" if log_params["api_key"] else "Not Set"
-        logger.debug(f"OpenAI client parameters for initialization: {log_params}")
         if self.http_client is not None:
             client_params["http_client"] = self.http_client
-            logger.debug("Using custom HTTP client for OpenAI")
 
-        logger.info(f"Creating new OpenAI client with parameters: base_url={client_params.get('base_url')}, organization={client_params.get('organization')}")
         new_client = OpenAIClient(**client_params)
-        logger.debug("New OpenAI client created successfully.")
         return new_client
 
     @property
@@ -152,9 +141,7 @@ class OpenAIChat(Model):
         """
         Returns keyword arguments for API requests.
         """
-        kwargs = get_request_kwargs(self)
-        logger.debug(f"Generated OpenAI request kwargs: {kwargs}")
-        return kwargs
+        return get_request_kwargs(self)
 
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -213,71 +200,36 @@ class OpenAIChat(Model):
         """
         Format a message into the format expected by OpenAI.
         """
-        formatted = format_message(message, message.images, message.audio)
-        logger.debug(f"Formatted message for OpenAI API: {formatted}")
-        return formatted
+        return format_message(message, message.images, message.audio)
 
     def invoke(self, messages: List[Message]) -> Union[ChatCompletion, ParsedChatCompletion]:
         """
         Send a chat completion request to the OpenAI API.
         """
-        logger.info(f"Invoking OpenAI model: {self.id}")
         request_kwargs = self.request_kwargs
         formatted_messages = [self.format_message(m) for m in messages] # type: ignore
-        
-        if self.verbose_logging:
-            logger.info(f"Request parameters: {request_kwargs}")
-            logger.info(f"Number of messages in request: {len(formatted_messages)}")
-            logger.info(f"Formatted messages payload: {formatted_messages}")
-        else:
-            logger.debug(f"Request parameters: {request_kwargs}")
-            logger.debug(f"Number of messages in request: {len(formatted_messages)}")
-            logger.debug(f"Formatted messages payload: {formatted_messages}")
 
         if self.response_format is not None and self.structured_outputs:
             try:
                 if isinstance(self.response_format, type) and issubclass(self.response_format, BaseModel):
-                    logger.debug(f"Using structured output with format: {self.response_format.__name__}")
-                    logger.debug("Calling OpenAI beta.chat.completions.parse")
-                    logger.debug(f"Parse request payload - model: {self.id}, messages: {formatted_messages}, kwargs: {request_kwargs}")
                     response = self.get_client().beta.chat.completions.parse(
                         model=self.id,
                         messages=formatted_messages,
                         **request_kwargs,
                     )
-                    if self.verbose_logging:
-                        logger.info(f"Received parsed response from OpenAI: {response}")
-                    else:
-                        logger.debug(f"Received parsed response from OpenAI: {type(response)}")
-                        logger.debug(f"Raw parsed response object: {response}")
                     return response
                 else:
-                    error_msg = "response_format must be a subclass of BaseModel if structured_outputs=True"
-                    logger.error(error_msg)
-                    raise ValueError(error_msg)
+                    raise ValueError("response_format must be a subclass of BaseModel if structured_outputs=True")
             except Exception as e:
                 logger.error(f"Error during structured output parsing call: {e}")
                 raise
 
-        logger.debug(f"Sending chat completion request to OpenAI with model {self.id}")
         try:
-            if self.verbose_logging:
-                logger.info(f"Create request payload - model: {self.id}, messages: {formatted_messages}, kwargs: {request_kwargs}")
-            else:
-                logger.debug(f"Create request payload - model: {self.id}, messages: {formatted_messages}, kwargs: {request_kwargs}")
-                
             response = self.get_client().chat.completions.create(
                 model=self.id,
                 messages=formatted_messages,
                 **request_kwargs,
             )
-            
-            if self.verbose_logging:
-                logger.info(f"Raw OpenAI response received: {response}")
-                logger.info(f"Received response from OpenAI: finish_reason={response.choices[0].finish_reason}")
-            else:
-                logger.debug(f"Raw OpenAI response received: {response}")
-                logger.debug(f"Received response from OpenAI: finish_reason={response.choices[0].finish_reason}")
             return response
         except Exception as e:
             logger.error(f"Error calling OpenAI chat.completions.create: {e}")
@@ -287,30 +239,11 @@ class OpenAIChat(Model):
         """
         Send a streaming chat completion request to the OpenAI API.
         """
-        logger.info(f"Invoking OpenAI model {self.id} with streaming")
         formatted_messages = [self.format_message(m) for m in messages] # type: ignore
-        
-        if self.verbose_logging:
-            logger.info(f"Number of messages in streaming request: {len(formatted_messages)}")
-            logger.info(f"Formatted messages payload for stream: {formatted_messages}")
-        else:
-            logger.debug(f"Number of messages in streaming request: {len(formatted_messages)}")
-            logger.debug(f"Formatted messages payload for stream: {formatted_messages}")
-
         client = self.get_client()
         request_kwargs = self.request_kwargs
-        
-        if self.verbose_logging:
-            logger.info(f"Starting stream with parameters: {request_kwargs}")
-        else:
-            logger.debug(f"Starting stream with parameters: {request_kwargs}")
 
         try:
-            if self.verbose_logging:
-                logger.info(f"Stream request payload - model: {self.id}, messages: {formatted_messages}, stream: True, stream_options: {{'include_usage': True}}, kwargs: {request_kwargs}")
-            else:
-                logger.debug(f"Stream request payload - model: {self.id}, messages: {formatted_messages}, stream: True, stream_options: {{'include_usage': True}}, kwargs: {request_kwargs}")
-                
             stream = client.chat.completions.create(
                 model=self.id,
                 messages=formatted_messages,
@@ -319,15 +252,8 @@ class OpenAIChat(Model):
                 **request_kwargs,
             )
 
-            logger.debug("Stream initialized, yielding chunks")
             for chunk in stream:  # type: ignore
-                if self.verbose_logging:
-                    logger.info(f"Received stream chunk: {chunk}")
-                else:
-                    # logger.debug(f"Received stream chunk: {chunk}")
-                    pass
                 yield chunk
-            logger.debug("Finished yielding stream chunks.")
         except Exception as e:
             logger.error(f"Error during OpenAI stream creation or iteration: {e}")
             raise
@@ -530,18 +456,19 @@ class OpenAIChat(Model):
         """
         Generate a streaming response from OpenAI.
         """
-        logger.debug("---------- OpenAI Stream Response Start ----------")
+        logger.info("🎵 [MODEL] Stream started")
         self._log_messages(messages)
         stream_data: StreamData = StreamData()
         metrics: Metrics = Metrics()
 
         # -*- Generate response
         metrics.response_timer.start()
-        logger.debug("Invoking stream...")
         try:
             stream_iterator = self.invoke_stream(messages=messages)
+            chunk_count = 0
             for response in stream_iterator:
-                # logger.debug(f"Processing stream chunk: {response}")
+                chunk_count += 1
+                
                 # Handle cases where response.choices might be None (e.g., audio streaming)
                 if response.choices is not None and len(response.choices) > 0:
                     metrics.completion_tokens += 1
@@ -553,13 +480,13 @@ class OpenAIChat(Model):
 
                     if response_delta.content is not None:
                         stream_data.response_content += response_delta.content
-                        # logger.debug(f"Yielding content chunk: {response_delta.content}")
                         yield ModelResponse(content=response_delta.content)
 
-                    if hasattr(response_delta, "audio"):
+                    if hasattr(response_delta, "audio") and response_delta.audio is not None:
                         response_audio = response_delta.audio
                         stream_data.response_audio = response_audio
-                        logger.debug(f"Yielding audio chunk: {response_audio}")
+                        if chunk_count <= 3:  # Only log first 3 audio chunks
+                            logger.info(f"🎵 [MODEL] Audio chunk #{chunk_count} received (type={type(response_audio).__name__})")
                         yield ModelResponse(audio=response_audio)
 
                     if response_delta.tool_calls is not None:
@@ -567,15 +494,15 @@ class OpenAIChat(Model):
                         if stream_data.response_tool_calls is None:
                             stream_data.response_tool_calls = []
                         stream_data.response_tool_calls.extend(response_delta.tool_calls)
-                        logger.debug(f"Aggregated tool calls so far: {stream_data.response_tool_calls}")
 
                 if response.usage is not None:
                     add_response_usage_to_metrics(metrics=metrics, response_usage=response.usage)
+            
+            logger.info(f"🎵 [MODEL] Stream complete: {chunk_count} chunks, audio={stream_data.response_audio is not None}")
             metrics.response_timer.stop()
-            logger.debug(f"Stream finished. Total response time: {metrics.response_timer.elapsed:.4f}s")
-            logger.debug(f"Final aggregated stream data: content_len={len(stream_data.response_content)}, audio_present={stream_data.response_audio is not None}, tool_calls_present={stream_data.response_tool_calls is not None}")
         except Exception as e:
             metrics.response_timer.stop()
+            logger.error(f"🎵 [MODEL] Stream error: {e}")
             logger.error(f"Error during stream processing: {e}")
             # Use content parameter instead of unsupported error parameter
             yield ModelResponse(content=f"Error: {str(e)}")
