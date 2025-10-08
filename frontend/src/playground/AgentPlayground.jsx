@@ -244,79 +244,105 @@ const pcm16ToWav = (base64Pcm16, sampleRate = 24000, numChannels = 1) => {
   }
 }
 
-// Simple Audio Player Component
+// Simple Audio Player Component using Web Audio API for gapless playback
 const AudioPlayer = ({ audioChunks }) => {
   const [isPlaying, setIsPlaying] = useState(false)
-  const [audioSrc, setAudioSrc] = useState(null)
-  const audioRef = useRef(null)
-  const hasPlayedRef = useRef(false) // Track if audio has been played
-  const lastChunkCountRef = useRef(0) // Track last processed chunk count
+  const audioContextRef = useRef(null)
+  const processedChunksRef = useRef(0)
+  const nextStartTimeRef = useRef(0)
+  const scheduledSourcesRef = useRef([])
 
-  // Combine all PCM16 chunks into one audio file
+  // Initialize Audio Context
   useEffect(() => {
-    if (!audioChunks || audioChunks.length === 0) return
-
-    console.log('🎵 Combining', audioChunks.length, 'audio chunks')
+    audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)()
     
-    // Combine all PCM16 data chunks
-    let combinedPcm = ''
-    for (const chunk of audioChunks) {
-      if (chunk.data) {
-        combinedPcm += chunk.data
-      }
-    }
-
-    if (combinedPcm) {
-      const wavBase64 = pcm16ToWav(combinedPcm)
-      if (wavBase64) {
-        setAudioSrc(`data:audio/wav;base64,${wavBase64}`)
-        lastChunkCountRef.current = audioChunks.length
-      }
-    }
-  }, [audioChunks])
-
-  // Auto-play when audio is ready (only once when first created)
-  useEffect(() => {
-    if (audioSrc && audioRef.current && !hasPlayedRef.current) {
-      console.log('🎵 Playing combined audio')
-      hasPlayedRef.current = true
-      audioRef.current.play().catch(e => console.error('Play failed:', e))
-    }
-  }, [audioSrc])
-
-  useEffect(() => {
-    const audio = audioRef.current
-    if (!audio) return
-
-    const handleEnded = () => setIsPlaying(false)
-    const handlePause = () => setIsPlaying(false)
-    const handlePlay = () => setIsPlaying(true)
-
-    audio.addEventListener('ended', handleEnded)
-    audio.addEventListener('pause', handlePause)
-    audio.addEventListener('play', handlePlay)
-
     return () => {
-      audio.removeEventListener('ended', handleEnded)
-      audio.removeEventListener('pause', handlePause)
-      audio.removeEventListener('play', handlePlay)
+      if (audioContextRef.current) {
+        audioContextRef.current.close()
+      }
     }
   }, [])
 
-  const togglePlayPause = () => {
-    const audio = audioRef.current
-    if (!audio) return
+  // Process new chunks and schedule them for gapless playback
+  useEffect(() => {
+    if (!audioChunks || audioChunks.length === 0) return
+    if (!audioContextRef.current) return
 
-    if (isPlaying) {
-      audio.pause()
-    } else {
-      audio.play()
+    const newChunks = audioChunks.slice(processedChunksRef.current)
+    if (newChunks.length === 0) return
+
+    console.log('🎵 Scheduling', newChunks.length, 'new audio chunk(s) for playback')
+
+    const audioContext = audioContextRef.current
+
+    // Combine new chunks into a single PCM buffer for smoother playback
+    let combinedPcm = ''
+    newChunks.forEach(chunk => {
+      if (chunk.data) {
+        combinedPcm += chunk.data
+      }
+    })
+
+    if (combinedPcm) {
+      // Convert PCM16 to WAV
+      const wavBase64 = pcm16ToWav(combinedPcm)
+      if (wavBase64) {
+        // Decode base64 to array buffer
+        const binaryString = atob(wavBase64)
+        const bytes = new Uint8Array(binaryString.length)
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i)
+        }
+
+        // Decode audio data
+        audioContext.decodeAudioData(bytes.buffer.slice(0), (audioBuffer) => {
+          const source = audioContext.createBufferSource()
+          source.buffer = audioBuffer
+          source.connect(audioContext.destination)
+
+          // Schedule this chunk to play right after the previous one
+          const startTime = Math.max(audioContext.currentTime, nextStartTimeRef.current)
+          source.start(startTime)
+          
+          // Update next start time for gapless playback
+          nextStartTimeRef.current = startTime + audioBuffer.duration
+          
+          // Track playing state
+          setIsPlaying(true)
+          source.onended = () => {
+            // Check if there are more sources scheduled
+            const index = scheduledSourcesRef.current.indexOf(source)
+            if (index > -1) {
+              scheduledSourcesRef.current.splice(index, 1)
+            }
+            if (scheduledSourcesRef.current.length === 0) {
+              setIsPlaying(false)
+            }
+          }
+
+          scheduledSourcesRef.current.push(source)
+        }, (error) => {
+          console.error('Error decoding audio:', error)
+        })
+      }
     }
-  }
 
-  if (!audioSrc) {
-    return null
-  }
+    processedChunksRef.current = audioChunks.length
+  }, [audioChunks])
+
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      scheduledSourcesRef.current.forEach(source => {
+        try {
+          source.stop()
+        } catch (e) {
+          // Already stopped
+        }
+      })
+      scheduledSourcesRef.current = []
+    }
+  }, [])
 
   return (
     <Box sx={{ 
@@ -332,26 +358,19 @@ const AudioPlayer = ({ audioChunks }) => {
     }}>
       <IconButton 
         size="small" 
-        onClick={togglePlayPause}
+        disabled
         sx={{ 
-          bgcolor: 'primary.main', 
+          bgcolor: isPlaying ? 'success.main' : 'action.disabled', 
           color: 'primary.contrastText',
-          '&:hover': { bgcolor: 'primary.dark' }
         }}
       >
-        {isPlaying ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
+        {isPlaying ? <PlayArrowIcon fontSize="small" /> : <VolumeUpIcon fontSize="small" />}
       </IconButton>
-      
-      <audio 
-        ref={audioRef} 
-        src={audioSrc}
-        style={{ display: 'none' }}
-      />
       
       <Box sx={{ flex: 1 }}>
         <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, fontWeight: 600 }}>
           <VolumeUpIcon fontSize="inherit" />
-          Audio Response
+          {isPlaying ? 'Playing Audio...' : 'Audio Response'}
         </Typography>
       </Box>
     </Box>
