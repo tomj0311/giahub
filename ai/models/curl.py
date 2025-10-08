@@ -15,11 +15,7 @@ class CurlGen(CurlGenModelBase):
         self,
         # Core parameters
         api_key: str = None,
-        base_url: str = "",
-        
-        # API configuration
-        deployment_name: str = "",
-        api_version: str = "2025-04-01-preview",
+        api_url: str = "https://tomj0-mf6aqr8i-eastus2.services.ai.azure.com/openai/deployments/FLUX-1.1-pro/images/generations?api-version=2025-04-01-preview",
         
         # Image generation parameters
         size: str = "1024x1024",
@@ -34,9 +30,8 @@ class CurlGen(CurlGenModelBase):
         
         Args:
             api_key: Azure API key for authentication
-            base_url: Azure endpoint base URL
-            deployment_name: Azure deployment name (default: FLUX-1.1-pro-2)
-            api_version: Azure API version
+            api_url: Full Azure API endpoint URL (including deployment, api-version, etc.)
+                     Example: "https://tomj0-mf6aqr8i-eastus2.services.ai.azure.com/openai/deployments/FLUX-1.1-pro/images/generations?api-version=2025-04-01-preview"
             size: Image size (e.g., "1024x1024", "512x512")
             output_format: Output format (default: "png")
             n: Number of images to generate (default: 1)
@@ -44,9 +39,7 @@ class CurlGen(CurlGenModelBase):
         """
         super().__init__(
             api_key=api_key,
-            base_url=base_url,
-            deployment_name=deployment_name,
-            api_version=api_version,
+            api_url=api_url,
             size=size,
             output_format=output_format,
             n=n,

@@ -14,15 +14,13 @@ from ai.utils.log import logger
 class CurlGenModel(Model):
     """Model that directly calls Azure FLUX image generation API using requests."""
     
-    id: str = "FLUX-1.1-pro-2"
+    id: str = "FLUX-1.1-pro"
     name: str = "CurlGen"
     provider: str = "Azure FLUX"
     
     # API configuration
-    base_url: str = "https://tomj0-mf6aqr8i-eastus2.services.ai.azure.com"
+    api_url: str = ""
     api_key: Optional[str] = None
-    api_version: str = "2025-04-01-preview"
-    deployment_name: str = "FLUX-1.1-pro-2"
     
     # Image parameters
     output_format: str = "png"
@@ -39,14 +37,13 @@ class CurlGenModel(Model):
     def request_kwargs(self) -> Dict[str, Any]:
         """Return minimal request configuration."""
         return {
-            "base_url": self.base_url,
+            "api_url": self.api_url,
             "api_key": self.api_key,
-            "deployment_name": self.deployment_name,
         }
 
     def _build_url(self) -> str:
-        """Build the complete API endpoint URL."""
-        return f"{self.base_url}/openai/deployments/{self.deployment_name}/images/generations?api-version={self.api_version}"
+        """Return the complete API endpoint URL."""
+        return self.api_url
 
     def _build_headers(self) -> Dict[str, str]:
         """Build request headers."""
