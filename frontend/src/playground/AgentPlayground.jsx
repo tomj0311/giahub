@@ -110,6 +110,80 @@ const detectJSX = (content) => {
   return { hasJSX: false, jsxCode: null, contentWithoutJSX: content, jsxBlocks: [] }
 }
 
+// Simple function to detect base64 image strings
+const detectBase64Images = (content) => {
+  if (!content) return { hasImages: false, images: [], contentWithoutImages: content }
+  
+  // Match base64 image data URIs and standalone base64 strings (more aggressive)
+  const b64Patterns = [
+    // Data URI format
+    /data:image\/(png|jpeg|jpg|gif|webp|svg\+xml);base64,([A-Za-z0-9+/=]+)/gi,
+    // Standalone base64 strings (100+ chars to catch them all)
+    /\b([A-Za-z0-9+/]{100,}={0,2})\b/g
+  ]
+  
+  const images = []
+  let contentWithoutImages = content
+  
+  b64Patterns.forEach(regex => {
+    let match
+    const tempRegex = new RegExp(regex.source, regex.flags)
+    while ((match = tempRegex.exec(content)) !== null) {
+      const fullMatch = match[0]
+      let imgSrc = fullMatch
+      
+      // If it's already a data URI, use it as is
+      if (fullMatch.startsWith('data:image')) {
+        imgSrc = fullMatch.trim()
+      } 
+      // If it's a standalone base64 string, try to detect format or assume PNG
+      else {
+        const b64String = match[1] || fullMatch.trim()
+        // Try to detect image format from base64 header
+        if (b64String.startsWith('iVBORw0KGgo')) {
+          imgSrc = `data:image/png;base64,${b64String}`
+        } else if (b64String.startsWith('/9j/')) {
+          imgSrc = `data:image/jpeg;base64,${b64String}`
+        } else if (b64String.startsWith('R0lGOD')) {
+          imgSrc = `data:image/gif;base64,${b64String}`
+        } else if (b64String.startsWith('UklGR')) {
+          imgSrc = `data:image/webp;base64,${b64String}`
+        } else {
+          // Default to PNG if can't detect
+          imgSrc = `data:image/png;base64,${b64String}`
+        }
+      }
+      
+      images.push({
+        src: imgSrc,
+        fullMatch: fullMatch,
+        index: match.index
+      })
+    }
+  })
+  
+  // Remove duplicates and sort by index
+  const uniqueImages = images.filter((img, idx, self) => 
+    idx === self.findIndex(t => t.src === img.src)
+  ).sort((a, b) => a.index - b.index)
+  
+  // Remove image strings from content (clean up whitespace too)
+  uniqueImages.forEach(img => {
+    contentWithoutImages = contentWithoutImages.replace(img.fullMatch, '')
+  })
+  
+  // Clean up extra whitespace and newlines left behind
+  contentWithoutImages = contentWithoutImages
+    .replace(/\n\s*\n\s*\n/g, '\n\n') // Multiple newlines to double
+    .replace(/^\s+|\s+$/g, '') // Trim
+  
+  return {
+    hasImages: uniqueImages.length > 0,
+    images: uniqueImages,
+    contentWithoutImages: contentWithoutImages
+  }
+}
+
 // Agent Playground using HTTP Server-Sent Events for streaming
 export default function AgentPlayground({ user }) {
   const theme = useTheme()
@@ -791,10 +865,11 @@ export default function AgentPlayground({ user }) {
                   {(() => {
                     const bpmnData = detectBPMN(m.content)
                     const jsxData = detectJSX(bpmnData.contentWithoutBPMN)
+                    const imageData = detectBase64Images(jsxData.contentWithoutJSX)
                     
                     return (
                       <>
-                        {/* Show markdown content (without BPMN and JSX blocks) */}
+                        {/* Show markdown content (without BPMN, JSX blocks, and images) */}
                         <ReactMarkdown 
                           remarkPlugins={[remarkGfm]}
                           components={{
@@ -891,8 +966,42 @@ export default function AgentPlayground({ user }) {
                             }
                           }}
                         >
-                          {jsxData.contentWithoutJSX || bpmnData.contentWithoutBPMN || m.content || '...'}
+                          {imageData.contentWithoutImages || jsxData.contentWithoutJSX || bpmnData.contentWithoutBPMN || m.content || '...'}
                         </ReactMarkdown>
+                        
+                        {/* Show base64 images if detected */}
+                        {imageData.hasImages && (
+                          <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                            {imageData.images.map((img, idx) => (
+                              <Box 
+                                key={idx} 
+                                sx={{ 
+                                  border: '1px solid', 
+                                  borderColor: 'divider', 
+                                  borderRadius: 1, 
+                                  overflow: 'hidden',
+                                  maxWidth: 400,
+                                  maxHeight: 400
+                                }}
+                              >
+                                <img 
+                                  src={img.src} 
+                                  alt={`Image ${idx + 1}`}
+                                  style={{ 
+                                    width: '100%', 
+                                    height: '100%', 
+                                    objectFit: 'contain',
+                                    display: 'block'
+                                  }}
+                                  onError={(e) => {
+                                    e.target.style.display = 'none'
+                                    console.error('Failed to load base64 image')
+                                  }}
+                                />
+                              </Box>
+                            ))}
+                          </Box>
+                        )}
                         
                         {/* Show JSX component if detected */}
                         {jsxData.hasJSX && (
