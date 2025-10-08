@@ -271,8 +271,6 @@ const AudioPlayer = ({ audioChunks }) => {
     const newChunks = audioChunks.slice(processedChunksRef.current)
     if (newChunks.length === 0) return
 
-    console.log('🎵 Scheduling', newChunks.length, 'new audio chunk(s) for playback')
-
     const audioContext = audioContextRef.current
 
     // Combine new chunks into a single PCM buffer for smoother playback
@@ -742,11 +740,14 @@ export default function AgentPlayground({ user }) {
                 const event = JSON.parse(line.slice(6))
 
                 if (event.type === 'agent_chunk' && event.payload?.content) {
+                  // Filter out "None" strings from content
+                  const filteredContent = event.payload.content === 'None' ? '' : event.payload.content
+                  
                   // Update the streaming message with new content (streaming mode)
                   setMessages(prev => {
                     const updated = prev.map(msg =>
                       msg.ts === agentMsgId && msg.streaming
-                        ? { ...msg, content: msg.content + event.payload.content }
+                        ? { ...msg, content: msg.content + filteredContent }
                         : msg
                     )
                     finalMessages = updated
@@ -755,18 +756,27 @@ export default function AgentPlayground({ user }) {
                   
                   // Store audio data if present - accumulate audio chunks
                   if (event.payload.audio || event.payload.response_audio) {
-                    const newAudioCount = event.payload.audio?.length || 0
-                    console.log('🎵 [FRONTEND] Received new audio chunks:', newAudioCount)
                     setMessageAudio(prev => {
-                      const existingAudio = prev[agentMsgId] || { audio: [], response_audio: null }
+                      const existingAudio = prev[agentMsgId] || { audio: [], response_audio: null, transcript: '' }
                       
                       // Accumulate audio chunks if it's an array
                       let updatedAudio = existingAudio.audio || []
+                      let updatedTranscript = existingAudio.transcript || ''
+                      
                       if (event.payload.audio) {
                         if (Array.isArray(event.payload.audio)) {
                           updatedAudio = [...updatedAudio, ...event.payload.audio]
+                          // Extract and accumulate transcripts
+                          event.payload.audio.forEach(audioChunk => {
+                            if (audioChunk.transcript && audioChunk.transcript !== 'None') {
+                              updatedTranscript += audioChunk.transcript
+                            }
+                          })
                         } else {
                           updatedAudio = [...updatedAudio, event.payload.audio]
+                          if (event.payload.audio.transcript && event.payload.audio.transcript !== 'None') {
+                            updatedTranscript += event.payload.audio.transcript
+                          }
                         }
                       }
                       
@@ -780,10 +790,10 @@ export default function AgentPlayground({ user }) {
                         ...prev,
                         [agentMsgId]: {
                           audio: updatedAudio.length > 0 ? updatedAudio : undefined,
-                          response_audio: updatedResponseAudio
+                          response_audio: updatedResponseAudio,
+                          transcript: updatedTranscript
                         }
                       }
-                      console.log('🎵 [FRONTEND] Total accumulated audio items:', updatedAudio.length)
                       return newAudioState
                     })
                   }
@@ -1358,6 +1368,23 @@ export default function AgentPlayground({ user }) {
                     <Box sx={{ mt: 1 }}>
                       {audioData.audio && Array.isArray(audioData.audio) && (
                         <AudioPlayer audioChunks={audioData.audio} />
+                      )}
+                      {audioData.transcript && audioData.transcript.trim() && (
+                        <Box sx={{ 
+                          mt: 1, 
+                          p: 1.5, 
+                          bgcolor: 'action.hover',
+                          borderRadius: 1,
+                          border: '1px solid',
+                          borderColor: 'divider'
+                        }}>
+                          <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.5, color: 'text.secondary' }}>
+                            Audio Transcript:
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
+                            {audioData.transcript}
+                          </Typography>
+                        </Box>
                       )}
                     </Box>
                   )
