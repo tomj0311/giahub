@@ -40,6 +40,9 @@ import SendIcon from '@mui/icons-material/Send'
 import CancelIcon from '@mui/icons-material/Cancel'
 import EditIcon from '@mui/icons-material/Edit'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import VolumeUpIcon from '@mui/icons-material/VolumeUp'
+import PlayArrowIcon from '@mui/icons-material/PlayArrow'
+import PauseIcon from '@mui/icons-material/Pause'
 import { agentService } from '../services/agentService'
 import { agentRuntimeService } from '../services/agentRuntimeService'
 import sharedApiService from '../utils/apiService'
@@ -184,6 +187,110 @@ const detectBase64Images = (content) => {
   }
 }
 
+// Simple Audio Player Component
+const AudioPlayer = ({ audioData }) => {
+  const [isPlaying, setIsPlaying] = useState(false)
+  const audioRef = useRef(null)
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    const handleEnded = () => setIsPlaying(false)
+    const handlePause = () => setIsPlaying(false)
+    const handlePlay = () => setIsPlaying(true)
+
+    audio.addEventListener('ended', handleEnded)
+    audio.addEventListener('pause', handlePause)
+    audio.addEventListener('play', handlePlay)
+
+    return () => {
+      audio.removeEventListener('ended', handleEnded)
+      audio.removeEventListener('pause', handlePause)
+      audio.removeEventListener('play', handlePlay)
+    }
+  }, [])
+
+  const togglePlayPause = () => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    if (isPlaying) {
+      audio.pause()
+    } else {
+      audio.play()
+    }
+  }
+
+  // Determine audio source
+  let audioSrc = null
+  let transcript = null
+  
+  // OpenAI response_audio format: { id, data, expires_at, transcript }
+  if (audioData.data) {
+    audioSrc = `data:audio/wav;base64,${audioData.data}`
+    transcript = audioData.transcript
+  }
+  // Standard format: { base64_audio, url }
+  else if (audioData.base64_audio) {
+    // Detect format from base64 header or default to mp3
+    let mimeType = 'audio/mpeg'
+    if (audioData.base64_audio.startsWith('//M')) {
+      mimeType = 'audio/mpeg' // MP3
+    } else if (audioData.base64_audio.startsWith('UklGR')) {
+      mimeType = 'audio/wav' // WAV
+    } else if (audioData.base64_audio.startsWith('T2dn')) {
+      mimeType = 'audio/ogg' // OGG
+    }
+    audioSrc = `data:${mimeType};base64,${audioData.base64_audio}`
+  } else if (audioData.url) {
+    audioSrc = audioData.url
+  }
+
+  if (!audioSrc) {
+    return <Typography variant="caption" color="error">No audio source available</Typography>
+  }
+
+  return (
+    <Box sx={{ 
+      display: 'flex', 
+      alignItems: 'center',
+      gap: 1, 
+      p: 1.5, 
+      border: '1px solid', 
+      borderColor: 'divider', 
+      borderRadius: 1,
+      bgcolor: 'action.hover',
+      maxWidth: 500
+    }}>
+      <IconButton 
+        size="small" 
+        onClick={togglePlayPause}
+        sx={{ 
+          bgcolor: 'primary.main', 
+          color: 'primary.contrastText',
+          '&:hover': { bgcolor: 'primary.dark' }
+        }}
+      >
+        {isPlaying ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
+      </IconButton>
+      
+      <audio 
+        ref={audioRef} 
+        src={audioSrc}
+        style={{ display: 'none' }}
+      />
+      
+      <Box sx={{ flex: 1 }}>
+        <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, fontWeight: 600 }}>
+          <VolumeUpIcon fontSize="inherit" />
+          Audio Response {audioData.length && `(${audioData.length})`}
+        </Typography>
+      </Box>
+    </Box>
+  )
+}
+
 // Agent Playground using HTTP Server-Sent Events for streaming
 export default function AgentPlayground({ user }) {
   const theme = useTheme()
@@ -204,6 +311,9 @@ export default function AgentPlayground({ user }) {
   const [running, setRunning] = useState(false)
   const [abortController, setAbortController] = useState(null)
   const [lastUserMessage, setLastUserMessage] = useState('')
+  
+  // Track audio data for messages (map of message timestamp to audio data)
+  const [messageAudio, setMessageAudio] = useState({})
 
   // File uploads (optional knowledge)
   const [stagedFiles, setStagedFiles] = useState([])
@@ -310,6 +420,7 @@ export default function AgentPlayground({ user }) {
           
           setSelected(conv.agent_name)
           setMessages(conv.messages || [])
+          setMessageAudio(conv.message_audio || {})  // Load audio data
           setUploadedFiles(conv.uploaded_files || [])
           setSessionCollection(conv.session_prefix || conv.session_collection || genUuidHex())
           setVectorCollectionName(conv.vector_collection_name || null) // Load the vector collection name
@@ -545,7 +656,7 @@ export default function AgentPlayground({ user }) {
                 const event = JSON.parse(line.slice(6))
 
                 if (event.type === 'agent_chunk' && event.payload?.content) {
-                  // Update the streaming message with new content
+                  // Update the streaming message with new content (streaming mode)
                   setMessages(prev => {
                     const updated = prev.map(msg =>
                       msg.ts === agentMsgId && msg.streaming
@@ -555,6 +666,39 @@ export default function AgentPlayground({ user }) {
                     finalMessages = updated
                     return updated
                   })
+                  
+                  // Store audio data if present
+                  if (event.payload.audio || event.payload.response_audio) {
+                    setMessageAudio(prev => ({
+                      ...prev,
+                      [agentMsgId]: {
+                        audio: event.payload.audio || prev[agentMsgId]?.audio,
+                        response_audio: event.payload.response_audio || prev[agentMsgId]?.response_audio
+                      }
+                    }))
+                  }
+                } else if (event.type === 'agent_response' && event.payload?.content) {
+                  // Handle non-streaming response (complete response at once)
+                  setMessages(prev => {
+                    const updated = prev.map(msg =>
+                      msg.ts === agentMsgId
+                        ? { ...msg, content: event.payload.content, streaming: false }
+                        : msg
+                    )
+                    finalMessages = updated
+                    return updated
+                  })
+                  
+                  // Store audio data if present
+                  if (event.payload.audio || event.payload.response_audio) {
+                    setMessageAudio(prev => ({
+                      ...prev,
+                      [agentMsgId]: {
+                        audio: event.payload.audio,
+                        response_audio: event.payload.response_audio
+                      }
+                    }))
+                  }
                 } else if (event.type === 'agent_run_complete') {
                   // Mark streaming as complete - conversation saving is handled by backend
                   setMessages(prev => {
@@ -701,6 +845,7 @@ export default function AgentPlayground({ user }) {
       
       setSelected(conv.agent_name)
       setMessages(conv.messages || [])
+      setMessageAudio(conv.message_audio || {})  // Load audio data
       setUploadedFiles(conv.uploaded_files || [])
       setSessionCollection(conv.session_prefix || conv.session_collection || genUuidHex())
       setVectorCollectionName(conv.vector_collection_name || null) // Load the vector collection name
@@ -729,6 +874,7 @@ export default function AgentPlayground({ user }) {
     setSessionCollection(genUuidHex())
     setVectorCollectionName(null) // Reset vector collection name
     setLastUserMessage('') // Clear last user message when clearing chat
+    setMessageAudio({}) // Clear audio data
   }, [])
 
   // Generate conversation title from first user message
@@ -828,7 +974,8 @@ export default function AgentPlayground({ user }) {
                   {m.content}
                 </Typography>
               ) : (
-                <Box dir="auto" sx={{
+                <>
+                  <Box dir="auto" sx={{
                   fontSize: 15,
                   lineHeight: 1.5,
                   maxWidth: '90ch',
@@ -1085,6 +1232,29 @@ export default function AgentPlayground({ user }) {
                     )
                   })()}
                 </Box>
+                
+                {/* Audio Player - Show if this message has audio */}
+                {(() => {
+                  const audioData = messageAudio[m.ts]
+                  if (!audioData) return null
+                  if (!audioData.audio && !audioData.response_audio) return null
+                  
+                  return (
+                    <Box sx={{ mt: 1 }}>
+                      {audioData.audio && audioData.audio.map((audioItem, audioIdx) => (
+                        <Box key={audioIdx} sx={{ mb: 1 }}>
+                          <AudioPlayer audioData={audioItem} />
+                        </Box>
+                      ))}
+                      {audioData.response_audio && (
+                        <Box sx={{ mb: 1 }}>
+                          <AudioPlayer audioData={audioData.response_audio} />
+                        </Box>
+                      )}
+                    </Box>
+                  )
+                })()}
+                </>
               )}
             </Box>
           ))}

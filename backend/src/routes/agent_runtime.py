@@ -393,6 +393,7 @@ async def get_conversation(conversation_id: str, user: dict = Depends(verify_tok
         "conversation_id": doc.get("conversation_id"),
         "agent_name": doc.get("agent_name"),
         "messages": doc.get("messages", []),
+        "message_audio": doc.get("message_audio", {}),
         "uploaded_files": doc.get("uploaded_files", []),
         "conv_id": conv_id,
         "updated_at": int((doc.get("updated_at") or datetime.utcnow()).timestamp() * 1000),
