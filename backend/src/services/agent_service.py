@@ -169,6 +169,7 @@ class AgentService:
                     "collections": populated_collections,
                     "collection": collection_data,  # Keep for backward compatibility
                     "memory": d.get("memory", {}),
+                    "stream": d.get("stream", True),  # Default to True if not set
                     "created_at": d.get("created_at"),
                     "updated_at": d.get("updated_at"),
                 }
@@ -285,6 +286,7 @@ class AgentService:
                     "collections": populated_collections,
                     "collection": collection_data,  # Keep for backward compatibility
                     "memory": d.get("memory", {}),
+                    "stream": d.get("stream", True),  # Default to True if not set
                     "created_at": d.get("created_at"),
                     "updated_at": d.get("updated_at"),
                 }

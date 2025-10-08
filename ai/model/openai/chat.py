@@ -542,7 +542,8 @@ class OpenAIChat(Model):
             stream_iterator = self.invoke_stream(messages=messages)
             for response in stream_iterator:
                 # logger.debug(f"Processing stream chunk: {response}")
-                if len(response.choices) > 0:
+                # Handle cases where response.choices might be None (e.g., audio streaming)
+                if response.choices is not None and len(response.choices) > 0:
                     metrics.completion_tokens += 1
                     if metrics.completion_tokens == 1:
                         metrics.time_to_first_token = metrics.response_timer.elapsed

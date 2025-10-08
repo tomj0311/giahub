@@ -24,7 +24,9 @@ import {
   TableHead,
   TableRow,
   IconButton,
-  TablePagination
+  TablePagination,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material'
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon, Play as PlayIcon } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
@@ -78,6 +80,7 @@ export default function Agent({ user }) {
     tools: {},                       // keys are tool IDs
     knowledge_collections: {},       // keys are knowledge collection IDs
     memory: { history: { enabled: false, num: 3 } },
+    stream: true,                    // stream enabled by default
   })
 
   const toolList = Object.keys(form.tools || {}) // IDs
@@ -94,6 +97,7 @@ export default function Agent({ user }) {
       tools: {},
       knowledge_collections: {},
       memory: { history: { enabled: false, num: 3 } },
+      stream: true,
     })
   }
 
@@ -285,6 +289,7 @@ export default function Agent({ user }) {
       tools: agent.tools || {}, // assume already keyed by ID
       knowledge_collections: knowledgeCollections,
       memory: agent.memory || { history: { enabled: false, num: 3 } },
+      stream: agent.stream !== undefined ? agent.stream : true,
     })
   }
 
@@ -303,6 +308,7 @@ export default function Agent({ user }) {
         tools: form.tools,
         collections: form.knowledge_collections,
         memory: form.memory,
+        stream: form.stream,
       }
       const resp = await apiCall(`/api/agents`, {
         method: 'POST',
@@ -675,6 +681,19 @@ export default function Agent({ user }) {
                       />
                     )}
                   </Stack>
+                </Paper>
+
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>Streaming</Typography>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={form.stream}
+                        onChange={(e) => setForm(f => ({ ...f, stream: e.target.checked }))}
+                      />
+                    }
+                    label="Enable streaming responses"
+                  />
                 </Paper>
               </Stack>
             </Grid>
