@@ -15,10 +15,10 @@ class CurlGen(CurlGenModelBase):
         self,
         # Core parameters
         api_key: str = None,
-        base_url: str = "https://tomj0-mf6aqr8i-eastus2.services.ai.azure.com",
+        base_url: str = "",
         
         # API configuration
-        deployment_name: str = "FLUX-1.1-pro-2",
+        deployment_name: str = "",
         api_version: str = "2025-04-01-preview",
         
         # Image generation parameters
