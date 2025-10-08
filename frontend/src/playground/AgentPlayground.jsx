@@ -1444,10 +1444,25 @@ export default function AgentPlayground({ user }) {
                     return null
                   }
                   
+                  // Prepare audio chunks for the player
+                  let audioChunks = null
+                  
+                  // Handle streaming audio (array of chunks)
+                  if (audioData.audio && Array.isArray(audioData.audio)) {
+                    audioChunks = audioData.audio
+                  } 
+                  // Handle non-streaming audio (single response_audio)
+                  else if (audioData.response_audio) {
+                    // Wrap response_audio in an array for the AudioPlayer
+                    audioChunks = Array.isArray(audioData.response_audio) 
+                      ? audioData.response_audio 
+                      : [audioData.response_audio]
+                  }
+                  
                   return (
                     <Box sx={{ mt: 1 }}>
-                      {audioData.audio && Array.isArray(audioData.audio) && (
-                        <AudioPlayer audioChunks={audioData.audio} />
+                      {audioChunks && audioChunks.length > 0 && (
+                        <AudioPlayer audioChunks={audioChunks} />
                       )}
                       {audioData.transcript && audioData.transcript.trim() && (
                         <Box sx={{ 
