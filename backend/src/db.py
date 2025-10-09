@@ -124,18 +124,25 @@ async def ensure_indexes():
         await collections["menuItems"].create_index("isActive")
 
         logger.debug("[DB] Creating model configuration indexes")
-        # Model configurations indexes
-        await collections["modelConfig"].create_index("name", unique=True)
+        # Model configurations indexes - tenant-scoped unique name
+        await collections["modelConfig"].create_index([("tenantId", 1), ("name", 1)], unique=True)
         await collections["modelConfig"].create_index("category")
         await collections["modelConfig"].create_index("type")
         await collections["modelConfig"].create_index("created_at")
 
         logger.debug("[DB] Creating tool configuration indexes")
-        # Tool configurations indexes
-        await collections["toolConfig"].create_index("name", unique=True)
+        # Tool configurations indexes - tenant-scoped unique name
+        await collections["toolConfig"].create_index([("tenantId", 1), ("name", 1)], unique=True)
         await collections["toolConfig"].create_index("category")
         await collections["toolConfig"].create_index("type")
         await collections["toolConfig"].create_index("created_at")
+
+        logger.debug("[DB] Creating embedder configuration indexes")
+        # Embedder configurations indexes - tenant-scoped unique name
+        await collections["embedderConfig"].create_index([("tenantId", 1), ("name", 1)], unique=True)
+        await collections["embedderConfig"].create_index("category")
+        await collections["embedderConfig"].create_index("type")
+        await collections["embedderConfig"].create_index("created_at")
 
         logger.debug("[DB] Creating tenant indexes")
         # Tenant indexes
@@ -151,6 +158,7 @@ async def ensure_indexes():
         await collections["userRoles"].create_index("tenantId")
         await collections["modelConfig"].create_index("tenantId")
         await collections["toolConfig"].create_index("tenantId")
+        await collections["embedderConfig"].create_index("tenantId")
 
         logger.debug("[DB] Creating knowledge collection indexes")
         # Knowledge collection indexes - handle transition from prefix to collection

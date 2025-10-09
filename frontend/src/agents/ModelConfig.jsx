@@ -390,9 +390,9 @@ function ModelConfig({ user }) {
     async function saveModelConfig() {
     // removed save start debug logs
         
-        if (!form.name || !form.model || !form.embedding) {
+        if (!form.name || !form.model) {
             // removed validation failed log
-            showError('Name, model selection and embedding selection are required');
+            showError('Name and model selection are required');
             return;
         }
         
@@ -407,10 +407,12 @@ function ModelConfig({ user }) {
                 strategy: form.model,
                 params: form.model_params
             },
-            embedding: {
-                strategy: form.embedding,
-                params: form.embedding_params
-            },
+            ...(form.embedding ? {
+                embedding: {
+                    strategy: form.embedding,
+                    params: form.embedding_params
+                }
+            } : {}),
             type: 'modelConfig'
         };
     // removed config to save log
@@ -841,7 +843,7 @@ function ModelConfig({ user }) {
                     )}
                     <Box sx={{ flex: 1 }} />
                     <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={saveModelConfig} variant="contained" disabled={saveState.loading || !form.name || !form.model || !form.embedding}>
+                    <Button onClick={saveModelConfig} variant="contained" disabled={saveState.loading || !form.name || !form.model}>
                         {saveState.loading ? 'Saving...' : isEditMode ? 'Update Configuration' : 'Save Configuration'}
                     </Button>
                 </DialogActions>
