@@ -645,20 +645,20 @@ function WorkflowExecution({ user }) {
                 />
                 {(() => {
                   const selectedWorkflow = allWorkflows.find(wf => wf.instance_id === selectedInstanceForBpmn);
-                  if (selectedWorkflow && selectedWorkflow.status !== 'complete') {
+                  if (selectedWorkflow && selectedWorkflow.status !== 'completed') {
                     return (
                       <Chip 
-                        label="Incomplete"
+                        label={selectedWorkflow.status === 'error' ? 'Error' : selectedWorkflow.status === 'waiting' ? 'Waiting' : 'Incomplete'}
                         size="small"
                         variant="outlined"
                         sx={{ 
-                          borderColor: '#ff9800',
-                          color: '#ff9800',
+                          borderColor: selectedWorkflow.status === 'error' ? '#f44336' : '#ff9800',
+                          color: selectedWorkflow.status === 'error' ? '#f44336' : '#ff9800',
                           '& .MuiChip-icon': {
-                            color: '#ff9800'
+                            color: selectedWorkflow.status === 'error' ? '#f44336' : '#ff9800'
                           }
                         }}
-                        icon={<Clock size={12} />}
+                        icon={selectedWorkflow.status === 'error' ? <XCircle size={12} /> : <Clock size={12} />}
                       />
                     );
                   }
@@ -722,13 +722,13 @@ function WorkflowExecution({ user }) {
                             setPollingInterval(null);
                           }
                           
-                          if (wf.status !== 'complete') {
+                          if (wf.status !== 'completed') {
                             const interval = setInterval(async () => {
                               // Refresh the instance status periodically for incomplete workflows
                               await handleInstanceClick(wf.instance_id, false);
-                              // Check if workflow is now complete
+                              // Check if workflow is now completed
                               const updatedWorkflow = allWorkflows.find(w => w.instance_id === wf.instance_id);
-                              if (updatedWorkflow?.status === 'complete') {
+                              if (updatedWorkflow?.status === 'completed') {
                                 clearInterval(interval);
                                 setPollingInterval(null);
                               }
@@ -745,10 +745,10 @@ function WorkflowExecution({ user }) {
                             const hasErrorTasks = selectedInstanceForBpmn === wf.instance_id && 
                               activeTasks.some(task => task.status === 128);
                             
-                            if (hasErrorTasks) {
+                            if (hasErrorTasks || wf.status === 'error') {
                               return (
                                 <Chip 
-                                  label="FAIL" 
+                                  label="ERROR" 
                                   color="error" 
                                   size="small"
                                   icon={<XCircle size={12} />}
@@ -756,12 +756,34 @@ function WorkflowExecution({ user }) {
                               );
                             }
                             
+                            if (wf.status === 'completed') {
+                              return (
+                                <Chip 
+                                  label="COMPLETED" 
+                                  color="success" 
+                                  size="small"
+                                  icon={<CheckCircle size={12} />}
+                                />
+                              );
+                            }
+                            
+                            if (wf.status === 'waiting') {
+                              return (
+                                <Chip 
+                                  label="WAITING" 
+                                  color="warning" 
+                                  size="small"
+                                  icon={<Clock size={12} />}
+                                />
+                              );
+                            }
+                            
+                            // Fallback for any other status
                             return (
                               <Chip 
-                                label={wf.status} 
-                                color={wf.status === 'complete' ? 'success' : 'warning'} 
+                                label={wf.status.toUpperCase()} 
+                                color="default" 
                                 size="small"
-                                icon={wf.status === 'complete' ? <CheckCircle size={12} /> : <Clock size={12} />}
                               />
                             );
                           })()}

@@ -154,14 +154,15 @@ class WorkflowServicePersistent:
             await cls._update_workflow_status(workflow, instance_id, tenant_id)
             logger.info(f"[WORKFLOW] Workflow execution completed after {step_count} steps")
             
+            # Determine final status
+            final_status = cls._determine_workflow_status(workflow)
+            
             return {
                 "instance_id": instance_id,
-                "completed": workflow.is_completed(),
+                "status": final_status,
                 "needs_user_input": workflow.manual_input_required(),
                 "current_task_id": cls._get_current_task_id(workflow)
             }
-            
-            return status_data
         
         except Exception as e:
             logger.error(f"[WORKFLOW] Error: {e}", exc_info=True)
@@ -524,7 +525,7 @@ class WorkflowServicePersistent:
             return {
                 "message": "Task submitted successfully",
                 "instance_id": instance_id,
-                "completed": result["completed"],
+                "status": result["status"],
                 "needs_user_input": result["needs_user_input"],
                 "current_task_id": result["current_task_id"]
             }
@@ -633,10 +634,12 @@ class WorkflowServicePersistent:
         try:
             # Build query based on status
             query = {"workflow_id": workflow_id}
-            if status == "incomplete":
-                query["serialized_data.completed"] = False
-            elif status == "complete":
-                query["serialized_data.completed"] = True
+            if status == "waiting":
+                query["serialized_data.status"] = "waiting"
+            elif status == "error":
+                query["serialized_data.status"] = "error"
+            elif status == "completed":
+                query["serialized_data.status"] = "completed"
             # For "all", no additional filter needed
 
             # Get total count and paginated documents
@@ -659,7 +662,7 @@ class WorkflowServicePersistent:
                     "workflow_id": doc.get("workflow_id"),
                     "instance_id": doc.get("instance_id"),
                     "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
-                    "status": "complete" if doc.get("serialized_data", {}).get("completed", False) else "incomplete"
+                    "status": doc.get("serialized_data", {}).get("status", "waiting")
                 }
                 workflows.append(workflow)
 
@@ -764,11 +767,33 @@ class WorkflowServicePersistent:
         return None
 
     @classmethod
+    def _determine_workflow_status(cls, workflow) -> str:
+        """Determine workflow status: 'completed', 'error', or 'waiting'"""
+        # Check if workflow is completed
+        if workflow.is_completed():
+            return "completed"
+        
+        # Check if any task has error state
+        error_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.ERROR]
+        if error_tasks:
+            return "error"
+        
+        # Check if waiting for user input
+        if workflow.manual_input_required():
+            return "waiting"
+        
+        # Default to waiting if none of the above
+        return "waiting"
+
+    @classmethod
     async def _update_workflow_status(cls, workflow, instance_id, tenant_id, step_count=None, extra_data=None):
         """Update workflow status and save to MongoDB - centralized to avoid redundancy"""
+        # Determine status string
+        workflow_status = cls._determine_workflow_status(workflow)
+        
         status_data = {
             "instance_id": instance_id,
-            "completed": workflow.is_completed(),
+            "status": workflow_status,
             "needs_user_input": workflow.manual_input_required(),
             "current_task_id": cls._get_current_task_id(workflow)
         }
@@ -797,9 +822,12 @@ class WorkflowServicePersistent:
             serializer = BpmnWorkflowSerializer()
             workflow = serializer.deserialize_json(json.dumps(instance["serialized_data"]))
             
+            # Determine status string
+            workflow_status = cls._determine_workflow_status(workflow)
+            
             return {
                 "instance_id": instance_id,
-                "completed": workflow.is_completed(),
+                "status": workflow_status,
                 "needs_user_input": workflow.manual_input_required(),
                 "current_task_id": cls._get_current_task_id(workflow),
                 "workflow_data": workflow.data
@@ -861,7 +889,7 @@ class WorkflowServicePersistent:
             return {
                 "message": "Workflow started successfully",
                 "instance_id": result["instance_id"],
-                "completed": result["completed"],
+                "status": result["status"],
                 "needs_user_input": result["needs_user_input"],
                 "current_task_id": result["current_task_id"]
             }
