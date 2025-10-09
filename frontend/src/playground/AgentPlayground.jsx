@@ -636,15 +636,15 @@ export default function AgentPlayground({ user }) {
     const windowHeight = window.innerHeight
     const documentHeight = document.documentElement.scrollHeight
     const distanceFromBottom = documentHeight - windowHeight - scrollTop
-    const atB = distanceFromBottom < 100
+    const atB = distanceFromBottom < 50  // Reduced threshold for faster stop
     setAtBottom(atB)
     
     // Disable auto-scroll when user manually scrolls up
-    if (!atB && autoScroll) {
+    if (!atB) {
       setAutoScroll(false)
     }
     // Re-enable auto-scroll when user scrolls back to bottom
-    else if (atB && !autoScroll) {
+    else if (atB) {
       setAutoScroll(true)
     }
   }
