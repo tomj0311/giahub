@@ -1289,7 +1289,7 @@ export default function AgentPlayground({ user }) {
                             }
                           }}
                         >
-                          {imageData.contentWithoutImages || jsxData.contentWithoutJSX || bpmnData.contentWithoutBPMN || m.content || '...'}
+                          {imageData.hasImages ? imageData.contentWithoutImages : (jsxData.contentWithoutJSX || bpmnData.contentWithoutBPMN || m.content || '...')}
                         </ReactMarkdown>
                         
                         {/* Show base64 images if detected */}
