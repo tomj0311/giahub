@@ -248,7 +248,7 @@ const pcm16ToWav = (base64Pcm16, sampleRate = 24000, numChannels = 1) => {
 }
 
 // Simple Audio Player Component using Web Audio API for gapless playback
-const AudioPlayer = ({ audioChunks }) => {
+const AudioPlayer = ({ audioChunks, autoPlay = false }) => {
   const [isPlaying, setIsPlaying] = useState(false)
   const [hasAudio, setHasAudio] = useState(false) // Track if audio is available for replay
   const audioContextRef = useRef(null)
@@ -260,6 +260,7 @@ const AudioPlayer = ({ audioChunks }) => {
   // Initialize Audio Context
   useEffect(() => {
     audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)()
+    console.log('🎵 AudioPlayer: Initialized audio context, autoPlay =', autoPlay)
     
     return () => {
       if (audioContextRef.current) {
@@ -275,6 +276,8 @@ const AudioPlayer = ({ audioChunks }) => {
 
     const newChunks = audioChunks.slice(processedChunksRef.current)
     if (newChunks.length === 0) return
+
+    console.log('🎵 AudioPlayer: Processing', newChunks.length, 'new chunks, autoPlay =', autoPlay)
 
     const audioContext = audioContextRef.current
 
@@ -304,32 +307,38 @@ const AudioPlayer = ({ audioChunks }) => {
           allAudioBuffersRef.current.push(audioBuffer)
           setHasAudio(true)
           
-          const source = audioContext.createBufferSource()
-          source.buffer = audioBuffer
-          source.connect(audioContext.destination)
+          // Only auto-play if autoPlay is true (for new streaming)
+          if (autoPlay) {
+            console.log('🎵 AudioPlayer: Auto-playing audio chunk')
+            const source = audioContext.createBufferSource()
+            source.buffer = audioBuffer
+            source.connect(audioContext.destination)
 
-          // Schedule this chunk to play right after the previous one
-          const startTime = Math.max(audioContext.currentTime, nextStartTimeRef.current)
-          source.start(startTime)
-          
-          // Update next start time for gapless playback
-          nextStartTimeRef.current = startTime + audioBuffer.duration
-          
-          // Track playing state
-          setIsPlaying(true)
-          
-          source.onended = () => {
-            // Check if there are more sources scheduled
-            const index = scheduledSourcesRef.current.indexOf(source)
-            if (index > -1) {
-              scheduledSourcesRef.current.splice(index, 1)
+            // Schedule this chunk to play right after the previous one
+            const startTime = Math.max(audioContext.currentTime, nextStartTimeRef.current)
+            source.start(startTime)
+            
+            // Update next start time for gapless playback
+            nextStartTimeRef.current = startTime + audioBuffer.duration
+            
+            // Track playing state
+            setIsPlaying(true)
+            
+            source.onended = () => {
+              // Check if there are more sources scheduled
+              const index = scheduledSourcesRef.current.indexOf(source)
+              if (index > -1) {
+                scheduledSourcesRef.current.splice(index, 1)
+              }
+              if (scheduledSourcesRef.current.length === 0) {
+                setIsPlaying(false)
+              }
             }
-            if (scheduledSourcesRef.current.length === 0) {
-              setIsPlaying(false)
-            }
+
+            scheduledSourcesRef.current.push(source)
+          } else {
+            console.log('🎵 AudioPlayer: Audio chunk loaded but not auto-playing (from history)')
           }
-
-          scheduledSourcesRef.current.push(source)
         }, (error) => {
           console.error('Error decoding audio:', error.message)
         })
@@ -337,7 +346,7 @@ const AudioPlayer = ({ audioChunks }) => {
     }
 
     processedChunksRef.current = audioChunks.length
-  }, [audioChunks])
+  }, [audioChunks, autoPlay])
 
   // Cleanup
   useEffect(() => {
@@ -1426,10 +1435,20 @@ export default function AgentPlayground({ user }) {
                       : [audioData.response_audio]
                   }
                   
+                  // Auto-play only if this is a streaming message (new response)
+                  const shouldAutoPlay = m.streaming === true
+                  
+                  console.log('🎵 Message audio render:', { 
+                    ts: m.ts, 
+                    streaming: m.streaming, 
+                    shouldAutoPlay, 
+                    hasAudio: !!audioChunks 
+                  })
+                  
                   return (
                     <Box sx={{ mt: 1 }}>
                       {audioChunks && audioChunks.length > 0 && (
-                        <AudioPlayer audioChunks={audioChunks} />
+                        <AudioPlayer audioChunks={audioChunks} autoPlay={shouldAutoPlay} />
                       )}
                       {audioData.transcript && audioData.transcript.trim() && (
                         <Box sx={{ 
