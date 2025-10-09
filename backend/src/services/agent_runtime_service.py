@@ -416,8 +416,6 @@ class AgentRuntimeService:
                         response_audio = getattr(response, 'response_audio', None)
                         has_audio = (audio_list and isinstance(audio_list, list) and len(audio_list) > 0) or response_audio
                         
-                        logger.info(f"🎵 Response {response_count}: audio_list={bool(audio_list)}, response_audio={bool(response_audio)}, has_audio={has_audio}")
-                        
                         if not content and not has_audio:
                             # Skip this chunk if it has no content and no audio
                             continue
@@ -450,24 +448,18 @@ class AgentRuntimeService:
                                 
                                 # Update the count of sent audio chunks
                                 sent_audio_count = len(audio_list)
-                                logger.info(f"🎵 ✅ Added {len(new_audio_items)} audio chunks to payload")
                         
                         if response_audio:
                             if isinstance(response_audio, dict):
                                 chunk_payload["response_audio"] = response_audio
                             else:
                                 chunk_payload["response_audio"] = str(response_audio)
-                            logger.info(f"🎵 ✅ Added response_audio to payload")
                         
-                        logger.info(f"🎵 Yielding chunk with keys: {list(chunk_payload.keys())}")
                         yield {"type": "agent_chunk", "payload": chunk_payload, "timestamp": asyncio.get_event_loop().time()}
                         await asyncio.sleep(0)
                         
-                    if not iteration_started:
-                        logger.error(f"🎵 [BACKEND] ❌ No responses from agent")
-                    
                     # Send completion event after all chunks have been sent
-                    logger.info(f"🎵 Streaming complete. Sent {response_count} chunks with {sent_audio_count} total audio items")
+                    logger.info(f"Streaming complete. Sent {response_count} chunks")
                     yield {"type": "agent_run_complete", "timestamp": asyncio.get_event_loop().time()}
                         
                 except Exception as e:
@@ -550,14 +542,8 @@ class AgentRuntimeService:
         """Log agent execution results for audit and calculation purposes"""
         try:
             run_response = getattr(agent, 'run_response', None)
-            logger.debug(f"Agent run_response exists: {run_response is not None}")
             
             if run_response:
-                logger.debug(f"Run response content length: {len(str(getattr(run_response, 'content', '')))}")
-                logger.debug(f"Run response content type: {getattr(run_response, 'content_type', 'None')}")
-                logger.debug(f"Run response metrics type: {type(getattr(run_response, 'metrics', None))}")
-                logger.debug(f"Run response metrics content: {getattr(run_response, 'metrics', None)}")
-                
                 run_data = {
                     "user_id": user.get("id"),
                     "agent_name": agent_name,
@@ -574,22 +560,16 @@ class AgentRuntimeService:
                 response_metrics = getattr(run_response, 'metrics', {}) or {}
                 model_metrics = getattr(agent.model, 'metrics', {}) if hasattr(agent, 'model') and agent.model else {}
                 
-                logger.debug(f"[METRICS_DEBUG] response_metrics type: {type(response_metrics)}, value: {response_metrics}")
-                logger.debug(f"[METRICS_DEBUG] model_metrics type: {type(model_metrics)}, value: {model_metrics}")
-                
                 # Use model metrics as primary source since response_metrics aggregation is failing
                 final_metrics = {}
                 if model_metrics:
                     final_metrics = dict(model_metrics)  # Convert to regular dict
-                    logger.debug(f"[METRICS_DEBUG] Using model_metrics as primary source")
                 elif response_metrics:
                     # Convert defaultdict to regular dict for MongoDB
                     if hasattr(response_metrics, 'default_factory'):
-                        logger.debug(f"[METRICS_DEBUG] Converting response_metrics defaultdict to dict")
                         final_metrics = dict(response_metrics)
                     else:
                         final_metrics = response_metrics
-                    logger.debug(f"[METRICS_DEBUG] Using response_metrics as fallback")
                 
                 if final_metrics:
                     response_data["metrics"] = final_metrics
@@ -629,9 +609,8 @@ class AgentRuntimeService:
                             aggregate_metrics["avg_time_to_first_token"] = ttft
                     
                     run_data["metrics"] = aggregate_metrics
-                    logger.debug(f"[METRICS_DEBUG] Final aggregate_metrics: {aggregate_metrics}")
                 else:
-                    logger.warning(f"[METRICS_DEBUG] No metrics found in response or model")
+                    logger.debug("No metrics found in response or model")
                 
                 run_data["response"] = response_data
                 
@@ -766,7 +745,8 @@ class AgentRuntimeService:
         agent = None
         completed = False
         agent_response_content = ""
-        agent_response_audio = None  # Track audio data
+        accumulated_audio = []  # ACCUMULATE all audio chunks here
+        response_audio_data = None  # Track response_audio separately
         
         try:
             # Handle the case where agent is not found
@@ -803,43 +783,64 @@ class AgentRuntimeService:
             # Stream agent responses and collect the content
             async for response in cls.run_agent_stream(agent, prompt, user, conv_id, cancel_event=cancel_event, stream=stream):
                 # Collect agent response content for conversation saving
-                if response.get("type") == "agent_chunk" and response.get("payload", {}).get("content"):
-                    agent_response_content += response["payload"]["content"]
-                    # Collect audio if present
-                    payload_audio = response.get("payload", {}).get("audio")
-                    payload_response_audio = response.get("payload", {}).get("response_audio")
+                if response.get("type") == "agent_chunk":
+                    # Accumulate content
+                    chunk_content = response.get("payload", {}).get("content")
+                    if chunk_content:
+                        agent_response_content += chunk_content
                     
-                    if payload_audio or payload_response_audio:
-                        agent_response_audio = {
-                            "audio": payload_audio,
-                            "response_audio": payload_response_audio
-                        }
+                    # ACCUMULATE audio chunks - don't overwrite!
+                    payload_audio = response.get("payload", {}).get("audio")
+                    if payload_audio:
+                        if isinstance(payload_audio, list):
+                            accumulated_audio.extend(payload_audio)
+                        else:
+                            accumulated_audio.append(payload_audio)
+                    
+                    # Track response_audio (usually in last chunk)
+                    payload_response_audio = response.get("payload", {}).get("response_audio")
+                    if payload_response_audio:
+                        response_audio_data = payload_response_audio
+                        
                 elif response.get("type") == "agent_response":
                     agent_response_content += response["payload"]["content"]
-                    # Collect audio if present
-                    payload_audio = response.get("payload", {}).get("audio")
-                    payload_response_audio = response.get("payload", {}).get("response_audio")
                     
-                    if payload_audio or payload_response_audio:
-                        agent_response_audio = {
-                            "audio": payload_audio,
-                            "response_audio": payload_response_audio
-                        }
+                    # For non-streaming, just get the audio directly
+                    payload_audio = response.get("payload", {}).get("audio")
+                    if payload_audio:
+                        if isinstance(payload_audio, list):
+                            accumulated_audio.extend(payload_audio)
+                        else:
+                            accumulated_audio.append(payload_audio)
+                    
+                    payload_response_audio = response.get("payload", {}).get("response_audio")
+                    if payload_response_audio:
+                        response_audio_data = payload_response_audio
+                    
+                    completed = True
+                elif response.get("type") == "agent_run_complete":
                     completed = True
                     
                 yield response
                 
         except Exception as e:
             logger.error(f"Failed to execute agent '{agent_name}': {e}")
-            logger.error(f"🎵 [AUDIO_DEBUG] Exception in execute_agent: {e}")
             error_message = f"Failed to execute agent: {str(e)}"
             agent_response_content = f"Error: {error_message}"
             yield {"type": "error", "error": error_message}
         finally:
-            # Automatically save conversation to history when execution completes
-            logger.info(f"🎵 [AUDIO_DEBUG] Finally block - conv_id: {conv_id}, completed: {completed}, has_audio: {bool(agent_response_audio)}")
-            if conv_id and prompt.strip():
-                logger.info(f"🎵 [AUDIO_DEBUG] Saving conversation (has audio: {bool(agent_response_audio)})")
+            # Build final audio object from accumulated chunks
+            agent_response_audio = None
+            if accumulated_audio or response_audio_data:
+                agent_response_audio = {}
+                if accumulated_audio:
+                    agent_response_audio["audio"] = accumulated_audio
+                if response_audio_data:
+                    agent_response_audio["response_audio"] = response_audio_data
+            
+            # ONLY save conversation if it completed successfully
+            if completed and conv_id and prompt.strip() and (agent_response_content or accumulated_audio):
+                logger.info(f"Saving conversation: conv_id={conv_id}, audio_chunks={len(accumulated_audio)}")
                 await cls._save_conversation_to_history(
                     conv_id=conv_id,
                     agent_name=agent_name,

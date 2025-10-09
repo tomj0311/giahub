@@ -43,6 +43,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import VolumeUpIcon from '@mui/icons-material/VolumeUp'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import PauseIcon from '@mui/icons-material/Pause'
+import ReplayIcon from '@mui/icons-material/Replay'
 import { agentService } from '../services/agentService'
 import { agentRuntimeService } from '../services/agentRuntimeService'
 import sharedApiService from '../utils/apiService'
@@ -189,22 +190,14 @@ const detectBase64Images = (content) => {
 
 // Utility function to convert PCM16 base64 to WAV base64
 const pcm16ToWav = (base64Pcm16, sampleRate = 24000, numChannels = 1) => {
-  console.log('🎵 pcm16ToWav: Starting conversion')
-  console.log('🎵 pcm16ToWav: Input base64 length:', base64Pcm16?.length)
-  console.log('🎵 pcm16ToWav: Sample rate:', sampleRate)
-  console.log('🎵 pcm16ToWav: Num channels:', numChannels)
-  
   try {
     // Decode base64 to binary
-    console.log('🎵 pcm16ToWav: Decoding base64...')
     const pcmData = atob(base64Pcm16)
-    console.log('🎵 pcm16ToWav: Decoded PCM data length:', pcmData.length)
     
     const pcmBytes = new Uint8Array(pcmData.length)
     for (let i = 0; i < pcmData.length; i++) {
       pcmBytes[i] = pcmData.charCodeAt(i)
     }
-    console.log('🎵 pcm16ToWav: Created PCM bytes array, length:', pcmBytes.length)
     
     // Calculate sizes
     const dataSize = pcmBytes.length
@@ -212,15 +205,9 @@ const pcm16ToWav = (base64Pcm16, sampleRate = 24000, numChannels = 1) => {
     const byteRate = sampleRate * numChannels * 2 // 2 bytes per sample (16-bit)
     const blockAlign = numChannels * 2
     
-    console.log('🎵 pcm16ToWav: Data size:', dataSize)
-    console.log('🎵 pcm16ToWav: File size:', fileSize)
-    console.log('🎵 pcm16ToWav: Byte rate:', byteRate)
-    console.log('🎵 pcm16ToWav: Block align:', blockAlign)
-    
     // Create WAV file buffer
     const wavBuffer = new ArrayBuffer(fileSize)
     const view = new DataView(wavBuffer)
-    console.log('🎵 pcm16ToWav: Created WAV buffer')
     
     // Write WAV header
     // "RIFF" chunk descriptor
@@ -247,18 +234,15 @@ const pcm16ToWav = (base64Pcm16, sampleRate = 24000, numChannels = 1) => {
     wavData.set(pcmBytes, 44)
     
     // Convert to base64
-    console.log('🎵 pcm16ToWav: Converting to base64...')
     let binary = ''
     const bytes = new Uint8Array(wavBuffer)
     for (let i = 0; i < bytes.byteLength; i++) {
       binary += String.fromCharCode(bytes[i])
     }
     const result = btoa(binary)
-    console.log('🎵 pcm16ToWav: Conversion complete, result length:', result.length)
     return result
   } catch (error) {
-    console.error('🔥 pcm16ToWav: Failed to convert PCM16 to WAV:', error)
-    console.error('🔥 pcm16ToWav: Error details:', error.message, error.stack)
+    console.error('Failed to convert PCM16 to WAV:', error.message)
     return null
   }
 }
@@ -266,20 +250,19 @@ const pcm16ToWav = (base64Pcm16, sampleRate = 24000, numChannels = 1) => {
 // Simple Audio Player Component using Web Audio API for gapless playback
 const AudioPlayer = ({ audioChunks }) => {
   const [isPlaying, setIsPlaying] = useState(false)
+  const [hasAudio, setHasAudio] = useState(false) // Track if audio is available for replay
   const audioContextRef = useRef(null)
   const processedChunksRef = useRef(0)
   const nextStartTimeRef = useRef(0)
   const scheduledSourcesRef = useRef([])
+  const allAudioBuffersRef = useRef([]) // Store all decoded audio buffers for replay
 
   // Initialize Audio Context
   useEffect(() => {
-    console.log('🎵 AudioPlayer: Initializing Audio Context')
     audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)()
-    console.log('🎵 AudioPlayer: Audio Context created:', audioContextRef.current)
     
     return () => {
       if (audioContextRef.current) {
-        console.log('🎵 AudioPlayer: Closing Audio Context')
         audioContextRef.current.close()
       }
     }
@@ -287,67 +270,39 @@ const AudioPlayer = ({ audioChunks }) => {
 
   // Process new chunks and schedule them for gapless playback
   useEffect(() => {
-    console.log('🎵 AudioPlayer: Processing chunks effect triggered')
-    console.log('🎵 AudioPlayer: audioChunks:', audioChunks)
-    console.log('🎵 AudioPlayer: audioChunks length:', audioChunks?.length)
-    
-    if (!audioChunks || audioChunks.length === 0) {
-      console.log('🎵 AudioPlayer: No audio chunks, returning')
-      return
-    }
-    if (!audioContextRef.current) {
-      console.log('🎵 AudioPlayer: No audio context, returning')
-      return
-    }
+    if (!audioChunks || audioChunks.length === 0) return
+    if (!audioContextRef.current) return
 
     const newChunks = audioChunks.slice(processedChunksRef.current)
-    console.log('🎵 AudioPlayer: New chunks to process:', newChunks.length)
-    console.log('🎵 AudioPlayer: New chunks data:', newChunks)
-    
-    if (newChunks.length === 0) {
-      console.log('🎵 AudioPlayer: No new chunks to process')
-      return
-    }
+    if (newChunks.length === 0) return
 
     const audioContext = audioContextRef.current
 
     // Combine new chunks into a single PCM buffer for smoother playback
     let combinedPcm = ''
-    newChunks.forEach((chunk, idx) => {
-      console.log(`🎵 AudioPlayer: Processing chunk ${idx}:`, chunk)
+    newChunks.forEach((chunk) => {
       if (chunk.data) {
         combinedPcm += chunk.data
-        console.log(`🎵 AudioPlayer: Added chunk ${idx} data, total length now:`, combinedPcm.length)
-      } else {
-        console.log(`🎵 AudioPlayer: Chunk ${idx} has no data property`)
       }
     })
-    
-    console.log('🎵 AudioPlayer: Combined PCM length:', combinedPcm.length)
 
     if (combinedPcm) {
-      console.log('🎵 AudioPlayer: Converting PCM to WAV...')
       // Convert PCM16 to WAV
       const wavBase64 = pcm16ToWav(combinedPcm)
-      console.log('🎵 AudioPlayer: WAV conversion result:', wavBase64 ? `Success (${wavBase64.length} chars)` : 'Failed')
       
       if (wavBase64) {
         // Decode base64 to array buffer
-        console.log('🎵 AudioPlayer: Decoding base64 to array buffer...')
         const binaryString = atob(wavBase64)
         const bytes = new Uint8Array(binaryString.length)
         for (let i = 0; i < binaryString.length; i++) {
           bytes[i] = binaryString.charCodeAt(i)
         }
-        console.log('🎵 AudioPlayer: Array buffer created, size:', bytes.length)
 
         // Decode audio data
-        console.log('🎵 AudioPlayer: Decoding audio data...')
         audioContext.decodeAudioData(bytes.buffer.slice(0), (audioBuffer) => {
-          console.log('🎵 AudioPlayer: Audio decoded successfully!')
-          console.log('🎵 AudioPlayer: Audio buffer duration:', audioBuffer.duration)
-          console.log('🎵 AudioPlayer: Audio buffer sample rate:', audioBuffer.sampleRate)
-          console.log('🎵 AudioPlayer: Audio buffer channels:', audioBuffer.numberOfChannels)
+          // Store the audio buffer for replay
+          allAudioBuffersRef.current.push(audioBuffer)
+          setHasAudio(true)
           
           const source = audioContext.createBufferSource()
           source.buffer = audioBuffer
@@ -355,50 +310,33 @@ const AudioPlayer = ({ audioChunks }) => {
 
           // Schedule this chunk to play right after the previous one
           const startTime = Math.max(audioContext.currentTime, nextStartTimeRef.current)
-          console.log('🎵 AudioPlayer: Scheduling playback at:', startTime)
-          console.log('🎵 AudioPlayer: Current time:', audioContext.currentTime)
-          console.log('🎵 AudioPlayer: Next start time ref:', nextStartTimeRef.current)
-          
           source.start(startTime)
-          console.log('🎵 AudioPlayer: Playback started!')
           
           // Update next start time for gapless playback
           nextStartTimeRef.current = startTime + audioBuffer.duration
-          console.log('🎵 AudioPlayer: Updated next start time to:', nextStartTimeRef.current)
           
           // Track playing state
           setIsPlaying(true)
-          console.log('🎵 AudioPlayer: Set isPlaying to true')
           
           source.onended = () => {
-            console.log('🎵 AudioPlayer: Source playback ended')
             // Check if there are more sources scheduled
             const index = scheduledSourcesRef.current.indexOf(source)
             if (index > -1) {
               scheduledSourcesRef.current.splice(index, 1)
             }
-            console.log('🎵 AudioPlayer: Remaining scheduled sources:', scheduledSourcesRef.current.length)
             if (scheduledSourcesRef.current.length === 0) {
               setIsPlaying(false)
-              console.log('🎵 AudioPlayer: Set isPlaying to false (all sources ended)')
             }
           }
 
           scheduledSourcesRef.current.push(source)
-          console.log('🎵 AudioPlayer: Total scheduled sources:', scheduledSourcesRef.current.length)
         }, (error) => {
-          console.error('🔥 AudioPlayer: Error decoding audio:', error)
-          console.error('🔥 AudioPlayer: Error details:', error.message, error.name)
+          console.error('Error decoding audio:', error.message)
         })
-      } else {
-        console.log('🎵 AudioPlayer: No WAV base64 data, skipping playback')
       }
-    } else {
-      console.log('🎵 AudioPlayer: No combined PCM data')
     }
 
     processedChunksRef.current = audioChunks.length
-    console.log('🎵 AudioPlayer: Updated processedChunksRef to:', processedChunksRef.current)
   }, [audioChunks])
 
   // Cleanup
@@ -415,6 +353,51 @@ const AudioPlayer = ({ audioChunks }) => {
     }
   }, [])
 
+  // Replay function - play all stored audio buffers
+  const handleReplay = () => {
+    if (!audioContextRef.current || allAudioBuffersRef.current.length === 0) {
+      return
+    }
+
+    // Stop any currently playing audio
+    scheduledSourcesRef.current.forEach(source => {
+      try {
+        source.stop()
+      } catch (e) {
+        // Already stopped
+      }
+    })
+    scheduledSourcesRef.current = []
+    
+    const audioContext = audioContextRef.current
+    let currentTime = audioContext.currentTime
+    
+    // Schedule all buffers for playback
+    allAudioBuffersRef.current.forEach((audioBuffer, index) => {
+      const source = audioContext.createBufferSource()
+      source.buffer = audioBuffer
+      source.connect(audioContext.destination)
+      
+      source.start(currentTime)
+      currentTime += audioBuffer.duration
+      
+      source.onended = () => {
+        const idx = scheduledSourcesRef.current.indexOf(source)
+        if (idx > -1) {
+          scheduledSourcesRef.current.splice(idx, 1)
+        }
+        if (scheduledSourcesRef.current.length === 0) {
+          setIsPlaying(false)
+        }
+      }
+      
+      scheduledSourcesRef.current.push(source)
+    })
+    
+    setIsPlaying(true)
+    nextStartTimeRef.current = currentTime
+  }
+
   return (
     <Box sx={{ 
       display: 'flex', 
@@ -429,13 +412,22 @@ const AudioPlayer = ({ audioChunks }) => {
     }}>
       <IconButton 
         size="small" 
-        disabled
+        onClick={handleReplay}
+        disabled={isPlaying || !hasAudio}
         sx={{ 
-          bgcolor: isPlaying ? 'success.main' : 'action.disabled', 
+          bgcolor: isPlaying ? 'success.main' : (hasAudio ? 'primary.main' : 'action.disabled'), 
           color: 'primary.contrastText',
+          '&:hover': {
+            bgcolor: isPlaying ? 'success.dark' : (hasAudio ? 'primary.dark' : 'action.selected'),
+          },
+          '&.Mui-disabled': {
+            bgcolor: 'action.disabled',
+            color: 'text.disabled'
+          }
         }}
+        title={isPlaying ? 'Playing...' : (hasAudio ? 'Replay audio' : 'No audio available')}
       >
-        {isPlaying ? <PlayArrowIcon fontSize="small" /> : <VolumeUpIcon fontSize="small" />}
+        {isPlaying ? <PlayArrowIcon fontSize="small" /> : <ReplayIcon fontSize="small" />}
       </IconButton>
       
       <Box sx={{ flex: 1 }}>
@@ -500,11 +492,6 @@ export default function AgentPlayground({ user }) {
     has_prev: false
   })
 
-  // Debug state changes
-  useEffect(() => {}, [conversations])
-  useEffect(() => {}, [historyPagination])
-  useEffect(() => {}, [uploadedFiles])
-
   // Agent selector dialog
   const [selectorOpen, setSelectorOpen] = useState(false)
 
@@ -526,9 +513,6 @@ export default function AgentPlayground({ user }) {
   const [atBottom, setAtBottom] = useState(true)
   // Dynamic input area height spacing so last message rests right above input (no extra gap / no overlap)
   const [inputHeight, setInputHeight] = useState(180) // fallback default
-
-  // Debug component mount
-  useEffect(() => { return () => {}; }, [])
 
   useEffect(() => {
     const loadAgents = async () => {
@@ -811,7 +795,6 @@ export default function AgentPlayground({ user }) {
             if (line.startsWith('data: ')) {
               try {
                 const event = JSON.parse(line.slice(6))
-                console.log('🎵 SSE Event received:', event.type, 'payload keys:', Object.keys(event.payload || {}))
 
                 if (event.type === 'agent_chunk') {
                   // Process content if present
@@ -833,8 +816,6 @@ export default function AgentPlayground({ user }) {
                   
                   // Store audio data if present - accumulate audio chunks
                   if (event.payload.audio || event.payload.response_audio) {
-                    console.log('🎵 SSE: Received audio in event payload')
-                    
                     setMessageAudio(prev => {
                       const existingAudio = prev[agentMsgId] || { audio: [], response_audio: null, transcript: '' }
                       
@@ -873,7 +854,6 @@ export default function AgentPlayground({ user }) {
                           transcript: updatedTranscript
                         }
                       }
-                      console.log('🎵 SSE: Updated messageAudio state with', updatedAudio.length, 'audio chunks')
                       return newAudioState
                     })
                   }
@@ -948,8 +928,6 @@ export default function AgentPlayground({ user }) {
   }, [selected, prompt, stagedFiles, uploadedFiles, messages, currentConversationId, sessionCollection, vectorCollectionName, token])
 
   const openHistory = async (page = 1) => {
-  // Open history invoked
-
     // Only show full loading on initial open, not on pagination
     const isInitialLoad = !historyOpen
     
@@ -965,28 +943,22 @@ export default function AgentPlayground({ user }) {
       const currentPage = page
       const pageSize = 5  // Fixed page size to match backend
 
-
       if (!token) {
         throw new Error('No authentication token available')
       }
 
-      console.log('🎯 Selected agent for filtering:', selected)
       const params = {
         page: currentPage,
         page_size: pageSize,
         ...(selected && { agent_name: selected })
       }
-      console.log('📡 API call params:', params)
       
       const result = await agentRuntimeService.listConversations(token, params)
 
-
       // Check if result has pagination structure
       if (result && result.conversations && result.pagination) {
-  setConversations(result.conversations)
-  setHistoryPagination(result.pagination)
-
-        // Verify state was actually set (note: this might show old state due to async nature)
+        setConversations(result.conversations)
+        setHistoryPagination(result.pagination)
       } else if (Array.isArray(result)) {
         setConversations(result)
         setHistoryPagination({
@@ -1019,10 +991,7 @@ export default function AgentPlayground({ user }) {
         })
       }
     } catch (e) {
-      console.error('💥 History list API failed:', e)
-      console.error('💥 Error details:', e.message, e.stack)
-      console.error('💥 Error name:', e.name)
-      console.error('💥 Full error object:', e)
+      console.error('Failed to load conversation history:', e.message)
       setConversations([])
       setHistoryPagination({
         page: 1,
@@ -1056,7 +1025,7 @@ export default function AgentPlayground({ user }) {
       const lastUserMsg = (conv.messages || []).filter(msg => msg.role === 'user').pop()
       setLastUserMessage(lastUserMsg ? lastUserMsg.content : '')
     } catch (e) {
-      console.error('load conversation failed', e)
+      console.error('Failed to load conversation:', e.message)
     }
   }
 
@@ -1091,7 +1060,6 @@ export default function AgentPlayground({ user }) {
 
   // Handle edit BPMN button click
   const handleEditBPMN = (bpmnXML) => {
-    
     // Navigate to dashboard/bpmn with the XML data
     navigate('/dashboard/bpmn', {
       state: {
@@ -1099,7 +1067,6 @@ export default function AgentPlayground({ user }) {
         editMode: true
       }
     })
-    
   }
 
   const renderGroupedList = () => {
