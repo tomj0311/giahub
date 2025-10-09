@@ -124,6 +124,21 @@ export default function Agent({ user }) {
         sort_order: 'desc'
       });
 
+      // Build query parameters for models, tools, knowledge to get max items (backend limit is 100)
+      const maxPageSize = '100';
+      const modelsQueryParams = new URLSearchParams({
+        page: '1',
+        page_size: maxPageSize
+      });
+      const toolsQueryParams = new URLSearchParams({
+        page: '1',
+        page_size: maxPageSize
+      });
+      const knowledgeQueryParams = new URLSearchParams({
+        page: '1',
+        page_size: maxPageSize
+      });
+
       // Use the singleton service for all API calls to prevent duplicates
       const [agentsResult, modelsResult, toolsResult, knowledgeResult] = await Promise.all([
         sharedApiService.makeRequest(
@@ -132,19 +147,19 @@ export default function Agent({ user }) {
           { page, pageSize, token: token?.substring(0, 10) }
         ),
         sharedApiService.makeRequest(
-          '/api/models/configs',
+          `/api/models/configs?${modelsQueryParams}`,
           { headers: authHeaders },
-          { token: token?.substring(0, 10) }
+          { token: token?.substring(0, 10), bypassCache: true }
         ),
         sharedApiService.makeRequest(
-          '/api/tools/configs',
+          `/api/tools/configs?${toolsQueryParams}`,
           { headers: authHeaders },
-          { token: token?.substring(0, 10) }
+          { token: token?.substring(0, 10), bypassCache: true }
         ),
         sharedApiService.makeRequest(
-          '/api/knowledge/configs',
+          `/api/knowledge/configs?${knowledgeQueryParams}`,
           { headers: authHeaders },
-          { token: token?.substring(0, 10) }
+          { token: token?.substring(0, 10), bypassCache: true }
         )
       ])
 
