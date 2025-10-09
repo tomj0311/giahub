@@ -24,6 +24,8 @@ import {
 	HelpCircle,
 	Code,
 	TestTube,
+	Package,
+	Box,
 	// New unique icons for the reorganized menu
 	Star,
 	Gamepad2,
@@ -60,6 +62,8 @@ export const iconMap = {
 	Monitor,
 	Code,
 	TestTube,
+	Package,
+	Box,
 	Users,
 	Shield,
 	UserPlus,

@@ -139,17 +139,29 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 					icon: 'Play'
 				},
 				{
-					label: 'Function Tester',
-					to: '/dashboard/function-tester',
-					icon: 'TestTube'
+					label: 'Utilities',
+					icon: 'Package',
+					expandable: true,
+					children: [
+						{
+							label: 'Function Tester',
+							to: '/dashboard/function-tester',
+							icon: 'TestTube'
+						},
+						{
+							label: 'Generate UI Components',
+							to: '/dashboard/dynamic',
+							icon: 'Code'
+						},
+						{
+							label: 'Component Loader',
+							to: '/dashboard/component-loader',
+							icon: 'Box'
+						}
+					]
 				},
 				{
-					label: 'Generate UI Components',
-					to: '/dashboard/dynamic',
-					icon: 'Code'
-				},
-				{
-					label: 'Create Process Diagrams',
+					label: 'Create Processes',
 					to: '/dashboard/bpmn',
 					icon: 'GitBranch'
 				},
@@ -292,48 +304,146 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 
 					{/* Submenu items */}
 					{isExpanded && (drawerOpen || isMobile) && item.children?.map((child) => {
-						const selected = location.pathname === child.to
-						const ChildIcon = getIconComponent(child.icon)
-						return (
-							<ListItemButton
-								key={child.to}
-								component={RouterLink}
-								to={child.to}
-								selected={selected}
-								sx={{
-									minHeight: 32,
-									px: 0.5,
-									py: 0.25,
-									my: 0.1,
-									mx: 0.5,
-									ml: 2.5,
-									borderRadius: 1.5,
-									'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
-									'&:hover': {
-										backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
-										'& .MuiListItemText-primary': { color: theme.palette.text.primary }
-									},
-									'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
-									'&.Mui-selected': {
-										backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'
-									}
-								}}
-								onClick={() => { if (isMobile) setMobileOpen(false) }}
-							>
-								<ListItemIcon sx={{ minWidth: 24, color: 'text.secondary' }}>
-									<ChildIcon size={16} strokeWidth={1.8} />
-								</ListItemIcon>
-								<ListItemText
-									primary={child.label}
-									primaryTypographyProps={{
-										fontSize: 11.5,
-										fontWeight: 500,
-										letterSpacing: 0.2,
-										color: selected ? 'text.primary' : 'text.secondary'
+						// Check if child has nested children (submenu within submenu)
+						if (child.expandable && child.children) {
+							const isChildExpanded = expandedSections[child.label] || false
+							const ChildExpandIcon = isChildExpanded ? ChevronUp : ChevronDown
+							const ChildIcon = getIconComponent(child.icon)
+							const isChildSectionSelected = child.children?.some((nestedChild) =>
+								location.pathname === nestedChild.to || location.pathname.startsWith(nestedChild.to)
+							)
+							
+							return (
+								<React.Fragment key={child.label}>
+									<ListItemButton
+										onClick={() => toggleSection(child.label)}
+										selected={Boolean(isChildSectionSelected)}
+										sx={{
+											minHeight: 32,
+											px: 0.5,
+											py: 0.25,
+											my: 0.1,
+											mx: 0.5,
+											ml: 2.5,
+											borderRadius: 1.5,
+											'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
+											'&:hover': {
+												backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+												'& .MuiListItemText-primary': { color: theme.palette.text.primary }
+											},
+											'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
+											'&.Mui-selected': {
+												backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'
+											}
+										}}
+									>
+										<ListItemIcon sx={{ minWidth: 24, color: 'text.secondary' }}>
+											<ChildIcon size={16} strokeWidth={1.8} />
+										</ListItemIcon>
+										<ListItemText
+											primary={child.label}
+											primaryTypographyProps={{
+												fontSize: 11.5,
+												fontWeight: 500,
+												letterSpacing: 0.2,
+												color: isChildSectionSelected ? 'text.primary' : 'text.secondary'
+											}}
+										/>
+										<ChildExpandIcon size={14} color={theme.palette.text.secondary} />
+									</ListItemButton>
+									
+									{/* Nested submenu items */}
+									{isChildExpanded && child.children?.map((nestedChild) => {
+										const nestedSelected = location.pathname === nestedChild.to
+										const NestedIcon = getIconComponent(nestedChild.icon)
+										return (
+											<ListItemButton
+												key={nestedChild.to}
+												component={RouterLink}
+												to={nestedChild.to}
+												selected={nestedSelected}
+												sx={{
+													minHeight: 28,
+													px: 0.5,
+													py: 0.25,
+													my: 0.1,
+													mx: 0.5,
+													ml: 4.5,
+													borderRadius: 1.5,
+													'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
+													'&:hover': {
+														backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.12)',
+														'& .MuiListItemText-primary': { color: theme.palette.text.primary }
+													},
+													'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
+													'&.Mui-selected': {
+														backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.12)'
+													}
+												}}
+												onClick={() => { if (isMobile) setMobileOpen(false) }}
+											>
+												<ListItemIcon sx={{ minWidth: 20, color: 'text.secondary' }}>
+													<NestedIcon size={14} strokeWidth={1.8} />
+												</ListItemIcon>
+												<ListItemText
+													primary={nestedChild.label}
+													primaryTypographyProps={{
+														fontSize: 11,
+														fontWeight: 500,
+														letterSpacing: 0.2,
+														color: nestedSelected ? 'text.primary' : 'text.secondary'
+													}}
+												/>
+											</ListItemButton>
+										)
+									})}
+								</React.Fragment>
+							)
+						} else {
+							// Regular child item without nested children
+							const selected = location.pathname === child.to
+							const ChildIcon = getIconComponent(child.icon)
+							return (
+								<ListItemButton
+									key={child.to}
+									component={RouterLink}
+									to={child.to}
+									selected={selected}
+									sx={{
+										minHeight: 32,
+										px: 0.5,
+										py: 0.25,
+										my: 0.1,
+										mx: 0.5,
+										ml: 2.5,
+										borderRadius: 1.5,
+										'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
+										'&:hover': {
+											backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+											'& .MuiListItemText-primary': { color: theme.palette.text.primary }
+										},
+										'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
+										'&.Mui-selected': {
+											backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'
+										}
 									}}
-								/>
-							</ListItemButton>
-						)
+									onClick={() => { if (isMobile) setMobileOpen(false) }}
+								>
+									<ListItemIcon sx={{ minWidth: 24, color: 'text.secondary' }}>
+										<ChildIcon size={16} strokeWidth={1.8} />
+									</ListItemIcon>
+									<ListItemText
+										primary={child.label}
+										primaryTypographyProps={{
+											fontSize: 11.5,
+											fontWeight: 500,
+											letterSpacing: 0.2,
+											color: selected ? 'text.primary' : 'text.secondary'
+										}}
+									/>
+								</ListItemButton>
+							)
+						}
 					})}
 				</React.Fragment>
 			)
