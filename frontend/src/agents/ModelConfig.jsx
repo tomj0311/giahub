@@ -76,6 +76,14 @@ function ModelConfig({ user }) {
     const [categories, setCategories] = useState([]);
     const [loadingCategories, setLoadingCategories] = useState(false);
 
+    // Form validation errors
+    const [errors, setErrors] = useState({
+        name: '',
+        model: '',
+        model_params: {},
+        embedding_params: {}
+    });
+
     // Discover components using HTTP
     const discoverComponents = useCallback(async () => {
         if (!isMountedRef.current) return;
@@ -352,6 +360,83 @@ function ModelConfig({ user }) {
         };
     }, []); // EMPTY DEPENDENCIES - NO BULLSHIT
 
+    const validateForm = () => {
+        const newErrors = {
+            name: '',
+            model: '',
+            model_params: {},
+            embedding_params: {}
+        }
+
+        // Validate name
+        if (!form.name || form.name.trim() === '') {
+            newErrors.name = 'Configuration name is required'
+        }
+
+        // Validate model selection
+        if (!form.model) {
+            newErrors.model = 'Model selection is required'
+        }
+
+        // Validate required model parameters (those without defaults)
+        const modelIntro = form.model ? introspectCache[form.model] : null
+        if (modelIntro && modelIntro.formatted_params) {
+            modelIntro.formatted_params.forEach(paramFormatted => {
+                const paramName = paramFormatted.split(':')[0].trim()
+                const descSplitIdx = paramFormatted.indexOf(' - ')
+                const mainPart = descSplitIdx !== -1 ? paramFormatted.slice(0, descSplitIdx) : paramFormatted
+                const eqIdx = mainPart.indexOf('=')
+                let defaultRaw = ''
+                if (eqIdx !== -1) {
+                    defaultRaw = mainPart.slice(eqIdx + 1).trim()
+                }
+                const hasDefault = defaultRaw !== '' && defaultRaw.toLowerCase() !== 'none'
+                
+                // If parameter has no default and no value provided, it's required
+                if (!hasDefault && (!form.model_params[paramName] || form.model_params[paramName].toString().trim() === '')) {
+                    newErrors.model_params[paramName] = `${paramName} is required`
+                }
+            })
+        }
+
+        // Validate required embedding parameters (those without defaults)
+        const embeddingIntro = form.embedding ? introspectCache[form.embedding] : null
+        if (embeddingIntro && embeddingIntro.formatted_params) {
+            embeddingIntro.formatted_params.forEach(paramFormatted => {
+                const paramName = paramFormatted.split(':')[0].trim()
+                const descSplitIdx = paramFormatted.indexOf(' - ')
+                const mainPart = descSplitIdx !== -1 ? paramFormatted.slice(0, descSplitIdx) : paramFormatted
+                const eqIdx = mainPart.indexOf('=')
+                let defaultRaw = ''
+                if (eqIdx !== -1) {
+                    defaultRaw = mainPart.slice(eqIdx + 1).trim()
+                }
+                const hasDefault = defaultRaw !== '' && defaultRaw.toLowerCase() !== 'none'
+                
+                // If parameter has no default and no value provided, it's required
+                if (!hasDefault && (!form.embedding_params[paramName] || form.embedding_params[paramName].toString().trim() === '')) {
+                    newErrors.embedding_params[paramName] = `${paramName} is required`
+                }
+            })
+        }
+
+        setErrors(newErrors)
+        
+        // Return true if no errors
+        const hasModelParamErrors = Object.keys(newErrors.model_params).length > 0
+        const hasEmbeddingParamErrors = Object.keys(newErrors.embedding_params).length > 0
+        return !newErrors.name && !newErrors.model && !hasModelParamErrors && !hasEmbeddingParamErrors
+    }
+
+    const resetErrors = () => {
+        setErrors({
+            name: '',
+            model: '',
+            model_params: {},
+            embedding_params: {}
+        })
+    }
+
     function ensureIntrospection(path, kind) {
         if (!path || introspectCache[path]) return;
         introspectModel(path, kind);
@@ -390,10 +475,9 @@ function ModelConfig({ user }) {
     async function saveModelConfig() {
     // removed save start debug logs
         
-        if (!form.name || !form.model) {
-            // removed validation failed log
-            showError('Name and model selection are required');
-            return;
+        // Validate form before saving
+        if (!validateForm()) {
+            return
         }
         
     // removed validation passed log
@@ -542,6 +626,7 @@ function ModelConfig({ user }) {
     // removed opening create dialog log
         setForm({ id: null, name: '', category: '', model: '', model_params: {}, embedding: '', embedding_params: {} });
         setIsEditMode(false);
+        resetErrors();
         setDialogOpen(true);
     // removed create dialog opened log
     };
@@ -549,6 +634,7 @@ function ModelConfig({ user }) {
     const openEdit = (configName) => {
     // removed opening edit dialog log
         loadExistingConfig(configName);
+        resetErrors();
         setDialogOpen(true);
     // removed edit dialog opened log
     };
@@ -635,7 +721,15 @@ function ModelConfig({ user }) {
                 </CardContent>
             </Card>
 
-            <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
+            <Dialog 
+                open={dialogOpen} 
+                onClose={() => {
+                    setDialogOpen(false);
+                    resetErrors();
+                }} 
+                maxWidth="md" 
+                fullWidth
+            >
                 <DialogTitle>{isEditMode ? 'Edit Model Configuration' : 'Create Model Configuration'}</DialogTitle>
                 <DialogContent dividers>
                     <Stack spacing={1}>
@@ -651,6 +745,10 @@ function ModelConfig({ user }) {
                             loading={loadingConfigs}
                             loadingText="Loading configurations…"
                             onChange={(_, v) => {
+                                // Clear error when user changes the field
+                                if (errors.name) {
+                                    setErrors(prev => ({ ...prev, name: '' }));
+                                }
                                 // If selecting from dropdown, load immediately; otherwise just update name
                                 if (v && existingConfigs.some(c => c.name === v)) {
                                     loadExistingConfig(v);
@@ -659,6 +757,10 @@ function ModelConfig({ user }) {
                                 }
                             }}
                             onInputChange={(_, v) => {
+                                // Clear error when user types
+                                if (errors.name) {
+                                    setErrors(prev => ({ ...prev, name: '' }));
+                                }
                                 // Only update the form name while typing, don't load config
                                 setForm(f => ({ ...f, name: v }));
                             }}
@@ -669,6 +771,8 @@ function ModelConfig({ user }) {
                                     placeholder="Enter a short descriptive name"
                                     size="small"
                                     required
+                                    error={!!errors.name}
+                                    helperText={errors.name}
                                     onBlur={(e) => {
                                         // Load existing config only when user stops typing (on blur)
                                         const inputValue = e.target.value;
@@ -709,10 +813,22 @@ function ModelConfig({ user }) {
                                 loading={loadingDiscovery && !(components.models || []).length}
                                 loadingText="Loading models…"
                                 onChange={(_, v) => {
+                                    // Clear error when user changes the field
+                                    if (errors.model) {
+                                        setErrors(prev => ({ ...prev, model: '' }));
+                                    }
                                     setForm(f => ({ ...f, model: v || '', model_params: {} }));
                                     ensureIntrospection(v, 'model');
                                 }}
-                                renderInput={(params) => <TextField {...params} label="Select Model" />}
+                                renderInput={(params) => 
+                                    <TextField 
+                                        {...params} 
+                                        label="Select Model" 
+                                        required
+                                        error={!!errors.model}
+                                        helperText={errors.model}
+                                    />
+                                }
                             />
                             <Button variant="gradientBorder" size="medium" onClick={discoverComponents}>Refresh</Button>
                         </Box>
@@ -767,10 +883,22 @@ function ModelConfig({ user }) {
                                                 label={paramName}
                                                 InputLabelProps={{ shrink: true }}
                                                 value={form.model_params[paramName] || ''}
-                                                onChange={(e) => setForm(f => ({ ...f, model_params: { ...f.model_params, [paramName]: e.target.value } }))}
+                                                onChange={(e) => {
+                                                    // Clear error when user types
+                                                    if (errors.model_params[paramName]) {
+                                                        setErrors(prev => ({
+                                                            ...prev,
+                                                            model_params: { ...prev.model_params, [paramName]: '' }
+                                                        }));
+                                                    }
+                                                    setForm(f => ({ ...f, model_params: { ...f.model_params, [paramName]: e.target.value } }));
+                                                }}
                                                 placeholder={placeholderText}
                                                 sx={{ gridColumn }}
                                                 type={paramType.includes('int') || paramType.includes('float') ? 'number' : 'text'}
+                                                required={!hasDefault}
+                                                error={!!errors.model_params[paramName]}
+                                                helperText={errors.model_params[paramName]}
                                             />
                                         );
                                     })}
@@ -825,10 +953,22 @@ function ModelConfig({ user }) {
                                                 label={paramName}
                                                 InputLabelProps={{ shrink: true }}
                                                 value={form.embedding_params[paramName] || ''}
-                                                onChange={(e) => setForm(f => ({ ...f, embedding_params: { ...f.embedding_params, [paramName]: e.target.value } }))}
+                                                onChange={(e) => {
+                                                    // Clear error when user types
+                                                    if (errors.embedding_params[paramName]) {
+                                                        setErrors(prev => ({
+                                                            ...prev,
+                                                            embedding_params: { ...prev.embedding_params, [paramName]: '' }
+                                                        }));
+                                                    }
+                                                    setForm(f => ({ ...f, embedding_params: { ...f.embedding_params, [paramName]: e.target.value } }));
+                                                }}
                                                 placeholder={placeholderText}
                                                 sx={{ gridColumn }}
                                                 type={paramType.includes('int') || paramType.includes('float') ? 'number' : 'text'}
+                                                required={!hasDefault}
+                                                error={!!errors.embedding_params[paramName]}
+                                                helperText={errors.embedding_params[paramName]}
                                             />
                                         );
                                     })}
@@ -842,7 +982,14 @@ function ModelConfig({ user }) {
                         <Button color="error" onClick={() => deleteModelConfig(form.id, form.name)} startIcon={<DeleteIcon size={16} />}>Delete</Button>
                     )}
                     <Box sx={{ flex: 1 }} />
-                    <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
+                    <Button 
+                        onClick={() => {
+                            setDialogOpen(false);
+                            resetErrors();
+                        }}
+                    >
+                        Cancel
+                    </Button>
                     <Button onClick={saveModelConfig} variant="contained" disabled={saveState.loading || !form.name || !form.model}>
                         {saveState.loading ? 'Saving...' : isEditMode ? 'Update Configuration' : 'Save Configuration'}
                     </Button>

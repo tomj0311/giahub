@@ -83,6 +83,12 @@ export default function Agent({ user }) {
     stream: true,                    // stream enabled by default
   })
 
+  // Form validation errors
+  const [errors, setErrors] = useState({
+    name: '',
+    model_id: '',
+  })
+
   const toolList = Object.keys(form.tools || {}) // IDs
   const knowledgeList = Object.keys(form.knowledge_collections || {}) // IDs
 
@@ -99,6 +105,28 @@ export default function Agent({ user }) {
       memory: { history: { enabled: false, num: 3 } },
       stream: true,
     })
+    setErrors({
+      name: '',
+      model_id: '',
+    })
+  }
+
+  const validateForm = () => {
+    const newErrors = {
+      name: '',
+      model_id: '',
+    }
+
+    if (!form.name || form.name.trim() === '') {
+      newErrors.name = 'Agent name is required'
+    }
+
+    if (!form.model_id) {
+      newErrors.model_id = 'Model configuration is required'
+    }
+
+    setErrors(newErrors)
+    return !newErrors.name && !newErrors.model_id
   }
 
   const fetchAll = useCallback(async (page = 1, pageSize = 8) => {
@@ -309,8 +337,11 @@ export default function Agent({ user }) {
   }
 
   const handleSave = async () => {
-    if (!form.name) { showError('Name is required'); return }
-    if (!form.model_id) { showError('Select a model configuration'); return }
+    // Validate form before saving
+    if (!validateForm()) {
+      return
+    }
+
     setSaving(true)
     try {
       const payload = {
@@ -398,6 +429,11 @@ export default function Agent({ user }) {
 
   const openEdit = (agent) => {
     loadAgent(agent)
+    // Clear any validation errors
+    setErrors({
+      name: '',
+      model_id: '',
+    })
     setDialogOpen(true)
   }
 
@@ -582,7 +618,16 @@ export default function Agent({ user }) {
         </CardContent>
       </Card>
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
+      <Dialog 
+        open={dialogOpen} 
+        onClose={() => {
+          setDialogOpen(false)
+          // Clear errors when dialog is closed
+          setErrors({ name: '', model_id: '' })
+        }} 
+        maxWidth="md" 
+        fullWidth
+      >
         <DialogTitle>{form.id ? 'Edit Agent' : 'Create Agent'}</DialogTitle>
         <DialogContent dividers>
           <Grid container spacing={3} sx={{ mt: 0 }}>
@@ -593,6 +638,10 @@ export default function Agent({ user }) {
                   options={existingAgents.map(a => a.name)}
                   value={form.name}
                   onChange={(_, v) => {
+                    // Clear error when user changes the field
+                    if (errors.name) {
+                      setErrors(prev => ({ ...prev, name: '' }))
+                    }
                     // If selecting from dropdown, load immediately; otherwise just update name
                     if (v && existingAgents.some(a => a.name === v)) {
                       const agent = existingAgents.find(a => a.name === v)
@@ -602,6 +651,10 @@ export default function Agent({ user }) {
                     }
                   }}
                   onInputChange={(_, v) => {
+                    // Clear error when user types
+                    if (errors.name) {
+                      setErrors(prev => ({ ...prev, name: '' }))
+                    }
                     // Only update the form name while typing, don't load agent
                     setForm(f => ({ ...f, name: v || '' }))
                   }}
@@ -611,6 +664,8 @@ export default function Agent({ user }) {
                       label="Agent Name" 
                       size="small" 
                       required 
+                      error={!!errors.name}
+                      helperText={errors.name}
                       onBlur={(e) => {
                         // Load existing agent only when user stops typing (on blur)
                         const inputValue = e.target.value;
@@ -643,8 +698,23 @@ export default function Agent({ user }) {
                   options={models}
                   getOptionLabel={(o) => o?.name || ''}
                   value={models.find(m => m.id === form.model_id) || null}
-                  onChange={(_, v) => setForm(f => ({ ...f, model_id: v?.id || '' }))}
-                  renderInput={(p) => <TextField {...p} label="Model Configuration" size="small" />}
+                  onChange={(_, v) => {
+                    // Clear error when user changes the field
+                    if (errors.model_id) {
+                      setErrors(prev => ({ ...prev, model_id: '' }))
+                    }
+                    setForm(f => ({ ...f, model_id: v?.id || '' }))
+                  }}
+                  renderInput={(p) => 
+                    <TextField 
+                      {...p} 
+                      label="Model Configuration" 
+                      size="small" 
+                      required
+                      error={!!errors.model_id}
+                      helperText={errors.model_id}
+                    />
+                  }
                 />
 
                 <Autocomplete
@@ -719,7 +789,16 @@ export default function Agent({ user }) {
             <Button color="error" onClick={handleDelete} disabled={saving} startIcon={<DeleteIcon size={16} />}>Delete</Button>
           )}
           <Box sx={{ flex: 1 }} />
-          <Button onClick={() => setDialogOpen(false)} disabled={saving}>Cancel</Button>
+          <Button 
+            onClick={() => {
+              setDialogOpen(false)
+              // Clear errors when dialog is closed
+              setErrors({ name: '', model_id: '' })
+            }} 
+            disabled={saving}
+          >
+            Cancel
+          </Button>
           <Button variant="contained" onClick={handleSave} disabled={saving}>
             {saving ? <CircularProgress size={16} color="inherit" /> : 'Save Agent'}
           </Button>

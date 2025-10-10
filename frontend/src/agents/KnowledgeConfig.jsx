@@ -84,6 +84,11 @@ export default function KnowledgeConfig({ user }) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saveState, setSaveState] = useState({ loading: false })
 
+  // Form validation errors
+  const [errors, setErrors] = useState({
+    name: ''
+  })
+
   const loadModels = useCallback(async () => {
     if (!isMountedRef.current) return;
     
@@ -320,6 +325,26 @@ export default function KnowledgeConfig({ user }) {
     };
   }, []);
 
+  const validateForm = () => {
+    const newErrors = {
+      name: ''
+    }
+
+    // Validate name
+    if (!form.name || form.name.trim() === '') {
+      newErrors.name = 'Collection name is required'
+    }
+
+    setErrors(newErrors)
+    return !newErrors.name
+  }
+
+  const resetErrors = () => {
+    setErrors({
+      name: ''
+    })
+  }
+
   async function loadExistingConfig(configName) {
     const config = existingConfigs.find(c => c.name === configName)
     if (config) {
@@ -370,8 +395,8 @@ export default function KnowledgeConfig({ user }) {
   }
 
   const save = async () => {
-    if (!form.name) {
-      showError('Collection name is required')
+    // Validate form before saving
+    if (!validateForm()) {
       return
     }
     
@@ -595,11 +620,13 @@ export default function KnowledgeConfig({ user }) {
     setExistingFiles([])
     setFilesToDelete([])
     setPendingFiles([])
+    resetErrors()
     setDialogOpen(true)
   }
 
   const openEdit = (name) => {
     loadExistingConfig(name)
+    resetErrors()
     setDialogOpen(true)
   }
 
@@ -681,7 +708,15 @@ export default function KnowledgeConfig({ user }) {
         </CardContent>
       </Card>
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
+      <Dialog 
+        open={dialogOpen} 
+        onClose={() => {
+          setDialogOpen(false);
+          resetErrors();
+        }} 
+        maxWidth="md" 
+        fullWidth
+      >
         <DialogTitle>{isEdit ? 'Edit Collection' : 'Create Collection'}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={1}>
@@ -697,6 +732,10 @@ export default function KnowledgeConfig({ user }) {
               loadingText="Loading collections…"
               disabled={isEdit} // prevent renaming while editing to keep id-based operations simple
               onChange={(_, v) => {
+                // Clear error when user changes the field
+                if (errors.name) {
+                  setErrors(prev => ({ ...prev, name: '' }));
+                }
                 // If selecting from dropdown, load immediately; otherwise just update name
                 if (v && existingConfigs.some(c => c.name === v)) {
                   loadExistingConfig(v)
@@ -707,6 +746,10 @@ export default function KnowledgeConfig({ user }) {
               }}
               onInputChange={(_, v) => {
                 if (isEdit) return; // block name changes during edit mode
+                // Clear error when user types
+                if (errors.name) {
+                  setErrors(prev => ({ ...prev, name: '' }));
+                }
                 // Only update the form name while typing, don't load config
                 setForm(f => ({ ...f, name: v }))
               }}
@@ -717,7 +760,8 @@ export default function KnowledgeConfig({ user }) {
                   placeholder="Enter or select a collection…" 
                   size="small" 
                   required 
-                  helperText={isEdit ? 'Name locked while editing existing collection' : ''}
+                  error={!!errors.name}
+                  helperText={errors.name || (isEdit ? 'Name locked while editing existing collection' : '')}
                   onBlur={(e) => {
                     if (isEdit) return; // block loading during edit mode
                     // Load existing config only when user stops typing (on blur)
@@ -870,7 +914,15 @@ export default function KnowledgeConfig({ user }) {
             <Button color="error" onClick={onDelete} startIcon={<DeleteIcon size={16} />} disabled={saveState.loading}>Delete</Button>
           )}
           <Box sx={{ flex: 1 }} />
-          <Button onClick={() => setDialogOpen(false)} disabled={saveState.loading}>Cancel</Button>
+          <Button 
+            onClick={() => {
+              setDialogOpen(false);
+              resetErrors();
+            }} 
+            disabled={saveState.loading}
+          >
+            Cancel
+          </Button>
           <Button onClick={save} variant="contained" disabled={saveState.loading || !form.name}>
             {saveState.loading ? (isEdit ? 'Updating…' : 'Saving…') : (isEdit ? 'Update Collection' : 'Create Collection')}
           </Button>

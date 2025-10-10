@@ -71,6 +71,13 @@ function ToolConfig({ user }) {
     const [categories, setCategories] = useState([]);
     const [loadingCategories, setLoadingCategories] = useState(false);
 
+    // Form validation errors
+    const [errors, setErrors] = useState({
+        name: '',
+        tool: '',
+        tool_params: {}
+    });
+
     const discoverComponents = useCallback(async () => {
         if (!isMountedRef.current) return;
         
@@ -296,6 +303,59 @@ function ToolConfig({ user }) {
         };
     }, []); // EMPTY DEPENDENCIES - NO BULLSHIT
 
+    const validateForm = () => {
+        const newErrors = {
+            name: '',
+            tool: '',
+            tool_params: {}
+        }
+
+        // Validate name
+        if (!form.name || form.name.trim() === '') {
+            newErrors.name = 'Configuration name is required'
+        }
+
+        // Validate tool selection
+        if (!form.tool) {
+            newErrors.tool = 'Tool selection is required'
+        }
+
+        // Validate required tool parameters (those without defaults)
+        const toolIntro = form.tool ? introspectCache[form.tool] : null
+        if (toolIntro && toolIntro.formatted_params) {
+            toolIntro.formatted_params.forEach(paramFormatted => {
+                const paramName = paramFormatted.split(':')[0].trim()
+                const descSplitIdx = paramFormatted.indexOf(' - ')
+                const mainPart = descSplitIdx !== -1 ? paramFormatted.slice(0, descSplitIdx) : paramFormatted
+                const eqIdx = mainPart.indexOf('=')
+                let defaultRaw = ''
+                if (eqIdx !== -1) {
+                    defaultRaw = mainPart.slice(eqIdx + 1).trim()
+                }
+                const hasDefault = defaultRaw !== '' && defaultRaw.toLowerCase() !== 'none'
+                
+                // If parameter has no default and no value provided, it's required
+                if (!hasDefault && (!form.tool_params[paramName] || form.tool_params[paramName].toString().trim() === '')) {
+                    newErrors.tool_params[paramName] = `${paramName} is required`
+                }
+            })
+        }
+
+        setErrors(newErrors)
+        
+        // Return true if no errors
+        const hasToolParamErrors = Object.keys(newErrors.tool_params).length > 0
+        return !newErrors.name && !newErrors.tool && !hasToolParamErrors
+    }
+
+    const resetErrors = () => {
+        setErrors({
+            name: '',
+            tool: '',
+            tool_params: {}
+        })
+    }
+
     function ensureIntrospection(path, kind) {
         if (!path || introspectCache[path]) return;
         introspectTool(path, kind);
@@ -323,9 +383,9 @@ function ToolConfig({ user }) {
     }
 
     async function saveToolConfig() {
-        if (!form.name || !form.tool) {
-            showError('Name and tool selection are required');
-            return;
+        // Validate form before saving
+        if (!validateForm()) {
+            return
         }
         setSaveState(s => ({ ...s, loading: true }));
         const configToSave = {
@@ -423,11 +483,13 @@ function ToolConfig({ user }) {
     const openCreate = () => {
         setForm({ id: null, name: '', category: '', tool: '', tool_params: {} });
         setIsEditMode(false);
+        resetErrors();
         setDialogOpen(true);
     };
 
     const openEdit = (name) => {
         loadExistingConfig(name);
+        resetErrors();
         setDialogOpen(true);
     };
 
@@ -510,7 +572,15 @@ function ToolConfig({ user }) {
                 </CardContent>
             </Card>
 
-            <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
+            <Dialog 
+                open={dialogOpen} 
+                onClose={() => {
+                    setDialogOpen(false);
+                    resetErrors();
+                }} 
+                maxWidth="md" 
+                fullWidth
+            >
                 <DialogTitle>{isEditMode ? 'Edit Tool Configuration' : 'Create Tool Configuration'}</DialogTitle>
                 <DialogContent dividers>
                     <Stack spacing={1}>
@@ -526,6 +596,10 @@ function ToolConfig({ user }) {
                             loading={loadingConfigs}
                             loadingText="Loading configurations…"
                             onChange={(_, v) => {
+                                // Clear error when user changes the field
+                                if (errors.name) {
+                                    setErrors(prev => ({ ...prev, name: '' }));
+                                }
                                 // If selecting from dropdown, load immediately; otherwise just update name
                                 if (v && existingConfigs.some(c => c.name === v)) {
                                     loadExistingConfig(v);
@@ -534,6 +608,10 @@ function ToolConfig({ user }) {
                                 }
                             }}
                             onInputChange={(_, v) => {
+                                // Clear error when user types
+                                if (errors.name) {
+                                    setErrors(prev => ({ ...prev, name: '' }));
+                                }
                                 // Only update the form name while typing, don't load config
                                 setForm(f => ({ ...f, name: v }));
                             }}
@@ -544,6 +622,8 @@ function ToolConfig({ user }) {
                                     placeholder="Enter a short descriptive name"
                                     size="small"
                                     required
+                                    error={!!errors.name}
+                                    helperText={errors.name}
                                     onBlur={(e) => {
                                         // Load existing config only when user stops typing (on blur)
                                         const inputValue = e.target.value;
@@ -584,10 +664,22 @@ function ToolConfig({ user }) {
                                 loading={loadingDiscovery && !(components.functions || []).length}
                                 loadingText="Loading tools…"
                                 onChange={(_, v) => {
+                                    // Clear error when user changes the field
+                                    if (errors.tool) {
+                                        setErrors(prev => ({ ...prev, tool: '' }));
+                                    }
                                     setForm(f => ({ ...f, tool: v || '', tool_params: {} }));
                                     ensureIntrospection(v, 'tool');
                                 }}
-                                renderInput={(params) => <TextField {...params} label="Select Tool" />}
+                                renderInput={(params) => 
+                                    <TextField 
+                                        {...params} 
+                                        label="Select Tool" 
+                                        required
+                                        error={!!errors.tool}
+                                        helperText={errors.tool}
+                                    />
+                                }
                             />
                             <Button variant="gradientBorder" size="medium" onClick={discoverComponents}>Refresh</Button>
                         </Box>
@@ -633,10 +725,22 @@ function ToolConfig({ user }) {
                                                 label={paramName}
                                                 InputLabelProps={{ shrink: true }}
                                                 value={form.tool_params[paramName] || ''}
-                                                onChange={(e) => setForm(f => ({ ...f, tool_params: { ...f.tool_params, [paramName]: e.target.value } }))}
+                                                onChange={(e) => {
+                                                    // Clear error when user types
+                                                    if (errors.tool_params[paramName]) {
+                                                        setErrors(prev => ({
+                                                            ...prev,
+                                                            tool_params: { ...prev.tool_params, [paramName]: '' }
+                                                        }));
+                                                    }
+                                                    setForm(f => ({ ...f, tool_params: { ...f.tool_params, [paramName]: e.target.value } }));
+                                                }}
                                                 placeholder={placeholderText}
                                                 sx={{ gridColumn }}
                                                 type={paramType.includes('int') || paramType.includes('float') ? 'number' : 'text'}
+                                                required={!hasDefault}
+                                                error={!!errors.tool_params[paramName]}
+                                                helperText={errors.tool_params[paramName]}
                                             />
                                         );
                                     })}
@@ -650,7 +754,14 @@ function ToolConfig({ user }) {
                         <Button color="error" onClick={() => deleteToolConfig(form.id, form.name)} startIcon={<DeleteIcon size={16} />}>Delete</Button>
                     )}
                     <Box sx={{ flex: 1 }} />
-                    <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
+                    <Button 
+                        onClick={() => {
+                            setDialogOpen(false);
+                            resetErrors();
+                        }}
+                    >
+                        Cancel
+                    </Button>
                     <Button onClick={saveToolConfig} variant="contained" disabled={saveState.loading || !form.name || !form.tool}>
                         {saveState.loading ? 'Saving...' : isEditMode ? 'Update Configuration' : 'Save Configuration'}
                     </Button>
