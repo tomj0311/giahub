@@ -169,25 +169,44 @@ function ProjectDashboard({ user }) {
     return result
   }
 
+  // Helper function to parse dates consistently (avoid timezone issues)
+  const parseDate = (dateStr) => {
+    if (!dateStr) return null
+    
+    console.log('[parseDate] Input:', dateStr, 'Type:', typeof dateStr)
+    
+    // If it's a date-only string (YYYY-MM-DD), parse it as local time
+    if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const [year, month, day] = dateStr.split('-').map(Number)
+      const result = new Date(year, month - 1, day)
+      console.log('[parseDate] Parsed as local:', dateStr, '->', result.toISOString(), 'Month:', result.getMonth(), 'Date:', result.getDate())
+      return result
+    }
+    
+    const result = new Date(dateStr)
+    console.log('[parseDate] Parsed as Date():', dateStr, '->', result.toISOString(), 'Month:', result.getMonth(), 'Date:', result.getDate())
+    return result
+  }
+
   const calculateTimeline = (projectList, activityList) => {
     const allDates = []
 
     projectList.forEach(project => {
       if (project.start_date) {
-        const d = new Date(project.start_date)
+        const d = parseDate(project.start_date)
         allDates.push(d)
         console.log('[Timeline] Project start_date:', project.start_date, '-> Parsed:', d)
       }
       if (project.due_date) {
-        const d = new Date(project.due_date)
+        const d = parseDate(project.due_date)
         allDates.push(d)
         console.log('[Timeline] Project due_date:', project.due_date, '-> Parsed:', d)
       }
     })
 
     activityList.forEach(activity => {
-      if (activity.start_date) allDates.push(new Date(activity.start_date))
-      if (activity.due_date) allDates.push(new Date(activity.due_date))
+      if (activity.start_date) allDates.push(parseDate(activity.start_date))
+      if (activity.due_date) allDates.push(parseDate(activity.due_date))
     })
 
     if (allDates.length === 0) {
@@ -202,13 +221,22 @@ function ProjectDashboard({ user }) {
 
     const minDate = new Date(Math.min(...allDates))
     const maxDate = new Date(Math.max(...allDates))
-    // Start from 1 month before for context
-    const start = new Date(minDate.getFullYear(), minDate.getMonth() - 1, 1)
-    // End 1 month after for context
-    const end = new Date(maxDate.getFullYear(), maxDate.getMonth() + 1, 0)
+    
+    console.log('[Timeline] All dates:', allDates.map(d => d.toISOString()))
+    console.log('[Timeline] Min Date:', minDate.toISOString(), 'Month:', minDate.getMonth(), 'Year:', minDate.getFullYear())
+    console.log('[Timeline] Max Date:', maxDate.toISOString(), 'Month:', maxDate.getMonth(), 'Year:', maxDate.getFullYear())
+    
+    // Start 10 days before earliest date for context
+    const start = new Date(minDate)
+    start.setDate(start.getDate() - 10)
+    
+    // End 10 days after latest date for context
+    const end = new Date(maxDate)
+    end.setDate(end.getDate() + 10)
 
-    console.log('[Timeline] Start:', start.toISOString(), 'End:', end.toISOString())
-    console.log('[Timeline] Min Date:', minDate.toISOString(), 'Max Date:', maxDate.toISOString())
+    console.log('[Timeline] Calculated Start:', start.toISOString(), 'Month:', start.getMonth(), 'Day:', start.getDate())
+    console.log('[Timeline] Calculated End:', end.toISOString(), 'Month:', end.getMonth(), 'Day:', end.getDate())
+    console.log('[Timeline] Duration in days:', (end - start) / (1000 * 60 * 60 * 24))
 
     setTimelineStart(start)
     setTimelineEnd(end)
@@ -243,21 +271,22 @@ function ProjectDashboard({ user }) {
   }
 
   const calculateBarPosition = (startDate, dueDate) => {
-    if (!startDate || !dueDate || !timelineStart || !timelineEnd) {
-      return { left: '0%', width: '0%' }
+    if (!startDate || !dueDate || !timelineStart || !timelineEnd || !timelineDays.length) {
+      return { left: '0px', width: '0px' }
     }
 
-    const start = new Date(startDate)
-    const due = new Date(dueDate)
-    const timelineStartTime = timelineStart.getTime()
-    const timelineEndTime = timelineEnd.getTime()
-    const totalDuration = timelineEndTime - timelineStartTime
-
-    const startOffset = start.getTime() - timelineStartTime
-    const barDuration = due.getTime() - start.getTime()
-
-    const left = Math.max(0, (startOffset / totalDuration) * 100)
-    const width = Math.max(2, (barDuration / totalDuration) * 100)
+    const start = parseDate(startDate)
+    const due = parseDate(dueDate)
+    
+    // Calculate position in days from timeline start
+    const dayWidth = 30 * zoomLevel // pixels per day
+    const msPerDay = 1000 * 60 * 60 * 24
+    
+    const daysFromStart = (start - timelineStart) / msPerDay
+    const durationInDays = (due - start) / msPerDay
+    
+    const leftPx = Math.max(0, daysFromStart * dayWidth)
+    const widthPx = Math.max(dayWidth, durationInDays * dayWidth)
 
     console.log('[Bar Position]', {
       startDate,
@@ -265,14 +294,16 @@ function ProjectDashboard({ user }) {
       parsedStart: start.toISOString(),
       parsedDue: due.toISOString(),
       timelineStart: timelineStart.toISOString(),
-      timelineEnd: timelineEnd.toISOString(),
-      left: `${left}%`,
-      width: `${Math.min(width, 100 - left)}%`
+      daysFromStart,
+      durationInDays,
+      dayWidth,
+      left: `${leftPx}px`,
+      width: `${widthPx}px`
     })
 
     return {
-      left: `${left}%`,
-      width: `${Math.min(width, 100 - left)}%`
+      left: `${leftPx}px`,
+      width: `${widthPx}px`
     }
   }
 
@@ -726,7 +757,7 @@ function ProjectDashboard({ user }) {
                 {/* Months Row */}
                 <Box sx={{ 
                   display: 'flex', 
-                  backgroundColor: 'action.hover', 
+                  backgroundColor: 'background.paper', 
                   borderBottom: 1, 
                   borderColor: 'divider',
                   minHeight: '24px',
@@ -769,7 +800,7 @@ function ProjectDashboard({ user }) {
                 {/* Days Row */}
                 <Box sx={{ 
                   display: 'flex', 
-                  backgroundColor: alpha(theme.palette.action.hover, 0.5),
+                  backgroundColor: 'background.paper',
                   borderBottom: 2, 
                   borderColor: 'divider',
                   minHeight: '24px',
