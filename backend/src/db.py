@@ -60,6 +60,8 @@ def get_collections():
         "agent_runs": database["agent_runs"],
         "workflowConfig": database["workflowConfig"],
         "workflowInstances": database["workflowInstances"],
+        "projects": database["projects"],
+        "projectActivities": database["projectActivities"],
     }
     logger.debug(f"[DB] Retrieved {len(_collections_cache)} collections")
     return _collections_cache
@@ -216,6 +218,29 @@ async def ensure_indexes():
         await collections["workflowInstances"].create_index("created_at")
         await collections["workflowInstances"].create_index("tenantId")
         await collections["workflowInstances"].create_index([("tenantId", 1), ("status", 1), ("created_at", -1)])
+
+        logger.debug("[DB] Creating project indexes")
+        # Projects collection indexes
+        await collections["projects"].create_index([("tenantId", 1), ("name", 1)], unique=True)
+        await collections["projects"].create_index("parent_id")
+        await collections["projects"].create_index("status")
+        await collections["projects"].create_index("priority")
+        await collections["projects"].create_index("assignee")
+        await collections["projects"].create_index("due_date")
+        await collections["projects"].create_index("created_at")
+        await collections["projects"].create_index([("tenantId", 1), ("parent_id", 1)])
+
+        logger.debug("[DB] Creating project activities indexes")
+        # Project activities collection indexes
+        await collections["projectActivities"].create_index("project_id")
+        await collections["projectActivities"].create_index("type")
+        await collections["projectActivities"].create_index("status")
+        await collections["projectActivities"].create_index("priority")
+        await collections["projectActivities"].create_index("assignee")
+        await collections["projectActivities"].create_index("due_date")
+        await collections["projectActivities"].create_index("created_at")
+        await collections["projectActivities"].create_index([("tenantId", 1), ("project_id", 1)])
+        await collections["projectActivities"].create_index([("tenantId", 1), ("type", 1)])
 
         logger.info("[DB] Indexes created successfully")
     except Exception as e:

@@ -16,6 +16,8 @@ from .workflow_config import router as workflow_config_router
 from .workflow import router as workflow_router
 from .analytics import router as analytics_router
 from .dynamic_execution import router as dynamic_execution_router
+from .projects import router as projects_router
+from .project_activities import router as project_activities_router
 
 __all__ = [
     "auth_router", 
@@ -36,5 +38,7 @@ __all__ = [
     "workflow_router",
     "analytics_router",
     "dynamic_execution_router",
+    "projects_router",
+    "project_activities_router",
 ]
 

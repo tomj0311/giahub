@@ -50,6 +50,7 @@ const ToolConfig = lazy(() => import('../agents/ToolConfig'))
 const KnowledgeConfig = lazy(() => import('../agents/KnowledgeConfig'))
 const Agent = lazy(() => import('../agents/Agent'))
 const AgentPlayground = lazy(() => import('../playground/AgentPlayground'))
+const Projects = lazy(() => import('../projects/Projects'))
 const WorkflowConfig = lazy(() => import('../workflows/WorkflowConfig'))
 const WorkflowDashboard = lazy(() => import('../workflows/WorkflowDashboard'))
 const WorkflowExecution = lazy(() => import('../workflows/WorkflowExecution'))
@@ -85,6 +86,19 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			to: '/dashboard/home',
 			icon: 'Home',
 			order: 10
+		},
+		{
+			label: 'Projects',
+			icon: 'FolderKanban',
+			expandable: true,
+			order: 15,
+			children: [
+				{
+					label: 'Overview',
+					to: '/dashboard/projects',
+					icon: 'LayoutDashboard'
+				}
+			]
 		},
 		{
 			label: 'Agents',
@@ -753,8 +767,8 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 				<Toolbar />
 				<Box sx={{
 					width: '100%',
-					// Conditional styling for BPMN, workflow-execution, and workflow-ui routes
-					...(location.pathname === '/dashboard/bpmn' || location.pathname === '/dashboard/workflow-execution' || location.pathname === '/dashboard/workflow-ui' ? {
+					// Conditional styling for BPMN, workflow-execution, workflow-ui, and projects routes
+					...(location.pathname === '/dashboard/bpmn' || location.pathname === '/dashboard/workflow-execution' || location.pathname === '/dashboard/workflow-ui' || location.pathname === '/dashboard/projects' ? {
 						// Full width with minimal padding
 						maxWidth: 'none',
 						mx: 0,
@@ -847,6 +861,7 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="users" element={<Users user={user} />} />
 				<Route path="role-management" element={<RoleManagement user={user} />} />
 				<Route path="user-invitation" element={<UserInvitation user={user} />} />
+				<Route path="projects" element={<Projects user={user} />} />
 				<Route path="agents" element={<Agent user={user} />} />
 				<Route path="models" element={<ModelConfig user={user} />} />
 				<Route path="tools" element={<ToolConfig user={user} />} />

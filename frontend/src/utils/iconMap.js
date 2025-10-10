@@ -26,6 +26,7 @@ import {
 	TestTube,
 	Package,
 	Box,
+	FolderKanban,
 	// New unique icons for the reorganized menu
 	Star,
 	Gamepad2,
@@ -64,6 +65,8 @@ export const iconMap = {
 	TestTube,
 	Package,
 	Box,
+	FolderKanban,
+	LayoutDashboard,
 	Users,
 	Shield,
 	UserPlus,
@@ -78,7 +81,6 @@ export const iconMap = {
 	PeopleIcon: Users,
 	SecurityIcon: Shield,
 	PersonAddIcon: UserPlus,
-	LayoutDashboard,
 	GraduationCap,
 	// New unique icons
 	Star,
