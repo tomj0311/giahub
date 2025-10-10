@@ -57,6 +57,7 @@ function ProjectPlanning({ user, projectId }) {
   const [currentTab, setCurrentTab] = useState(0)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
+  const [formErrors, setFormErrors] = useState({})
   const [form, setForm] = useState({
     id: null,
     project_id: projectId || '',
@@ -238,6 +239,7 @@ function ProjectPlanning({ user, projectId }) {
       spent_time: 0
     })
     setIsEditMode(false)
+    setFormErrors({})
     setDialogOpen(true)
   }
 
@@ -273,6 +275,7 @@ function ProjectPlanning({ user, projectId }) {
         spent_time: response.spent_time || 0
       })
       setIsEditMode(true)
+      setFormErrors({})
       setDialogOpen(true)
     } catch (error) {
       showError('Failed to load activity details')
@@ -280,15 +283,49 @@ function ProjectPlanning({ user, projectId }) {
   }
 
   const saveActivity = async () => {
+    // Clear previous errors
+    const errors = {}
+    
+    // Validate required fields
     if (!form.subject.trim()) {
-      showError('Activity subject is required')
-      return
+      errors.subject = 'Activity subject is required'
     }
 
     if (!form.project_id) {
-      showError('Please select a project - each activity must belong to a project')
+      errors.project_id = 'Please select a project'
+    }
+
+    // Required fields for all activity types
+    if (!form.assignee?.trim()) {
+      errors.assignee = 'Assignee is required'
+    }
+    if (!form.approver?.trim()) {
+      errors.approver = 'Approver is required'
+    }
+    if (!form.start_date) {
+      errors.start_date = 'Start date is required'
+    }
+    if (!form.end_date) {
+      errors.end_date = 'End date is required'
+    }
+
+    // Validate that start_date is before end_date
+    if (form.start_date && form.end_date) {
+      const startDate = new Date(form.start_date)
+      const endDate = new Date(form.end_date)
+      if (startDate >= endDate) {
+        errors.end_date = 'End date must be after start date'
+      }
+    }
+
+    // If there are errors, set them and return
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors)
       return
     }
+
+    // Clear errors if validation passes
+    setFormErrors({})
 
     try {
       const payload = { ...form }
@@ -308,6 +345,8 @@ function ProjectPlanning({ user, projectId }) {
           throw new Error(error.detail || 'Failed to update activity')
         }
         showSuccess('Activity updated successfully')
+        setDialogOpen(false)
+        loadActivities(pagination.page + 1, pagination.rowsPerPage)
       } else {
         const res = await apiCall('/api/projects/activities', {
           method: 'POST',
@@ -322,10 +361,9 @@ function ProjectPlanning({ user, projectId }) {
           throw new Error(error.detail || 'Failed to create activity')
         }
         showSuccess('Activity created successfully')
+        setDialogOpen(false)
+        loadActivities(pagination.page + 1, pagination.rowsPerPage)
       }
-
-      setDialogOpen(false)
-      loadActivities(pagination.page + 1, pagination.rowsPerPage)
     } catch (error) {
       showError(error.message || 'Failed to save activity')
     }
@@ -414,7 +452,9 @@ function ProjectPlanning({ user, projectId }) {
                       <TableCell>Status</TableCell>
                       <TableCell>Priority</TableCell>
                       <TableCell>Assignee</TableCell>
-                      <TableCell>Due Date</TableCell>
+                      <TableCell>Approver</TableCell>
+                      <TableCell>Start Date</TableCell>
+                      <TableCell>End Date</TableCell>
                       <TableCell>Progress</TableCell>
                       <TableCell align="right">Actions</TableCell>
                     </TableRow>
@@ -422,7 +462,7 @@ function ProjectPlanning({ user, projectId }) {
                   <TableBody>
                     {activities.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} align="center">
+                        <TableCell colSpan={11} align="center">
                           <Typography variant="body2" color="text.secondary">
                             No {ACTIVITY_TYPES[currentTab].toLowerCase()}s found. Create one to get started.
                           </Typography>
@@ -462,8 +502,12 @@ function ProjectPlanning({ user, projectId }) {
                           </TableCell>
                           <TableCell>{activity.priority}</TableCell>
                           <TableCell>{activity.assignee || '-'}</TableCell>
+                          <TableCell>{activity.approver || '-'}</TableCell>
                           <TableCell>
-                            {activity.due_date ? new Date(activity.due_date).toLocaleDateString() : '-'}
+                            {activity.start_date ? new Date(activity.start_date).toLocaleDateString() : '-'}
+                          </TableCell>
+                          <TableCell>
+                            {activity.end_date ? new Date(activity.end_date).toLocaleDateString() : '-'}
                           </TableCell>
                           <TableCell>{activity.progress}%</TableCell>
                           <TableCell align="right">
@@ -524,13 +568,15 @@ function ProjectPlanning({ user, projectId }) {
               value={projects.find(p => p.id === form.project_id) || null}
               onChange={(event, newValue) => {
                 setForm({ ...form, project_id: newValue ? newValue.id : '' })
+                setFormErrors({ ...formErrors, project_id: undefined })
               }}
               renderInput={(params) => (
                 <TextField 
                   {...params} 
                   label="Project" 
                   required
-                  helperText={projects.length === 0 ? "No projects found. Create a project first." : `${projects.length} projects available`}
+                  error={!!formErrors.project_id}
+                  helperText={formErrors.project_id || (projects.length === 0 ? "No projects found. Create a project first." : `${projects.length} projects available`)}
                 />
               )}
               fullWidth
@@ -539,9 +585,14 @@ function ProjectPlanning({ user, projectId }) {
             <TextField
               label="Subject"
               value={form.subject}
-              onChange={(e) => setForm({ ...form, subject: e.target.value })}
+              onChange={(e) => {
+                setForm({ ...form, subject: e.target.value })
+                setFormErrors({ ...formErrors, subject: undefined })
+              }}
               fullWidth
               required
+              error={!!formErrors.subject}
+              helperText={formErrors.subject}
             />
             <TextField
               label="Description"
@@ -583,22 +634,54 @@ function ProjectPlanning({ user, projectId }) {
               <TextField
                 label="Assignee"
                 value={form.assignee}
-                onChange={(e) => setForm({ ...form, assignee: e.target.value })}
+                onChange={(e) => {
+                  setForm({ ...form, assignee: e.target.value })
+                  setFormErrors({ ...formErrors, assignee: undefined })
+                }}
                 fullWidth
+                required
+                error={!!formErrors.assignee}
+                helperText={formErrors.assignee || 'Required'}
               />
               <TextField
                 label="Approver"
                 value={form.approver}
-                onChange={(e) => setForm({ ...form, approver: e.target.value })}
+                onChange={(e) => {
+                  setForm({ ...form, approver: e.target.value })
+                  setFormErrors({ ...formErrors, approver: undefined })
+                }}
                 fullWidth
+                required
+                error={!!formErrors.approver}
+                helperText={formErrors.approver || 'Required'}
               />
               <TextField
                 label="Start Date"
                 type="date"
                 value={form.start_date}
-                onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                onChange={(e) => {
+                  setForm({ ...form, start_date: e.target.value })
+                  setFormErrors({ ...formErrors, start_date: undefined, end_date: undefined })
+                }}
                 fullWidth
                 InputLabelProps={{ shrink: true }}
+                required
+                error={!!formErrors.start_date}
+                helperText={formErrors.start_date || 'Required'}
+              />
+              <TextField
+                label="End Date"
+                type="date"
+                value={form.end_date}
+                onChange={(e) => {
+                  setForm({ ...form, end_date: e.target.value })
+                  setFormErrors({ ...formErrors, end_date: undefined })
+                }}
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+                required
+                error={!!formErrors.end_date}
+                helperText={formErrors.end_date || 'Required'}
               />
               <TextField
                 label="Due Date"

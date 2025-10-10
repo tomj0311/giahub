@@ -59,6 +59,7 @@ function ProjectTreeView({ user }) {
   const [expanded, setExpanded] = useState({}) // Track expanded nodes
   const [dialogOpen, setDialogOpen] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
+  const [formErrors, setFormErrors] = useState({})
   const [form, setForm] = useState({
     id: null,
     name: '',
@@ -160,6 +161,7 @@ function ProjectTreeView({ user }) {
       is_public: false
     })
     setIsEditMode(false)
+    setFormErrors({})
     setDialogOpen(true)
   }
 
@@ -192,6 +194,7 @@ function ProjectTreeView({ user }) {
         is_public: response.is_public || false
       })
       setIsEditMode(true)
+      setFormErrors({})
       setDialogOpen(true)
     } catch (error) {
       showError('Failed to load project details')
@@ -199,10 +202,47 @@ function ProjectTreeView({ user }) {
   }
 
   const saveProject = async () => {
+    // Clear previous errors
+    const errors = {}
+    
+    // Validate required fields
     if (!form.name.trim()) {
-      showError('Project name is required')
+      errors.name = 'Project name is required'
+    }
+
+    if (!form.assignee?.trim()) {
+      errors.assignee = 'Assignee is required'
+    }
+
+    if (!form.approver?.trim()) {
+      errors.approver = 'Approver is required'
+    }
+
+    if (!form.start_date) {
+      errors.start_date = 'Start date is required'
+    }
+
+    if (!form.due_date) {
+      errors.due_date = 'Due date is required'
+    }
+
+    // Validate that start_date is before due_date
+    if (form.start_date && form.due_date) {
+      const startDate = new Date(form.start_date)
+      const dueDate = new Date(form.due_date)
+      if (startDate >= dueDate) {
+        errors.due_date = 'Due date must be after start date'
+      }
+    }
+
+    // If there are errors, set them and return
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors)
       return
     }
+
+    // Clear errors if validation passes
+    setFormErrors({})
 
     try {
       const payload = { ...form }
@@ -222,6 +262,8 @@ function ProjectTreeView({ user }) {
           throw new Error(error.detail || 'Failed to update project')
         }
         showSuccess('Project updated successfully')
+        setDialogOpen(false)
+        loadProjectTree()
       } else {
         const res = await apiCall('/api/projects/projects', {
           method: 'POST',
@@ -236,10 +278,9 @@ function ProjectTreeView({ user }) {
           throw new Error(error.detail || 'Failed to create project')
         }
         showSuccess('Project created successfully')
+        setDialogOpen(false)
+        loadProjectTree()
       }
-
-      setDialogOpen(false)
-      loadProjectTree()
     } catch (error) {
       console.error('Failed to save project:', error)
       showError(error.message || 'Failed to save project')
@@ -471,9 +512,14 @@ function ProjectTreeView({ user }) {
             <TextField
               label="Project Name"
               value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              onChange={(e) => {
+                setForm({ ...form, name: e.target.value })
+                setFormErrors({ ...formErrors, name: undefined })
+              }}
               fullWidth
               required
+              error={!!formErrors.name}
+              helperText={formErrors.name}
             />
             <TextField
               label="Description"
@@ -529,30 +575,54 @@ function ProjectTreeView({ user }) {
               <TextField
                 label="Assignee"
                 value={form.assignee}
-                onChange={(e) => setForm({ ...form, assignee: e.target.value })}
+                onChange={(e) => {
+                  setForm({ ...form, assignee: e.target.value })
+                  setFormErrors({ ...formErrors, assignee: undefined })
+                }}
                 fullWidth
+                required
+                error={!!formErrors.assignee}
+                helperText={formErrors.assignee || 'Required'}
               />
               <TextField
                 label="Approver"
                 value={form.approver}
-                onChange={(e) => setForm({ ...form, approver: e.target.value })}
+                onChange={(e) => {
+                  setForm({ ...form, approver: e.target.value })
+                  setFormErrors({ ...formErrors, approver: undefined })
+                }}
                 fullWidth
+                required
+                error={!!formErrors.approver}
+                helperText={formErrors.approver || 'Required'}
               />
               <TextField
                 label="Start Date"
                 type="date"
                 value={form.start_date}
-                onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                onChange={(e) => {
+                  setForm({ ...form, start_date: e.target.value })
+                  setFormErrors({ ...formErrors, start_date: undefined, due_date: undefined })
+                }}
                 fullWidth
                 InputLabelProps={{ shrink: true }}
+                required
+                error={!!formErrors.start_date}
+                helperText={formErrors.start_date || 'Required'}
               />
               <TextField
                 label="Due Date"
                 type="date"
                 value={form.due_date}
-                onChange={(e) => setForm({ ...form, due_date: e.target.value })}
+                onChange={(e) => {
+                  setForm({ ...form, due_date: e.target.value })
+                  setFormErrors({ ...formErrors, due_date: undefined })
+                }}
                 fullWidth
                 InputLabelProps={{ shrink: true }}
+                required
+                error={!!formErrors.due_date}
+                helperText={formErrors.due_date || 'Required'}
               />
               <TextField
                 label="Progress (%)"

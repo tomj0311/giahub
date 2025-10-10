@@ -56,6 +56,45 @@ class ProjectService:
                 detail="Project with this name already exists"
             )
 
+        # Validate required fields
+        missing_fields = []
+        assignee = project.get("assignee", "").strip()
+        approver = project.get("approver", "").strip()
+        start_date = project.get("start_date")
+        due_date = project.get("due_date")
+        
+        if not assignee:
+            missing_fields.append("assignee")
+        if not approver:
+            missing_fields.append("approver")
+        if not start_date:
+            missing_fields.append("start_date")
+        if not due_date:
+            missing_fields.append("due_date")
+        
+        if missing_fields:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"The following fields are mandatory: {', '.join(missing_fields)}"
+            )
+
+        # Validate start_date and due_date
+        if start_date and due_date:
+            try:
+                from datetime import datetime as dt
+                start = dt.fromisoformat(start_date.replace('Z', '+00:00'))
+                end = dt.fromisoformat(due_date.replace('Z', '+00:00'))
+                if start >= end:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Start date must be before due date"
+                    )
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid date format. Please use ISO format (YYYY-MM-DD)"
+                )
+
         # Get parent project if specified
         parent_id = project.get("parent_id")
         if parent_id and parent_id != "root":
@@ -248,6 +287,57 @@ class ProjectService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid project ID format"
             )
+        
+        # Get current project to check existing dates if needed
+        current_project = await MongoStorageService.find_one("projects",
+            {"_id": object_id},
+            tenant_id=tenant_id
+        )
+        
+        if not current_project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found"
+            )
+        
+        # Validate required fields
+        assignee = updates.get("assignee", current_project.get("assignee", "")).strip() if "assignee" in updates else current_project.get("assignee", "").strip()
+        approver = updates.get("approver", current_project.get("approver", "")).strip() if "approver" in updates else current_project.get("approver", "").strip()
+        start_date = updates.get("start_date", current_project.get("start_date"))
+        due_date = updates.get("due_date", current_project.get("due_date"))
+        
+        missing_fields = []
+        if not assignee:
+            missing_fields.append("assignee")
+        if not approver:
+            missing_fields.append("approver")
+        if not start_date:
+            missing_fields.append("start_date")
+        if not due_date:
+            missing_fields.append("due_date")
+        
+        if missing_fields:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"The following fields are mandatory: {', '.join(missing_fields)}"
+            )
+        
+        # Validate start_date and due_date
+        if start_date and due_date:
+            try:
+                from datetime import datetime as dt
+                start = dt.fromisoformat(start_date.replace('Z', '+00:00'))
+                end = dt.fromisoformat(due_date.replace('Z', '+00:00'))
+                if start >= end:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Start date must be before due date"
+                    )
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid date format. Please use ISO format (YYYY-MM-DD)"
+                )
         
         update_data = dict(updates)
         if "name" in update_data and isinstance(update_data["name"], str):

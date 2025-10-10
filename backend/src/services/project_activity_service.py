@@ -60,6 +60,45 @@ class ProjectActivityService:
                 detail="Project ID is required"
             )
         
+        # Validate required fields for all activity types
+        missing_fields = []
+        assignee = activity.get("assignee", "").strip()
+        approver = activity.get("approver", "").strip()
+        start_date = activity.get("start_date")
+        end_date = activity.get("end_date")
+        
+        if not assignee:
+            missing_fields.append("assignee")
+        if not approver:
+            missing_fields.append("approver")
+        if not start_date:
+            missing_fields.append("start_date")
+        if not end_date:
+            missing_fields.append("end_date")
+        
+        if missing_fields:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"The following fields are mandatory: {', '.join(missing_fields)}"
+            )
+        
+        # Validate that start_date is before end_date
+        if start_date and end_date:
+            try:
+                from datetime import datetime
+                start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                if start >= end:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Start date must be before end date"
+                    )
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid date format. Please use ISO format (YYYY-MM-DD)"
+                )
+        
         # Verify project exists
         try:
             from bson import ObjectId
@@ -232,6 +271,60 @@ class ProjectActivityService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid activity ID format"
             )
+        
+        # Fetch current activity to check its type
+        current_activity = await MongoStorageService.find_one("projectActivities",
+            {"_id": object_id},
+            tenant_id=tenant_id
+        )
+        
+        if not current_activity:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Activity not found"
+            )
+        
+        # Validate required fields for all activity types
+        activity_type = updates.get("type", current_activity.get("type"))
+        
+        # Check if required fields are present (either in updates or existing data)
+        assignee = updates.get("assignee", current_activity.get("assignee", "")).strip() if "assignee" in updates else current_activity.get("assignee", "").strip()
+        approver = updates.get("approver", current_activity.get("approver", "")).strip() if "approver" in updates else current_activity.get("approver", "").strip()
+        start_date = updates.get("start_date", current_activity.get("start_date"))
+        end_date = updates.get("end_date", current_activity.get("end_date"))
+        
+        missing_fields = []
+        if not assignee:
+            missing_fields.append("assignee")
+        if not approver:
+            missing_fields.append("approver")
+        if not start_date:
+            missing_fields.append("start_date")
+        if not end_date:
+            missing_fields.append("end_date")
+        
+        if missing_fields:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"The following fields are mandatory: {', '.join(missing_fields)}"
+            )
+        
+        # Validate that start_date is before end_date
+        if start_date and end_date:
+            try:
+                from datetime import datetime
+                start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                if start >= end:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Start date must be before end date"
+                    )
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid date format. Please use ISO format (YYYY-MM-DD)"
+                )
         
         update_data = dict(updates)
         if "subject" in update_data and isinstance(update_data["subject"], str):

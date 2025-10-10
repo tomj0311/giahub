@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Box, Tabs, Tab, Typography, List, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material'
 import ProjectTreeView from './ProjectTreeView'
 import ProjectPlanning from './ProjectPlanning'
-import ProjectDashboard from './ProjectDashboard'
+import ProjectDashboard from './ProjectGantt'
 import { FolderKanban, ListChecks, BarChart3 } from 'lucide-react'
 
 function Projects({ user }) {
@@ -13,7 +13,7 @@ function Projects({ user }) {
   }
 
   const menuItems = [
-    { label: 'Dashboard', icon: <BarChart3 size={20} />, index: 2 },
+    { label: 'Gantt Chart', icon: <BarChart3 size={20} />, index: 2 },
     { label: 'Portfolio', icon: <FolderKanban size={20} />, index: 0 },
     { label: 'Planning', icon: <ListChecks size={20} />, index: 1 },
   ]
