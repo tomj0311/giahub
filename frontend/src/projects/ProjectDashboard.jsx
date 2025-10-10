@@ -38,6 +38,7 @@ function ProjectDashboard({ user }) {
   const [selectedProject, setSelectedProject] = useState(null)
   const [ganttExpanded, setGanttExpanded] = useState({})
   const [zoomLevel, setZoomLevel] = useState(1)
+  const [loadingActivitiesFor, setLoadingActivitiesFor] = useState({})
   const ganttRef = useRef(null)
 
   // Handle zoom with mouse wheel - works on scroll without Ctrl key
@@ -97,7 +98,12 @@ function ProjectDashboard({ user }) {
       console.log('[Dashboard] Loading activities...')
       let activityList = []
       try {
-        const activitiesRes = await apiCall('/api/projects/activities?page=1&page_size=1000', {
+        const params = new URLSearchParams({
+          page: '1',
+          page_size: '200'
+        })
+        
+        const activitiesRes = await apiCall(`/api/projects/activities?${params}`, {
           method: 'GET',
           headers: { Authorization: `Bearer ${token}` }
         })
@@ -109,7 +115,9 @@ function ProjectDashboard({ user }) {
           activityList = activitiesData.activities || []
           console.log('[Dashboard] Activities loaded:', activityList.length, activityList)
         } else {
-          console.warn('[Dashboard] Failed to load activities, continuing without them')
+          const errorData = await activitiesRes.json()
+          console.error('[Dashboard] Failed to load activities - Error:', errorData)
+          console.warn('[Dashboard] Continuing without them')
         }
       } catch (activityError) {
         console.error('[Dashboard] Error loading activities:', activityError)
@@ -312,6 +320,46 @@ function ProjectDashboard({ user }) {
       ...prev,
       [projectId]: !prev[projectId]
     }))
+    
+    // Load activities when expanding a project
+    if (!expanded[projectId] && !activitiesByProject[projectId]) {
+      loadActivitiesForProject(projectId)
+    }
+  }
+
+  const loadActivitiesForProject = async (projectId) => {
+    if (loadingActivitiesFor[projectId]) return
+    
+    setLoadingActivitiesFor(prev => ({ ...prev, [projectId]: true }))
+    
+    try {
+      const params = new URLSearchParams({
+        page: '1',
+        page_size: '200'
+      })
+      
+      if (projectId) params.append('project_id', projectId)
+      
+      const res = await apiCall(`/api/projects/activities?${params}`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        console.log(`[Dashboard] Loaded ${data.activities?.length || 0} activities for project ${projectId}`, data.activities)
+        setActivitiesByProject(prev => ({
+          ...prev,
+          [projectId]: data.activities || []
+        }))
+      } else {
+        console.error('[Dashboard] Failed to load activities:', res.status)
+      }
+    } catch (error) {
+      console.error('[Dashboard] Error loading activities:', error)
+    } finally {
+      setLoadingActivitiesFor(prev => ({ ...prev, [projectId]: false }))
+    }
   }
 
   const toggleGanttExpand = (projectId) => {
@@ -328,6 +376,9 @@ function ProjectDashboard({ user }) {
     }
     
     setSelectedProject(project)
+    
+    // Load activities for selected project
+    loadActivitiesForProject(project.id)
     
     // Auto-expand the selected project in the Gantt view
     const expandedState = { [project.id]: true }
@@ -366,7 +417,13 @@ function ProjectDashboard({ user }) {
       ON_TRACK: 'success',
       AT_RISK: 'warning',
       OFF_TRACK: 'error',
-      COMPLETED: 'info'
+      COMPLETED: 'info',
+      // Activity statuses
+      'New': 'info',
+      'In Progress': 'primary',
+      'On Hold': 'warning',
+      'Completed': 'success',
+      'Cancelled': 'error'
     }
     return colors[status] || 'default'
   }
@@ -387,6 +444,8 @@ function ProjectDashboard({ user }) {
     const hasActivities = activitiesByProject[project.id] && activitiesByProject[project.id].length > 0
     const isExpanded = expanded[project.id]
     const isSelected = selectedProject?.id === project.id
+
+    console.log(`[renderProjectNode] Project: ${project.name}, hasActivities: ${hasActivities}, activities count: ${activitiesByProject[project.id]?.length || 0}, isExpanded: ${isExpanded}`)
 
     return (
       <React.Fragment key={project.id}>
@@ -481,7 +540,7 @@ function ProjectDashboard({ user }) {
             <TableCell>{activity.priority}</TableCell>
             <TableCell>
               <Chip
-                label={getStatusLabel(activity.status)}
+                label={activity.status}
                 color={getStatusColor(activity.status)}
                 size="small"
                 variant="outlined"
@@ -491,7 +550,7 @@ function ProjectDashboard({ user }) {
             <TableCell>
               {activity.due_date ? new Date(activity.due_date).toLocaleDateString() : '-'}
             </TableCell>
-            <TableCell>{activity.progress}%</TableCell>
+            <TableCell>{activity.progress || 0}%</TableCell>
           </TableRow>
         ))}
 
@@ -593,7 +652,7 @@ function ProjectDashboard({ user }) {
             <TableCell>{activity.priority}</TableCell>
             <TableCell>
               <Chip
-                label={getStatusLabel(activity.status)}
+                label={activity.status}
                 color={getStatusColor(activity.status)}
                 size="small"
                 variant="outlined"
@@ -603,7 +662,7 @@ function ProjectDashboard({ user }) {
             <TableCell>
               {activity.due_date ? new Date(activity.due_date).toLocaleDateString() : '-'}
             </TableCell>
-            <TableCell>{activity.progress}%</TableCell>
+            <TableCell>{activity.progress || 0}%</TableCell>
           </TableRow>
         ))}
 
