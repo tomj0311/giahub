@@ -65,7 +65,7 @@ class ProjectActivityService:
         assignee = activity.get("assignee", "").strip()
         approver = activity.get("approver", "").strip()
         start_date = activity.get("start_date")
-        end_date = activity.get("end_date")
+        due_date = activity.get("due_date")
         
         if not assignee:
             missing_fields.append("assignee")
@@ -73,8 +73,8 @@ class ProjectActivityService:
             missing_fields.append("approver")
         if not start_date:
             missing_fields.append("start_date")
-        if not end_date:
-            missing_fields.append("end_date")
+        if not due_date:
+            missing_fields.append("due_date")
         
         if missing_fields:
             raise HTTPException(
@@ -82,16 +82,16 @@ class ProjectActivityService:
                 detail=f"The following fields are mandatory: {', '.join(missing_fields)}"
             )
         
-        # Validate that start_date is before end_date
-        if start_date and end_date:
+        # Validate that start_date is before due_date
+        if start_date and due_date:
             try:
                 from datetime import datetime
                 start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
-                end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-                if start >= end:
+                due = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                if start >= due:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Start date must be before end date"
+                        detail="Start date must be before due date"
                     )
             except ValueError:
                 raise HTTPException(
@@ -131,7 +131,6 @@ class ProjectActivityService:
             "approver": activity.get("approver"),
             "due_date": activity.get("due_date"),
             "start_date": activity.get("start_date"),
-            "end_date": activity.get("end_date"),
             "progress": activity.get("progress", 0),
             "estimated_time": activity.get("estimated_time"),
             "spent_time": activity.get("spent_time", 0),
@@ -291,7 +290,7 @@ class ProjectActivityService:
         assignee = updates.get("assignee", current_activity.get("assignee", "")).strip() if "assignee" in updates else current_activity.get("assignee", "").strip()
         approver = updates.get("approver", current_activity.get("approver", "")).strip() if "approver" in updates else current_activity.get("approver", "").strip()
         start_date = updates.get("start_date", current_activity.get("start_date"))
-        end_date = updates.get("end_date", current_activity.get("end_date"))
+        due_date = updates.get("due_date", current_activity.get("due_date"))
         
         missing_fields = []
         if not assignee:
@@ -300,8 +299,8 @@ class ProjectActivityService:
             missing_fields.append("approver")
         if not start_date:
             missing_fields.append("start_date")
-        if not end_date:
-            missing_fields.append("end_date")
+        if not due_date:
+            missing_fields.append("due_date")
         
         if missing_fields:
             raise HTTPException(
@@ -309,16 +308,16 @@ class ProjectActivityService:
                 detail=f"The following fields are mandatory: {', '.join(missing_fields)}"
             )
         
-        # Validate that start_date is before end_date
-        if start_date and end_date:
+        # Validate that start_date is before due_date
+        if start_date and due_date:
             try:
                 from datetime import datetime
                 start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
-                end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-                if start >= end:
+                due = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                if start >= due:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Start date must be before end date"
+                        detail="Start date must be before due date"
                     )
             except ValueError:
                 raise HTTPException(

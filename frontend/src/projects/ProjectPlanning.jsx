@@ -70,7 +70,6 @@ function ProjectPlanning({ user, projectId }) {
     approver: '',
     due_date: '',
     start_date: '',
-    end_date: '',
     progress: 0,
     estimated_time: '',
     spent_time: 0
@@ -233,7 +232,6 @@ function ProjectPlanning({ user, projectId }) {
       approver: '',
       due_date: '',
       start_date: '',
-      end_date: '',
       progress: 0,
       estimated_time: '',
       spent_time: 0
@@ -269,7 +267,6 @@ function ProjectPlanning({ user, projectId }) {
         approver: response.approver || '',
         due_date: response.due_date || '',
         start_date: response.start_date || '',
-        end_date: response.end_date || '',
         progress: response.progress || 0,
         estimated_time: response.estimated_time || '',
         spent_time: response.spent_time || 0
@@ -305,16 +302,16 @@ function ProjectPlanning({ user, projectId }) {
     if (!form.start_date) {
       errors.start_date = 'Start date is required'
     }
-    if (!form.end_date) {
-      errors.end_date = 'End date is required'
+    if (!form.due_date) {
+      errors.due_date = 'Due date is required'
     }
 
-    // Validate that start_date is before end_date
-    if (form.start_date && form.end_date) {
+    // Validate that start_date is before due_date
+    if (form.start_date && form.due_date) {
       const startDate = new Date(form.start_date)
-      const endDate = new Date(form.end_date)
-      if (startDate >= endDate) {
-        errors.end_date = 'End date must be after start date'
+      const dueDate = new Date(form.due_date)
+      if (startDate >= dueDate) {
+        errors.due_date = 'Due date must be after start date'
       }
     }
 
@@ -454,7 +451,7 @@ function ProjectPlanning({ user, projectId }) {
                       <TableCell>Assignee</TableCell>
                       <TableCell>Approver</TableCell>
                       <TableCell>Start Date</TableCell>
-                      <TableCell>End Date</TableCell>
+                      <TableCell>Due Date</TableCell>
                       <TableCell>Progress</TableCell>
                       <TableCell align="right">Actions</TableCell>
                     </TableRow>
@@ -507,7 +504,7 @@ function ProjectPlanning({ user, projectId }) {
                             {activity.start_date ? new Date(activity.start_date).toLocaleDateString() : '-'}
                           </TableCell>
                           <TableCell>
-                            {activity.end_date ? new Date(activity.end_date).toLocaleDateString() : '-'}
+                            {activity.due_date ? new Date(activity.due_date).toLocaleDateString() : '-'}
                           </TableCell>
                           <TableCell>{activity.progress}%</TableCell>
                           <TableCell align="right">
@@ -661,7 +658,7 @@ function ProjectPlanning({ user, projectId }) {
                 value={form.start_date}
                 onChange={(e) => {
                   setForm({ ...form, start_date: e.target.value })
-                  setFormErrors({ ...formErrors, start_date: undefined, end_date: undefined })
+                  setFormErrors({ ...formErrors, start_date: undefined, due_date: undefined })
                 }}
                 fullWidth
                 InputLabelProps={{ shrink: true }}
@@ -670,26 +667,18 @@ function ProjectPlanning({ user, projectId }) {
                 helperText={formErrors.start_date || 'Required'}
               />
               <TextField
-                label="End Date"
+                label="Due Date"
                 type="date"
-                value={form.end_date}
+                value={form.due_date}
                 onChange={(e) => {
-                  setForm({ ...form, end_date: e.target.value })
-                  setFormErrors({ ...formErrors, end_date: undefined })
+                  setForm({ ...form, due_date: e.target.value })
+                  setFormErrors({ ...formErrors, due_date: undefined })
                 }}
                 fullWidth
                 InputLabelProps={{ shrink: true }}
                 required
-                error={!!formErrors.end_date}
-                helperText={formErrors.end_date || 'Required'}
-              />
-              <TextField
-                label="Due Date"
-                type="date"
-                value={form.due_date}
-                onChange={(e) => setForm({ ...form, due_date: e.target.value })}
-                fullWidth
-                InputLabelProps={{ shrink: true }}
+                error={!!formErrors.due_date}
+                helperText={formErrors.due_date || 'Required'}
               />
               <TextField
                 label="Progress (%)"
