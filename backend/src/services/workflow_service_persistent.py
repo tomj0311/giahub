@@ -635,11 +635,11 @@ class WorkflowServicePersistent:
             # Build query based on status
             query = {"workflow_id": workflow_id}
             if status == "waiting":
-                query["serialized_data.status"] = "waiting"
+                query["serialized_data.data.workflow_status.status"] = "waiting"
             elif status == "error":
-                query["serialized_data.status"] = "error"
+                query["serialized_data.data.workflow_status.status"] = "error"
             elif status == "completed":
-                query["serialized_data.status"] = "completed"
+                query["serialized_data.data.workflow_status.status"] = "completed"
             # For "all", no additional filter needed
 
             # Get total count and paginated documents
@@ -662,7 +662,7 @@ class WorkflowServicePersistent:
                     "workflow_id": doc.get("workflow_id"),
                     "instance_id": doc.get("instance_id"),
                     "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
-                    "status": doc.get("serialized_data", {}).get("status", "waiting")
+                    "status": doc.get("serialized_data", {}).get("data", {}).get("workflow_status", {}).get("status", "waiting")
                 }
                 workflows.append(workflow)
 
