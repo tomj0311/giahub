@@ -20,6 +20,7 @@
 import copy
 import re
 import textwrap
+import types
 
 
 class BasePythonScriptEngineEnvironment:
@@ -94,10 +95,11 @@ class TaskDataEnvironment(BasePythonScriptEngineEnvironment):
         pass
 
     def _remove_globals_and_functions_from_context(self, context, external_context=None):
-        """When executing a script, don't leave the globals, functions
-        and external methods in the context that we have modified."""
+        """When executing a script, don't leave the globals, functions,
+        modules, and external methods in the context that we have modified."""
         for k in list(context):
             if k == "__builtins__" or \
+                    isinstance(context[k], types.ModuleType) or \
                     hasattr(context[k], '__call__') or \
                     k in self.globals or \
                     external_context and k in external_context:
