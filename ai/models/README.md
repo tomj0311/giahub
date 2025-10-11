@@ -67,6 +67,19 @@ from ai.models import Dummy
 from ai.models.dummy import Dummy
 ```
 
+### CurlGen (Image Generation)
+```python
+from ai.models import CurlGen
+# or
+from ai.models.curl import CurlGen
+
+# Example usage
+model = CurlGen(
+    api_key="your-azure-api-key",
+    size="1024x1024"
+)
+```
+
 ## Usage Example
 
 Instead of the more verbose import:

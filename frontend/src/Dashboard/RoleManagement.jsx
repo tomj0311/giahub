@@ -23,7 +23,8 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemSecondaryAction
+  ListItemSecondaryAction,
+  Autocomplete
 } from '@mui/material'
 import {
   Plus as AddIcon,
@@ -44,8 +45,15 @@ export default function RoleManagement({ user }) {
   const [formData, setFormData] = useState({
     roleName: '',
     description: '',
-    permissions: ''
+    permissions: []
   })
+
+  // Predefined permissions list
+  const availablePermissions = [
+    'Read',
+    'Write',
+    'Delete'
+  ]
 
   useEffect(() => {
     fetchRoles()
@@ -54,7 +62,7 @@ export default function RoleManagement({ user }) {
   const fetchRoles = async () => {
     try {
       setLoading(true)
-  const response = await apiCall('/api/roles', {
+      const response = await apiCall('/api/roles', {
         headers: user?.token ? { 'Authorization': `Bearer ${user.token}` } : {}
       })
 
@@ -73,22 +81,20 @@ export default function RoleManagement({ user }) {
 
   const handleCreateRole = async () => {
     try {
-      const permissions = formData.permissions.split(',').map(p => p.trim()).filter(p => p)
-
-  const response = await apiCall('/api/roles', {
+      const response = await apiCall('/api/roles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(user?.token ? { 'Authorization': `Bearer ${user.token}` } : {}) },
         body: JSON.stringify({
           roleName: formData.roleName,
           description: formData.description,
-          permissions: permissions
+          permissions: formData.permissions
         })
       })
 
       if (response.ok) {
         showSuccess('Role created successfully')
         setOpenCreateDialog(false)
-        setFormData({ roleName: '', description: '', permissions: '' })
+        setFormData({ roleName: '', description: '', permissions: [] })
         fetchRoles()
       } else {
         const data = await response.json()
@@ -101,14 +107,12 @@ export default function RoleManagement({ user }) {
 
   const handleEditRole = async () => {
     try {
-      const permissions = formData.permissions.split(',').map(p => p.trim()).filter(p => p)
-
-  const response = await apiCall(`/api/roles/${selectedRole.roleId}`, {
+      const response = await apiCall(`/api/roles/${selectedRole.roleId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...(user?.token ? { 'Authorization': `Bearer ${user.token}` } : {}) },
         body: JSON.stringify({
           description: formData.description,
-          permissions: permissions
+          permissions: formData.permissions
         })
       })
 
@@ -116,7 +120,7 @@ export default function RoleManagement({ user }) {
         showSuccess('Role updated successfully')
         setOpenEditDialog(false)
         setSelectedRole(null)
-        setFormData({ roleName: '', description: '', permissions: '' })
+        setFormData({ roleName: '', description: '', permissions: [] })
         fetchRoles()
       } else {
         const data = await response.json()
@@ -133,7 +137,7 @@ export default function RoleManagement({ user }) {
     }
 
     try {
-  const response = await apiCall(`/api/roles/${role.roleId}`, {
+      const response = await apiCall(`/api/roles/${role.roleId}`, {
         method: 'DELETE',
         headers: user?.token ? { 'Authorization': `Bearer ${user.token}` } : {}
       })
@@ -151,7 +155,7 @@ export default function RoleManagement({ user }) {
   }
 
   const openCreateForm = () => {
-    setFormData({ roleName: '', description: '', permissions: '' })
+    setFormData({ roleName: '', description: '', permissions: [] })
     setOpenCreateDialog(true)
   }
 
@@ -160,7 +164,7 @@ export default function RoleManagement({ user }) {
     setFormData({
       roleName: role.roleName,
       description: role.description,
-      permissions: role.permissions.join(', ')
+      permissions: role.permissions || []
     })
     setOpenEditDialog(true)
   }
@@ -169,7 +173,7 @@ export default function RoleManagement({ user }) {
     setOpenCreateDialog(false)
     setOpenEditDialog(false)
     setSelectedRole(null)
-    setFormData({ roleName: '', description: '', permissions: '' })
+    setFormData({ roleName: '', description: '', permissions: [] })
   }
 
   const getRoleTypeColor = (roleName) => {
@@ -313,14 +317,35 @@ export default function RoleManagement({ user }) {
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             sx={{ mb: 2 }}
           />
-          <TextField
-            margin="dense"
-            label="Permissions (comma-separated)"
-            fullWidth
-            variant="outlined"
+          <Autocomplete
+            multiple
+            options={availablePermissions}
             value={formData.permissions}
-            onChange={(e) => setFormData({ ...formData, permissions: e.target.value })}
-            helperText="Enter permissions separated by commas (e.g., read, write, delete)"
+            onChange={(event, newValue) => {
+              setFormData({ ...formData, permissions: newValue })
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Permissions"
+                fullWidth
+                variant="outlined"
+                helperText="Select or type permissions for this role"
+              />
+            )}
+            renderTags={(value, getTagProps) =>
+              value.map((option, index) => (
+                <Chip
+                  variant="outlined"
+                  label={option}
+                  {...getTagProps({ index })}
+                  key={option}
+                  size="small"
+                />
+              ))
+            }
+            freeSolo
+            sx={{ mt: 1, mb: 2 }}
           />
         </DialogContent>
         <DialogActions>
@@ -344,14 +369,35 @@ export default function RoleManagement({ user }) {
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             sx={{ mb: 2 }}
           />
-          <TextField
-            margin="dense"
-            label="Permissions (comma-separated)"
-            fullWidth
-            variant="outlined"
+          <Autocomplete
+            multiple
+            options={availablePermissions}
             value={formData.permissions}
-            onChange={(e) => setFormData({ ...formData, permissions: e.target.value })}
-            helperText="Enter permissions separated by commas (e.g., read, write, delete)"
+            onChange={(event, newValue) => {
+              setFormData({ ...formData, permissions: newValue })
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Permissions"
+                fullWidth
+                variant="outlined"
+                helperText="Select or type permissions for this role"
+              />
+            )}
+            renderTags={(value, getTagProps) =>
+              value.map((option, index) => (
+                <Chip
+                  variant="outlined"
+                  label={option}
+                  {...getTagProps({ index })}
+                  key={option}
+                  size="small"
+                />
+              ))
+            }
+            freeSolo
+            sx={{ mt: 1, mb: 2 }}
           />
         </DialogContent>
         <DialogActions>

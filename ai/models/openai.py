@@ -1,6 +1,7 @@
 """
 OpenAI Models - Simplified interface
 """
+import json
 from typing import Optional, List, Dict, Any, Union
 from ai.model.openai.chat import OpenAIChat
 from ai.model.openai.like import OpenAILike as OpenAILikeBase
@@ -32,8 +33,12 @@ class OpenAI(OpenAIChat):
         logprobs: Optional[bool] = None,
         top_logprobs: Optional[int] = None,
         
+        # Audio parameters - for audio-enabled models
+        modalities: Union[str, List[str]] = None,
+        audio: Union[str, Dict[str, Any]] = None,
+        
         # Client configuration
-        base_url: Optional[str] = None,
+        base_url: str = None,
         timeout: Optional[float] = None,
         max_retries: Optional[int] = None,
         organization: Optional[str] = None,
@@ -45,7 +50,7 @@ class OpenAI(OpenAIChat):
         Initialize OpenAI model with optional fine-tuning parameters.
         
         Args:
-            id: Model ID (e.g., "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo")
+            id: Model ID (e.g., "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo", "gpt-audio")
             api_key: OpenAI API key
             temperature: Controls randomness (0.0 to 2.0). Higher = more creative
             max_tokens: Maximum tokens in response
@@ -57,12 +62,28 @@ class OpenAI(OpenAIChat):
             response_format: Response format specification
             logprobs: Return log probabilities
             top_logprobs: Number of top logprobs to return
+            modalities: List of modalities or JSON string (e.g., ["text", "audio"] or '["text", "audio"]')
+            audio: Audio config dict or JSON string (e.g., {"voice": "alloy", "format": "wav"} or '{"voice": "alloy", "format": "wav"}')
             base_url: Custom API base URL
             timeout: Request timeout in seconds
             max_retries: Maximum number of retries
             organization: OpenAI organization ID
             **kwargs: Additional parameters passed to underlying implementation
         """
+        # Convert modalities from string to list if needed
+        if modalities is not None and isinstance(modalities, str):
+            try:
+                modalities = json.loads(modalities)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid modalities JSON string: {modalities}. Error: {e}")
+        
+        # Convert audio from string to dict if needed
+        if audio is not None and isinstance(audio, str):
+            try:
+                audio = json.loads(audio)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid audio JSON string: {audio}. Error: {e}")
+        
         super().__init__(
             id=id,
             api_key=api_key,
@@ -76,6 +97,8 @@ class OpenAI(OpenAIChat):
             response_format=response_format,
             logprobs=logprobs,
             top_logprobs=top_logprobs,
+            modalities=modalities,
+            audio=audio,
             base_url=base_url,
             timeout=timeout,
             max_retries=max_retries,

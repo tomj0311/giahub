@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom'
 import { ThemeProvider, CssBaseline } from '@mui/material'
 import AppBar from '@mui/material/AppBar'
@@ -21,19 +21,21 @@ function useAuth() {
   const [token, setToken] = useState(() => localStorage.getItem('token'))
   const [name, setName] = useState(() => localStorage.getItem('name'))
 
-  const login = (t, n) => {
+  const login = useCallback((t, n) => {
     localStorage.setItem('token', t)
     localStorage.setItem('name', n || '')
     setToken(t)
     setName(n || '')
-  }
-  const logout = async () => {
+  }, [])
+  
+  const logout = useCallback(async () => {
     try { await apiCall('/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }) } catch { }
     localStorage.removeItem('token')
     localStorage.removeItem('name')
     setToken(null)
     setName(null)
-  }
+  }, [token])
+  
   return { token, name, login, logout }
 }
 
@@ -59,7 +61,7 @@ function AppShell({ children, themeKey, setThemeKey, isAuthenticated }) {
       <CssBaseline />
       <AppBar position="sticky" sx={{ background: theme.custom.appBarGradient, backgroundSize: '200% 200%', animation: 'appBarShift 12s ease infinite' }}>
         <Toolbar>
-          <Typography variant="h6" sx={{ flexGrow: 1, color: '#ffffff', fontWeight: 600 }}>GiaHUB</Typography>
+          <Typography variant="h6" sx={{ flexGrow: 1, color: '#ffffff', fontWeight: 600 }}>GIA</Typography>
           <IconButton
             color="inherit"
             onClick={() => setThemeKey(getThemeKeyForMode(theme.palette.mode === 'dark' ? 'light' : 'dark'))}
@@ -78,6 +80,8 @@ function AppShell({ children, themeKey, setThemeKey, isAuthenticated }) {
 }
 
 export default function App() {
+  // removed debug render log
+  
   const [themeKey, setThemeKey] = useState(() => {
     const savedKey = localStorage.getItem('theme')
     if (savedKey) return savedKey
@@ -85,6 +89,12 @@ export default function App() {
     return getThemeKeyForMode(systemDark ? 'dark' : 'light')
   })
   const auth = useAuth()
+
+  // Memoize user object to prevent unnecessary re-renders
+  const user = useMemo(() => ({ 
+    name: auth.name, 
+    token: auth.token 
+  }), [auth.name, auth.token])
 
   // Save theme preference to localStorage whenever it changes
   useEffect(() => {
@@ -96,7 +106,8 @@ export default function App() {
     } catch { }
     // Keep document background in sync to avoid flashes when toggling
     const dark = themeKey === 'aurora'
-    const bg = dark ? '#000000' : '#ffffff'
+    const theme = buildTheme(themeKey)
+    const bg = theme.custom.backgroundGradient
     const tc = dark ? 'dark' : 'light'
     try {
       document.documentElement.style.backgroundColor = bg
@@ -138,14 +149,11 @@ export default function App() {
         <Route path="/verify" element={<VerifyPage />} />
         <Route path="/auth/callback" element={<AuthCallback onLogin={auth.login} />} />
 
-        {/* Protected routes */}
-        <Route path="/agent-playground" element={<Navigate to="/dashboard/agent-playground" replace />} />
-        <Route path="/dashboard/*" element={auth.token ? <Dashboard user={{ name: auth.name, token: auth.token }} onLogout={auth.logout} themeKey={themeKey} setThemeKey={setThemeKey} /> : <Navigate to="/login" replace />} />
-        <Route path="/agents/*" element={auth.token ? <Dashboard user={{ name: auth.name, token: auth.token }} onLogout={auth.logout} themeKey={themeKey} setThemeKey={setThemeKey} /> : <Navigate to="/login" replace />} />
+        {/* Dashboard - handles all authenticated routes */}
+        <Route path="/dashboard/*" element={auth.token ? <Dashboard user={user} onLogout={auth.logout} themeKey={themeKey} setThemeKey={setThemeKey} /> : <Navigate to="/login" replace />} />
 
-        {/* Default redirects */}
+        {/* Simple redirects */}
         <Route path="/" element={<Navigate to={auth.token ? "/dashboard" : "/login"} replace />} />
-        <Route path="*" element={<Navigate to={auth.token ? "/dashboard" : "/login"} replace />} />
       </Routes>
     </AppShell>
   )

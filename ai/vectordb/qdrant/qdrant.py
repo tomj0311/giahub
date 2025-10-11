@@ -203,13 +203,22 @@ class Qdrant(VectorDb):
             logger.error(f"Error getting embedding for Query: {query}")
             return []
 
-        results = self.client.search(
-            collection_name=self.collection,
-            query_vector=query_embedding,
-            with_vectors=True,
-            with_payload=True,
-            limit=limit,
-        )
+        try:
+            results = self.client.search(
+                collection_name=self.collection,
+                query_vector=query_embedding,
+                with_vectors=True,
+                with_payload=True,
+                limit=limit,
+            )
+        except Exception as e:
+            # Handle cases where collection doesn't exist or other API errors
+            if "404" in str(e) or "not found" in str(e).lower():
+                logger.warning(f"Collection '{self.collection}' not found during search: {e}")
+                return []
+            else:
+                logger.error(f"Error searching collection '{self.collection}': {e}")
+                raise
 
         # Build search results
         search_results: List[Document] = []
@@ -238,13 +247,16 @@ class Qdrant(VectorDb):
             self.client.delete_collection(self.collection)
 
     def exists(self) -> bool:
-        if self.client:
-            collections_response: models.CollectionsResponse = self.client.get_collections()
-            collections: List[models.CollectionDescription] = collections_response.collections
-            for collection in collections:
-                if collection.name == self.collection:
-                    # collection.status == models.CollectionStatus.GREEN
-                    return True
+        try:
+            if self.client:
+                collections_response: models.CollectionsResponse = self.client.get_collections()
+                collections: List[models.CollectionDescription] = collections_response.collections
+                for collection in collections:
+                    if collection.name == self.collection:
+                        # collection.status == models.CollectionStatus.GREEN
+                        return True
+        except Exception as e:
+            logger.warning(f"Error checking if collection '{self.collection}' exists: {e}")
         return False
 
     def get_count(self) -> int:

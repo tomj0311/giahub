@@ -19,8 +19,8 @@ const themeDefinitions = {
       info: { main: '#0288d1' },
       success: { main: '#00796b' },
       background: {
-        default: '#ffffff',
-        paper: '#ffffff'
+        default: '#f8f9fa',
+        paper: '#fafafa'
       },
       text: {
         primary: '#000000',
@@ -30,7 +30,7 @@ const themeDefinitions = {
     // Darker blue primary-based animated gradient for AppBar
     appBarGradient: 'linear-gradient(120deg,#0a2e5c 0%,#0d47a1 35%,#1565c0 65%,#1976d2 100%)',
     // For light theme ocean the background must be pure white
-    backgroundGradient: '#ffffff'
+    backgroundGradient: '#f8f9fa'
   },
   aurora: {
     name: 'Aurora',
@@ -50,7 +50,7 @@ const themeDefinitions = {
       error: { main: '#ff3f5d' },
       background: {
         default: '#000000', // Pure black from CSS
-        paper: '#121212' // Solid dark background for dialogs
+        paper: '#1e1e1e' // Solid dark background for dialogs
       },
       text: {
         primary: '#ffffff', // White text
@@ -266,52 +266,6 @@ export function buildTheme(key) {
       }
     }
   };
-  // Center placeholder/text while preserving overall height (works for size=medium and size=small)
-  theme.components.MuiOutlinedInput = {
-    ...(theme.components.MuiOutlinedInput || {}),
-    styleOverrides: {
-      ...(theme.components.MuiOutlinedInput?.styleOverrides || {}),
-      root: {
-        ...(theme.components.MuiOutlinedInput?.styleOverrides?.root || {}),
-        alignItems: 'center',
-        '&.MuiInputBase-sizeSmall .MuiOutlinedInput-input': {
-          paddingTop: 16.5,
-          paddingBottom: 16.5
-        }
-      },
-      input: {
-        ...(theme.components.MuiOutlinedInput?.styleOverrides?.input || {}),
-        paddingTop: 16.5,
-        paddingBottom: 16.5
-      }
-    }
-  };
-  // Center the floating label inside outlined fields (affects visible label text)
-  theme.components.MuiInputLabel = {
-    ...(theme.components.MuiInputLabel || {}),
-    styleOverrides: {
-      ...(theme.components.MuiInputLabel?.styleOverrides || {}),
-      root: {
-        ...(theme.components.MuiInputLabel?.styleOverrides?.root || {}),
-        '&.MuiInputLabel-outlined': {
-          top: '50%',
-          transform: 'translate(14px, -50%) scale(1)'
-        },
-        '&.MuiInputLabel-outlined.MuiInputLabel-sizeSmall': {
-          top: '50%',
-          transform: 'translate(14px, -50%) scale(1)'
-        },
-        '&.MuiInputLabel-outlined.MuiInputLabel-shrink': {
-          top: 0,
-          transform: 'translate(14px, -9px) scale(0.75)'
-        },
-        '&.MuiInputLabel-outlined.MuiInputLabel-sizeSmall.MuiInputLabel-shrink': {
-          top: 0,
-          transform: 'translate(14px, -9px) scale(0.75)'
-        }
-      }
-    }
-  };
   // Base Paper + soft / section variants (applies to both themes) - Updated with CSS styles
   theme.components.MuiPaper = {
     ...(theme.components.MuiPaper || {}),
@@ -323,7 +277,7 @@ export function buildTheme(key) {
         backgroundImage: 'none',
         background: theme.palette.mode === 'dark'
           ? theme.palette.background.paper // Solid background for dark mode
-          : '#ffffff', // Solid white for light mode
+          : theme.palette.background.paper, // Use palette for consistency
         border: theme.palette.mode === 'dark' 
           ? '1px solid rgba(255, 255, 255, 0.08)' // Border color from CSS
           : '1px solid rgba(0, 0, 0, 0.08)',
@@ -437,36 +391,47 @@ export function buildTheme(key) {
             }
           },
           containedPrimary: {
-            // Using the login button gradient from CSS
-            background: 'linear-gradient(180deg, #ffffff 0%, #fdfdfd 50%, #f5f5f5 100%)',
-            color: '#09090A', // Dark text from CSS - ensures high contrast on white background
-            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.15)', // From CSS
+            // Using Aurora theme gradient instead of white background
+            background: `linear-gradient(135deg, ${theme.palette.gradient?.appBarStart || '#ff9d42'} 0%, ${theme.palette.gradient?.appBarMiddle || '#ff4fd8'} 50%, ${theme.palette.gradient?.appBarEnd || '#5d00ff'} 100%)`,
+            color: '#ffffff', // White text on gradient background
+            boxShadow: '0 4px 12px rgba(255, 77, 216, 0.3)', // Gradient-themed shadow
+            border: 'none',
             // Remove responsive padding - use fixed sizes from root
             '&:hover': {
-              opacity: 0.9, // From CSS hover effect
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
-              color: '#000000' // Ensure even darker text on hover for maximum contrast
+              background: `linear-gradient(135deg, ${theme.palette.gradient?.appBarStart || '#ff9d42'} 0%, ${theme.palette.gradient?.appBarMiddle || '#ff4fd8'} 40%, ${theme.palette.gradient?.appBarEnd || '#5d00ff'} 90%)`,
+              boxShadow: '0 6px 16px rgba(255, 77, 216, 0.4)',
+              color: '#ffffff',
+              transform: 'translateY(-1px)'
             },
             '&:active': {
-              filter: 'brightness(0.9)',
-              color: '#000000' // Maintain dark text on active state
+              transform: 'translateY(0)',
+              boxShadow: '0 2px 8px rgba(255, 77, 216, 0.3)'
             },
             '&:disabled': {
-              background: 'linear-gradient(180deg, #f5f5f5 0%, #e0e0e0 50%, #d5d5d5 100%)',
-              color: '#666666' // Darker disabled text for better visibility
+              background: 'rgba(255, 255, 255, 0.1)',
+              color: 'rgba(255, 255, 255, 0.5)',
+              boxShadow: 'none'
             }
           },
           containedSecondary: {
-            // Ensure secondary contained buttons also have proper contrast
-            background: 'linear-gradient(180deg, #e3f2fd 0%, #bbdefb 50%, #90caf9 100%)',
-            color: '#0d47a1', // Dark blue text for contrast on light blue background
+            // Gradient secondary button for Aurora theme
+            background: `linear-gradient(135deg, ${theme.palette.gradient?.textStart || '#ef7b75'} 0%, ${theme.palette.gradient?.textSecond || '#f25c99'} 50%, ${theme.palette.gradient?.textThird || '#f63fba'} 100%)`,
+            color: '#ffffff',
+            boxShadow: '0 4px 12px rgba(239, 123, 117, 0.3)',
             '&:hover': {
-              background: 'linear-gradient(180deg, #bbdefb 0%, #90caf9 50%, #64b5f6 100%)',
-              color: '#0d47a1'
+              background: `linear-gradient(135deg, ${theme.palette.gradient?.textStart || '#ef7b75'} 0%, ${theme.palette.gradient?.textSecond || '#f25c99'} 40%, ${theme.palette.gradient?.textThird || '#f63fba'} 90%)`,
+              boxShadow: '0 6px 16px rgba(239, 123, 117, 0.4)',
+              color: '#ffffff',
+              transform: 'translateY(-1px)'
+            },
+            '&:active': {
+              transform: 'translateY(0)',
+              boxShadow: '0 2px 8px rgba(239, 123, 117, 0.3)'
             },
             '&:disabled': {
-              background: '#f5f5f5',
-              color: '#666666'
+              background: 'rgba(255, 255, 255, 0.1)',
+              color: 'rgba(255, 255, 255, 0.5)',
+              boxShadow: 'none'
             }
           },
           outlinedPrimary: {
@@ -557,9 +522,21 @@ export function buildTheme(key) {
       MuiCard: {
         styleOverrides: {
           root: {
-            backgroundColor: '#151515',
+            backgroundColor: theme.palette.background.paper,
             border: '1px solid rgba(255, 255, 255, 0.12)',
             boxShadow: '0 6px 28px -12px #000, 0 0 0 1px rgba(255, 255, 255, 0.04)'
+          }
+        }
+      },
+      MuiBox: {
+        styleOverrides: {
+          root: {
+            // Ensure Box has same background as Paper/Card when needed
+            '&.MuiBox-background-paper': {
+              backgroundColor: theme.palette.background.paper,
+              border: '1px solid rgba(255, 255, 255, 0.10)',
+              boxShadow: '0 6px 28px -12px #000, 0 0 0 1px rgba(255, 255, 255, 0.04)'
+            }
           }
         }
       },
@@ -676,14 +653,7 @@ export function buildTheme(key) {
           size: 'medium',
           margin: 'normal'
         }
-      },
-      MuiInputBase: {
-        styleOverrides: {
-          root: {
-            minHeight: 56
-          }
-        }
-  }
+      }
     };
   } else {
     // Ocean theme button styling
@@ -923,14 +893,7 @@ export function buildTheme(key) {
           size: 'medium',
           margin: 'normal'
         }
-      },
-      MuiInputBase: {
-        styleOverrides: {
-          root: {
-            minHeight: 56
-          }
-        }
-  }
+      }
     };
   }
   return theme;

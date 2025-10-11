@@ -57,7 +57,7 @@ export default function LoginPage({ onLogin }) {
       const resp = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ email: username, password })
       })
       
       if (resp.ok) {
@@ -73,14 +73,13 @@ export default function LoginPage({ onLogin }) {
         const errorData = await resp.json()
         errorMessage = errorData.detail || errorMessage
       } catch (parseError) {
-        console.log('Could not parse error response:', parseError)
+        // swallowed parse error
       }
       
-      console.log('Login failed with status:', resp.status, 'message:', errorMessage)
       showError(errorMessage)
       
     } catch (err) {
-      console.log('Login error caught:', err)
+      // removed login error debug log
       showError(err.message || 'An error occurred during login')
     } finally {
       setLoading(false)

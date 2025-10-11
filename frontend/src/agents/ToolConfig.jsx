@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Box,
     Button,
@@ -22,18 +22,29 @@ import {
     TableHead,
     TableRow,
     Paper,
-    IconButton
+    IconButton,
+    TablePagination
 } from '@mui/material';
 import { apiCall } from '../config/api';
+import sharedApiService from '../utils/apiService';
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { useConfirmation } from '../contexts/ConfirmationContext';
 
-export default function ToolConfig({ user }) {
+function ToolConfig({ user }) {
     const token = user?.token;
     const { showSuccess, showError, showWarning } = useSnackbar();
     const { showDeleteConfirmation } = useConfirmation();
     
+    // Add ref to track if component is mounted and prevent duplicate calls
+    const isMountedRef = useRef(true);
+    const isLoadingConfigsRef = useRef(false);
+    const isLoadingCategoriesRef = useRef(false);
+    const isLoadingDiscoveryRef = useRef(false);
+
+    // Store token ref to avoid useCallback dependency issues
+    const tokenRef = useRef(token);
+    tokenRef.current = token;
 
     const [components, setComponents] = useState({ functions: [] });
     const [loadingDiscovery, setLoadingDiscovery] = useState(true);
@@ -41,6 +52,12 @@ export default function ToolConfig({ user }) {
     const [pendingIntros, setPendingIntros] = useState({});
     const [existingConfigs, setExistingConfigs] = useState([]);
     const [loadingConfigs, setLoadingConfigs] = useState(true);
+    const [pagination, setPagination] = useState({
+        page: 0, // MUI uses 0-based pagination
+        rowsPerPage: 8,
+        total: 0,
+        totalPages: 0
+    });
     const [isEditMode, setIsEditMode] = useState(false);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [form, setForm] = useState({
@@ -54,32 +71,66 @@ export default function ToolConfig({ user }) {
     const [categories, setCategories] = useState([]);
     const [loadingCategories, setLoadingCategories] = useState(false);
 
-    const discoverComponents = async () => {
+    // Form validation errors
+    const [errors, setErrors] = useState({
+        name: '',
+        tool: '',
+        tool_params: {}
+    });
+
+    const discoverComponents = useCallback(async () => {
+        if (!isMountedRef.current) return;
+        
+        // Prevent duplicate calls
+        if (isLoadingDiscoveryRef.current) {
+            return;
+        }
+        
         try {
+            isLoadingDiscoveryRef.current = true;
             setLoadingDiscovery(true);
-            const response = await apiCall(`/api/tool-config/components?folder=ai.functions`, {
-                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-            });
-            if (response.ok) {
-                const data = await response.json();
-                const comps = data?.components || {};
+            
+            const result = await sharedApiService.makeRequest(
+                '/api/tools/components?folder=ai.functions',
+                {
+                    headers: tokenRef.current ? { 'Authorization': `Bearer ${tokenRef.current}` } : {}
+                },
+                { 
+                    folder: 'ai.functions',
+                    token: tokenRef.current?.substring(0, 10)
+                }
+            );
+            
+            if (!isMountedRef.current) {
+                return;
+            }
+            
+            if (result.success) {
+                const comps = result.data?.components || {};
                 setComponents({ functions: comps['ai.functions'] || [] });
             } else {
-                showError('Failed to discover tools');
+                if (isMountedRef.current) {
+                    showError('Failed to discover tools');
+                }
             }
         } catch (error) {
             console.error('Failed to discover tools:', error);
-            showError('Failed to discover tools');
+            if (isMountedRef.current) {
+                showError('Failed to discover tools');
+            }
         } finally {
-            setLoadingDiscovery(false);
+            if (isMountedRef.current) {
+                isLoadingDiscoveryRef.current = false;
+                setLoadingDiscovery(false);
+            }
         }
-    };
+    }, []); // Empty dependencies
 
     const introspectTool = async (modulePath, kind = 'tool') => {
         if (!modulePath || introspectCache[modulePath] || pendingIntros[modulePath]) return;
         try {
             setPendingIntros(p => ({ ...p, [modulePath]: true }));
-            const response = await apiCall(`/api/tool-config/introspect`, {
+            const response = await apiCall(`/api/tools/introspect`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -101,38 +152,112 @@ export default function ToolConfig({ user }) {
         }
     };
 
-    const loadCategories = async () => {
+    const loadCategories = useCallback(async () => {
+        if (!isMountedRef.current) return;
+        
+        // Prevent duplicate calls
+        if (isLoadingCategoriesRef.current) {
+            return;
+        }
+        
         try {
+            isLoadingCategoriesRef.current = true;
             setLoadingCategories(true);
-            const response = await apiCall(`/api/tool-config/categories`, {
-                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setCategories(data.categories || []);
+            
+            const result = await sharedApiService.makeRequest(
+                '/api/tools/categories',
+                {
+                    headers: tokenRef.current ? { 'Authorization': `Bearer ${tokenRef.current}` } : {}
+                },
+                { token: tokenRef.current?.substring(0, 10) }
+            );
+            
+            if (!isMountedRef.current) {
+                return;
+            }
+            
+            if (result.success) {
+                setCategories(result.data.categories || []);
             }
         } catch (error) {
             console.error('Failed to load categories:', error);
         } finally {
-            setLoadingCategories(false);
+            if (isMountedRef.current) {
+                isLoadingCategoriesRef.current = false;
+                setLoadingCategories(false);
+            }
         }
-    };
+    }, []); // Empty dependencies
 
-    const loadExistingConfigs = async () => {
+    const loadExistingConfigs = useCallback(async (page = 1, pageSize = 8) => {
+        if (!isMountedRef.current) return;
+        
+        // Prevent duplicate calls
+        if (isLoadingConfigsRef.current) {
+            return;
+        }
+        
         try {
-            const resp = await apiCall(`/api/tool-config/configs`, {
-                headers: {
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                }
+            isLoadingConfigsRef.current = true;
+            setLoadingConfigs(true);
+            
+            const queryParams = new URLSearchParams({
+                page: page.toString(),
+                page_size: pageSize.toString(),
+                sort_by: 'name',
+                sort_order: 'asc'
             });
-            if (resp.ok) {
-                const data = await resp.json();
+            
+            const result = await sharedApiService.makeRequest(
+                `/api/tools/configs?${queryParams}`,
+                {
+                    headers: {
+                        ...(tokenRef.current ? { 'Authorization': `Bearer ${tokenRef.current}` } : {})
+                    }
+                },
+                { 
+                    page, 
+                    pageSize, 
+                    token: tokenRef.current?.substring(0, 10) 
+                }
+            );
+            
+            if (!isMountedRef.current) {
+                return;
+            }
+            
+            if (result.success) {
+                const data = result.data;
                 setExistingConfigs(data.configurations || []);
+                if (data.pagination) {
+                    setPagination({
+                        page: data.pagination.page - 1, // Convert to 0-based for MUI
+                        rowsPerPage: data.pagination.page_size,
+                        total: data.pagination.total,
+                        totalPages: data.pagination.total_pages
+                    });
+                }
             }
         } catch (e) {
             console.error('Failed to load existing configurations:', e);
         } finally {
-            setLoadingConfigs(false);
+            if (isMountedRef.current) {
+                isLoadingConfigsRef.current = false;
+                setLoadingConfigs(false);
+            }
+        }
+    }, []); // Empty dependencies
+
+    const handlePageChange = (event, newPage) => {
+        if (!loadingConfigs && !saveState.loading) {
+            loadExistingConfigs(newPage + 1, pagination.rowsPerPage); // Convert to 1-based for API
+        }
+    };
+
+    const handleRowsPerPageChange = (event) => {
+        if (!loadingConfigs && !saveState.loading) {
+            const newRowsPerPage = parseInt(event.target.value, 10);
+            loadExistingConfigs(1, newRowsPerPage); // Reset to first page
         }
     };
 
@@ -140,13 +265,96 @@ export default function ToolConfig({ user }) {
         if (!loadingDiscovery && components.functions.length === 0) {
             showWarning('No tools discovered. Check backend logs or refresh.');
         }
-    }, [loadingDiscovery, components.functions]);
+    }, [loadingDiscovery, components.functions]); // Remove showWarning - it's unstable
 
+    // Use exact same pattern as other components
     useEffect(() => {
-        discoverComponents();
-        loadExistingConfigs();
-        loadCategories();
-    }, []);
+        const loadData = async () => {
+            // removed mount log
+            if (!isMountedRef.current) return;
+            
+            // Set mounted to true
+            isMountedRef.current = true;
+            
+            try {
+                // Load components first
+                await discoverComponents();
+                
+                // Load configs and categories
+                await Promise.all([
+                    loadExistingConfigs(),
+                    loadCategories()
+                ]);
+                
+            } catch (err) {
+                console.error('❌ TOOLCONFIG Error during initialization:', err);
+            }
+        };
+        
+        loadData();
+        
+        return () => {
+            // removed unmount log
+            // Set mounted to false FIRST to prevent any state updates
+            isMountedRef.current = false;
+            isLoadingConfigsRef.current = false;
+            isLoadingCategoriesRef.current = false;
+            isLoadingDiscoveryRef.current = false;
+        };
+    }, []); // EMPTY DEPENDENCIES - NO BULLSHIT
+
+    const validateForm = () => {
+        const newErrors = {
+            name: '',
+            tool: '',
+            tool_params: {}
+        }
+
+        // Validate name
+        if (!form.name || form.name.trim() === '') {
+            newErrors.name = 'Configuration name is required'
+        }
+
+        // Validate tool selection
+        if (!form.tool) {
+            newErrors.tool = 'Tool selection is required'
+        }
+
+        // Validate required tool parameters (those without defaults)
+        const toolIntro = form.tool ? introspectCache[form.tool] : null
+        if (toolIntro && toolIntro.formatted_params) {
+            toolIntro.formatted_params.forEach(paramFormatted => {
+                const paramName = paramFormatted.split(':')[0].trim()
+                const descSplitIdx = paramFormatted.indexOf(' - ')
+                const mainPart = descSplitIdx !== -1 ? paramFormatted.slice(0, descSplitIdx) : paramFormatted
+                const eqIdx = mainPart.indexOf('=')
+                let defaultRaw = ''
+                if (eqIdx !== -1) {
+                    defaultRaw = mainPart.slice(eqIdx + 1).trim()
+                }
+                const hasDefault = defaultRaw !== '' && defaultRaw.toLowerCase() !== 'none'
+                
+                // If parameter has no default and no value provided, it's required
+                if (!hasDefault && (!form.tool_params[paramName] || form.tool_params[paramName].toString().trim() === '')) {
+                    newErrors.tool_params[paramName] = `${paramName} is required`
+                }
+            })
+        }
+
+        setErrors(newErrors)
+        
+        // Return true if no errors
+        const hasToolParamErrors = Object.keys(newErrors.tool_params).length > 0
+        return !newErrors.name && !newErrors.tool && !hasToolParamErrors
+    }
+
+    const resetErrors = () => {
+        setErrors({
+            name: '',
+            tool: '',
+            tool_params: {}
+        })
+    }
 
     function ensureIntrospection(path, kind) {
         if (!path || introspectCache[path]) return;
@@ -175,9 +383,9 @@ export default function ToolConfig({ user }) {
     }
 
     async function saveToolConfig() {
-        if (!form.name || !form.tool) {
-            showError('Name and tool selection are required');
-            return;
+        // Validate form before saving
+        if (!validateForm()) {
+            return
         }
         setSaveState(s => ({ ...s, loading: true }));
         const configToSave = {
@@ -192,13 +400,13 @@ export default function ToolConfig({ user }) {
         try {
             let resp;
             if (isEditMode && form.id) {
-                resp = await apiCall(`/api/tool-config/configs/${form.id}`, {
+                resp = await apiCall(`/api/tools/configs/${form.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
                     body: JSON.stringify(configToSave)
                 });
             } else {
-                resp = await apiCall(`/api/tool-config/configs`, {
+                resp = await apiCall(`/api/tools/configs`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
                     body: JSON.stringify(configToSave)
@@ -213,8 +421,16 @@ export default function ToolConfig({ user }) {
             const action = isEditMode ? 'updated' : 'saved';
             showSuccess(`Tool configuration "${form.name}" ${action} successfully`);
             setSaveState({ loading: false });
-            loadExistingConfigs();
-            loadCategories();
+            
+            // Invalidate cache after successful save
+            sharedApiService.invalidateCache('/api/tools/configs');
+            sharedApiService.invalidateCache('/api/tools/categories');
+            sharedApiService.invalidateCache('/api/tools/components');
+            
+            if (isMountedRef.current) {
+                loadExistingConfigs();
+                loadCategories();
+            }
             setForm({ id: null, name: '', category: '', tool: '', tool_params: {} });
             setIsEditMode(false);
             setDialogOpen(false);
@@ -236,7 +452,7 @@ export default function ToolConfig({ user }) {
         
         try {
             setSaveState({ loading: true });
-            const resp = await apiCall(`/api/tool-config/configs/${id}`, {
+            const resp = await apiCall(`/api/tools/configs/${id}`, {
                 method: 'DELETE',
                 headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
             });
@@ -247,7 +463,15 @@ export default function ToolConfig({ user }) {
                 return;
             }
             showSuccess('Tool configuration deleted');
-            await loadExistingConfigs();
+            
+            // Invalidate cache after successful delete
+            sharedApiService.invalidateCache('/api/tools/configs');
+            sharedApiService.invalidateCache('/api/tools/categories');
+            sharedApiService.invalidateCache('/api/tools/components');
+            
+            if (isMountedRef.current) {
+                await loadExistingConfigs();
+            }
             setSaveState({ loading: false });
             setDialogOpen(false);
         } catch (e) {
@@ -259,11 +483,13 @@ export default function ToolConfig({ user }) {
     const openCreate = () => {
         setForm({ id: null, name: '', category: '', tool: '', tool_params: {} });
         setIsEditMode(false);
+        resetErrors();
         setDialogOpen(true);
     };
 
     const openEdit = (name) => {
         loadExistingConfig(name);
+        resetErrors();
         setDialogOpen(true);
     };
 
@@ -292,7 +518,9 @@ export default function ToolConfig({ user }) {
             <Card>
                 <CardContent>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                        <Typography variant="h6">All Tool Configs ({existingConfigs.length})</Typography>
+                        <Typography variant="h6">
+                            Tool Configs ({pagination.total} total, showing {existingConfigs.length} on page {pagination.page + 1})
+                        </Typography>
                     </Box>
                     <TableContainer component={Paper} variant="outlined">
                         <Table>
@@ -330,10 +558,29 @@ export default function ToolConfig({ user }) {
                             </TableBody>
                         </Table>
                     </TableContainer>
+                    <TablePagination
+                        component="div"
+                        count={pagination.total}
+                        page={pagination.page}
+                        onPageChange={handlePageChange}
+                        rowsPerPage={pagination.rowsPerPage}
+                        onRowsPerPageChange={handleRowsPerPageChange}
+                        rowsPerPageOptions={[5, 8, 10, 15, 25]}
+                        showFirstButton
+                        showLastButton
+                    />
                 </CardContent>
             </Card>
 
-            <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
+            <Dialog 
+                open={dialogOpen} 
+                onClose={() => {
+                    setDialogOpen(false);
+                    resetErrors();
+                }} 
+                maxWidth="md" 
+                fullWidth
+            >
                 <DialogTitle>{isEditMode ? 'Edit Tool Configuration' : 'Create Tool Configuration'}</DialogTitle>
                 <DialogContent dividers>
                     <Stack spacing={1}>
@@ -349,21 +596,24 @@ export default function ToolConfig({ user }) {
                             loading={loadingConfigs}
                             loadingText="Loading configurations…"
                             onChange={(_, v) => {
+                                // Clear error when user changes the field
+                                if (errors.name) {
+                                    setErrors(prev => ({ ...prev, name: '' }));
+                                }
+                                // If selecting from dropdown, load immediately; otherwise just update name
                                 if (v && existingConfigs.some(c => c.name === v)) {
                                     loadExistingConfig(v);
                                 } else {
-                                    setForm(f => ({ ...f, id: null, name: v || '' }));
-                                    setIsEditMode(false);
+                                    setForm(f => ({ ...f, name: v || '' }));
                                 }
                             }}
                             onInputChange={(_, v) => {
-                                setForm(f => ({ ...f, name: v }));
-                                if (existingConfigs.some(c => c.name === v)) {
-                                    loadExistingConfig(v);
-                                } else {
-                                    setForm(f => ({ ...f, id: null }));
-                                    setIsEditMode(false);
+                                // Clear error when user types
+                                if (errors.name) {
+                                    setErrors(prev => ({ ...prev, name: '' }));
                                 }
+                                // Only update the form name while typing, don't load config
+                                setForm(f => ({ ...f, name: v }));
                             }}
                             renderInput={(params) =>
                                 <TextField
@@ -372,6 +622,15 @@ export default function ToolConfig({ user }) {
                                     placeholder="Enter a short descriptive name"
                                     size="small"
                                     required
+                                    error={!!errors.name}
+                                    helperText={errors.name}
+                                    onBlur={(e) => {
+                                        // Load existing config only when user stops typing (on blur)
+                                        const inputValue = e.target.value;
+                                        if (inputValue && existingConfigs.some(c => c.name === inputValue)) {
+                                            loadExistingConfig(inputValue);
+                                        }
+                                    }}
                                 />
                             }
                         />
@@ -405,10 +664,22 @@ export default function ToolConfig({ user }) {
                                 loading={loadingDiscovery && !(components.functions || []).length}
                                 loadingText="Loading tools…"
                                 onChange={(_, v) => {
+                                    // Clear error when user changes the field
+                                    if (errors.tool) {
+                                        setErrors(prev => ({ ...prev, tool: '' }));
+                                    }
                                     setForm(f => ({ ...f, tool: v || '', tool_params: {} }));
                                     ensureIntrospection(v, 'tool');
                                 }}
-                                renderInput={(params) => <TextField {...params} label="Select Tool" />}
+                                renderInput={(params) => 
+                                    <TextField 
+                                        {...params} 
+                                        label="Select Tool" 
+                                        required
+                                        error={!!errors.tool}
+                                        helperText={errors.tool}
+                                    />
+                                }
                             />
                             <Button variant="gradientBorder" size="medium" onClick={discoverComponents}>Refresh</Button>
                         </Box>
@@ -454,10 +725,22 @@ export default function ToolConfig({ user }) {
                                                 label={paramName}
                                                 InputLabelProps={{ shrink: true }}
                                                 value={form.tool_params[paramName] || ''}
-                                                onChange={(e) => setForm(f => ({ ...f, tool_params: { ...f.tool_params, [paramName]: e.target.value } }))}
+                                                onChange={(e) => {
+                                                    // Clear error when user types
+                                                    if (errors.tool_params[paramName]) {
+                                                        setErrors(prev => ({
+                                                            ...prev,
+                                                            tool_params: { ...prev.tool_params, [paramName]: '' }
+                                                        }));
+                                                    }
+                                                    setForm(f => ({ ...f, tool_params: { ...f.tool_params, [paramName]: e.target.value } }));
+                                                }}
                                                 placeholder={placeholderText}
                                                 sx={{ gridColumn }}
                                                 type={paramType.includes('int') || paramType.includes('float') ? 'number' : 'text'}
+                                                required={!hasDefault}
+                                                error={!!errors.tool_params[paramName]}
+                                                helperText={errors.tool_params[paramName]}
                                             />
                                         );
                                     })}
@@ -471,7 +754,14 @@ export default function ToolConfig({ user }) {
                         <Button color="error" onClick={() => deleteToolConfig(form.id, form.name)} startIcon={<DeleteIcon size={16} />}>Delete</Button>
                     )}
                     <Box sx={{ flex: 1 }} />
-                    <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
+                    <Button 
+                        onClick={() => {
+                            setDialogOpen(false);
+                            resetErrors();
+                        }}
+                    >
+                        Cancel
+                    </Button>
                     <Button onClick={saveToolConfig} variant="contained" disabled={saveState.loading || !form.name || !form.tool}>
                         {saveState.loading ? 'Saving...' : isEditMode ? 'Update Configuration' : 'Save Configuration'}
                     </Button>
@@ -480,3 +770,5 @@ export default function ToolConfig({ user }) {
         </Box>
     );
 }
+
+export default React.memo(ToolConfig);

@@ -32,10 +32,16 @@ def _aggregate_metrics_from_run_messages(self: "Agent", messages: List[Message])
     aggregated_metrics: Dict[str, Any] = defaultdict(list)
 
     # Use a defaultdict(list) to collect all values for each assistant message
+    logger.debug(f"[METRICS_DEBUG] Aggregating metrics from {len(messages)} messages")
     for m in messages:
+        logger.debug(f"[METRICS_DEBUG] Message role: {m.role}, has metrics: {m.metrics is not None}")
         if m.role == "assistant" and m.metrics is not None:
+            logger.debug(f"[METRICS_DEBUG] Assistant message metrics: {m.metrics}")
             for k, v in m.metrics.items():
+                logger.debug(f"[METRICS_DEBUG] Adding metric {k}={v} to aggregated_metrics")
                 aggregated_metrics[k].append(v)
+    
+    logger.debug(f"[METRICS_DEBUG] Final aggregated metrics: {dict(aggregated_metrics)}")
     return aggregated_metrics
 
 
@@ -152,11 +158,22 @@ def _run(
     if self.stream:
         model_response = ModelResponse(content="")
         for model_response_chunk in self.model.response_stream(messages=messages_for_model):
+            # Handle content chunks
             if model_response_chunk.event == ModelResponseEvent.assistant_response.value:
                 if model_response_chunk.content is not None and model_response.content is not None:
                     model_response.content += model_response_chunk.content
                     self.run_response.content = model_response_chunk.content
                     self.run_response.created_at = model_response_chunk.created_at
+                    yield self.run_response
+                
+                # Handle audio chunks (content may be None for audio-only chunks)
+                if model_response_chunk.audio is not None:
+                    if self.run_response.audio is None:
+                        self.run_response.audio = []
+                        logger.info(f"🎵 [AGENT] Audio streaming started")
+                    self.run_response.audio.append(model_response_chunk.audio)
+                    self.run_response.response_audio = model_response_chunk.audio
+                    # Yield the response with audio data even if there's no content
                     yield self.run_response
 
             elif model_response_chunk.event == ModelResponseEvent.tool_call_started.value:

@@ -16,7 +16,7 @@ class OpenAI(OpenAIEmbedder):
     def __init__(
         self,
         # Core parameters
-        model: str = "text-embedding-ada-002",
+        model: str = "text-embedding-3-small",
         api_key: str = None,
         
         # Embedding-specific parameters
@@ -26,7 +26,7 @@ class OpenAI(OpenAIEmbedder):
         
         # Client configuration
         organization: Optional[str] = None,
-        base_url: Optional[str] = None,
+        base_url: str = None,
         
         # Advanced parameters
         request_params: Optional[Dict[str, Any]] = None,

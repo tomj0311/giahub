@@ -18,5 +18,11 @@ export const agentService = {
     const j = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(j.detail || `HTTP ${res.status}`)
     return j
+  },
+  async getAgent(name, token) {
+    const res = await apiCall(`/api/agents/${encodeURIComponent(name)}`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(j.detail || `HTTP ${res.status}`)
+    return j
   }
 }

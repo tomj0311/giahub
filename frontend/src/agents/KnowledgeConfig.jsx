@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Box,
   Typography,
@@ -8,9 +8,6 @@ import {
   Autocomplete,
   LinearProgress,
   useTheme,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   Chip,
   FormControl,
   InputLabel,
@@ -31,98 +28,14 @@ import {
   TableRow,
   Paper,
   IconButton,
-  Stack
+  Stack,
+  TablePagination
 } from '@mui/material'
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { Plus as AddIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from 'lucide-react'
 import { apiCall } from '../config/api'
+import sharedApiService from '../utils/apiService'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { useConfirmation } from '../contexts/ConfirmationContext'
-
-const api = {
-  async getDefaults(token) {
-    const r = await apiCall('/api/knowledge/defaults', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-    return r.json()
-  },
-  async getCategories(token) {
-    const r = await apiCall('/api/knowledge/categories', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-    return r.json()
-  },
-  async getCollections(token) {
-    const r = await apiCall('/api/knowledge/collections', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-    return r.json()
-  },
-  async getCollection(collection, token) {
-    const r = await apiCall(`/api/knowledge/collection/${encodeURIComponent(collection)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-    if (!r.ok) throw new Error('Failed to load collection')
-    return r.json()
-  },
-  async saveCollection(body, token) {
-    const r = await apiCall('/api/knowledge/collection/save', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify(body)
-    })
-    return r.json()
-  },
-  async deleteCollection(collection, token) {
-    const r = await apiCall(`/api/knowledge/collection/${encodeURIComponent(collection)}`, {
-      method: 'DELETE',
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    })
-    if (!r.ok) throw new Error('Delete failed')
-    return r.json()
-  },
-  async uploadFiles(collection, files, token) {
-    const fd = new FormData()
-    fd.append('collection', collection)
-    for (const f of files) fd.append('files', f)
-    const r = await apiCall(`/api/knowledge/upload?collection=${encodeURIComponent(collection)}`, {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: fd
-    })
-    if (!r.ok) throw new Error('Upload failed')
-    return r.json()
-  },
-  async deleteFile(collection, filename, token) {
-    const r = await apiCall(`/api/knowledge/collection/${encodeURIComponent(collection)}/file/${encodeURIComponent(filename)}`, {
-      method: 'DELETE',
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    })
-    if (!r.ok) throw new Error('Failed to delete file')
-    return r.json()
-  },
-  async discoverChunking(token) {
-    const r = await apiCall('/api/knowledge/components?folder=ai.chunking', {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    })
-    return r.json()
-  },
-  async discoverEmbedders(token) {
-    const r = await apiCall('/api/knowledge/components?folder=ai.embeddings', {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    })
-    return r.json()
-  },
-  async introspect(module_path, token) {
-    console.log('[API] Introspecting module_path:', module_path)
-    const r = await apiCall('/api/knowledge/introspect', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify({ module_path, kind: 'chunk' })
-    })
-    const result = await r.json()
-    console.log('[API] Introspection response:', result)
-    return result
-  }
-}
 
 export default function KnowledgeConfig({ user }) {
   const theme = useTheme()
@@ -130,14 +43,29 @@ export default function KnowledgeConfig({ user }) {
   const { showSuccess, showError, showWarning } = useSnackbar()
   const { showDeleteConfirmation } = useConfirmation()
 
+  // Add ref to track if component is mounted and prevent duplicate calls
+  const isMountedRef = useRef(true)
+  const isLoadingConfigsRef = useRef(false)
+  const isLoadingCategoriesRef = useRef(false)
+  const isLoadingModelsRef = useRef(false)
+
+  // Store token ref to avoid useCallback dependency issues
+  const tokenRef = useRef(token)
+  tokenRef.current = token
+
   const [loading, setLoading] = useState(true)
   const [collections, setCollections] = useState([])
   const [existingConfigs, setExistingConfigs] = useState([]) // Full collection configurations like ToolConfig
   const [loadingConfigs, setLoadingConfigs] = useState(true)
+  const [pagination, setPagination] = useState({
+    page: 0, // MUI uses 0-based pagination
+    rowsPerPage: 8,
+    total: 0,
+    totalPages: 0
+  })
+  const [models, setModels] = useState([])
   const [categories, setCategories] = useState([])
   const [loadingCategories, setLoadingCategories] = useState(false)
-  const [components, setComponents] = useState({ chunking: [], embedders: [] })
-  const [introspection, setIntrospection] = useState({})
   const [defaults, setDefaults] = useState({ chunk_size: 5000, chunk_overlap: 0 })
   const [isEdit, setIsEdit] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
@@ -146,12 +74,7 @@ export default function KnowledgeConfig({ user }) {
     id: null,
     name: '',
     category: '',
-    chunk_strategy: '',
-    chunk_strategy_params: {},
-    chunk_size: null,
-    chunk_overlap: null,
-    embedder_strategy: '',
-    embedder_strategy_params: {}
+    model_id: ''
   })
 
   const [pendingFiles, setPendingFiles] = useState([])
@@ -161,175 +84,308 @@ export default function KnowledgeConfig({ user }) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saveState, setSaveState] = useState({ loading: false })
 
-  const loadCategories = async () => {
+  // Form validation errors
+  const [errors, setErrors] = useState({
+    name: ''
+  })
+
+  const loadModels = useCallback(async () => {
+    if (!isMountedRef.current) return;
+    
+    // Prevent duplicate calls
+    if (isLoadingModelsRef.current) {
+      return;
+    }
+    
     try {
+      isLoadingModelsRef.current = true;
+  // removed loading models log
+      
+      const result = await sharedApiService.makeRequest(
+        '/api/models/configs',
+        {
+          headers: tokenRef.current ? { Authorization: `Bearer ${tokenRef.current}` } : {}
+        },
+        { token: tokenRef.current?.substring(0, 10) }
+      );
+      
+  // removed models api response log
+      
+      if (!isMountedRef.current) {
+        return;
+      }
+      
+      if (result.success) {
+        // The response structure is { configurations: [...] } from ModelConfig
+        const modelsList = result.data.configurations || []
+  // removed processed models list log
+        setModels(Array.isArray(modelsList) ? modelsList : [])
+      } else {
+        console.error('[KnowledgeConfig] Failed to load models:', result.error)
+        if (isMountedRef.current) {
+          showError('Failed to load models')
+        }
+      }
+    } catch (error) {
+      console.error('[KnowledgeConfig] Failed to load models:', error)
+      if (isMountedRef.current) {
+        showError('Failed to load models')
+      }
+    } finally {
+      if (isMountedRef.current) {
+        isLoadingModelsRef.current = false;
+      }
+    }
+  }, []); // Empty dependencies
+
+  const loadCategories = useCallback(async () => {
+    if (!isMountedRef.current) return;
+    
+    // Prevent duplicate calls
+    if (isLoadingCategoriesRef.current) {
+      return;
+    }
+    
+    try {
+      isLoadingCategoriesRef.current = true;
       setLoadingCategories(true)
-      const response = await api.getCategories(token)
-      setCategories(response.categories || [])
+      
+      const result = await sharedApiService.makeRequest(
+        '/api/knowledge/categories',
+        {
+          headers: tokenRef.current ? { Authorization: `Bearer ${tokenRef.current}` } : {}
+        },
+        { token: tokenRef.current?.substring(0, 10) }
+      );
+      
+      if (!isMountedRef.current) {
+        return;
+      }
+      
+      if (result.success) {
+        setCategories(result.data.categories || [])
+      } else {
+        console.error('[KnowledgeConfig] Failed to load categories:', result.error)
+      }
     } catch (error) {
       console.error('[KnowledgeConfig] Failed to load categories:', error)
     } finally {
-      setLoadingCategories(false)
-    }
-  }
-
-  const loadExistingConfigs = async () => {
-    try {
-      setLoadingConfigs(true)
-      const collectionsResponse = await api.getCollections(token)
-      const collectionNames = collectionsResponse.collections || []
-      setCollections(collectionNames)
-      
-      // Load full data for each collection like ToolConfig loads configurations
-      const collectionsWithData = []
-      for (const name of collectionNames) {
-        try {
-          const data = await api.getCollection(name, token)
-          
-          // Extract chunk configuration - prefer from embedder.chunk, fallback to root chunk
-          const chunkConfig = data.embedder?.chunk || data.chunk || {}
-          
-          collectionsWithData.push({
-            id: name, // Use collection name as id like ToolConfig
-            name: data.collection || name,
-            category: data.category || '',
-            chunk_strategy: chunkConfig.strategy || '',
-            chunk_strategy_params: chunkConfig.params || {},
-            chunk_size: chunkConfig.chunk_size || null,
-            chunk_overlap: chunkConfig.chunk_overlap || null,
-            embedder_strategy: data.embedder?.strategy || '',
-            embedder_strategy_params: data.embedder?.params || {},
-            files: data.files || [] // Include files from the collection
-          })
-        } catch (error) {
-          console.error(`[KnowledgeConfig] Failed to load collection ${name}:`, error)
-          // Add basic entry if collection data can't be loaded
-          collectionsWithData.push({
-            id: name,
-            name: name,
-            category: '',
-            chunk_strategy: '',
-            chunk_strategy_params: {},
-            chunk_size: null,
-            chunk_overlap: null,
-            embedder_strategy: '',
-            embedder_strategy_params: {},
-            files: [] // Empty files array for failed loads
-          })
-        }
+      if (isMountedRef.current) {
+        isLoadingCategoriesRef.current = false;
+        setLoadingCategories(false)
       }
-      setExistingConfigs(collectionsWithData)
+    }
+  }, []); // Empty dependencies
+
+  const loadExistingConfigs = useCallback(async (page = 1, pageSize = 8) => {
+    if (!isMountedRef.current) return;
+    
+    // Prevent duplicate calls
+    if (isLoadingConfigsRef.current) {
+      return;
+    }
+    
+    try {
+      isLoadingConfigsRef.current = true;
+      setLoadingConfigs(true)
+      
+      const queryParams = new URLSearchParams({
+        page: page.toString(),
+        page_size: pageSize.toString(),
+        sort_by: 'collection',
+        sort_order: 'asc'
+      });
+      
+      const result = await sharedApiService.makeRequest(
+        `/api/knowledge/collections?${queryParams}`,
+        {
+          headers: tokenRef.current ? { Authorization: `Bearer ${tokenRef.current}` } : {}
+        },
+        { 
+          page, 
+          pageSize, 
+          token: tokenRef.current?.substring(0, 10) 
+        }
+      );
+      
+      if (!isMountedRef.current) {
+        return;
+      }
+      
+      if (result.success) {
+        const data = result.data;
+        const collections = data.collections || [];
+        
+  // removed raw api response logs
+        
+        // Set pagination data
+        if (data.pagination) {
+          setPagination({
+            page: data.pagination.page - 1, // Convert to 0-based for MUI
+            rowsPerPage: data.pagination.page_size,
+            total: data.pagination.total,
+            totalPages: data.pagination.total_pages
+          });
+        }
+        
+        // Load full data for each collection like ToolConfig loads configurations
+        const collectionsWithData = []
+        for (const collection of collections) {
+          try {
+            // For paginated results, collections already have the needed structure
+            // from the backend's list_collections_paginated method
+            collectionsWithData.push({
+              id: collection.id || collection.name,
+              name: collection.name,
+              category: collection.category || '',
+              model_id: collection.model_id || '',
+              model_name: collection.model_name || '',
+              files_count: collection.files_count || 0,
+              files: [] // Will be loaded when editing
+            })
+          } catch (error) {
+            console.error(`[KnowledgeConfig] Failed to process collection ${collection.name}:`, error)
+            // Add basic entry if collection data can't be processed
+            collectionsWithData.push({
+              id: collection.name,
+              name: collection.name,
+              category: '',
+              model_id: '',
+              model_name: '',
+              files_count: 0,
+              files: []
+            })
+          }
+        }
+        setExistingConfigs(collectionsWithData)
+  // removed collections loaded log
+      } else {
+        console.error('[KnowledgeConfig] Failed to load collections:', result.error)
+      }
     } catch (error) {
       console.error('[KnowledgeConfig] Failed to load collections:', error)
     } finally {
-      setLoadingConfigs(false)
+      if (isMountedRef.current) {
+        isLoadingConfigsRef.current = false;
+        setLoadingConfigs(false)
+      }
     }
-  }
+  }, []); // Empty dependencies
+
+  const handlePageChange = (event, newPage) => {
+    if (!loadingConfigs && !saveState.loading) {
+      const actualPage = newPage + 1; // Convert from 0-based to 1-based
+      loadExistingConfigs(actualPage, pagination.rowsPerPage);
+    }
+  };
+
+  const handleRowsPerPageChange = (event) => {
+    if (!loadingConfigs && !saveState.loading) {
+      const newPageSize = parseInt(event.target.value, 10);
+      setPagination(prev => ({ ...prev, page: 0, rowsPerPage: newPageSize })); // Reset to first page
+      loadExistingConfigs(1, newPageSize);
+    }
+  };
 
   useEffect(() => {
     // Load data like ToolConfig does
     const loadData = async () => {
-      console.log('[KnowledgeConfig] Starting data load...')
+  // removed mount log
+      if (!isMountedRef.current) return;
+      
       try {
         setLoading(true)
         
-        // Load defaults and components first
-        const [d, comps, embedderComps] = await Promise.all([
-          api.getDefaults(token),
-          api.discoverChunking(token),
-          api.discoverEmbedders(token)
-        ])
-        
-        console.log('[KnowledgeConfig] API responses:', { d, comps, embedderComps })
-        setDefaults(d.defaults || {})
-        
-        // Process chunking components
-        const chunkingData = comps.components?.['ai.chunking'] || {}
-        const chunkingComponents = chunkingData['ai.chunking'] || chunkingData['chunking'] || []
-        
-        // Process embedder components
-        const embedderData = embedderComps.components?.['ai.embeddings'] || {}
-        const embedderComponents = embedderData['ai.embeddings'] || embedderData['embeddings'] || []
-        
-        setComponents({ 
-          chunking: Array.isArray(chunkingComponents) ? chunkingComponents : [],
-          embedders: Array.isArray(embedderComponents) ? embedderComponents : []
-        })
-        
-        // Load configs and categories like ToolConfig
+        // Load data using singleton service
         await Promise.all([
-          loadExistingConfigs(),
-          loadCategories()
-        ])
+          loadModels(),
+          loadCategories(),
+          loadExistingConfigs()
+        ]);
         
-      } catch (err) {
-        console.error('[KnowledgeConfig] Error loading data:', err)
-      } finally {
-        setLoading(false)
+        if (isMountedRef.current) {
+          setLoading(false)
+        }
+      } catch (error) {
+        console.error('[KnowledgeConfig] Failed to load initial data:', error)
+        if (isMountedRef.current) {
+          setLoading(false)
+        }
       }
     }
     
     loadData()
-  }, [token])
+  }, []); // Empty dependencies to prevent duplicate calls
 
+  // Cleanup function to handle component unmount
   useEffect(() => {
-    if (form.chunk_strategy && !introspection[form.chunk_strategy]) {
-      console.log('[KnowledgeConfig] Introspecting chunk strategy:', form.chunk_strategy)
-      api.introspect(form.chunk_strategy, token).then(info => {
-        console.log('[KnowledgeConfig] Introspection result:', info)
-        setIntrospection(prev => ({ ...prev, [form.chunk_strategy]: info }))
-      }).catch(err => {
-        console.error('[KnowledgeConfig] Introspection error:', err)
-      })
-    }
-  }, [form.chunk_strategy, token])
+    return () => {
+  // removed unmount log
+      isMountedRef.current = false;
+    };
+  }, []);
 
-  useEffect(() => {
-    if (form.embedder_strategy && !introspection[form.embedder_strategy]) {
-      console.log('[KnowledgeConfig] Introspecting embedder strategy:', form.embedder_strategy)
-      api.introspect(form.embedder_strategy, token).then(info => {
-        console.log('[KnowledgeConfig] Embedder introspection result:', info)
-        setIntrospection(prev => ({ ...prev, [form.embedder_strategy]: info }))
-      }).catch(err => {
-        console.error('[KnowledgeConfig] Embedder introspection error:', err)
-      })
+  const validateForm = () => {
+    const newErrors = {
+      name: ''
     }
-  }, [form.embedder_strategy, token])
+
+    // Validate name
+    if (!form.name || form.name.trim() === '') {
+      newErrors.name = 'Collection name is required'
+    }
+
+    setErrors(newErrors)
+    return !newErrors.name
+  }
+
+  const resetErrors = () => {
+    setErrors({
+      name: ''
+    })
+  }
 
   async function loadExistingConfig(configName) {
     const config = existingConfigs.find(c => c.name === configName)
     if (config) {
-      console.log('[KnowledgeConfig] Loading config:', config) // Keep this debug temporarily
+  // removed loading config log
       setForm({
         ...config,
         id: config.id,
         name: config.name,
         category: config.category || '',
-        chunk_strategy: config.chunk_strategy || '',
-        chunk_strategy_params: config.chunk_strategy_params || {},
-        chunk_size: config.chunk_size || null,
-        chunk_overlap: config.chunk_overlap || null,
-        embedder_strategy: config.embedder_strategy || '',
-        embedder_strategy_params: config.embedder_strategy_params || {}
+        model_id: config.model_id || ''
       })
       setIsEditMode(true)
       setIsEdit(true)
       
-      // Set existing files from config data
-      console.log('[KnowledgeConfig] Setting existing files to:', config.files)
-      setExistingFiles(config.files || [])
+      // Load files from the collection API when editing
+      try {
+        const result = await sharedApiService.makeRequest(
+          `/api/knowledge/collection/${encodeURIComponent(configName)}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+          { collection: configName, token: token?.substring(0, 10) }
+        );
+        
+        if (result.success) {
+          const files = result.data.files || [];
+          // removed setting existing files log
+          setExistingFiles(files)
+        } else {
+          console.error('[KnowledgeConfig] Failed to load collection files:', result.error)
+          setExistingFiles([])
+        }
+      } catch (error) {
+        console.error('[KnowledgeConfig] Failed to load collection files:', error)
+        setExistingFiles([])
+      }
       setFilesToDelete([])
     } else {
       setForm({ 
         id: null, 
         name: configName, 
         category: '', 
-        chunk_strategy: '', 
-        chunk_strategy_params: {},
-        chunk_size: null,
-        chunk_overlap: null,
-        embedder_strategy: '',
-        embedder_strategy_params: {}
+        model_id: ''
       })
       setIsEditMode(false)
       setIsEdit(false)
@@ -339,14 +395,8 @@ export default function KnowledgeConfig({ user }) {
   }
 
   const save = async () => {
-    if (!form.name) {
-      showError('Collection name is required')
-      return
-    }
-    
-    // Validate embedder strategy is required when files are present
-    if ((existingFiles.length > 0 || pendingFiles.length > 0) && !form.embedder_strategy) {
-      showError('Embedder strategy is required when files are present')
+    // Validate form before saving
+    if (!validateForm()) {
       return
     }
     
@@ -358,7 +408,18 @@ export default function KnowledgeConfig({ user }) {
       if (filesToDelete.length > 0) {
         for (const filename of filesToDelete) {
           try {
-            await api.deleteFile(form.name, filename, token)
+            const result = await sharedApiService.makeRequest(
+              `/api/knowledge/collection/${encodeURIComponent(form.name)}/file/${encodeURIComponent(filename)}`,
+              {
+                method: 'DELETE',
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
+              },
+              { collection: form.name, filename, token: token?.substring(0, 10) }
+            );
+            
+            if (!result.success) {
+              throw new Error(result.error || 'Failed to delete file');
+            }
           } catch (error) {
             console.error(`Failed to delete file ${filename}:`, error)
             showWarning(`Failed to delete file: ${filename}`)
@@ -369,51 +430,92 @@ export default function KnowledgeConfig({ user }) {
       const payload = {
         collection: form.name,
         category: form.category || '',
-        overwrite: isEdit,
-        embedder: form.embedder_strategy ? {
-          strategy: form.embedder_strategy,
-          params: form.embedder_strategy_params || {},
-          chunk: {
-            strategy: form.chunk_strategy || '',
-            params: form.chunk_strategy_params || {},
-            ...(form.chunk_size !== null && { chunk_size: form.chunk_size }),
-            ...(form.chunk_overlap !== null && { chunk_overlap: form.chunk_overlap })
-          }
-        } : undefined
+        model_id: form.model_id || '',
+        overwrite: isEdit
       }
       
-      const res = await api.saveCollection(payload, token)
+      const result = await sharedApiService.makeRequest(
+        '/api/knowledge/collection/save',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify(payload)
+        },
+        { collection: form.name, token: token?.substring(0, 10) }
+      );
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to save collection');
+      }
+      
+      const res = result.data;
       
       if (pendingFiles.length > 0) {
-        await api.uploadFiles(form.name, pendingFiles, token)
+        const fd = new FormData()
+        fd.append('collection', form.name)
+        for (const f of pendingFiles) fd.append('files', f)
+        if (payload) {
+          fd.append('payload', JSON.stringify(payload))
+        }
+        
+        const uploadResult = await sharedApiService.makeRequest(
+          `/api/knowledge/upload?collection=${encodeURIComponent(form.name)}`,
+          {
+            method: 'POST',
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            body: fd
+          },
+          { collection: form.name, upload: true, token: token?.substring(0, 10) }
+        );
+        
+        if (!uploadResult.success) {
+          throw new Error(uploadResult.error || 'Upload failed');
+        }
+        
         setPendingFiles([])
       }
       
       if (res.exists) {
         // Save again forcing overwrite
-        await api.saveCollection({ ...payload, overwrite: true }, token)
+        const overwriteResult = await sharedApiService.makeRequest(
+          '/api/knowledge/collection/save',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({ ...payload, overwrite: true })
+          },
+          { collection: form.name, overwrite: true, token: token?.substring(0, 10) }
+        );
+        
+        if (!overwriteResult.success) {
+          throw new Error(overwriteResult.error || 'Failed to overwrite collection');
+        }
       }
       
       const action = isEdit ? 'updated' : 'saved'
       showSuccess(`Knowledge collection "${form.name}" ${action} successfully`)
       
-      // Reload data like ToolConfig
-      await Promise.all([
-        loadExistingConfigs(),
-        loadCategories()
-      ])
+      // Invalidate cache and reload data like ToolConfig
+      sharedApiService.invalidateCache();
+      if (isMountedRef.current) {
+        await Promise.all([
+          loadExistingConfigs(),
+          loadCategories()
+        ])
+      }
       
       // Reset form and close dialog
       setForm({ 
         id: null, 
         name: '', 
         category: '', 
-        chunk_strategy: '', 
-        chunk_strategy_params: {},
-        chunk_size: null,
-        chunk_overlap: null,
-        embedder_strategy: '',
-        embedder_strategy_params: {}
+        model_id: ''
       })
       setIsEdit(false)
       setIsEditMode(false)
@@ -445,23 +547,33 @@ export default function KnowledgeConfig({ user }) {
     setSaveBusy(true)
     
     try {
-      await api.deleteCollection(form.name, token)
+      const result = await sharedApiService.makeRequest(
+        `/api/knowledge/collection/${encodeURIComponent(form.name)}`,
+        {
+          method: 'DELETE',
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        },
+        { collection: form.name, delete: true, token: token?.substring(0, 10) }
+      );
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Delete failed');
+      }
+      
       showSuccess('Knowledge collection deleted')
       
-      // Reload configurations like ToolConfig
-      await loadExistingConfigs()
+      // Invalidate cache and reload configurations like ToolConfig
+      sharedApiService.invalidateCache();
+      if (isMountedRef.current) {
+        await loadExistingConfigs()
+      }
       
       // Reset form and close dialog
       setForm({ 
         id: null, 
         name: '', 
         category: '', 
-        chunk_strategy: '', 
-        chunk_strategy_params: {},
-        chunk_size: null,
-        chunk_overlap: null,
-        embedder_strategy: '',
-        embedder_strategy_params: {}
+        model_id: ''
       })
       setIsEdit(false)
       setIsEditMode(false)
@@ -479,13 +591,13 @@ export default function KnowledgeConfig({ user }) {
     }
   }
 
-  const chunkIntro = form.chunk_strategy ? introspection[form.chunk_strategy] : null
-  const embedderIntro = form.embedder_strategy ? introspection[form.embedder_strategy] : null
+  const chunkIntro = null
+  const embedderIntro = null
 
-  console.log('[KnowledgeConfig] Render - loading:', loading, 'existingConfigs:', existingConfigs.length, 'components:', components)
+  // removed render debug log
 
   if (loading || loadingConfigs) {
-    console.log('[KnowledgeConfig] Showing loading spinner')
+  // removed loading spinner log
     return (
       <Paper sx={{ p: 4, textAlign: 'center' }}>
         <CircularProgress />
@@ -494,30 +606,27 @@ export default function KnowledgeConfig({ user }) {
     )
   }
 
-  console.log('[KnowledgeConfig] Rendering main component')
+  // removed rendering main component log
 
   const openCreate = () => {
     setForm({ 
       id: null, 
       name: '', 
       category: '', 
-      chunk_strategy: '', 
-      chunk_strategy_params: {},
-      chunk_size: null,
-      chunk_overlap: null,
-      embedder_strategy: '',
-      embedder_strategy_params: {}
+      model_id: ''
     })
     setIsEdit(false)
     setIsEditMode(false)
     setExistingFiles([])
     setFilesToDelete([])
     setPendingFiles([])
+    resetErrors()
     setDialogOpen(true)
   }
 
   const openEdit = (name) => {
     loadExistingConfig(name)
+    resetErrors()
     setDialogOpen(true)
   }
 
@@ -545,7 +654,9 @@ export default function KnowledgeConfig({ user }) {
       <Card>
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">All Collections ({existingConfigs.length})</Typography>
+            <Typography variant="h6">
+              All Collections ({pagination.total} total, showing {existingConfigs.length})
+            </Typography>
           </Box>
           <TableContainer component={Paper} variant="outlined">
             <Table>
@@ -553,8 +664,8 @@ export default function KnowledgeConfig({ user }) {
                 <TableRow>
                   <TableCell>Name</TableCell>
                   <TableCell>Category</TableCell>
-                  <TableCell>Embedder Strategy</TableCell>
-                  <TableCell>Chunk Strategy</TableCell>
+                  <TableCell>Model</TableCell>
+                  <TableCell>Files</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -570,8 +681,8 @@ export default function KnowledgeConfig({ user }) {
                     <TableRow key={cfg.id || cfg.name} hover>
                       <TableCell>{cfg.name}</TableCell>
                       <TableCell>{cfg.category || '-'}</TableCell>
-                      <TableCell>{cfg.embedder_strategy || '-'}</TableCell>
-                      <TableCell>{cfg.chunk_strategy || '-'}</TableCell>
+                      <TableCell>{cfg.model_name || cfg.model_id || '-'}</TableCell>
+                      <TableCell>{cfg.files_count || 0}</TableCell>
                       <TableCell align="right">
                         <IconButton size="small" color="primary" onClick={() => openEdit(cfg.name)}>
                           <EditIcon size={16} />
@@ -583,10 +694,29 @@ export default function KnowledgeConfig({ user }) {
               </TableBody>
             </Table>
           </TableContainer>
+          <TablePagination
+            component="div"
+            count={pagination.total}
+            page={pagination.page}
+            onPageChange={handlePageChange}
+            rowsPerPage={pagination.rowsPerPage}
+            onRowsPerPageChange={handleRowsPerPageChange}
+            rowsPerPageOptions={[8, 16, 24, 50]}
+            showFirstButton
+            showLastButton
+          />
         </CardContent>
       </Card>
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
+      <Dialog 
+        open={dialogOpen} 
+        onClose={() => {
+          setDialogOpen(false);
+          resetErrors();
+        }} 
+        maxWidth="md" 
+        fullWidth
+      >
         <DialogTitle>{isEdit ? 'Edit Collection' : 'Create Collection'}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={1}>
@@ -600,27 +730,47 @@ export default function KnowledgeConfig({ user }) {
               value={form.name}
               loading={loadingConfigs}
               loadingText="Loading collections…"
+              disabled={isEdit} // prevent renaming while editing to keep id-based operations simple
               onChange={(_, v) => {
+                // Clear error when user changes the field
+                if (errors.name) {
+                  setErrors(prev => ({ ...prev, name: '' }));
+                }
+                // If selecting from dropdown, load immediately; otherwise just update name
                 if (v && existingConfigs.some(c => c.name === v)) {
                   loadExistingConfig(v)
                 } else {
-                  setForm(f => ({ ...f, id: null, name: v || '' }))
-                  setIsEditMode(false)
-                  setIsEdit(false)
+                  setForm(f => ({ ...f, name: v || '' }))
+                  // Keep isEdit/isEditMode so a rename updates rather than creating duplicate
                 }
               }}
               onInputChange={(_, v) => {
-                setForm(f => ({ ...f, name: v }))
-                if (existingConfigs.some(c => c.name === v)) {
-                  loadExistingConfig(v)
-                } else {
-                  setForm(f => ({ ...f, id: null }))
-                  setIsEditMode(false)
-                  setIsEdit(false)
+                if (isEdit) return; // block name changes during edit mode
+                // Clear error when user types
+                if (errors.name) {
+                  setErrors(prev => ({ ...prev, name: '' }));
                 }
+                // Only update the form name while typing, don't load config
+                setForm(f => ({ ...f, name: v }))
               }}
               renderInput={(params) => (
-                <TextField {...params} label="Collection Name" placeholder="Enter or select a collection…" size="small" required />
+                <TextField 
+                  {...params} 
+                  label="Collection Name" 
+                  placeholder="Enter or select a collection…" 
+                  size="small" 
+                  required 
+                  error={!!errors.name}
+                  helperText={errors.name || (isEdit ? 'Name locked while editing existing collection' : '')}
+                  onBlur={(e) => {
+                    if (isEdit) return; // block loading during edit mode
+                    // Load existing config only when user stops typing (on blur)
+                    const inputValue = e.target.value;
+                    if (inputValue && existingConfigs.some(c => c.name === inputValue)) {
+                      loadExistingConfig(inputValue);
+                    }
+                  }}
+                />
               )}
             />
 
@@ -648,7 +798,7 @@ export default function KnowledgeConfig({ user }) {
             <Paper variant="soft" sx={{ p: 2 }}>
               <Typography variant="h6" gutterBottom>File Upload</Typography>
               
-              {console.log('[KnowledgeConfig] Render files - existingFiles.length:', existingFiles.length, 'existingFiles:', existingFiles)}
+              {/* removed inline render debug log */}
               
               {/* Existing Files */}
               {existingFiles.length > 0 && (
@@ -692,7 +842,12 @@ export default function KnowledgeConfig({ user }) {
               {/* File Upload */}
               <Box sx={{ border: '2px dashed', borderColor: 'grey.300', borderRadius: 2, p: 2, textAlign: 'center', mb: 2 }}>
                 <input type="file" multiple style={{ display: 'none' }} id="kc-file-upload"
-                  onChange={(e) => setPendingFiles(Array.from(e.target.files || []))}
+                  onChange={(e) => {
+                    const newFiles = Array.from(e.target.files || []);
+                    setPendingFiles(prev => [...prev, ...newFiles]);
+                    // Reset the input value to allow selecting the same files again if needed
+                    e.target.value = '';
+                  }}
                   accept=".pdf,.docx,.txt,.py,.js" />
                 <label htmlFor="kc-file-upload">
                   <Button component="span" variant="contained" size="large" disabled={saveBusy}>
@@ -722,245 +877,36 @@ export default function KnowledgeConfig({ user }) {
               )}
             </Paper>
 
-            {/* Embedder Strategy - Required when files are present */}
-            {(existingFiles.length > 0 || pendingFiles.length > 0) && (
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="h6" gutterBottom>
-                  Embedder Strategy *
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Select an embedder strategy for vector indexing of your documents.
-                </Typography>
-                
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
-                  <FormControl size="small" sx={{ minWidth: 220 }}>
-                    <InputLabel id="embedder-strategy-label">Embedder Strategy</InputLabel>
-                    <Select 
-                      labelId="embedder-strategy-label" 
-                      label="Embedder Strategy" 
-                      value={form.embedder_strategy || ''}
-                      error={!form.embedder_strategy && (existingFiles.length > 0 || pendingFiles.length > 0)}
-                      onChange={(e) => setForm(f => ({ ...f, embedder_strategy: e.target.value, embedder_strategy_params: {} }))}
-                    >
-                      <MenuItem value="">
-                        <em>Select an embedder...</em>
-                      </MenuItem>
-                      {Array.isArray(components.embedders) ? components.embedders.map(c => (
-                        <MenuItem key={c} value={c}>{c}</MenuItem>
-                      )) : []}
-                    </Select>
-                  </FormControl>
-                  <Button variant="outlined" size="small" onClick={async () => {
-                    const comps = await api.discoverEmbedders(token)
-                    const embedderData = comps.components?.['ai.embeddings'] || {}
-                    const embedders = embedderData['ai.embeddings'] || embedderData['embeddings'] || []
-                    setComponents(prev => ({ ...prev, embedders: Array.isArray(embedders) ? embedders : [] }))
-                  }}>Refresh</Button>
-                </Box>
+            {/* Model Selection */}
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                Model Selection
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Select a model for processing your documents.
+              </Typography>
+              
+              <FormControl size="small" sx={{ minWidth: 300 }}>
+                <InputLabel id="model-select-label">Model</InputLabel>
+                <Select 
+                  labelId="model-select-label" 
+                  label="Model" 
+                  value={form.model_id || ''}
+                  onChange={(e) => setForm(f => ({ ...f, model_id: e.target.value }))}
+                >
+                  <MenuItem value="">
+                    <em>Select a model...</em>
+                  </MenuItem>
+                  {/* removed models dropdown debug log */}
+                  {models.map(model => (
+                    <MenuItem key={model.id || model.name} value={model.id || model.name}>
+                      {model.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
 
-                {!embedderIntro && form.embedder_strategy && (
-                  <Fade in>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                      <CircularProgress size={16} />
-                      <Typography variant="caption" sx={{ opacity: 0.7 }}>Fetching embedder parameters…</Typography>
-                    </Box>
-                  </Fade>
-                )}
-
-                {embedderIntro && (
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                      Embedder Parameters ({embedderIntro.class_name || form.embedder_strategy.split('.').pop()})
-                    </Typography>
-                    <Box sx={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                      gap: 2
-                    }}>
-                      {(embedderIntro.formatted_params || []).map((paramFormatted, idx) => {
-                        const paramName = paramFormatted.split(':')[0].trim();
-                        const typeMatch = paramFormatted.match(/:\s*([^=\s]+)/);
-                        const paramType = typeMatch ? typeMatch[1].toLowerCase() : 'str';
-                        let defaultRaw = '';
-                        const descSplitIdx = paramFormatted.indexOf(' - ');
-                        const mainPart = descSplitIdx !== -1 ? paramFormatted.slice(0, descSplitIdx) : paramFormatted;
-                        const eqIdx = mainPart.indexOf('=');
-                        if (eqIdx !== -1) {
-                          defaultRaw = mainPart.slice(eqIdx + 1).trim();
-                          if ((defaultRaw.startsWith("'") && defaultRaw.endsWith("'")) || (defaultRaw.startsWith('"') && defaultRaw.endsWith('"'))) {
-                            defaultRaw = defaultRaw.slice(1, -1);
-                          }
-                        }
-                        const hasDefault = defaultRaw !== '' && defaultRaw.toLowerCase() !== 'none';
-                        const placeholderText = hasDefault ? `Default: ${defaultRaw}` : `Enter ${paramName}`;
-                        let gridColumn = 'span 1';
-                        if (paramType.includes('int') || paramType.includes('float') || paramType.includes('bool')) {
-                          gridColumn = 'span 1';
-                        } else if (paramType.includes('str') && (paramName.includes('key') || paramName.includes('token') || paramName.includes('url'))) {
-                          gridColumn = 'span 2';
-                        }
-                        return (
-                          <TextField
-                            key={paramName}
-                            size="small"
-                            label={paramName}
-                            InputLabelProps={{ shrink: true }}
-                            value={form.embedder_strategy_params[paramName] || ''}
-                            onChange={(e) => setForm(f => ({
-                              ...f,
-                              embedder_strategy_params: { ...(f.embedder_strategy_params || {}), [paramName]: e.target.value }
-                            }))}
-                            placeholder={placeholderText}
-                            sx={{ gridColumn }}
-                            type={paramType.includes('int') || paramType.includes('float') ? 'number' : 'text'}
-                          />
-                        );
-                      })}
-                    </Box>
-                  </Box>
-                )}
-              </Box>
-            )}
-
-            <Accordion>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>Advanced Configuration</AccordionSummary>
-              <AccordionDetails>
-                {/* Chunking Configuration - only show when embedder is selected and files are present */}
-                {form.embedder_strategy && (existingFiles.length > 0 || pendingFiles.length > 0) ? (
-                  <>
-                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
-                      <FormControl size="small" sx={{ minWidth: 220 }}>
-                        <InputLabel id="chunk-strategy-label">
-                          Chunk Strategy (Optional)
-                        </InputLabel>
-                        <Select 
-                          labelId="chunk-strategy-label" 
-                          label="Chunk Strategy (Optional)"
-                          value={form.chunk_strategy || ''}
-                          onChange={(e) => setForm(f => ({ ...f, chunk_strategy: e.target.value, chunk_strategy_params: {} }))}>
-                          <MenuItem value="">
-                            <em>Select chunking strategy...</em>
-                          </MenuItem>
-                          {Array.isArray(components.chunking) ? components.chunking.map(c => (
-                            <MenuItem key={c} value={c}>{c}</MenuItem>
-                          )) : []}
-                        </Select>
-                      </FormControl>
-                      <Button variant="outlined" size="small" onClick={async () => {
-                        const comps = await api.discoverChunking(token)
-                        const chunkingData = comps.components?.['ai.chunking'] || {}
-                        const chunking = chunkingData['ai.chunking'] || chunkingData['chunking'] || []
-                        setComponents(prev => ({ ...prev, chunking: Array.isArray(chunking) ? chunking : [] }))
-                      }}>Refresh</Button>
-                    </Box>
-
-                    {!form.chunk_strategy && (
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontStyle: 'italic' }}>
-                        No chunking strategy selected. Default chunking will be applied by the backend.
-                      </Typography>
-                    )}
-
-                    {!chunkIntro && form.chunk_strategy && (
-                      <Fade in>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                          <CircularProgress size={16} />
-                          <Typography variant="caption" sx={{ opacity: 0.7 }}>Fetching chunking parameters…</Typography>
-                        </Box>
-                      </Fade>
-                    )}
-
-                    {chunkIntro && (
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                          Chunking Parameters ({chunkIntro.class_name || form.chunk_strategy.split('.').pop()})
-                        </Typography>
-                        {console.log('[KnowledgeConfig] chunkIntro:', chunkIntro)}
-                        {console.log('[KnowledgeConfig] formatted_params:', chunkIntro.formatted_params)}
-                        <Box sx={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                          gap: 2
-                        }}>
-                          {(chunkIntro.formatted_params || []).map((paramFormatted, idx) => {
-                            console.log('[KnowledgeConfig] Processing param:', paramFormatted)
-                            const paramName = paramFormatted.split(':')[0].trim();
-                            const typeMatch = paramFormatted.match(/:\s*([^=\s]+)/);
-                            const paramType = typeMatch ? typeMatch[1].toLowerCase() : 'str';
-                            let defaultRaw = '';
-                            const descSplitIdx = paramFormatted.indexOf(' - ');
-                            const mainPart = descSplitIdx !== -1 ? paramFormatted.slice(0, descSplitIdx) : paramFormatted;
-                            const eqIdx = mainPart.indexOf('=');
-                            if (eqIdx !== -1) {
-                              defaultRaw = mainPart.slice(eqIdx + 1).trim();
-                              if ((defaultRaw.startsWith("'") && defaultRaw.endsWith("'")) || (defaultRaw.startsWith('"') && defaultRaw.endsWith('"'))) {
-                                defaultRaw = defaultRaw.slice(1, -1);
-                              }
-                            }
-                            const hasDefault = defaultRaw !== '' && defaultRaw.toLowerCase() !== 'none';
-                            const placeholderText = hasDefault ? `Default: ${defaultRaw}` : `Enter ${paramName}`;
-                            let gridColumn = 'span 1';
-                            if (paramType.includes('int') || paramType.includes('float') || paramType.includes('bool')) {
-                              gridColumn = 'span 1';
-                            } else if (paramType.includes('str') && (paramName.includes('key') || paramName.includes('token') || paramName.includes('url'))) {
-                              gridColumn = 'span 2';
-                            }
-                            return (
-                              <TextField
-                                key={paramName}
-                                size="small"
-                                label={paramName}
-                                InputLabelProps={{ shrink: true }}
-                                value={form.chunk_strategy_params[paramName] || ''}
-                                onChange={(e) => setForm(f => ({
-                                  ...f,
-                                  chunk_strategy_params: { ...(f.chunk_strategy_params || {}), [paramName]: e.target.value }
-                                }))}
-                                placeholder={placeholderText}
-                                sx={{ gridColumn }}
-                                type={paramType.includes('int') || paramType.includes('float') ? 'number' : 'text'}
-                              />
-                            );
-                          })}
-                        </Box>
-                      </Box>
-                    )}
-
-                    <Box>
-                      <Typography variant="subtitle2" sx={{ mb: 1 }}>Basic Configuration (Optional)</Typography>
-                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-                        <TextField 
-                          size="small" 
-                          label="Chunk Size (Optional)" 
-                          type="number"
-                          value={form.chunk_size || ''}
-                          onChange={(e) => setForm(f => ({ ...f, chunk_size: e.target.value ? parseInt(e.target.value) : null }))}
-                          placeholder={`Default: ${defaults.chunk_size || 5000}`}
-                          sx={{ width: 160 }} 
-                        />
-                        <TextField 
-                          size="small" 
-                          label="Chunk Overlap (Optional)" 
-                          type="number"
-                          value={form.chunk_overlap || ''}
-                          onChange={(e) => setForm(f => ({ ...f, chunk_overlap: e.target.value ? parseInt(e.target.value) : null }))}
-                          placeholder={`Default: ${defaults.chunk_overlap || 0}`}
-                          sx={{ width: 170 }} 
-                        />
-                      </Box>
-                    </Box>
-                  </>
-                ) : (
-                  <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                    {!(existingFiles.length > 0 || pendingFiles.length > 0) 
-                      ? 'Upload files to configure chunking options.'
-                      : !form.embedder_strategy 
-                        ? 'Select an embedder strategy to configure chunking options.'
-                        : 'Configure chunking options for your documents.'
-                    }
-                  </Typography>
-                )}
-              </AccordionDetails>
-            </Accordion>
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -968,7 +914,15 @@ export default function KnowledgeConfig({ user }) {
             <Button color="error" onClick={onDelete} startIcon={<DeleteIcon size={16} />} disabled={saveState.loading}>Delete</Button>
           )}
           <Box sx={{ flex: 1 }} />
-          <Button onClick={() => setDialogOpen(false)} disabled={saveState.loading}>Cancel</Button>
+          <Button 
+            onClick={() => {
+              setDialogOpen(false);
+              resetErrors();
+            }} 
+            disabled={saveState.loading}
+          >
+            Cancel
+          </Button>
           <Button onClick={save} variant="contained" disabled={saveState.loading || !form.name}>
             {saveState.loading ? (isEdit ? 'Updating…' : 'Saving…') : (isEdit ? 'Update Collection' : 'Create Collection')}
           </Button>

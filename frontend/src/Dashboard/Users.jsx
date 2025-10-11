@@ -92,6 +92,33 @@ export default function Users({ user }) {
     navigate('/dashboard/user-invitation')
   }
 
+  const handleDeleteUser = async (userId, userName) => {
+    if (!window.confirm(`Are you sure you want to delete user "${userName}"? This action cannot be undone.`)) {
+      return
+    }
+
+    try {
+      const response = await apiCall(`/api/rbac/users/${userId}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      })
+
+      if (response.ok) {
+        showSuccess('User deleted successfully')
+        // Remove the deleted user from the local state
+        setUsers(users.filter(user => user.id !== userId))
+      } else if (response.status === 403) {
+        showError('Access denied. You can only delete users who have roles that you own.')
+      } else if (response.status === 404) {
+        showError('User not found')
+      } else {
+        showError('Failed to delete user')
+      }
+    } catch (err) {
+      showError('Failed to delete user')
+    }
+  }
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
@@ -250,6 +277,7 @@ export default function Users({ user }) {
                               size="small"
                               color="error"
                               disabled={userData.id === user.id}
+                              onClick={() => handleDeleteUser(userData.id, getFullName(userData))}
                             >
                               <DeleteIcon size={16} />
                             </IconButton>

@@ -17,7 +17,10 @@ import {
 	Avatar,
 	Menu,
 	MenuItem,
-	Chip
+	Chip,
+	Tooltip,
+	Card,
+	CardContent
 } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
 import { getThemeKeyForMode } from '../theme'
@@ -47,9 +50,18 @@ const ToolConfig = lazy(() => import('../agents/ToolConfig'))
 const KnowledgeConfig = lazy(() => import('../agents/KnowledgeConfig'))
 const Agent = lazy(() => import('../agents/Agent'))
 const AgentPlayground = lazy(() => import('../playground/AgentPlayground'))
+const Projects = lazy(() => import('../projects/Projects'))
+const WorkflowConfig = lazy(() => import('../workflows/WorkflowConfig'))
+const WorkflowDashboard = lazy(() => import('../workflows/WorkflowDashboard'))
+const WorkflowExecution = lazy(() => import('../workflows/WorkflowExecution'))
+const WorkflowUI = lazy(() => import('../workflows/WorkflowUI'))
+const TaskCompletion = lazy(() => import('../workflows/TaskCompletion'))
+const DynamicComponentLoader = lazy(() => import('../workflows/DynamicComponentLoader'))
+const DynamicFunctionTester = lazy(() => import('../workflows/DynamicFunctionTester'))
+const Analytics = lazy(() => import('./Analytics'))
+const BPMN = lazy(() => import('../components/bpmn/BPMN'))
 import RouteTransition from '../components/RouteTransition'
 import RouteLoader from '../components/RouteLoader'
-import { menuService } from '../services/menuService'
 import { getIconComponent } from '../utils/iconMap'
 
 const DRAWER_WIDTH = 240
@@ -62,53 +74,148 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 	const [drawerOpen, setDrawerOpen] = useState(true) // desktop mini variant
 	const [mobileOpen, setMobileOpen] = useState(false)
 	const [anchorEl, setAnchorEl] = useState(null)
-	const [menuItems, setMenuItems] = useState([])
 	const [expandedSections, setExpandedSections] = useState({})
 	const location = useLocation()
 
-	// Load menu items from API
-	useEffect(() => {
-		const loadMenuItems = async () => {
-			try {
-				const items = await menuService.getMenuItems(user.token)
-				console.log('Loaded menu items:', items)
-				setMenuItems(items)
+	// removed DashboardLayout render debug log
 
-				// Set initial expanded state based on current route
-				const initialExpanded = {}
-				items.forEach(item => {
-					if (item.expandable && item.children) {
-						// Auto-expand if current route matches any child
-						const shouldExpand = item.children.some(child =>
-							location.pathname === child.to || location.pathname.startsWith(child.to)
-						)
-						initialExpanded[item.label] = shouldExpand
-					}
-				})
-				setExpandedSections(initialExpanded)
-			} catch (error) {
-				console.error('Failed to load menu items:', error)
-			}
-		}
-
-		loadMenuItems()
-	}, [user.token])
-
-	// Auto-expand sections when navigating to their pages
-	useEffect(() => {
-		const newExpanded = { ...expandedSections }
-		menuItems.forEach(item => {
-			if (item.expandable && item.children) {
-				const shouldExpand = item.children.some(child =>
-					location.pathname === child.to || location.pathname.startsWith(child.to)
-				)
-				if (shouldExpand && !newExpanded[item.label]) {
-					newExpanded[item.label] = true
+	// Hardcoded menu items based on screenshot
+	const menuItems = [
+		{
+			label: 'Home',
+			to: '/dashboard/home',
+			icon: 'Home',
+			order: 10
+		},
+		{
+			label: 'Projects',
+			icon: 'FolderKanban',
+			expandable: true,
+			order: 15,
+			children: [
+				{
+					label: 'Overview',
+					to: '/dashboard/projects',
+					icon: 'LayoutDashboard'
 				}
-			}
-		})
-		setExpandedSections(newExpanded)
-	}, [location.pathname, menuItems])
+			]
+		},
+		{
+			label: 'Agents',
+			icon: 'Bot',
+			expandable: true,
+			order: 20,
+			children: [
+				{
+					label: 'Playground',
+					to: '/dashboard/agent-playground',
+					icon: 'Play'
+				},
+				{
+					label: 'Analytics',
+					to: '/dashboard/analytics',
+					icon: 'BarChart'
+				}
+			]
+		},
+		{
+			label: 'Configuration',
+			icon: 'Settings',
+			expandable: true,
+			order: 30,
+			children: [
+				{
+					label: 'Models',
+					to: '/dashboard/models',
+					icon: 'Brain'
+				},
+				{
+					label: 'Tools',
+					to: '/dashboard/tools',
+					icon: 'Wrench'
+				},
+				{
+					label: 'Knowledge',
+					to: '/dashboard/knowledge',
+					icon: 'BookOpen'
+				}
+			]
+		},
+		{
+			label: 'Workflows',
+			icon: 'Workflow',
+			expandable: true,
+			order: 40,
+			children: [
+				{
+					label: 'Run Workflow',
+					to: '/dashboard/workflow-ui',
+					icon: 'Play'
+				},
+				{
+					label: 'Utilities',
+					icon: 'Package',
+					expandable: true,
+					children: [
+						{
+							label: 'Function Tester',
+							to: '/dashboard/function-tester',
+							icon: 'TestTube'
+						},
+						{
+							label: 'Generate UI Components',
+							to: '/dashboard/dynamic',
+							icon: 'Code'
+						},
+						{
+							label: 'Component Loader',
+							to: '/dashboard/component-loader',
+							icon: 'Box'
+						}
+					]
+				},
+				{
+					label: 'Create Processes',
+					to: '/dashboard/bpmn',
+					icon: 'GitBranch'
+				},
+				{
+					label: 'Manage Wrokflows',
+					to: '/dashboard/monitor',
+					icon: 'Monitor'
+				}
+			]
+		},
+		{
+			label: 'Settings',
+			icon: 'Settings',
+			expandable: true,
+			order: 100,
+			children: [
+				{
+					label: 'Users',
+					to: '/dashboard/users',
+					icon: 'Users'
+				},
+				{
+					label: 'Role Management',
+					to: '/dashboard/role-management',
+					icon: 'Shield'
+				},
+				{
+					label: 'User Invitation',
+					to: '/dashboard/user-invitation',
+					icon: 'UserPlus'
+				}
+			]
+		},
+		{
+			label: 'Help & Support',
+			to: '/dashboard/help',
+			icon: 'HelpCircle',
+			order: 110
+		}
+	]
 
 	const handleProfileMenuOpen = (event) => {
 		setAnchorEl(event.currentTarget)
@@ -149,6 +256,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			const isSectionSelected = item.children?.some((child) =>
 				location.pathname === child.to || location.pathname.startsWith(child.to)
 			)
+			// Use expandedSections state to control expansion
 			const isExpanded = expandedSections[item.label] || false
 			const ExpandIcon = isExpanded ? ChevronUp : ChevronDown
 			const Icon = getIconComponent(item.icon)
@@ -160,20 +268,33 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 						selected={Boolean(isSectionSelected)}
 						sx={{
 							minHeight: 36,
-							px: 1,
+							px: 0.5,
 							py: 0.25,
 							my: 0.25,
-							mx: 1,
+							mx: 0.5,
 							borderRadius: 1.5,
+							width: 'auto',
+							minWidth: 'fit-content',
+							justifyContent: drawerOpen || isMobile ? 'flex-start' : 'center',
 							'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
-							'&:hover .MuiListItemText-primary': { color: theme.palette.text.primary },
+							'&:hover': {
+								backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
+								'& .MuiListItemText-primary': { color: theme.palette.text.primary }
+							},
 							'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
 							'&.Mui-selected': {
 								backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
 							}
 						}}
 					>
-						<ListItemIcon sx={{ minWidth: 28, color: 'text.secondary' }}>
+						<ListItemIcon sx={{
+							minWidth: 0,
+							width: 20,
+							color: 'text.secondary',
+							display: 'flex',
+							justifyContent: 'flex-start',
+							ml: drawerOpen || isMobile ? 1 : 0.5
+						}}>
 							<Icon size={18} strokeWidth={1.8} />
 						</ListItemIcon>
 						<ListItemText
@@ -184,7 +305,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 								letterSpacing: 0.2,
 								color: isSectionSelected ? 'text.primary' : 'text.secondary'
 							}}
-							sx={{ opacity: drawerOpen || isMobile ? 1 : 0 }}
+							sx={{
+								opacity: drawerOpen || isMobile ? 1 : 0,
+								transition: 'opacity 200ms ease',
+								whiteSpace: 'nowrap'
+							}}
 						/>
 						{(drawerOpen || isMobile) && (
 							<ExpandIcon size={16} color={theme.palette.text.secondary} />
@@ -193,45 +318,146 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 
 					{/* Submenu items */}
 					{isExpanded && (drawerOpen || isMobile) && item.children?.map((child) => {
-						const selected = location.pathname === child.to
-						const ChildIcon = getIconComponent(child.icon)
-						return (
-							<ListItemButton
-								key={child.to}
-								component={RouterLink}
-								to={child.to}
-								selected={selected}
-								sx={{
-									minHeight: 32,
-									px: 1,
-									py: 0.25,
-									my: 0.1,
-									mx: 1,
-									ml: 3,
-									borderRadius: 1.5,
-									'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
-									'&:hover .MuiListItemText-primary': { color: theme.palette.text.primary },
-									'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
-									'&.Mui-selected': {
-										backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'
-									}
-								}}
-								onClick={() => { if (isMobile) setMobileOpen(false) }}
-							>
-								<ListItemIcon sx={{ minWidth: 24, color: 'text.secondary' }}>
-									<ChildIcon size={16} strokeWidth={1.8} />
-								</ListItemIcon>
-								<ListItemText
-									primary={child.label}
-									primaryTypographyProps={{
-										fontSize: 11.5,
-										fontWeight: 500,
-										letterSpacing: 0.2,
-										color: selected ? 'text.primary' : 'text.secondary'
+						// Check if child has nested children (submenu within submenu)
+						if (child.expandable && child.children) {
+							const isChildExpanded = expandedSections[child.label] || false
+							const ChildExpandIcon = isChildExpanded ? ChevronUp : ChevronDown
+							const ChildIcon = getIconComponent(child.icon)
+							const isChildSectionSelected = child.children?.some((nestedChild) =>
+								location.pathname === nestedChild.to || location.pathname.startsWith(nestedChild.to)
+							)
+							
+							return (
+								<React.Fragment key={child.label}>
+									<ListItemButton
+										onClick={() => toggleSection(child.label)}
+										selected={Boolean(isChildSectionSelected)}
+										sx={{
+											minHeight: 32,
+											px: 0.5,
+											py: 0.25,
+											my: 0.1,
+											mx: 0.5,
+											ml: 2.5,
+											borderRadius: 1.5,
+											'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
+											'&:hover': {
+												backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+												'& .MuiListItemText-primary': { color: theme.palette.text.primary }
+											},
+											'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
+											'&.Mui-selected': {
+												backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'
+											}
+										}}
+									>
+										<ListItemIcon sx={{ minWidth: 24, color: 'text.secondary' }}>
+											<ChildIcon size={16} strokeWidth={1.8} />
+										</ListItemIcon>
+										<ListItemText
+											primary={child.label}
+											primaryTypographyProps={{
+												fontSize: 11.5,
+												fontWeight: 500,
+												letterSpacing: 0.2,
+												color: isChildSectionSelected ? 'text.primary' : 'text.secondary'
+											}}
+										/>
+										<ChildExpandIcon size={14} color={theme.palette.text.secondary} />
+									</ListItemButton>
+									
+									{/* Nested submenu items */}
+									{isChildExpanded && child.children?.map((nestedChild) => {
+										const nestedSelected = location.pathname === nestedChild.to
+										const NestedIcon = getIconComponent(nestedChild.icon)
+										return (
+											<ListItemButton
+												key={nestedChild.to}
+												component={RouterLink}
+												to={nestedChild.to}
+												selected={nestedSelected}
+												sx={{
+													minHeight: 28,
+													px: 0.5,
+													py: 0.25,
+													my: 0.1,
+													mx: 0.5,
+													ml: 4.5,
+													borderRadius: 1.5,
+													'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
+													'&:hover': {
+														backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.12)',
+														'& .MuiListItemText-primary': { color: theme.palette.text.primary }
+													},
+													'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
+													'&.Mui-selected': {
+														backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.12)'
+													}
+												}}
+												onClick={() => { if (isMobile) setMobileOpen(false) }}
+											>
+												<ListItemIcon sx={{ minWidth: 20, color: 'text.secondary' }}>
+													<NestedIcon size={14} strokeWidth={1.8} />
+												</ListItemIcon>
+												<ListItemText
+													primary={nestedChild.label}
+													primaryTypographyProps={{
+														fontSize: 11,
+														fontWeight: 500,
+														letterSpacing: 0.2,
+														color: nestedSelected ? 'text.primary' : 'text.secondary'
+													}}
+												/>
+											</ListItemButton>
+										)
+									})}
+								</React.Fragment>
+							)
+						} else {
+							// Regular child item without nested children
+							const selected = location.pathname === child.to
+							const ChildIcon = getIconComponent(child.icon)
+							return (
+								<ListItemButton
+									key={child.to}
+									component={RouterLink}
+									to={child.to}
+									selected={selected}
+									sx={{
+										minHeight: 32,
+										px: 0.5,
+										py: 0.25,
+										my: 0.1,
+										mx: 0.5,
+										ml: 2.5,
+										borderRadius: 1.5,
+										'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
+										'&:hover': {
+											backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+											'& .MuiListItemText-primary': { color: theme.palette.text.primary }
+										},
+										'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
+										'&.Mui-selected': {
+											backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'
+										}
 									}}
-								/>
-							</ListItemButton>
-						)
+									onClick={() => { if (isMobile) setMobileOpen(false) }}
+								>
+									<ListItemIcon sx={{ minWidth: 24, color: 'text.secondary' }}>
+										<ChildIcon size={16} strokeWidth={1.8} />
+									</ListItemIcon>
+									<ListItemText
+										primary={child.label}
+										primaryTypographyProps={{
+											fontSize: 11.5,
+											fontWeight: 500,
+											letterSpacing: 0.2,
+											color: selected ? 'text.primary' : 'text.secondary'
+										}}
+									/>
+								</ListItemButton>
+							)
+						}
 					})}
 				</React.Fragment>
 			)
@@ -254,13 +480,19 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 						selected={selected}
 						sx={{
 							minHeight: 36,
-							px: 1,
+							px: 0.5,
 							py: 0.25,
 							my: 0.25,
-							mx: 1,
+							mx: 0.5,
 							borderRadius: 1.5,
+							width: 'auto',
+							minWidth: 'fit-content',
+							justifyContent: drawerOpen || isMobile ? 'flex-start' : 'center',
 							'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
-							'&:hover .MuiListItemText-primary': { color: theme.palette.text.primary },
+							'&:hover': {
+								backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
+								'& .MuiListItemText-primary': { color: theme.palette.text.primary }
+							},
 							'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
 							'&.Mui-selected': {
 								backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
@@ -274,7 +506,14 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 							}
 						}}
 					>
-						<ListItemIcon sx={{ minWidth: 28, color: 'text.secondary' }}>
+						<ListItemIcon sx={{
+							minWidth: 0,
+							width: 20,
+							color: 'text.secondary',
+							display: 'flex',
+							justifyContent: 'flex-start',
+							ml: drawerOpen || isMobile ? 1 : 0.5
+						}}>
 							<Icon size={18} strokeWidth={1.8} />
 						</ListItemIcon>
 						<ListItemText
@@ -285,7 +524,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 								letterSpacing: 0.2,
 								color: selected ? 'text.primary' : 'text.secondary'
 							}}
-							sx={{ opacity: drawerOpen || isMobile ? 1 : 0 }}
+							sx={{
+								opacity: drawerOpen || isMobile ? 1 : 0,
+								transition: 'opacity 200ms ease',
+								whiteSpace: 'nowrap'
+							}}
 						/>
 						{isExpandableWithLink && (drawerOpen || isMobile) && (
 							<ExpandIcon size={16} color={theme.palette.text.secondary} />
@@ -304,14 +547,17 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 								selected={childSelected}
 								sx={{
 									minHeight: 32,
-									px: 1,
+									px: 0.5,
 									py: 0.25,
 									my: 0.1,
-									mx: 1,
-									ml: 3,
+									mx: 0.5,
+									ml: 2.5,
 									borderRadius: 1.5,
 									'& .MuiListItemText-primary': { transition: 'color 160ms ease' },
-									'&:hover .MuiListItemText-primary': { color: theme.palette.text.primary },
+									'&:hover': {
+										backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+										'& .MuiListItemText-primary': { color: theme.palette.text.primary }
+									},
 									'&.Mui-selected .MuiListItemText-primary': { color: theme.palette.text.primary },
 									'&.Mui-selected': {
 										backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'
@@ -381,7 +627,8 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 				sx={{
 					background: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.95)',
 					backdropFilter: 'saturate(180%) blur(8px)',
-					borderBottom: theme.palette.mode === 'dark' ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
+					borderBottom: '1px solid',
+					borderColor: 'divider',
 					color: theme.palette.mode === 'dark' ? '#ffffff' : '#000000'
 				}}
 			>
@@ -408,7 +655,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 						flexGrow: 1,
 						color: theme.palette.mode === 'dark' ? '#ffffff !important' : '#000000 !important',
 						fontSize: '1.25rem'
-					}}>GiaHUB</Typography>
+					}}>GIA</Typography>
 
 					<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
 						<IconButton sx={{ color: theme.palette.mode === 'dark' ? '#ffffff !important' : '#000000 !important' }}>
@@ -520,15 +767,24 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 				<Toolbar />
 				<Box sx={{
 					width: '100%',
-					maxWidth: '1200px', // Consistent max width for all components
-					mx: 'auto',         // Center the content
-					px: {
-						xs: 2,    // 16px on mobile
-						sm: 3,    // 24px on small tablets
-						md: 4,    // 32px on medium screens
-						lg: 6,    // 48px on large screens
-					},
-					py: 4
+					// Conditional styling for BPMN, workflow-execution, workflow-ui, and projects routes
+					...(location.pathname === '/dashboard/bpmn' || location.pathname === '/dashboard/workflow-execution' || location.pathname === '/dashboard/workflow-ui' || location.pathname === '/dashboard/projects' ? {
+						// Full width with minimal padding
+						maxWidth: 'none',
+						mx: 0,
+						p: 2
+					} : {
+						// Standard layout for other routes
+						maxWidth: '1200px', // Consistent max width for all components
+						mx: 'auto',         // Center the content
+						px: {
+							xs: 2,    // 16px on mobile
+							sm: 3,    // 24px on small tablets
+							md: 4,    // 32px on medium screens
+							lg: 6,    // 48px on large screens
+						},
+						py: 4
+					})
 				}}>
 					<Suspense fallback={<RouteLoader />}>
 						<RouteTransition>
@@ -542,19 +798,86 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 }
 
 export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
+	// removed Dashboard render debug log
+	
+	// BPMN Editor wrapper component to handle navigation state
+	const BPMNEditorWrapper = () => {
+		const location = useLocation()
+		const initialBPMN = location.state?.initialBPMN || null
+		// Default to edit mode (true) unless explicitly set to false
+		// This ensures /dashboard/bpmn opens in edit mode by default
+		const editMode = location.state?.editMode !== false
+
+		// Clear location state after getting the BPMN to ensure fresh load every time
+		useEffect(() => {
+			if (location.state?.initialBPMN) {
+				// Clear the state to prevent reloading the same BPMN on refresh
+				window.history.replaceState({}, document.title, location.pathname)
+			}
+		}, [location.state?.initialBPMN, location.pathname])
+
+		// Convert themeKey to BPMN theme format
+		const getBPMNTheme = () => {
+			if (themeKey === 'aurora') return 'dark'
+			if (themeKey === 'ocean') return 'light'
+			return 'auto' // fallback
+		}
+
+		return (
+			<Box>
+				<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+					<Box>
+						<Typography variant="body1" color="text.secondary">
+							Design and visualize business processes with BPMN 2.0 editor.
+						</Typography>
+					</Box>
+				</Box>
+
+				<Card sx={{ overflow: 'hidden', boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}>
+					<CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+						<BPMN
+							initialTheme={getBPMNTheme()}
+							style={{ width: '100%', minHeight: '70vh', display: 'block' }}
+							initialBPMN={initialBPMN}
+							showToolbox={editMode}
+							showPropertyPanel={editMode}
+							readOnly={!editMode}
+							key={themeKey} // Force re-render when theme changes
+						/>
+					</CardContent>
+				</Card>
+			</Box>
+		)
+	}
 	return (
 		<Routes>
+			{/* TaskCompletion route without dashboard layout */}
+			<Route path="task/:workflowId/:instanceId" element={<TaskCompletion user={user} />} />
+			
+			{/* All other routes with dashboard layout */}
 			<Route path="/" element={<DashboardLayout user={user} onLogout={onLogout} themeKey={themeKey} setThemeKey={setThemeKey} />}>
-				<Route index element={<Navigate to="/dashboard/home" replace />} />
+				<Route index element={<Navigate to="home" replace />} />
 				<Route path="home" element={<Home user={user} />} />
 				<Route path="users" element={<Users user={user} />} />
 				<Route path="role-management" element={<RoleManagement user={user} />} />
 				<Route path="user-invitation" element={<UserInvitation user={user} />} />
-				<Route path="agent-config" element={<Agent user={user} />} />
-				<Route path="model-config" element={<ModelConfig user={user} />} />
-				<Route path="tool-config" element={<ToolConfig user={user} />} />
-				<Route path="knowledge-config" element={<KnowledgeConfig user={user} />} />
+				<Route path="projects" element={<Projects user={user} />} />
+				<Route path="agents" element={<Agent user={user} />} />
+				<Route path="models" element={<ModelConfig user={user} />} />
+				<Route path="tools" element={<ToolConfig user={user} />} />
+				<Route path="knowledge" element={<KnowledgeConfig user={user} />} />
 				<Route path="agent-playground" element={<AgentPlayground user={user} />} />
+				<Route path="analytics" element={<Analytics />} />
+				<Route path="workflows" element={<WorkflowConfig user={user} />} />
+				<Route path="workflow-ui" element={<WorkflowUI user={user} />} />
+				<Route path="function-tester" element={<DynamicFunctionTester user={user} />} />
+				<Route path="dynamic" element={<DynamicComponentLoader user={user} />} />
+				<Route path="bpmn" element={<BPMNEditorWrapper />} />
+				<Route path="monitor" element={<WorkflowDashboard user={user} />} />
+				<Route path="workflow-execution" element={<WorkflowExecution user={user} />} />
+				<Route path="manage" element={<BPMN initialTheme={themeKey === 'aurora' ? 'dark' : themeKey === 'ocean' ? 'light' : 'auto'} key={themeKey} style={{ width: '100%', minHeight: '70vh', borderRadius: 8, overflow: 'hidden' }} />} />
+				<Route path="tenants" element={<div>Tenants - Coming Soon</div>} />
+				<Route path="help" element={<div>Help & Support - Coming Soon</div>} />
 			</Route>
 		</Routes>
 	)

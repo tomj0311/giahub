@@ -1,0 +1,149 @@
+/* BPMN Component Styles - Self-contained and Reusable */
+
+/* CSS Custom Properties for theming */
+.bpmn-container {
+  /* Light theme variables */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8f9fa;
+  --bg-tertiary: #e9ecef;
+  --text-primary: #212529;
+  --text-secondary: #6c757d;
+  --border-color: #dee2e6;
+  --border-color-light: #e9ecef;
+  --border-color-rgb: 222, 226, 230;
+  --shadow: rgba(0, 0, 0, 0.1);
+  --hover-bg: #f1f3f4;
+  --accent-color: #235ea0;
+  --accent-color-rgb: 25, 118, 210;
+  --accent-hover: #498ccf;
+  --success-color: #28a745;
+  --warning-color: #ffc107;
+  --danger-color: #dc3545;
+  --message-flow-color: #ff6b6b;
+  --node-bg: #ffffff;
+  --node-border: #dee2e6;
+  --handle-bg: #555555;
+  --handle-border: #ffffff;
+  
+  /* Fallback colors for browsers that don't support color-mix */
+  --success-bg-light: #e8f5e8;
+  --danger-bg-light: #ffebee;
+  --warning-bg-light: #fff3e0;
+  --accent-bg-light: #e3f2fd;
+}
+
+.bpmn-container.bpmn-dark-theme {
+  /* Dark theme variables */
+  --bg-primary: #000000;
+  --bg-secondary: #2d2d2d;
+  --bg-tertiary: #404040;
+  --text-primary: #e0e0e0;
+  --text-secondary: #b0b0b0;
+  --border-color: #404040;
+  --border-color-light: #555555;
+  --border-color-rgb: 64, 64, 64;
+  --shadow: rgba(0, 0, 0, 0.3);
+  --hover-bg: #404040;
+  --accent-color: #235ea0;
+  --accent-color-rgb: 74, 158, 255;
+  --accent-hover: #498ccf;
+  --success-color: #4caf50;
+  --warning-color: #ff9800;
+  --danger-color: #f44336;
+  --message-flow-color: #ff7979;
+  --node-bg: #2d2d2d;
+  --node-border: #555555;
+  --handle-bg: #888888;
+  --handle-border: #2d2d2d;
+  
+  /* Fallback colors for browsers that don't support color-mix */
+  --success-bg-light: #1b2e1b;
+  --danger-bg-light: #2e1b1b;
+  --warning-bg-light: #2e2b1b;
+  --accent-bg-light: #1b2b3a;
+}
+
+/* Main container styles */
+.bpmn-container {
+  height: 80vh;
+  width: 100%;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
+  overflow: hidden;
+  position: relative;
+  /* Remove border-radius to prevent conflicts with Material-UI Card */
+}
+
+.bpmn-light-theme {
+  --theme-mode: 'light';
+}
+
+.bpmn-dark-theme {
+  --theme-mode: 'dark';
+}
+
+/* Loading state styles */
+.bpmn-loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: var(--bg-primary, #ffffff);
+  color: var(--text-primary, #212529);
+}
+
+.bpmn-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(var(--border-color-rgb, 222, 226, 230), 0.3);
+  border-top: 3px solid var(--accent-color, #1976d2);
+  border-radius: 50%;
+  animation: bpmn-spin 1s linear infinite;
+}
+
+@keyframes bpmn-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* React Flow node background removal */
+.bpmn-container .react-flow__node {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.bpmn-container .react-flow__node-default,
+.bpmn-container .react-flow__node-input,
+.bpmn-container .react-flow__node-output {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* Ensure custom node containers have no background in dark theme */
+.bpmn-container.bpmn-dark-theme .react-flow__node {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Scope all BPMN styles to prevent conflicts with parent application */
+.bpmn-container * {
+  box-sizing: border-box;
+}
+
+/* Make the component responsive */
+.bpmn-container.bpmn-responsive {
+  height: 100%;
+  width: 100%;
+}
+
+/* Optional: Allow custom sizing */
+.bpmn-container.bpmn-custom-size {
+  height: auto;
+  width: auto;
+}

@@ -1,5 +1,5 @@
 {
-  "name": "giahub-frontend",
+  "name": "gia-frontend",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -14,10 +14,12 @@
     "@mui/icons-material": "^6.5.0",
     "@mui/material": "^6.0.0",
     "lucide-react": "^0.542.0",
+    "prop-types": "^15.8.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
-    "react-router-dom": "^6.27.0"
+    "react-router-dom": "^6.27.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",

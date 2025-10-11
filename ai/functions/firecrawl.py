@@ -5,7 +5,7 @@ from ai.tools import Toolkit
 from ai.utils.log import logger
 
 try:  # Newer API objects
-    from firecrawl import FirecrawlApp, AsyncFirecrawlApp, ScrapeOptions  # type: ignore
+    from firecrawl import FirecrawlApp, AsyncFirecrawlApp, V1ScrapeOptions as ScrapeOptions  # type: ignore
 except ImportError:  # pragma: no cover
     raise ImportError(
         "`firecrawl-py` not installed. Install with: pip install firecrawl-py"
@@ -45,22 +45,43 @@ class FirecrawlTools(Toolkit):
         **_: Any,  # swallow any legacy / unknown kwargs gracefully
     ):
         super().__init__(name="firecrawl_tools")
+        
         self.api_key: Optional[str] = api_key
+        if not self.api_key:
+            logger.warning("FIRECRAWL_API_KEY not provided. Some functionality may be limited.")
+        else:
+            logger.info("FirecrawlTools initialized with API key")
+            
         self.formats: Optional[List[str]] = formats
         self.default_limit: int = default_limit
+        
+        logger.debug(f"FirecrawlTools configuration: formats={formats}, default_limit={default_limit}")
+        logger.debug(f"Tool registration flags: scrape={scrape}, crawl={crawl}, map_site={map_site}, search={search}")
 
         # Instantiate sync client
-        self.app: FirecrawlApp = FirecrawlApp(api_key=self.api_key)
+        try:
+            self.app: FirecrawlApp = FirecrawlApp(api_key=self.api_key)
+            logger.info("Firecrawl client initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize Firecrawl client: {e}")
+            raise
 
         # Register tool functions conditionally based on flags
+        registered_tools = []
         if scrape:
             self.register(self.scrape_website)
+            registered_tools.append("scrape_website")
         if crawl:
             self.register(self.crawl_website)
+            registered_tools.append("crawl_website")
         if map_site:
             self.register(self.map_website)
+            registered_tools.append("map_website")
         if search:
             self.register(self.search_web)
+            registered_tools.append("search_web")
+        
+        logger.info(f"FirecrawlTools registered tools: {', '.join(registered_tools)}")
 
     # ---------------------- Serialization helper ----------------------
     def _serialize(self, obj: Any) -> Any:
@@ -101,6 +122,7 @@ class FirecrawlTools(Toolkit):
         try:
             return json.dumps(self._serialize(obj))
         except Exception as e:  # pragma: no cover
+            logger.warning(f"Serialization failed: {e}")
             return json.dumps({"error": f"serialization_failed: {e}"})
 
     # ---------------------- Internal helpers ----------------------
@@ -159,10 +181,15 @@ class FirecrawlTools(Toolkit):
                 max_age: Cache max age (ms) if supported by backend.
         Returns: JSON string with scrape result or error message.
         """
+        logger.info(f"FirecrawlTools scrape requested for: '{url}'")
+        logger.debug(f"Scrape parameters: formats={formats}, only_main_content={only_main_content}, parse_pdf={parse_pdf}, max_age={max_age}")
+        
         if not url:
+            logger.warning("No URL provided for scraping")
             return json.dumps({"error": "No URL provided"})
 
         try:
+            logger.debug("Executing Firecrawl scrape_url API call")
             # Newer API (keyword args)
             result = self.app.scrape_url(
                 url=url,
@@ -172,14 +199,21 @@ class FirecrawlTools(Toolkit):
                 max_age=max_age,
             )
         except TypeError:
+            logger.debug("Falling back to legacy Firecrawl API for scrape_url")
             # Fallback to legacy param-dict style
             params: Dict[str, Any] = {}
             if formats or self.formats:
                 params["formats"] = formats or self.formats
             result = self.app.scrape_url(url, params=params)
         except Exception as e:  # pragma: no cover
+            logger.error(f"Failed to scrape website {url}: {e}")
             return json.dumps({"error": str(e)})
-        return self._to_json(result)
+        
+        logger.debug(f"Raw scrape result type: {type(result)}")
+        json_result = self._to_json(result)
+        logger.debug(f"Serialized scrape result length: {len(json_result)}")
+        logger.info("Scrape completed successfully")
+        return json_result
 
     def crawl_website(
         self,
@@ -201,24 +235,31 @@ class FirecrawlTools(Toolkit):
                 max_age: Cache max age (ms).
         Returns: JSON string with crawl job result.
         """
+        logger.info(f"FirecrawlTools crawl requested for: '{url}'")
+        effective_limit = limit or self.default_limit
+        logger.debug(f"Crawl parameters: limit={effective_limit} (requested: {limit}, default: {self.default_limit}), formats={formats}, only_main_content={only_main_content}, parse_pdf={parse_pdf}, max_age={max_age}")
+        
         if not url:
+            logger.warning("No URL provided for crawling")
             return json.dumps({"error": "No URL provided"})
 
-        effective_limit = limit or self.default_limit
         scrape_opts = self._build_scrape_options(
             formats=formats,
             only_main_content=only_main_content,
             parse_pdf=parse_pdf,
             max_age=max_age,
         )
+        logger.debug(f"Built scrape options: {scrape_opts}")
 
         try:
+            logger.debug("Executing Firecrawl crawl_url API call")
             result = self.app.crawl_url(
                 url=url,
                 limit=effective_limit,
                 scrape_options=scrape_opts,
             )
         except TypeError:
+            logger.debug("Falling back to legacy Firecrawl API for crawl_url")
             # Legacy style
             params: Dict[str, Any] = {"limit": effective_limit}
             if scrape_opts and (formats or self.formats):
@@ -226,8 +267,14 @@ class FirecrawlTools(Toolkit):
                 params["scrapeOptions"] = {"formats": (formats or self.formats)}
             result = self.app.crawl_url(url, params=params, poll_interval=30)
         except Exception as e:  # pragma: no cover
+            logger.error(f"Failed to crawl website {url}: {e}")
             return json.dumps({"error": str(e)})
-        return self._to_json(result)
+        
+        logger.debug(f"Raw crawl result type: {type(result)}")
+        json_result = self._to_json(result)
+        logger.debug(f"Serialized crawl result length: {len(json_result)}")
+        logger.info("Crawl completed successfully")
+        return json_result
 
     def map_website(self, url: str, include_subdomains: bool = False) -> str:
         """Generate a site map / graph of reachable URLs.
@@ -236,13 +283,25 @@ class FirecrawlTools(Toolkit):
                 url: Root URL to map.
                 include_subdomains: Whether to include subdomains.
         """
+        logger.info(f"FirecrawlTools map requested for: '{url}'")
+        logger.debug(f"Map parameters: include_subdomains={include_subdomains}")
+        
         if not url:
+            logger.warning("No URL provided for mapping")
             return json.dumps({"error": "No URL provided"})
+        
         try:
+            logger.debug("Executing Firecrawl map_url API call")
             result = self.app.map_url(url=url, include_subdomains=include_subdomains)
         except Exception as e:  # pragma: no cover
+            logger.error(f"Failed to map website {url}: {e}")
             return json.dumps({"error": str(e)})
-        return self._to_json(result)
+        
+        logger.debug(f"Raw map result type: {type(result)}")
+        json_result = self._to_json(result)
+        logger.debug(f"Serialized map result length: {len(json_result)}")
+        logger.info("Map completed successfully")
+        return json_result
 
     def search_web(
         self,
@@ -263,20 +322,34 @@ class FirecrawlTools(Toolkit):
                 parse_pdf: Parse PDF documents.
                 max_age: Cache max age (ms).
         """
+        logger.info(f"FirecrawlTools search requested for: '{query}'")
+        logger.debug(f"Search parameters: limit={limit}, formats={formats}, only_main_content={only_main_content}, parse_pdf={parse_pdf}, max_age={max_age}")
+        
         if not query:
+            logger.warning("No query provided for search")
             return json.dumps({"error": "No query provided"})
+        
         scrape_opts = self._build_scrape_options(
             formats=formats,
             only_main_content=only_main_content,
             parse_pdf=parse_pdf,
             max_age=max_age,
         )
+        logger.debug(f"Built scrape options for search: {scrape_opts}")
+        
         try:
+            logger.debug("Executing Firecrawl search API call")
             result = self.app.search(
                 query=query,
                 limit=limit,
                 scrape_options=scrape_opts,
             )
         except Exception as e:  # pragma: no cover
+            logger.error(f"Failed to search web for '{query}': {e}")
             return json.dumps({"error": str(e)})
-        return self._to_json(result)
+        
+        logger.debug(f"Raw search result type: {type(result)}")
+        json_result = self._to_json(result)
+        logger.debug(f"Serialized search result length: {len(json_result)}")
+        logger.info("Search completed successfully")
+        return json_result

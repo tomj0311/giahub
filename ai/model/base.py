@@ -21,7 +21,7 @@ class Model(BaseModel):
     # Provider for this Model. This is not sent to the Model API.
     provider: Optional[str] = Field(None, validate_default=True)
     # Metrics collected for this Model. This is not sent to the Model API.
-    metrics: Optional[Dict[str, Any]] = None
+    metrics: Optional[Dict[str, Any]] = Field(default_factory=dict)
     response_format: Optional[Any] = None
 
     # A list of tools provided to the Model.
