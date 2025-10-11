@@ -18,6 +18,7 @@
 # 02110-1301  USA
 
 import copy
+import re
 import textwrap
 
 
@@ -53,12 +54,41 @@ class TaskDataEnvironment(BasePythonScriptEngineEnvironment):
         my_globals.update(external_context or {})
         context.update(my_globals)
         try:
+            # Clean up markdown code blocks and backticks
+            cleaned_script = self._clean_markdown_code(script)
             # Remove common leading whitespace to handle indented scripts
-            cleaned_script = textwrap.dedent(script).strip()
+            cleaned_script = textwrap.dedent(cleaned_script).strip()
             exec(cleaned_script, context)
         finally:
             self._remove_globals_and_functions_from_context(context, external_context)
         return True
+
+    def _clean_markdown_code(self, script):
+        """Remove markdown code block markers and backticks from the script.
+        
+        This handles cases where the script contains:
+        - ```python ... ``` blocks
+        - ``` ... ``` blocks
+        - Inline backticks
+        """
+        if not script:
+            return script
+            
+        # Remove markdown code block markers - handle all variations
+        # Remove ```python, ```javascript, etc. at start
+        cleaned = re.sub(r'^```[a-zA-Z]*\s*', '', script.strip(), flags=re.MULTILINE)
+        
+        # Remove closing ``` at end
+        cleaned = re.sub(r'\s*```\s*$', '', cleaned, flags=re.MULTILINE)
+        
+        # Remove any standalone ``` lines
+        cleaned = re.sub(r'^\s*```\s*$', '', cleaned, flags=re.MULTILINE)
+        
+        # Remove lines that are just ```
+        lines = cleaned.split('\n')
+        lines = [line for line in lines if line.strip() != '```' and not line.strip().startswith('```')]
+        
+        return '\n'.join(lines).strip()
 
     def _prepare_context(self, context):
         pass
