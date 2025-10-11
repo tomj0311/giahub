@@ -126,9 +126,7 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color) 20%, transparent);
 }
 
-.react-flow__node.selected * {
-  border-width: 3px !important;
-}
+/* Removed border thickening - only glow effect on selection */
 
 .react-flow__node[data-type="participant"] {
   background: transparent;

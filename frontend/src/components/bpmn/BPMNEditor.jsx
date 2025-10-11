@@ -409,6 +409,27 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
     });
   }, []);
 
+  // Utility function to update group bounds data (similar to participant)
+  const updateGroupBoundsData = useCallback((groupId, allNodes) => {
+    return allNodes.map(node => {
+      if (node.id === groupId && node.type === 'group') {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            groupBounds: {
+              x: node.position.x,
+              y: node.position.y,
+              width: node.style?.width || node.data?.groupBounds?.width || 300,
+              height: node.style?.height || node.data?.groupBounds?.height || 200
+            }
+          }
+        };
+      }
+      return node;
+    });
+  }, []);
+
   // Enhanced onNodesChange to handle participant movement and child node movement
   const onNodesChangeWithBoundsUpdate = useCallback((changes) => {
     // Check if any nodes are being removed
@@ -436,19 +457,22 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
         change.type === 'dimensions'
       );
       
-      // Check if any nodes were moved and update their parent participant bounds
+      // Check if any nodes were moved and update their parent participant/group bounds
       const movedNodes = changes.filter(change => change.type === 'position' && change.dragging === false);
       const participantsToUpdate = new Set();
+      const groupsToUpdate = new Set();
       const movedParticipants = new Set();
+      const movedGroups = new Set();
       
-      // Track participant movements and child movements during dragging
+      // Track participant and group movements and child movements during dragging
       const draggedNodes = changes.filter(change => change.type === 'position' && change.dragging === true);
       
-      // Track resized participants
+      // Track resized participants and groups
       const resizedParticipants = changes.filter(change => change.type === 'dimensions');
       
-      // Handle participant movement - ensure child nodes move with participant
+      // Handle participant and group movement - ensure child nodes move with parent
       const participantMovements = new Map();
+      const groupMovements = new Map();
       
       movedNodes.forEach(change => {
         const node = newNodes.find(n => n.id === change.id);
@@ -464,12 +488,22 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
               const deltaY = node.position.y - oldNode.position.y;
               participantMovements.set(node.id, { deltaX, deltaY });
             }
+          } else if (node.type === 'group') {
+            // Track moved groups to update their bounds data
+            movedGroups.add(node.id);
+            
+            // Calculate the delta movement for this group
+            const oldNode = currentNodes.find(n => n.id === change.id);
+            if (oldNode && (oldNode.position.x !== node.position.x || oldNode.position.y !== node.position.y)) {
+              const deltaX = node.position.x - oldNode.position.x;
+              const deltaY = node.position.y - oldNode.position.y;
+              groupMovements.set(node.id, { deltaX, deltaY });
+            }
           }
-          // Remove automatic bounds updating for child nodes
         }
       });
       
-      // Handle participant resizing
+      // Handle participant and group resizing
       resizedParticipants.forEach(change => {
         const node = newNodes.find(n => n.id === change.id);
         if (node && node.type === 'participant') {
@@ -496,14 +530,47 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
             }
             return n;
           });
+        } else if (node && node.type === 'group') {
+          // Update the node's style and data when resized
+          newNodes = newNodes.map(n => {
+            if (n.id === change.id && n.type === 'group') {
+              return {
+                ...n,
+                style: {
+                  ...n.style,
+                  width: change.dimensions?.width ?? n.style?.width,
+                  height: change.dimensions?.height ?? n.style?.height
+                },
+                data: {
+                  ...n.data,
+                  groupBounds: {
+                    x: n.position.x,
+                    y: n.position.y,
+                    width: change.dimensions?.width ?? n.style?.width ?? 300,
+                    height: change.dimensions?.height ?? n.style?.height ?? 200
+                  }
+                }
+              };
+            }
+            return n;
+          });
         }
       });
       
-      // Apply movement delta to child nodes if their participant moved
-      if (participantMovements.size > 0) {
+      // Apply movement delta to child nodes if their participant or group moved
+      if (participantMovements.size > 0 || groupMovements.size > 0) {
         newNodes = newNodes.map(node => {
           if (node.parentNode && participantMovements.has(node.parentNode)) {
             const { deltaX, deltaY } = participantMovements.get(node.parentNode);
+            return {
+              ...node,
+              position: {
+                x: node.position.x + deltaX,
+                y: node.position.y + deltaY
+              }
+            };
+          } else if (node.parentNode && groupMovements.has(node.parentNode)) {
+            const { deltaX, deltaY } = groupMovements.get(node.parentNode);
             return {
               ...node,
               position: {
@@ -516,7 +583,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
         });
       }
       
-      // Handle real-time participant movement (during dragging)
+      // Handle real-time participant and group movement (during dragging)
       draggedNodes.forEach(change => {
         const node = newNodes.find(n => n.id === change.id);
         if (node && node.type === 'participant') {
@@ -538,12 +605,36 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
             }
             return n;
           });
+        } else if (node && node.type === 'group') {
+          // Update group bounds data during dragging for real-time feedback
+          newNodes = newNodes.map(n => {
+            if (n.id === change.id && n.type === 'group') {
+              return {
+                ...n,
+                data: {
+                  ...n.data,
+                  groupBounds: {
+                    x: change.position?.x ?? n.position.x,
+                    y: change.position?.y ?? n.position.y,
+                    width: n.style?.width || n.data?.groupBounds?.width || 300,
+                    height: n.style?.height || n.data?.groupBounds?.height || 200
+                  }
+                }
+              };
+            }
+            return n;
+          });
         }
       });
       
       // Update bounds data for moved participants (position only, not size)
       movedParticipants.forEach(participantId => {
         newNodes = updateParticipantBoundsData(participantId, newNodes);
+      });
+      
+      // Update bounds data for moved groups (position only, not size)
+      movedGroups.forEach(groupId => {
+        newNodes = updateGroupBoundsData(groupId, newNodes);
       });
       
       // Save to history if needed
@@ -553,7 +644,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
       
       return newNodes;
     });
-  }, [updateParticipantBoundsData, saveToHistory, edges, readOnly, setEdges]);
+  }, [updateParticipantBoundsData, updateGroupBoundsData, saveToHistory, edges, readOnly, setEdges]);
 
   const onConnect = useCallback(
     (params) => {
@@ -708,6 +799,21 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
         },
       };
 
+      // Add default size and bounds for group nodes
+      if (type === 'group') {
+        newNode.style = {
+          width: 300,
+          height: 200,
+          zIndex: -1
+        };
+        newNode.data.groupBounds = {
+          x: position.x,
+          y: position.y,
+          width: 300,
+          height: 200
+        };
+      }
+
       setNodes((nds) => {
         const updatedNodes = nds.concat(newNode);
         
@@ -721,6 +827,15 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
           position.x <= node.position.x + (node.style?.width || 910) &&
           position.y >= node.position.y &&
           position.y <= node.position.y + (node.style?.height || 250)
+        );
+        
+        // Check if the new node was dropped inside a group
+        const droppedInGroup = nds.find(node => 
+          node.type === 'group' &&
+          position.x >= node.position.x &&
+          position.x <= node.position.x + (node.style?.width || 300) &&
+          position.y >= node.position.y &&
+          position.y <= node.position.y + (node.style?.height || 200)
         );
         
         if (droppedInParticipant) {
@@ -740,6 +855,21 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
           }
           
           // No automatic bounds updating - let user resize manually
+        } else if (droppedInGroup) {
+          // Set parent relationship and convert to relative position
+          newNode.parentNode = droppedInGroup.id;
+          newNode.extent = 'parent';
+          newNode.position.x = position.x - droppedInGroup.position.x;
+          newNode.position.y = position.y - droppedInGroup.position.y;
+          newNode.data.groupId = droppedInGroup.id;
+          
+          // Ensure minimum padding
+          if (newNode.position.x < 20) {
+            newNode.position.x = 20;
+          }
+          if (newNode.position.y < 40) {
+            newNode.position.y = 40;
+          }
         }
         
         return updatedNodes;

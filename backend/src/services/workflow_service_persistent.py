@@ -217,15 +217,11 @@ class WorkflowServicePersistent:
     @classmethod
     async def _handle_task_error(cls, workflow, instance_id, tenant_id, task, error, task_type):
         """Helper method to handle task errors consistently"""
-        bpmn_id = task.task_spec.bpmn_id
-        task_name = getattr(task.task_spec, 'bpmn_name', bpmn_id)
         
         # Structure error response
         error_response = {
-            bpmn_id: {
-                'error': str(error),
-                'timestamp': datetime.now(UTC).isoformat()
-            }
+            'error': str(error),
+            'timestamp': datetime.now(UTC).isoformat()
         }
         task.data.update(error_response)
         task.error()
@@ -343,15 +339,6 @@ class WorkflowServicePersistent:
             logger.error(f"[WORKFLOW] Error handling ScriptTask {task.task_spec.bpmn_id}: {e}")
             bpmn_id = task.task_spec.bpmn_id
             
-            # Structure error response
-            error_response = {
-                bpmn_id: {
-                    'error': str(e),
-                    'date': datetime.now(UTC).isoformat()
-                }
-            }
-            task.data.update(error_response)
-            task.error()
             raise
 
     @classmethod
@@ -426,30 +413,12 @@ class WorkflowServicePersistent:
                 # Empty response - treat as error
                 logger.warning(f"[WORKFLOW] ServiceTask {bpmn_id} received empty response")
                 
-                # Structure error response
-                error_response = {
-                    bpmn_id: {
-                        'error': "Empty response from service",
-                        'timestamp': datetime.now(UTC).isoformat()
-                    }
-                }
-                task.data.update(error_response)
-                task.error()
                 raise Exception(f"ServiceTask {bpmn_id} failed: Empty response from service")
             
         except Exception as e:
             logger.error(f"[WORKFLOW] Error handling ServiceTask {task.task_spec.bpmn_id}: {e}")
             bpmn_id = task.task_spec.bpmn_id
             
-            # Structure error response
-            error_response = {
-                bpmn_id: {
-                    'error': str(e),
-                    'timestamp': datetime.now(UTC).isoformat()
-                }
-            }
-            task.data.update(error_response)
-            task.error()
             # Re-raise to stop workflow execution
             raise
 
@@ -496,19 +465,7 @@ class WorkflowServicePersistent:
                 logger.error(f"[WORKFLOW] Error completing task {task_id}: {task_error}")
                 
                 # Structure error response
-                error_response = {
-                    task_id: {
-                        'error': str(task_error),
-                        'timestamp': datetime.now(UTC).isoformat()
-                    }
-                }
-                current_task.data.update(error_response)
-                current_task.error()
-
-                await cls._update_workflow_status(workflow, instance_id, tenant_id, extra_data={
-                    "error": str(task_error),
-                    "error_type": "task_completion"
-                })
+                cls._handle_task_error(workflow, instance_id, tenant_id, current_task, task_error, "UserTask")
 
                 raise HTTPException(status_code=500, detail=f"Task completion failed: {str(task_error)}")
             
