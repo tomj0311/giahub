@@ -208,13 +208,15 @@ async def get_tenant_activity(user: dict = Depends(verify_token_middleware)):
             detail="Invalid user"
         )
     
+    # Get tenant_id for the user
+    tenant_id = await TenantService.get_user_tenant_id(user_id)
+    
     # Get recent user registrations in tenant
     query = await tenant_filter_query(user_id, {})
     recent_users = await MongoStorageService.find_many("users", query, sort_field="createdAt", sort_order=-1, limit=5)
     
     # Get recent role assignments in tenant
-    role_query = await tenant_filter_query(user_id, {})
-    recent_assignments = await MongoStorageService.find_many("userRoles", role_query, sort_field="assignedAt", sort_order=-1, limit=5)
+    recent_assignments = await MongoStorageService.find_many("userRoles", {}, tenant_id=tenant_id, sort_field="assignedAt", sort_order=-1, limit=5)
     
     # Format activity feed
     activity = []
@@ -229,7 +231,6 @@ async def get_tenant_activity(user: dict = Depends(verify_token_middleware)):
     
     for assignment in recent_assignments:
         # Get role name
-        tenant_id = await TenantService.get_user_tenant_id(user_id)
         role = await RBACService.get_role_by_id(assignment.get("roleId"), tenant_id=tenant_id)
         role_name = role.get("roleName") if role else "Unknown Role"
         

@@ -406,6 +406,9 @@ class UserService:
         try:
             from ..utils.tenant_middleware import tenant_filter_query, tenant_filter_records
             
+            # Get tenant_id for the requesting user
+            tenant_id = await TenantService.get_user_tenant_id(user_id)
+            
             # Filter users by tenant
             user_query = await tenant_filter_query(user_id, {})
             all_users = await MongoStorageService.find_many("users", user_query)
@@ -421,7 +424,7 @@ class UserService:
                     continue
                 
                 # Get user's roles (already tenant-filtered via RBAC service)
-                user_roles = await RBACService.get_user_roles(str(user_id_field))
+                user_roles = await RBACService.get_user_roles(str(user_id_field), tenant_id=tenant_id)
                 
                 # Build user data without password and _id (ObjectId serialization issue)
                 user_data = {k: v for k, v in u.items() if k not in ["password", "_id", "password_hash"]}
