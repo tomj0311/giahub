@@ -167,11 +167,6 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 							to: '/dashboard/dynamic',
 							icon: 'Code'
 						},
-						{
-							label: 'Component Loader',
-							to: '/dashboard/component-loader',
-							icon: 'Box'
-						}
 					]
 				},
 				{
