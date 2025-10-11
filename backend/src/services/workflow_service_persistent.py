@@ -88,16 +88,16 @@ class WorkflowServicePersistent:
                         logger.debug(f"[WORKFLOW] NoneTask detected: {task.task_spec.bpmn_id} - letting SpiffWorkflow handle according to standard")
                         # Don't try to execute or complete - let the engine handle it naturally
                         continue
-                    elif task_type == "ScriptTask":
-                        logger.info(f"[WORKFLOW] Handling ScriptTask: {task.task_spec.bpmn_id}")
-                        try:
-                            await cls.handle_script_task(workflow, task, user)
-                            custom_task_handled = True
-                            break  # Process one script task at a time
-                        except Exception as script_error:
-                            logger.error(f"[WORKFLOW] ScriptTask {task.task_spec.bpmn_id} failed: {script_error}")
-                            await cls._handle_task_error(workflow, instance_id, tenant_id, task, script_error, "ScriptTask")
-                            raise HTTPException(status_code=500, detail=f"ScriptTask failed: {str(script_error)}")
+                    # elif task_type == "ScriptTask":
+                    #     logger.info(f"[WORKFLOW] Handling ScriptTask: {task.task_spec.bpmn_id}")
+                    #     try:
+                    #         await cls.handle_script_task(workflow, task, user)
+                    #         custom_task_handled = True
+                    #         break  # Process one script task at a time
+                    #     except Exception as script_error:
+                    #         logger.error(f"[WORKFLOW] ScriptTask {task.task_spec.bpmn_id} failed: {script_error}")
+                    #         await cls._handle_task_error(workflow, instance_id, tenant_id, task, script_error, "ScriptTask")
+                    #         raise HTTPException(status_code=500, detail=f"ScriptTask failed: {str(script_error)}")
                     elif task_type == "ServiceTask":
                         if task.state == TaskState.STARTED:
                             logger.info(f"[WORKFLOW] Handling ServiceTask: {task.task_spec.bpmn_id}")
