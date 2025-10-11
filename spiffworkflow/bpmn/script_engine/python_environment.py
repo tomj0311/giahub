@@ -21,6 +21,7 @@ import copy
 import re
 import textwrap
 import types
+import json
 
 
 class BasePythonScriptEngineEnvironment:
@@ -96,14 +97,41 @@ class TaskDataEnvironment(BasePythonScriptEngineEnvironment):
 
     def _remove_globals_and_functions_from_context(self, context, external_context=None):
         """When executing a script, don't leave the globals, functions,
-        modules, and external methods in the context that we have modified."""
+        modules, and external methods in the context that we have modified.
+        Convert non-serializable objects (like DataFrames) to JSON."""
         for k in list(context):
+            obj = context[k]
+            
+            # Remove builtins, modules, functions, globals, and external context items
             if k == "__builtins__" or \
-                    isinstance(context[k], types.ModuleType) or \
-                    hasattr(context[k], '__call__') or \
+                    isinstance(obj, types.ModuleType) or \
+                    hasattr(obj, '__call__') or \
                     k in self.globals or \
                     external_context and k in external_context:
                 context.pop(k)
+            else:
+                # Convert non-serializable objects to JSON
+                type_name = type(obj).__name__
+                if type_name == 'DataFrame':
+                    context[k] = json.loads(obj.to_json(orient='records'))
+                elif type_name == 'Series':
+                    context[k] = json.loads(obj.to_json(orient='records'))
+                elif type_name == 'ndarray':
+                    context[k] = obj.tolist()
+                elif hasattr(type(obj), '__module__'):
+                    module = type(obj).__module__
+                    if module and module.startswith('pandas'):
+                        if hasattr(obj, 'to_json'):
+                            context[k] = json.loads(obj.to_json())
+                        else:
+                            context[k] = str(obj)
+                    elif module and module.startswith('numpy'):
+                        if hasattr(obj, 'tolist'):
+                            context[k] = obj.tolist()
+                        elif hasattr(obj, 'item'):
+                            context[k] = obj.item()
+                        else:
+                            context[k] = str(obj)
 
     def check_for_overwrite(self, context, external_context):
         """It's possible that someone will define a variable with the
