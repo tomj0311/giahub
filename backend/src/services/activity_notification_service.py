@@ -4,6 +4,7 @@ Activity Notification Service
 Handles notification creation, storage, and email sending for activity notifications.
 """
 
+import os
 from datetime import datetime
 from typing import List, Dict, Any
 from fastapi import HTTPException, status
@@ -162,11 +163,12 @@ You were mentioned in a notification for activity: <strong>{activity_subject}</s
                 """.strip()
                 
                 # Send notification email
+                redirect_url = os.getenv('REDIRECT_URL', 'http://localhost:5173')
                 result = send_notification_email(
                     to=user_email,
                     title=f"Activity Notification: {activity_subject}",
                     message=email_message,
-                    action_url=f"http://localhost:5173/dashboard/projects/activity/{activity.get('id')}",
+                    action_url=f"{redirect_url}/dashboard/projects/activity/{activity.get('id')}",
                     action_text="View Activity"
                 )
                 

@@ -84,14 +84,16 @@ app = FastAPI(
 app.openapi = custom_openapi
 
 # Add CORS middleware
+# Get allowed origins from environment variable, fallback to default development URLs
+allowed_origins = os.getenv('REDIRECT_URL', 'http://localhost:5173').split(',')
+# Add additional origins if specified
+additional_origins = os.getenv('ADDITIONAL_ORIGINS', '').split(',')
+if additional_origins and additional_origins[0]:
+    allowed_origins.extend(additional_origins)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173", 
-        "http://localhost:3000",
-        "https://135-235-137-65.nip.io",
-        "http://135-235-137-65.nip.io"
-    ],  # Frontend URLs
+    allow_origins=allowed_origins,  # Frontend URLs from environment
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

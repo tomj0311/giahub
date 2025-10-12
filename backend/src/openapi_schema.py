@@ -3,8 +3,13 @@ Complete OpenAPI schema definition for GIA Platform API
 Separated from main.py to keep it clean and maintainable
 """
 
+import os
+
 def get_openapi_schema():
     """Return the complete OpenAPI schema for the GIA Platform API"""
+    # Get server URL from environment
+    server_url = os.getenv('CLIENT_URL', 'http://localhost:4000')
+    
     return {
         "openapi": "3.1.0",
         "info": {
@@ -13,7 +18,7 @@ def get_openapi_schema():
             "description": "Comprehensive AI-powered platform API with authentication, role management, agent orchestration, workflow automation, and analytics capabilities"
         },
         "servers": [
-            {"url": "http://localhost:4000", "description": "Development server"}
+            {"url": server_url, "description": "API server"}
         ],
         "tags": [
             {"name": "Authentication", "description": "User authentication and OAuth"},
