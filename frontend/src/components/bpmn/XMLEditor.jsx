@@ -381,28 +381,36 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
       const funcDetails = functions[xmlProperties.serviceTask.function.functionName];
       setFunctionDetails(funcDetails);
       
-      // Update parameters based on function signature
+      // Update parameters based on function signature ONLY if current parameters are empty or have default empty values
       if (funcDetails.parameters) {
-        const initialParams = [];
-        Object.keys(funcDetails.parameters).forEach(paramName => {
-          const defaultValue = funcDetails.parameters[paramName].default;
-          // Only use default if it's not null, None, or 'null' string
-          const finalValue = (defaultValue && defaultValue !== null && defaultValue !== 'null' && defaultValue !== 'None') ? defaultValue : '';
-          initialParams.push({
-            name: paramName,
-            value: finalValue
+        const currentParams = xmlProperties.serviceTask.function.parameters;
+        // Check if parameters already have meaningful values (from XML parsing)
+        const hasExistingValues = currentParams.length > 0 && 
+          currentParams.some(param => param.name && param.value);
+        
+        // Only set default parameters if no existing values found
+        if (!hasExistingValues) {
+          const initialParams = [];
+          Object.keys(funcDetails.parameters).forEach(paramName => {
+            const defaultValue = funcDetails.parameters[paramName].default;
+            // Only use default if it's not null, None, or 'null' string
+            const finalValue = (defaultValue && defaultValue !== null && defaultValue !== 'null' && defaultValue !== 'None') ? defaultValue : '';
+            initialParams.push({
+              name: paramName,
+              value: finalValue
+            });
           });
-        });
-        setXmlProperties(prev => ({
-          ...prev,
-          serviceTask: {
-            ...prev.serviceTask,
-            function: {
-              ...prev.serviceTask.function,
-              parameters: initialParams
+          setXmlProperties(prev => ({
+            ...prev,
+            serviceTask: {
+              ...prev.serviceTask,
+              function: {
+                ...prev.serviceTask.function,
+                parameters: initialParams
+              }
             }
-          }
-        }));
+          }));
+        }
       }
     }
   }, [xmlProperties.serviceTask.function.functionName, functions]);
