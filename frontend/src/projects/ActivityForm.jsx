@@ -22,6 +22,11 @@ import { useSnackbar } from '../contexts/SnackbarContext'
 import { apiCall } from '../config/api'
 import ActivityNotifications from './ActivityNotifications'
 
+// Use global user cache to prevent duplicate API calls
+// This is shared with ActivityNotifications component
+let globalUserCache = null
+let globalUserCacheLoading = false
+
 const ACTIVITY_TYPES = ['MILESTONE', 'PHASE', 'TASK']
 const STATUS_OPTIONS = ['New', 'In Progress', 'On Hold', 'Completed', 'Cancelled']
 const PRIORITY_OPTIONS = ['Low', 'Normal', 'High', 'Urgent']
@@ -34,6 +39,8 @@ function ActivityForm({ user, projectId: propProjectId }) {
   const { showSuccess, showError } = useSnackbar()
 
   const isMountedRef = useRef(true)
+  const showErrorRef = useRef(showError)
+  const navigateRef = useRef(navigate)
   const [loading, setLoading] = useState(false)
   const [projects, setProjects] = useState([])
   const [tenantUsers, setTenantUsers] = useState([])
@@ -68,10 +75,18 @@ function ActivityForm({ user, projectId: propProjectId }) {
 
   const isEditMode = !!activityId
 
+  // Update refs when these change
   useEffect(() => {
+    showErrorRef.current = showError
+    navigateRef.current = navigate
+  }, [showError, navigate])
+
+  useEffect(() => {
+    console.log('[ACTIVITYFORM] useEffect triggered - token:', !!token, 'activityId:', activityId)
     isMountedRef.current = true
     
     const loadProjects = async () => {
+      console.log('[ACTIVITYFORM] Loading projects...')
       try {
         const res = await apiCall('/api/projects/projects?page=1&page_size=1000', {
           method: 'GET',
@@ -94,12 +109,39 @@ function ActivityForm({ user, projectId: propProjectId }) {
     }
 
     const loadTenantUsers = async () => {
+      console.log('[ACTIVITYFORM] Loading tenant users...')
+      
+      // Check global cache first
+      if (globalUserCache) {
+        console.log('[ACTIVITYFORM] Using globally cached users')
+        setTenantUsers(globalUserCache)
+        return
+      }
+      
+      // Check if already loading globally
+      if (globalUserCacheLoading) {
+        console.log('[ACTIVITYFORM] Users already loading globally, waiting...')
+        const checkInterval = setInterval(() => {
+          if (!globalUserCacheLoading && globalUserCache) {
+            clearInterval(checkInterval)
+            console.log('[ACTIVITYFORM] Global load complete, using cached users')
+            setTenantUsers(globalUserCache)
+          }
+        }, 50)
+        setTimeout(() => clearInterval(checkInterval), 5000)
+        return
+      }
+      
+      globalUserCacheLoading = true
+      
       try {
+        console.log('[ACTIVITYFORM] Making API call to /api/users/')
         const res = await apiCall('/api/users/', {
           method: 'GET',
           headers: { Authorization: `Bearer ${token}` }
         })
 
+        console.log('[ACTIVITYFORM] /api/users/ response status:', res.status)
         if (!res.ok) {
           const error = await res.json()
           console.error('[ActivityForm] Failed to load users:', error)
@@ -116,16 +158,22 @@ function ActivityForm({ user, projectId: propProjectId }) {
             lastName: u.lastName || '',
             displayName: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email
           }))
+          
+          // Cache globally so other components can use it
+          globalUserCache = mappedUsers
           setTenantUsers(mappedUsers)
         }
       } catch (error) {
         console.error('[ActivityForm] Error loading users:', error)
+      } finally {
+        globalUserCacheLoading = false
       }
     }
 
     const loadActivity = async () => {
       if (!activityId) return
       
+      console.log('[ACTIVITYFORM] Loading activity:', activityId)
       setLoading(true)
       try {
         const res = await apiCall(`/api/projects/activities/${activityId}`, {
@@ -159,8 +207,8 @@ function ActivityForm({ user, projectId: propProjectId }) {
           })
         }
       } catch (error) {
-        showError('Failed to load activity details')
-        navigate(-1)
+        showErrorRef.current('Failed to load activity details')
+        navigateRef.current(-1)
       } finally {
         if (isMountedRef.current) {
           setLoading(false)
@@ -175,7 +223,7 @@ function ActivityForm({ user, projectId: propProjectId }) {
     return () => {
       isMountedRef.current = false
     }
-  }, [token, activityId, showError, navigate])
+  }, [token, activityId]) // Removed showError and navigate from dependencies
 
   // Memoize project name to prevent unnecessary re-renders
   const projectName = useMemo(() => {
@@ -196,6 +244,7 @@ function ActivityForm({ user, projectId: propProjectId }) {
 
     if (!form.project_id) {
       errors.project_id = 'Please select a project'
+
     }
 
     if (!form.assignee?.trim()) {
@@ -270,7 +319,10 @@ function ActivityForm({ user, projectId: propProjectId }) {
       
       // Navigate back to the previous page or to the planning page
       navigate(location.state?.returnTo || '/dashboard/projects', { 
-        state: { tab: 1 } // Return to Planning tab
+        state: { 
+          tab: 1, // Return to Planning tab
+          planningTab: location.state?.planningTab // Preserve the planning sub-tab
+        }
       })
     } catch (error) {
       showError(error.message || 'Failed to save activity')
@@ -281,7 +333,10 @@ function ActivityForm({ user, projectId: propProjectId }) {
 
   const handleCancel = () => {
     navigate(location.state?.returnTo || '/dashboard/projects', {
-      state: { tab: 1 }
+      state: { 
+        tab: 1, // Return to Planning tab
+        planningTab: location.state?.planningTab // Preserve the planning sub-tab
+      }
     })
   }
 

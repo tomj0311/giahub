@@ -45,8 +45,8 @@ function ProjectPlanning({ user, projectId }) {
     total: 0
   })
   
-  // Check if we should restore tab from location state
-  const initialTab = location.state?.tab ?? 0
+  // Restore tab from location state, or default to tab 0 (Milestones)
+  const initialTab = location.state?.planningTab ?? 0
   const [currentTab, setCurrentTab] = useState(initialTab)
 
   const activityTypeFilter = ACTIVITY_TYPES[currentTab] || null
@@ -198,7 +198,8 @@ function ProjectPlanning({ user, projectId }) {
       state: {
         type,
         projectId: projectId || '',
-        returnTo: '/dashboard/projects'
+        returnTo: '/dashboard/projects',
+        planningTab: currentTab  // Preserve current tab
       }
     })
   }
@@ -206,7 +207,8 @@ function ProjectPlanning({ user, projectId }) {
   const openEdit = (activityId) => {
     navigate(`/dashboard/projects/activity/${activityId}`, {
       state: {
-        returnTo: '/dashboard/projects'
+        returnTo: '/dashboard/projects',
+        planningTab: currentTab  // Preserve current tab
       }
     })
   }

@@ -416,13 +416,6 @@ function ProjectTreeView({ user }) {
             </Box>
           </TableCell>
 
-          {/* Type */}
-          <TableCell>
-            <Typography variant="body2" color="text.secondary">
-              {hasChildren ? 'Phase' : 'Task'}
-            </Typography>
-          </TableCell>
-
           {/* Priority */}
           <TableCell>{node.priority}</TableCell>
 
@@ -515,7 +508,6 @@ function ProjectTreeView({ user }) {
                   <TableHead>
                     <TableRow>
                       <TableCell>Subject</TableCell>
-                      <TableCell>Type</TableCell>
                       <TableCell>Priority</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Assignee</TableCell>
@@ -527,7 +519,7 @@ function ProjectTreeView({ user }) {
                   <TableBody>
                     {projectTree.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} align="center">
+                        <TableCell colSpan={7} align="center">
                           <Typography variant="body2" color="text.secondary">
                             No projects found. Create one to get started.
                           </Typography>

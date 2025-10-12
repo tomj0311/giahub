@@ -55,6 +55,11 @@ const notificationCache = {
   }
 }
 
+// GLOBAL user cache to prevent duplicate user loads
+let globalUserCache = null
+let globalUserCacheLoading = false
+let globalUserCachePromise = null // Store the promise so concurrent loads can await it
+
 function ActivityNotifications({ user, activityId, projectName }) {
   const token = user?.token
   const { showSuccess, showError } = useSnackbar()
@@ -93,13 +98,42 @@ function ActivityNotifications({ user, activityId, projectName }) {
   useEffect(() => {
     if (!tokenRef.current) return
     
+    // Check global cache first
+    if (globalUserCache) {
+      console.log('[ACTIVITYNOTIFICATIONS] Using globally cached users')
+      setAllUsers(globalUserCache)
+      return
+    }
+    
+    // Check if already loading globally
+    if (globalUserCacheLoading) {
+      console.log('[ACTIVITYNOTIFICATIONS] Users already loading globally, waiting...')
+      // Wait for the load to complete
+      const checkInterval = setInterval(() => {
+        if (!globalUserCacheLoading && globalUserCache) {
+          clearInterval(checkInterval)
+          console.log('[ACTIVITYNOTIFICATIONS] Global load complete, using cached users')
+          setAllUsers(globalUserCache)
+        }
+      }, 50)
+      
+      // Cleanup after 5 seconds max
+      setTimeout(() => clearInterval(checkInterval), 5000)
+      return
+    }
+    
+    console.log('[ACTIVITYNOTIFICATIONS] Loading users for mentions...')
+    globalUserCacheLoading = true
+    
     const loadUsers = async () => {
       try {
+        console.log('[ACTIVITYNOTIFICATIONS] Making API call to /api/users/')
         const res = await apiCall('/api/users/', {
           method: 'GET',
           headers: { Authorization: `Bearer ${tokenRef.current}` }
         })
 
+        console.log('[ACTIVITYNOTIFICATIONS] /api/users/ response status:', res.status)
         if (!res.ok) return
 
         const users = await res.json()
@@ -108,9 +142,14 @@ function ActivityNotifications({ user, activityId, projectName }) {
           email: u.email,
           name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email
         }))
+        
+        // Cache globally
+        globalUserCache = mappedUsers
         setAllUsers(mappedUsers)
       } catch (error) {
         console.error('Error loading users:', error)
+      } finally {
+        globalUserCacheLoading = false
       }
     }
 
@@ -120,6 +159,15 @@ function ActivityNotifications({ user, activityId, projectName }) {
   // Load existing notifications
   useEffect(() => {
     if (!activityIdRef.current || !tokenRef.current) return
+    
+    // CRITICAL: Reset hasLoadedRef when activityId changes
+    // This ensures notifications are reloaded for each new activity
+    if (hasLoadedRef.current && hasLoadedRef.current !== activityIdRef.current) {
+      console.log('[NOTIFICATION] Activity changed from', hasLoadedRef.current, 'to', activityIdRef.current, '- resetting hasLoadedRef')
+      hasLoadedRef.current = false
+      // CLEAR old notifications immediately when switching activities
+      setNotifications([])
+    }
     
     // Check if already loading globally
     if (notificationCache.isLoading(activityIdRef.current)) {
@@ -560,17 +608,16 @@ function ActivityNotifications({ user, activityId, projectName }) {
 }
 
 // Memoize with custom comparison to prevent unnecessary re-renders
+// Only re-render when activityId or token changes, NOT when projectName changes
 export default React.memo(ActivityNotifications, (prevProps, nextProps) => {
   const shouldSkipRender = (
     prevProps.activityId === nextProps.activityId &&
-    prevProps.projectName === nextProps.projectName &&
     prevProps.user?.token === nextProps.user?.token
   )
   
   if (!shouldSkipRender) {
     console.log('[NOTIFICATION MEMO] Props changed, will re-render:', {
       activityIdChanged: prevProps.activityId !== nextProps.activityId,
-      projectNameChanged: prevProps.projectName !== nextProps.projectName,
       tokenChanged: prevProps.user?.token !== nextProps.user?.token
     })
   }

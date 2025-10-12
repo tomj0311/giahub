@@ -86,6 +86,8 @@ class ActivityNotificationService:
             "tenantId": tenant_id,
         }
         
+        logger.info(f"[NOTIFICATION_CREATE] Storing notification with activity_id='{activity_id}' (type: {type(activity_id).__name__})")
+        
         # Save to MongoDB
         notification_id = await MongoStorageService.insert_one(
             "activityNotifications",
@@ -188,6 +190,8 @@ You were mentioned in a notification for activity: <strong>{activity_subject}</s
         
         tenant_id = await cls.validate_tenant_access(user)
         
+        logger.info(f"[NOTIFICATION_GET] Requested activity_id='{activity_id}' (type: {type(activity_id).__name__}), tenant_id='{tenant_id}'")
+        
         try:
             # Validate activity exists
             try:
@@ -198,19 +202,34 @@ You were mentioned in a notification for activity: <strong>{activity_subject}</s
                     detail="Activity not found"
                 )
             
-            # Fetch notifications
+            # Fetch notifications with EXACT match on activity_id
+            query_filter = {"activity_id": activity_id}
+            logger.info(f"[NOTIFICATION_QUERY] Query filter: {query_filter}")
+            
             notifications = await MongoStorageService.find_many(
                 "activityNotifications",
-                {"activity_id": activity_id},
+                query_filter,
                 tenant_id=tenant_id,
                 sort_field="created_at",
                 sort_order=-1
             )
             
-            # Format notifications
+            logger.info(f"[NOTIFICATION_QUERY] Raw query returned {len(notifications)} notifications")
+            
+            # Format notifications and FILTER again to be absolutely sure
             notification_list = []
             for notif in notifications:
                 notif_dict = dict(notif)
+                notif_activity_id = notif_dict.get('activity_id')
+                
+                # Log each notification's activity_id for debugging
+                logger.info(f"[NOTIFICATION_FILTER] Notification activity_id='{notif_activity_id}' (match: {notif_activity_id == activity_id})")
+                
+                # STRICT FILTER: Only include if activity_id matches EXACTLY
+                if notif_activity_id != activity_id:
+                    logger.warning(f"[NOTIFICATION_FILTER] SKIPPING notification - activity_id mismatch: '{notif_activity_id}' != '{activity_id}'")
+                    continue
+                
                 notif_dict["id"] = str(notif_dict.pop("_id"))
                 # Serialize datetime to ISO format
                 if "created_at" in notif_dict and notif_dict["created_at"]:
