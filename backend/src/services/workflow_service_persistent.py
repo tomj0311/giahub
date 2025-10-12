@@ -352,19 +352,34 @@ class WorkflowServicePersistent:
                     parameters = function_config.get('parameters', {}).get('parameter', [])
                     
                     logger.info(f"[WORKFLOW] Executing function: {module_name}.{function_name}")
+                    logger.debug(f"[WORKFLOW] Task data available: {list(task.data.keys())}")
+                    logger.debug(f"[WORKFLOW] Parameters to map: {parameters}")
+                    logger.debug(f"[WORKFLOW] Parameters type: {type(parameters)}")
+                    
+                    # Normalize parameters to always be a list
+                    if isinstance(parameters, dict):
+                        parameters = [parameters]
+                        logger.debug(f"[WORKFLOW] Normalized single parameter dict to list: {parameters}")
                     
                     # Build function parameters from task data and config
                     function_params = {}
                     for param in parameters:
+                        logger.debug(f"[WORKFLOW] Current param in loop: {param}, type: {type(param)}")
                         if isinstance(param, dict):
                             param_name = param.get('name')
                             param_value = param.get('value')
+                            logger.debug(f"[WORKFLOW] Processing parameter - name: {param_name}, value: {param_value}")
+                            
                             if param_name:
                                 # Check if value is in task data, otherwise use config value
                                 if param_value in task.data:
                                     function_params[param_name] = task.data[param_value]
+                                    logger.info(f"[WORKFLOW] Mapped parameter '{param_name}' from task.data['{param_value}'] = {task.data[param_value]}")
                                 else:
                                     function_params[param_name] = param_value
+                                    logger.info(f"[WORKFLOW] Using config value for parameter '{param_name}' = {param_value}")
+                    
+                    logger.info(f"[WORKFLOW] Final function parameters: {function_params}")
                     
                     # Add user to parameters if not already present
                     if 'user' in function_params:
