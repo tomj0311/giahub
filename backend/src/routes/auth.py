@@ -113,9 +113,9 @@ async def google_callback(request: Request):
         })
         client_url = os.getenv('CLIENT_URL', 'http://localhost:5173')
         logger.info(f"[OAUTH] Redirecting user to frontend: {client_url}")
-        # Redirect to root with hash to avoid nginx routing issues
+        # Redirect to auth callback route
         return RedirectResponse(
-            url=f"{client_url}/#/auth/callback?token={auth_token}&name={user_data['name']}"
+            url=f"{client_url}/auth/callback?token={auth_token}&name={user_data['name']}"
         )
     except Exception as e:
         logger.error(f"[OAUTH] Exception during callback: {str(e)}")
@@ -166,7 +166,7 @@ async def google_callback(request: Request):
                             })
                             client_url = os.getenv('CLIENT_URL', 'http://localhost:5173')
                             return RedirectResponse(
-                                url=f"{client_url}/#/auth/callback?token={auth_token}&name={user_data['name']}"
+                                url=f"{client_url}/auth/callback?token={auth_token}&name={user_data['name']}"
                             )
             except Exception as fallback_error:
                 logger.error(f"[OAUTH] Manual token exchange also failed: {str(fallback_error)}")
@@ -240,7 +240,7 @@ async def microsoft_callback(request: Request):
         client_url = os.getenv('CLIENT_URL', 'http://localhost:5173')
         logger.info(f"[OAUTH] Redirecting Microsoft user to frontend: {client_url}")
         return RedirectResponse(
-            url=f"{client_url}/#/auth/callback?token={token}&name={user_data['name']}"
+            url=f"{client_url}/auth/callback?token={token}&name={user_data['name']}"
         )
     except HTTPException:
         logger.error("[OAUTH] HTTPException during Microsoft callback")

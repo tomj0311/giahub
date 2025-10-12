@@ -347,7 +347,7 @@ class AuthService:
             "role": "user",
             "verified": True,  # Google emails are pre-verified
             "emailVerified": True,  # Google emails are pre-verified
-            "active": True,
+            "active": False,  # Requires manual activation by admin
             "googleId": user_info.get('sub'),  # Google user ID
             "tenantId": default_tenant['tenantId'],
             "created_at": current_time,
@@ -461,7 +461,7 @@ class AuthService:
             "role": "user",
             "microsoftId": user_info.get('sub'),  # Microsoft user ID
             "emailVerified": True,  # Microsoft emails are pre-verified
-            "active": True,
+            "active": False,  # Requires manual activation by admin
             "tenantId": default_tenant['tenantId'],
             "createdAt": datetime.utcnow().timestamp() * 1000,
             "updatedAt": datetime.utcnow().timestamp() * 1000
