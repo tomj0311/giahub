@@ -31,7 +31,7 @@ import {
   CheckCircle,
   Error as ErrorIcon
 } from '@mui/icons-material';
-import { apiCall } from '../config/api';
+import { apiCall, API_BASE_URL } from '../config/api';
 
 const DynamicFunctionTester = () => {
   const theme = useTheme();
@@ -131,7 +131,7 @@ const DynamicFunctionTester = () => {
     console.log('🧪 Testing direct API call...');
     try {
       const token = getToken();
-      const response = await fetch('http://localhost:4000/api/dynamic/modules', {
+      const response = await fetch(`${API_BASE_URL}/api/dynamic/modules`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
       const data = await response.json();
