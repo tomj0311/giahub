@@ -1,0 +1,236 @@
+"""
+Activity Notification Service
+
+Handles notification creation, storage, and email sending for activity notifications.
+"""
+
+from datetime import datetime
+from typing import List, Dict, Any
+from fastapi import HTTPException, status
+
+from ..utils.log import logger
+from ..utils.mongo_storage import MongoStorageService
+from ..modules.email_sender import send_notification_email
+from ..services.project_activity_service import ProjectActivityService
+
+
+class ActivityNotificationService:
+    """Service for managing activity notifications"""
+    
+    @staticmethod
+    async def validate_tenant_access(user: dict) -> str:
+        """Validate tenant access and return tenant_id"""
+        user_id = user.get("id")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid user"
+            )
+        
+        tenant_id = user.get("tenantId")
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User does not belong to any tenant"
+            )
+        
+        return tenant_id
+    
+    @classmethod
+    async def create_notification(
+        cls, 
+        activity_id: str, 
+        notification: dict, 
+        user: dict
+    ) -> Dict[str, Any]:
+        """Create a new notification and send emails to mentioned users"""
+        from bson import ObjectId
+        
+        logger.info(f"[NOTIFICATION] Creating notification for activity {activity_id}")
+        
+        tenant_id = await cls.validate_tenant_access(user)
+        user_id = user.get("id")
+        user_email = user.get("email", "")
+        user_name = user.get("name") or user.get("firstName", "") or user_email
+        
+        # Validate activity exists
+        try:
+            activity = await ProjectActivityService.get_activity_by_id(activity_id, user)
+        except Exception as e:
+            logger.error(f"[NOTIFICATION] Activity not found: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Activity not found"
+            )
+        
+        message = notification.get("message", "").strip()
+        mentioned_users = notification.get("mentioned_users", [])
+        files = notification.get("files", [])
+        
+        if not message and len(files) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Message or files required"
+            )
+        
+        # Create notification document
+        doc = {
+            "activity_id": activity_id,
+            "sender_id": user_id,
+            "sender_email": user_email,
+            "sender_name": user_name,
+            "message": message,
+            "mentioned_users": mentioned_users,
+            "files": files,
+            "created_at": datetime.utcnow(),
+            "tenantId": tenant_id,
+        }
+        
+        # Save to MongoDB
+        notification_id = await MongoStorageService.insert_one(
+            "activityNotifications",
+            doc,
+            tenant_id=tenant_id
+        )
+        
+        # Send emails to mentioned users
+        if mentioned_users:
+            await cls._send_notification_emails(
+                activity=activity,
+                sender_name=user_name,
+                message=message,
+                mentioned_users=mentioned_users,
+                files=files
+            )
+        
+        # Return created notification with proper serialization
+        response_doc = {
+            "id": str(notification_id),
+            "activity_id": activity_id,
+            "sender_id": user_id,
+            "sender_email": user_email,
+            "sender_name": user_name,
+            "message": message,
+            "mentioned_users": mentioned_users,
+            "files": files,
+            "created_at": doc["created_at"].isoformat(),
+            "tenantId": tenant_id,
+        }
+        
+        return {
+            "message": "Notification created successfully",
+            "notification": response_doc
+        }
+    
+    @classmethod
+    async def _send_notification_emails(
+        cls,
+        activity: dict,
+        sender_name: str,
+        message: str,
+        mentioned_users: List[str],
+        files: List[dict]
+    ):
+        """Send email notifications to mentioned users"""
+        try:
+            activity_subject = activity.get("subject", "Activity")
+            project_id = activity.get("project_id", "")
+            
+            # Prepare file list for email
+            file_list = ""
+            if files:
+                file_list = "<br><br><strong>Attached files:</strong><br>"
+                for file in files:
+                    file_list += f"- {file.get('filename', 'Unknown file')}<br>"
+            
+            # Send email to each mentioned user
+            for user_email in mentioned_users:
+                if not user_email or "@" not in user_email:
+                    continue
+                
+                email_message = f"""
+You were mentioned in a notification for activity: <strong>{activity_subject}</strong>
+
+<strong>From:</strong> {sender_name}
+
+<strong>Message:</strong><br>
+{message}
+
+{file_list}
+                """.strip()
+                
+                # Send notification email
+                result = send_notification_email(
+                    to=user_email,
+                    title=f"Activity Notification: {activity_subject}",
+                    message=email_message,
+                    action_url=f"http://localhost:5173/dashboard/projects/activity/{activity.get('id')}",
+                    action_text="View Activity"
+                )
+                
+                if result.get("success"):
+                    logger.info(f"[NOTIFICATION] Email sent to {user_email}")
+                else:
+                    logger.error(f"[NOTIFICATION] Failed to send email to {user_email}: {result.get('error')}")
+        
+        except Exception as e:
+            logger.error(f"[NOTIFICATION] Error sending emails: {e}")
+            # Don't raise - notification was saved, email is secondary
+    
+    @classmethod
+    async def get_notifications(
+        cls,
+        activity_id: str,
+        user: dict
+    ) -> Dict[str, Any]:
+        """Get all notifications for an activity"""
+        from bson import ObjectId
+        
+        tenant_id = await cls.validate_tenant_access(user)
+        
+        try:
+            # Validate activity exists
+            try:
+                await ProjectActivityService.get_activity_by_id(activity_id, user)
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Activity not found"
+                )
+            
+            # Fetch notifications
+            notifications = await MongoStorageService.find_many(
+                "activityNotifications",
+                {"activity_id": activity_id},
+                tenant_id=tenant_id,
+                sort_field="created_at",
+                sort_order=-1
+            )
+            
+            # Format notifications
+            notification_list = []
+            for notif in notifications:
+                notif_dict = dict(notif)
+                notif_dict["id"] = str(notif_dict.pop("_id"))
+                # Serialize datetime to ISO format
+                if "created_at" in notif_dict and notif_dict["created_at"]:
+                    notif_dict["created_at"] = notif_dict["created_at"].isoformat()
+                if "updated_at" in notif_dict and notif_dict["updated_at"]:
+                    notif_dict["updated_at"] = notif_dict["updated_at"].isoformat()
+                notification_list.append(notif_dict)
+            
+            logger.info(f"[NOTIFICATION] Fetched {len(notification_list)} notifications for activity {activity_id}")
+            
+            return {
+                "notifications": notification_list,
+                "count": len(notification_list)
+            }
+        
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[NOTIFICATION] Error fetching notifications: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to fetch notifications"
+            )

@@ -27,7 +27,7 @@ class MongoStorageService:
         tenant_collections = {
             'roles', 'userRoles', 'modelConfig', 'toolConfig', 'embedderConfig',
             'knowledgeConfig', 'agents', 'conversations', 'agent_runs',
-            'workflowConfig', 'projects', 'projectActivities'
+            'workflowConfig', 'projects', 'projectActivities', 'activityNotifications'
         }
         
         # Special handling for users collection during OAuth flows
@@ -50,7 +50,7 @@ class MongoStorageService:
         tenant_collections = {
             'roles', 'userRoles', 'modelConfig', 'toolConfig', 'embedderConfig',
             'knowledgeConfig', 'agents', 'conversations', 'agent_runs',
-            'workflowConfig', 'projects', 'projectActivities'
+            'workflowConfig', 'projects', 'projectActivities', 'activityNotifications'
         }
         
         # Special handling for users collection during OAuth flows  

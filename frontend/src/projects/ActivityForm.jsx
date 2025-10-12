@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import {
   Box,
@@ -20,6 +20,7 @@ import {
 import { ArrowLeft, Save } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { apiCall } from '../config/api'
+import ActivityNotifications from './ActivityNotifications'
 
 const ACTIVITY_TYPES = ['MILESTONE', 'PHASE', 'TASK']
 const STATUS_OPTIONS = ['New', 'In Progress', 'On Hold', 'Completed', 'Cancelled']
@@ -176,6 +177,16 @@ function ActivityForm({ user, projectId: propProjectId }) {
     }
   }, [token, activityId, showError, navigate])
 
+  // Memoize project name to prevent unnecessary re-renders
+  const projectName = useMemo(() => {
+    return projects.find(p => p.id === form.project_id)?.name || 'Unknown'
+  }, [projects, form.project_id])
+
+  // Memoize user to prevent re-renders when parent re-renders
+  const stableUser = useMemo(() => ({
+    token: user?.token
+  }), [user?.token])
+
   const validateForm = () => {
     const errors = {}
     
@@ -283,6 +294,7 @@ function ActivityForm({ user, projectId: propProjectId }) {
   }
 
   return (
+    <>
     <Box sx={{ p: 3 }}>
       {/* Breadcrumbs */}
       <Breadcrumbs sx={{ mb: 3 }}>
@@ -551,8 +563,28 @@ function ActivityForm({ user, projectId: propProjectId }) {
           </Box>
         </CardContent>
       </Card>
+
+      {/* Notifications Section - Only show in edit mode when activity is saved */}
+      {/* Render in a separate container to isolate from form re-renders */}
     </Box>
+    
+    {/* Notifications - Rendered outside form container to prevent flickering */}
+    {isEditMode && activityId && (
+      <Box sx={{ p: 3, pt: 0, maxWidth: 1200, margin: '0 auto' }}>
+        <ActivityNotifications 
+          user={stableUser} 
+          activityId={activityId} 
+          projectName={projectName}
+        />
+      </Box>
+    )}
+    </>
   )
 }
 
-export default React.memo(ActivityForm)
+export default React.memo(ActivityForm, (prevProps, nextProps) => {
+  return (
+    prevProps.user?.token === nextProps.user?.token &&
+    prevProps.projectId === nextProps.projectId
+  )
+})
