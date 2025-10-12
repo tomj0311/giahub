@@ -207,7 +207,7 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
             }
           }
         }));
-      } else if (taskType === 'serviceTask') {
+      } else if (taskType === 'serviceTask' || taskType === 'callActivity') {
         // Parse serviceTask configuration
         const serviceConfig = doc.querySelector('serviceConfiguration');
         console.log('🔍 Found serviceConfiguration:', !!serviceConfig);
@@ -326,7 +326,7 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
   // Load modules when component mounts for serviceTask
   useEffect(() => {
     const taskType = selectedNode?.data?.taskType || elementType;
-    if (taskType === 'serviceTask') {
+    if (taskType === 'serviceTask' || taskType === 'callActivity') {
       loadModules();
     }
   }, [elementType, selectedNode]);
@@ -381,28 +381,36 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
       const funcDetails = functions[xmlProperties.serviceTask.function.functionName];
       setFunctionDetails(funcDetails);
       
-      // Update parameters based on function signature
+      // Update parameters based on function signature ONLY if current parameters are empty or have default empty values
       if (funcDetails.parameters) {
-        const initialParams = [];
-        Object.keys(funcDetails.parameters).forEach(paramName => {
-          const defaultValue = funcDetails.parameters[paramName].default;
-          // Only use default if it's not null, None, or 'null' string
-          const finalValue = (defaultValue && defaultValue !== null && defaultValue !== 'null' && defaultValue !== 'None') ? defaultValue : '';
-          initialParams.push({
-            name: paramName,
-            value: finalValue
+        const currentParams = xmlProperties.serviceTask.function.parameters;
+        // Check if parameters already have meaningful values (from XML parsing)
+        const hasExistingValues = currentParams.length > 0 && 
+          currentParams.some(param => param.name && param.value);
+        
+        // Only set default parameters if no existing values found
+        if (!hasExistingValues) {
+          const initialParams = [];
+          Object.keys(funcDetails.parameters).forEach(paramName => {
+            const defaultValue = funcDetails.parameters[paramName].default;
+            // Only use default if it's not null, None, or 'null' string
+            const finalValue = (defaultValue && defaultValue !== null && defaultValue !== 'null' && defaultValue !== 'None') ? defaultValue : '';
+            initialParams.push({
+              name: paramName,
+              value: finalValue
+            });
           });
-        });
-        setXmlProperties(prev => ({
-          ...prev,
-          serviceTask: {
-            ...prev.serviceTask,
-            function: {
-              ...prev.serviceTask.function,
-              parameters: initialParams
+          setXmlProperties(prev => ({
+            ...prev,
+            serviceTask: {
+              ...prev.serviceTask,
+              function: {
+                ...prev.serviceTask.function,
+                parameters: initialParams
+              }
             }
-          }
-        }));
+          }));
+        }
       }
     }
   }, [xmlProperties.serviceTask.function.functionName, functions]);
@@ -1301,8 +1309,8 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                   </div>
                 )}
 
-                {/* ServiceTask Properties */}
-                {(selectedNode?.data?.taskType || elementType) === 'serviceTask' && (
+                {/* ServiceTask and CallActivity Properties */}
+                {((selectedNode?.data?.taskType || elementType) === 'serviceTask' || (selectedNode?.data?.taskType || elementType) === 'callActivity') && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {/* Module and Function Selection in one line */}
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
@@ -1624,7 +1632,7 @@ ${assigneeFields.map(field => {
                         generatedXml = assigneeXml ? 
                           formDataXml.replace('</extensionElements>', `${assigneeXml}\n</extensionElements>`) : 
                           formDataXml;
-                      } else if (taskType === 'serviceTask') {
+                      } else if (taskType === 'serviceTask' || taskType === 'callActivity') {
                         // Only function configuration is supported
                         const configXml = `    <function>
       <moduleName>${xmlProperties.serviceTask.function.moduleName}</moduleName>

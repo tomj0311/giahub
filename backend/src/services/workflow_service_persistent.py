@@ -11,6 +11,7 @@ import os
 import uuid
 import importlib
 import inspect
+import asyncio
 from typing import Any, Dict, Optional
 from datetime import datetime, UTC
 from fastapi import HTTPException, status
@@ -79,8 +80,10 @@ class WorkflowServicePersistent:
                 started_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.STARTED]
                 all_tasks = ready_tasks + started_tasks
 
-                custom_task_handled = False
+                custom_tasks_handled = False
 
+                # Collect all STARTED ServiceTasks for parallel execution
+                service_tasks_to_handle = []
                 for task in all_tasks:
                     task_type = type(task.task_spec).__name__
                     if task_type == "NoneTask":
@@ -88,31 +91,30 @@ class WorkflowServicePersistent:
                         logger.debug(f"[WORKFLOW] NoneTask detected: {task.task_spec.bpmn_id} - letting SpiffWorkflow handle according to standard")
                         # Don't try to execute or complete - let the engine handle it naturally
                         continue
-                    elif task_type == "ScriptTask":
-                        logger.info(f"[WORKFLOW] Handling ScriptTask: {task.task_spec.bpmn_id}")
-                        try:
-                            await cls.handle_script_task(workflow, task, user)
-                            custom_task_handled = True
-                            break  # Process one script task at a time
-                        except Exception as script_error:
-                            logger.error(f"[WORKFLOW] ScriptTask {task.task_spec.bpmn_id} failed: {script_error}")
-                            await cls._handle_task_error(workflow, instance_id, tenant_id, task, script_error, "ScriptTask")
-                            raise HTTPException(status_code=500, detail=f"ScriptTask failed: {str(script_error)}")
-                    elif task_type == "ServiceTask":
-                        if task.state == TaskState.STARTED:
-                            logger.info(f"[WORKFLOW] Handling ServiceTask: {task.task_spec.bpmn_id}")
-                            try:
-                                await cls.handle_service_task(workflow, task, user)
-                                await cls._update_workflow_status(workflow, instance_id, tenant_id)
-                                custom_task_handled = True
-                                break  # Process one service task at a time
-                            except Exception as service_error:
-                                logger.error(f"[WORKFLOW] ServiceTask {task.task_spec.bpmn_id} failed: {service_error}")
-                                await cls._handle_task_error(workflow, instance_id, tenant_id, task, service_error, "ServiceTask")
-                                raise HTTPException(status_code=500, detail=f"ServiceTask failed: {str(service_error)}")
+                    elif task_type == "ServiceTask" and task.state == TaskState.STARTED:
+                        service_tasks_to_handle.append(task)
+                
+                # Handle all ServiceTasks in parallel
+                if service_tasks_to_handle:
+                    logger.info(f"[WORKFLOW] Handling {len(service_tasks_to_handle)} ServiceTask(s) in parallel: {[t.task_spec.bpmn_id for t in service_tasks_to_handle]}")
+                    try:
+                        # Execute all service tasks in parallel using asyncio.gather
+                        await asyncio.gather(*[
+                            cls.handle_service_task(workflow, task, user) 
+                            for task in service_tasks_to_handle
+                        ])
+                        await cls._update_workflow_status(workflow, instance_id, tenant_id)
+                        custom_tasks_handled = True
+                    except Exception as service_error:
+                        logger.error(f"[WORKFLOW] ServiceTask(s) failed: {service_error}")
+                        # Find which task failed (first one in the list for now)
+                        failed_task = service_tasks_to_handle[0] if service_tasks_to_handle else None
+                        if failed_task:
+                            await cls._handle_task_error(workflow, instance_id, tenant_id, failed_task, service_error, "ServiceTask")
+                        raise HTTPException(status_code=500, detail=f"ServiceTask failed: {str(service_error)}")
 
-                # If we handled a custom task, continue to next iteration
-                if custom_task_handled:
+                # If we handled custom tasks, continue to next iteration
+                if custom_tasks_handled:
                     await cls._update_workflow_status(workflow, instance_id, tenant_id)
                     continue
 
@@ -127,12 +129,13 @@ class WorkflowServicePersistent:
                 current_status = await cls._update_workflow_status(workflow, instance_id, tenant_id, step_count)
                 logger.debug(f"[WORKFLOW] Updated after step {step_count} with status: {current_status}")
                 
-                # Check if user input needed
-                if task_type in ["UserTask", "ManualTask", "NoneTask"]:
-                    ready_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY]
-                    if ready_tasks:
-                        task = ready_tasks[0]
-                        task_type = type(task.task_spec).__name__
+                # Check if user input needed - check for manual tasks
+                ready_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY]
+                if ready_tasks:
+                    task = ready_tasks[0]
+                    task_type = type(task.task_spec).__name__
+                    
+                    if task_type in ["UserTask", "ManualTask"]:
                         logger.info(f"[WORKFLOW] Manual input required for {task_type}: {task.task_spec.bpmn_id}")
                         
                         # Update with user input waiting status
@@ -362,19 +365,34 @@ class WorkflowServicePersistent:
                     parameters = function_config.get('parameters', {}).get('parameter', [])
                     
                     logger.info(f"[WORKFLOW] Executing function: {module_name}.{function_name}")
+                    logger.debug(f"[WORKFLOW] Task data available: {list(task.data.keys())}")
+                    logger.debug(f"[WORKFLOW] Parameters to map: {parameters}")
+                    logger.debug(f"[WORKFLOW] Parameters type: {type(parameters)}")
+                    
+                    # Normalize parameters to always be a list
+                    if isinstance(parameters, dict):
+                        parameters = [parameters]
+                        logger.debug(f"[WORKFLOW] Normalized single parameter dict to list: {parameters}")
                     
                     # Build function parameters from task data and config
                     function_params = {}
                     for param in parameters:
+                        logger.debug(f"[WORKFLOW] Current param in loop: {param}, type: {type(param)}")
                         if isinstance(param, dict):
                             param_name = param.get('name')
                             param_value = param.get('value')
+                            logger.debug(f"[WORKFLOW] Processing parameter - name: {param_name}, value: {param_value}")
+                            
                             if param_name:
                                 # Check if value is in task data, otherwise use config value
                                 if param_value in task.data:
                                     function_params[param_name] = task.data[param_value]
+                                    logger.info(f"[WORKFLOW] Mapped parameter '{param_name}' from task.data['{param_value}'] = {task.data[param_value]}")
                                 else:
                                     function_params[param_name] = param_value
+                                    logger.info(f"[WORKFLOW] Using config value for parameter '{param_name}' = {param_value}")
+                    
+                    logger.info(f"[WORKFLOW] Final function parameters: {function_params}")
                     
                     # Add user to parameters if not already present
                     if 'user' in function_params:

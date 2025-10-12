@@ -534,6 +534,10 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false, minioFullPa
           outgoingEdges.forEach(edge => {
             xml += `<outgoing>${edge.id}</outgoing>`;
           });
+          // Preserve any original nested elements like extensionElements
+          if (node.data?.originalNestedElements) {
+            xml += node.data.originalNestedElements;
+          }
           xml += `</subProcess>`;
         }
         break;
@@ -549,6 +553,10 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false, minioFullPa
           outgoingEdges.forEach(edge => {
             xml += `<outgoing>${edge.id}</outgoing>`;
           });
+          // Preserve any original nested elements like extensionElements
+          if (node.data?.originalNestedElements) {
+            xml += node.data.originalNestedElements;
+          }
           xml += `</callActivity>`;
         }
         break;

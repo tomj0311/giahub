@@ -51,6 +51,7 @@ const KnowledgeConfig = lazy(() => import('../agents/KnowledgeConfig'))
 const Agent = lazy(() => import('../agents/Agent'))
 const AgentPlayground = lazy(() => import('../playground/AgentPlayground'))
 const Projects = lazy(() => import('../projects/Projects'))
+const ActivityForm = lazy(() => import('../projects/ActivityForm'))
 const WorkflowConfig = lazy(() => import('../workflows/WorkflowConfig'))
 const WorkflowDashboard = lazy(() => import('../workflows/WorkflowDashboard'))
 const WorkflowExecution = lazy(() => import('../workflows/WorkflowExecution'))
@@ -167,11 +168,6 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 							to: '/dashboard/dynamic',
 							icon: 'Code'
 						},
-						{
-							label: 'Component Loader',
-							to: '/dashboard/component-loader',
-							icon: 'Box'
-						}
 					]
 				},
 				{
@@ -862,6 +858,8 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="role-management" element={<RoleManagement user={user} />} />
 				<Route path="user-invitation" element={<UserInvitation user={user} />} />
 				<Route path="projects" element={<Projects user={user} />} />
+				<Route path="projects/activity/new" element={<ActivityForm user={user} />} />
+				<Route path="projects/activity/:activityId" element={<ActivityForm user={user} />} />
 				<Route path="agents" element={<Agent user={user} />} />
 				<Route path="models" element={<ModelConfig user={user} />} />
 				<Route path="tools" element={<ToolConfig user={user} />} />

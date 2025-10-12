@@ -55,6 +55,7 @@ function ProjectTreeView({ user }) {
 
   const [projectTree, setProjectTree] = useState([])
   const [allProjects, setAllProjects] = useState([]) // Flat list for parent selection
+  const [tenantUsers, setTenantUsers] = useState([]) // Users in the same tenant
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState({}) // Track expanded nodes
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -112,6 +113,39 @@ function ProjectTreeView({ user }) {
     }
   }, [token, showError])
 
+  const loadTenantUsers = useCallback(async () => {
+    try {
+      const res = await apiCall('/api/users/', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.detail || 'Failed to load users')
+      }
+
+      const users = await res.json()
+      
+      if (isMountedRef.current) {
+        // Map users to include display name and email
+        const mappedUsers = users.map(u => ({
+          id: u.id,
+          email: u.email,
+          firstName: u.firstName || '',
+          lastName: u.lastName || '',
+          displayName: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email
+        }))
+        setTenantUsers(mappedUsers)
+      }
+    } catch (error) {
+      console.error('Failed to load tenant users:', error)
+      if (isMountedRef.current) {
+        showError(error.message || 'Failed to load users')
+      }
+    }
+  }, [token, showError])
+
   // Flatten tree for parent selection dropdown
   const flattenTree = (tree, level = 0) => {
     let result = []
@@ -132,6 +166,7 @@ function ProjectTreeView({ user }) {
   useEffect(() => {
     isMountedRef.current = true
     loadProjectTree()
+    loadTenantUsers()
 
     return () => {
       isMountedRef.current = false
@@ -216,6 +251,11 @@ function ProjectTreeView({ user }) {
 
     if (!form.approver?.trim()) {
       errors.approver = 'Approver is required'
+    }
+
+    // Validate that assignee and approver are not the same
+    if (form.assignee && form.approver && form.assignee === form.approver) {
+      errors.approver = 'Approver must be different from Assignee'
     }
 
     if (!form.start_date) {
@@ -376,13 +416,6 @@ function ProjectTreeView({ user }) {
             </Box>
           </TableCell>
 
-          {/* Type */}
-          <TableCell>
-            <Typography variant="body2" color="text.secondary">
-              {hasChildren ? 'Phase' : 'Task'}
-            </Typography>
-          </TableCell>
-
           {/* Priority */}
           <TableCell>{node.priority}</TableCell>
 
@@ -475,7 +508,6 @@ function ProjectTreeView({ user }) {
                   <TableHead>
                     <TableRow>
                       <TableCell>Subject</TableCell>
-                      <TableCell>Type</TableCell>
                       <TableCell>Priority</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Assignee</TableCell>
@@ -487,7 +519,7 @@ function ProjectTreeView({ user }) {
                   <TableBody>
                     {projectTree.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} align="center">
+                        <TableCell colSpan={7} align="center">
                           <Typography variant="body2" color="text.secondary">
                             No projects found. Create one to get started.
                           </Typography>
@@ -572,29 +604,65 @@ function ProjectTreeView({ user }) {
                   ))}
                 </Select>
               </FormControl>
-              <TextField
-                label="Assignee"
-                value={form.assignee}
-                onChange={(e) => {
-                  setForm({ ...form, assignee: e.target.value })
-                  setFormErrors({ ...formErrors, assignee: undefined })
+              <Autocomplete
+                options={tenantUsers}
+                getOptionLabel={(option) => option.displayName}
+                value={tenantUsers.find(u => u.email === form.assignee) || null}
+                onChange={(event, newValue) => {
+                  setForm({ ...form, assignee: newValue ? newValue.email : '' })
+                  setFormErrors({ ...formErrors, assignee: undefined, approver: undefined })
                 }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Assignee"
+                    required
+                    error={!!formErrors.assignee}
+                    helperText={formErrors.assignee || 'Required'}
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <li {...props} key={option.id}>
+                    <Box>
+                      <Typography variant="body1">{option.displayName}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {option.email}
+                      </Typography>
+                    </Box>
+                  </li>
+                )}
                 fullWidth
-                required
-                error={!!formErrors.assignee}
-                helperText={formErrors.assignee || 'Required'}
+                isOptionEqualToValue={(option, value) => option.email === value.email}
               />
-              <TextField
-                label="Approver"
-                value={form.approver}
-                onChange={(e) => {
-                  setForm({ ...form, approver: e.target.value })
+              <Autocomplete
+                options={tenantUsers.filter(u => u.email !== form.assignee)}
+                getOptionLabel={(option) => option.displayName}
+                value={tenantUsers.find(u => u.email === form.approver) || null}
+                onChange={(event, newValue) => {
+                  setForm({ ...form, approver: newValue ? newValue.email : '' })
                   setFormErrors({ ...formErrors, approver: undefined })
                 }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Approver"
+                    required
+                    error={!!formErrors.approver}
+                    helperText={formErrors.approver || 'Required - Must be different from Assignee'}
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <li {...props} key={option.id}>
+                    <Box>
+                      <Typography variant="body1">{option.displayName}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {option.email}
+                      </Typography>
+                    </Box>
+                  </li>
+                )}
                 fullWidth
-                required
-                error={!!formErrors.approver}
-                helperText={formErrors.approver || 'Required'}
+                isOptionEqualToValue={(option, value) => option.email === value.email}
               />
               <TextField
                 label="Start Date"

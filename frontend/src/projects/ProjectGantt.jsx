@@ -484,16 +484,6 @@ function ProjectDashboard({ user }) {
             </Box>
           </TableCell>
 
-          {/* Type */}
-          <TableCell>
-            <Typography variant="body2" color="text.secondary">
-              {hasChildren ? 'Phase' : 'Task'}
-            </Typography>
-          </TableCell>
-
-          {/* Priority */}
-          <TableCell>{project.priority}</TableCell>
-
           {/* Status */}
           <TableCell>
             <Chip
@@ -532,12 +522,6 @@ function ProjectDashboard({ user }) {
                 <Typography variant="body2">{activity.subject}</Typography>
               </Box>
             </TableCell>
-            <TableCell>
-              <Typography variant="body2" color="text.secondary">
-                {activity.type}
-              </Typography>
-            </TableCell>
-            <TableCell>{activity.priority}</TableCell>
             <TableCell>
               <Chip
                 label={activity.status}
@@ -596,16 +580,6 @@ function ProjectDashboard({ user }) {
             </Box>
           </TableCell>
 
-          {/* Type */}
-          <TableCell>
-            <Typography variant="body2" color="text.secondary">
-              {hasChildren ? 'Phase' : 'Task'}
-            </Typography>
-          </TableCell>
-
-          {/* Priority */}
-          <TableCell>{project.priority}</TableCell>
-
           {/* Status */}
           <TableCell>
             <Chip
@@ -644,12 +618,6 @@ function ProjectDashboard({ user }) {
                 <Typography variant="body2">{activity.subject}</Typography>
               </Box>
             </TableCell>
-            <TableCell>
-              <Typography variant="body2" color="text.secondary">
-                {activity.type}
-              </Typography>
-            </TableCell>
-            <TableCell>{activity.priority}</TableCell>
             <TableCell>
               <Chip
                 label={activity.status}
@@ -751,8 +719,6 @@ function ProjectDashboard({ user }) {
                 <TableHead>
                   <TableRow>
                     <TableCell>Subject</TableCell>
-                    <TableCell>Type</TableCell>
-                    <TableCell>Priority</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell>Assignee</TableCell>
                     <TableCell>Due Date</TableCell>
@@ -762,7 +728,7 @@ function ProjectDashboard({ user }) {
                 <TableBody>
                   {projectTree.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} align="center">
+                      <TableCell colSpan={5} align="center">
                         <Typography variant="body2" color="text.secondary">
                           No projects found
                         </Typography>

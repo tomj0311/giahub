@@ -7,7 +7,6 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   Controls,
-  MiniMap,
   Background,
   useReactFlow,
   applyNodeChanges,
@@ -1319,9 +1318,9 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
               maxWidth: `calc(100vw - ${isPanelOpen ? '25vw' : '0'} - ${isPropertyPanelOpen && showPropertyPanel ? '320px' : '0'})`,
               transition: 'margin-right 0.3s ease, max-width 0.3s ease'
             }}
+            proOptions={{ hideAttribution: true }}
           >
             {!readOnly && <Controls />}
-            {!readOnly && <MiniMap />}
           </ReactFlow>
         </div>
         <BPMNExporter nodes={nodes} edges={edges} onImportBPMN={handleImportBPMN} readOnly={readOnly} minioFullPath={minioFullPath} />
