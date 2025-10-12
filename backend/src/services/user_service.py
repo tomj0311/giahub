@@ -165,27 +165,35 @@ class UserService:
                 "updatedAt": current_time.timestamp() * 1000  # Timestamp in milliseconds
             }
             
-            # Note: We no longer automatically activate users after email verification
-            # Admin must manually activate users regardless of invitation status
-            logger.info(f"[USER] Email verified for user: {user.get('email')} - awaiting manual activation by admin")
-            
-            await MongoStorageService.update_one("users",
-                {"_id": user["_id"]},
-                {
-                    "$set": update_data,
-                    "$unset": {"verification_token": ""}
-                }
-            )
+            # For invited users, keep verification token for password setup
+            # For regular users, remove token and require admin activation
+            if user.get("isInvited", False):
+                logger.info(f"[USER] Email verified for invited user: {user.get('email')} - password setup required")
+                await MongoStorageService.update_one("users",
+                    {"_id": user["_id"]},
+                    {"$set": update_data}
+                    # Keep verification_token for password setup
+                )
+            else:
+                logger.info(f"[USER] Email verified for regular user: {user.get('email')} - awaiting manual activation by admin")
+                await MongoStorageService.update_one("users",
+                    {"_id": user["_id"]},
+                    {
+                        "$set": update_data,
+                        "$unset": {"verification_token": ""}
+                    }
+                )
             
             logger.info(f"[USER] Email verified successfully for: {user.get('email')}")
             
             # Return appropriate message based on user type
             if user.get("isInvited", False):
                 return {
-                    "message": "Email verified successfully! Your account is awaiting activation by an administrator.",
-                    "userType": "invited",
+                    "message": "Email verified successfully! Please set your password to complete account setup.",
+                    "userType": "invited", 
                     "activated": False,
-                    "requiresManualActivation": True
+                    "requiresPasswordSetup": True,
+                    "verificationToken": token  # Keep token for password setup
                 }
             else:
                 return {
@@ -202,6 +210,78 @@ class UserService:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Email verification failed"
+            )
+    
+    @classmethod
+    async def set_password_for_invited_user(cls, token: str, new_password: str) -> Dict[str, str]:
+        """Set password for invited user using verification token"""
+        logger.info(f"[USER] Password setup attempt for invited user with token: {token[:10]}...")
+        
+        if not token or not new_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token and password are required"
+            )
+        
+        try:
+            user = await MongoStorageService.find_one("users", {"verification_token": token})
+            
+            if not user:
+                logger.warning(f"[USER] Invalid verification token for password setup: {token[:10]}...")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid or expired verification token"
+                )
+            
+            # Check if user is invited
+            if not user.get("isInvited", False):
+                logger.warning(f"[USER] Non-invited user attempted password setup: {user.get('email')}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="This endpoint is only for invited users"
+                )
+            
+            # Check if user already has verified email and set password
+            if user.get("verified", False) and user.get("passwordSetByUser", False):
+                logger.info(f"[USER] Invited user already completed setup: {user.get('email')}")
+                return {"message": "Password already set. You can now log in."}
+            
+            # Hash the new password and update user
+            from ..utils.auth import hash_password
+            current_time = datetime.utcnow()
+            update_data = {
+                "password_hash": hash_password(new_password),
+                "verified": True,
+                "emailVerified": True,
+                "active": True,  # Activate invited user once they set password
+                "passwordSetByUser": True,  # Flag to track user has set their own password
+                "verified_at": current_time,
+                "updated_at": current_time,
+                "updatedAt": current_time.timestamp() * 1000
+            }
+            
+            await MongoStorageService.update_one("users",
+                {"_id": user["_id"]},
+                {
+                    "$set": update_data,
+                    "$unset": {"verification_token": ""}  # Remove token after use
+                }
+            )
+            
+            logger.info(f"[USER] Password set successfully for invited user: {user.get('email')}")
+            return {
+                "message": "Password set successfully! Your account is now active and you can log in.",
+                "userType": "invited",
+                "activated": True
+            }
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[USER] Password setup failed: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Password setup failed"
             )
     
     @classmethod

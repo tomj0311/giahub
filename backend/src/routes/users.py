@@ -17,6 +17,7 @@ from ..services.email_service import send_registration_email
 from ..services.rbac_service import RBACService
 from ..services.tenant_service import TenantService
 from ..services.user_service import UserService
+from ..services.auth_service import AuthService
 
 router = APIRouter(tags=["users"])
 
@@ -48,6 +49,24 @@ class UserLogin(BaseModel):
 
 class VerifyToken(BaseModel):
     token: str
+
+
+class SetPasswordForInvitedUser(BaseModel):
+    token: str
+    password: str
+    confirmPassword: str
+    
+    @validator('confirmPassword')
+    def passwords_match(cls, v, values):
+        if 'password' in values and v != values['password']:
+            raise ValueError('Passwords do not match')
+        return v
+
+    @validator('password')
+    def password_length(cls, v):
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters')
+        return v
 
 
 # Routes
@@ -95,11 +114,28 @@ async def verify_user(verification: VerifyToken):
         )
 
 
+@router.post("/set-password-invited")
+async def set_password_for_invited_user(password_data: SetPasswordForInvitedUser):
+    """Set password for invited user using verification token"""
+    try:
+        result = await UserService.set_password_for_invited_user(
+            password_data.token, 
+            password_data.password
+        )
+        return result
+    except Exception as e:
+        logger.error(f"[USERS] Set password failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to set password"
+        )
+
+
 @router.post("/login")
 async def login_user(login_data: UserLogin):
     """Login user"""
     try:
-        result = await UserService.authenticate_user(login_data.email, login_data.password)
+        result = await AuthService.authenticate_user(login_data.email, login_data.password)
         return result
     except Exception as e:
         logger.error(f"[USERS] Login failed for {login_data.email}: {e}")

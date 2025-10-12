@@ -40,9 +40,22 @@ export default function VerifyPage() {
 
       if (response.ok) {
         const data = await response.json()
-        setStatus('success')
-        setMessage(data.message || 'Email verified successfully!')
-        showSuccess('Email verified successfully! You can now log in.')
+        
+        // Check if this is an invited user that needs to set password
+        if (data.userType === 'invited' && data.requiresPasswordSetup) {
+          setStatus('success')
+          setMessage(data.message || 'Email verified successfully!')
+          showSuccess('Email verified! Please set your password to complete setup.')
+          
+          // Redirect to password setup page with the verification token
+          setTimeout(() => {
+            navigate(`/set-password?token=${encodeURIComponent(data.verificationToken || token)}`)
+          }, 2000)
+        } else {
+          setStatus('success')
+          setMessage(data.message || 'Email verified successfully!')
+          showSuccess('Email verified successfully! You can now log in.')
+        }
       } else {
         const errorData = await response.json()
         setStatus('error')

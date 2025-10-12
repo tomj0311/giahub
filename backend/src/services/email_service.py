@@ -198,11 +198,16 @@ async def send_invitation_email(
             <h2 style="margin:0 0 16px;">You're Invited to Join GIA!</h2>
             <p>Hello!</p>
             <p>You have been invited by <strong>{inviter_name}</strong> to join the GIA Platform.</p>
-            <p>To complete your account setup and start using the platform, please verify your email address by clicking the button below:</p>
+            <p>To complete your account setup, please follow these steps:</p>
+            <ol>
+                <li><strong>Verify your email</strong> by clicking the button below</li>
+                <li><strong>Set your password</strong> to secure your account</li>
+                <li><strong>Start using the platform!</strong></li>
+            </ol>
             <p>
                 <a href="{verification_link}" 
                    style="background:#1976d2;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:bold;">
-                   Verify Email & Activate Account
+                   Start Account Setup
                 </a>
             </p>
             <p style="background:#f5f5f5;padding:12px 16px;border-radius:6px;font-size:14px;letter-spacing:1px;text-align:center;">
@@ -213,7 +218,7 @@ async def send_invitation_email(
                 If the button doesn't work, you can copy and paste this URL into your browser:<br>
                 <span style="word-break:break-all;">{verification_link}</span>
             </p>
-            <p><strong>Note:</strong> Your account will remain inactive until you verify your email address.</p>
+            <p><strong>Note:</strong> You'll be able to set your own secure password during the setup process.</p>
             <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;">
             <p style="font-size:12px;color:#666;">
                 This invitation was sent by {inviter_name}. If you believe you received this email in error, please ignore it.<br>
