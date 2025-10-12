@@ -142,6 +142,29 @@ class RBACService:
         )
     
     @staticmethod
+    async def create_default_role_for_authenticated_user(email: str, *, owner_id: Optional[str] = None, tenant_id: Optional[str] = None) -> Dict:
+        """Create a DEFAULT role for an authenticated user.
+        
+        This creates a role named 'DEFAULT' after successful authentication.
+        """
+        role_name = "DEFAULT"
+        
+        # Check if DEFAULT role already exists for this user
+        existing = await RBACService.get_role_by_name(role_name, tenant_id=tenant_id)
+        if existing and existing.get("ownerId") == owner_id:
+            return existing
+            
+        # Create the DEFAULT role
+        return await RBACService.create_role(
+            role_name=role_name,
+            description=f"Default role for authenticated user {email}",
+            permissions=["Read", "Write", "Delete"],
+            owner_id=owner_id,
+            is_default=True,
+            tenant_id=tenant_id,
+        )
+    
+    @staticmethod
     async def assign_role_to_user(user_id: str, role_id: str, tenant_id: Optional[str] = None) -> Dict:
         """Assign a role to a user"""
 

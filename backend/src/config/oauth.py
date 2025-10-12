@@ -165,17 +165,11 @@ async def handle_google_user_data(user_info: Dict[str, Any]) -> Dict[str, Any]:
                 user_tenant_id = default_tenant["tenantId"]
                 print(f"✅ Created and assigned default tenant for existing user: {email}")
             
-            # Check if user has roles
+            # Check if user has roles (REMOVED - roles now created after authentication)
+            # Note: Role creation moved to after successful authentication
             user_roles = await RBACService.get_user_roles(user['id'])
             if not user_roles:
-                print(f"⚠️ Existing user {email} has no roles. Creating default role...")
-                default_role = await RBACService.create_default_user_role(
-                    email, 
-                    owner_id=user['id'],
-                    tenant_id=user_tenant_id
-                )
-                await RBACService.assign_role_to_user(user['id'], default_role["roleId"])
-                print(f"✅ Created and assigned default role for existing user: {email}")
+                print(f"⚠️ Existing user {email} has no roles. DEFAULT role will be created after authentication.")
             else:
                 print(f"✅ Existing user {email} has {len(user_roles)} role(s)")
         except Exception as e:
@@ -267,17 +261,11 @@ async def handle_microsoft_user_data(user_info: Dict[str, Any]) -> Dict[str, Any
                 user_tenant_id = default_tenant["tenantId"]
                 print(f"✅ Created and assigned default tenant for existing user: {email}")
             
-            # Check if user has roles
+            # Check if user has roles (REMOVED - roles now created after authentication)
+            # Note: Role creation moved to after successful authentication
             user_roles = await RBACService.get_user_roles(user['id'])
             if not user_roles:
-                print(f"⚠️ Existing user {email} has no roles. Creating default role...")
-                default_role = await RBACService.create_default_user_role(
-                    email, 
-                    owner_id=user['id'],
-                    tenant_id=user_tenant_id
-                )
-                await RBACService.assign_role_to_user(user['id'], default_role["roleId"])
-                print(f"✅ Created and assigned default role for existing user: {email}")
+                print(f"⚠️ Existing user {email} has no roles. DEFAULT role will be created after authentication.")
             else:
                 print(f"✅ Existing user {email} has {len(user_roles)} role(s)")
         except Exception as e:

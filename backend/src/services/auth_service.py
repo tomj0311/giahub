@@ -137,6 +137,13 @@ class AuthService:
             # Update last login
             await cls._update_last_login(user["_id"], tenant_id=tenant_info.get("tenant_id") if tenant_info else None)
 
+            # Ensure user has DEFAULT role after successful authentication
+            await cls._ensure_user_has_default_role(
+                str(user["_id"]), 
+                normalized_email, 
+                tenant_id=tenant_info.get("tenant_id") if tenant_info else None
+            )
+
             logger.info(f"[AUTH] User login successful for: {normalized_email}")
             return {
                 "token": token,
@@ -171,6 +178,32 @@ class AuthService:
         except Exception as e:
             logger.error(f"[AUTH] Failed to update last login for user {user_id}: {e}")
             # Don't raise exception for this non-critical operation
+
+    @classmethod
+    async def _ensure_user_has_default_role(cls, user_id: str, email: str, tenant_id: Optional[str] = None) -> None:
+        """Ensure user has a DEFAULT role after successful authentication"""
+        from ..services.rbac_service import RBACService
+        
+        try:
+            # Check if user already has roles
+            user_roles = await RBACService.get_user_roles(user_id, tenant_id=tenant_id)
+            
+            # If user has no roles, create and assign DEFAULT role
+            if not user_roles:
+                logger.info(f"[AUTH] Creating DEFAULT role for authenticated user: {email}")
+                default_role = await RBACService.create_default_role_for_authenticated_user(
+                    email,
+                    owner_id=user_id,
+                    tenant_id=tenant_id
+                )
+                await RBACService.assign_role_to_user(user_id, default_role["roleId"], tenant_id=tenant_id)
+                logger.info(f"[AUTH] Assigned DEFAULT role to user: {email}")
+            else:
+                logger.debug(f"[AUTH] User {email} already has {len(user_roles)} role(s), skipping DEFAULT role creation")
+                
+        except Exception as e:
+            logger.error(f"[AUTH] Failed to ensure DEFAULT role for user {email}: {e}")
+            # Don't raise exception - user can still be authenticated without roles
 
     @staticmethod
     async def validate_google_user_data(user_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -252,14 +285,14 @@ class AuthService:
 
         user_roles = await RBACService.get_user_roles(user_id, tenant_id=user_tenant_id)
         if not user_roles:
-            logger.warning(f"Existing OAuth user {user_data['email']} has no roles. Creating default role...")
-            default_role = await RBACService.create_default_user_role(
+            logger.warning(f"Existing OAuth user {user_data['email']} has no roles. Creating DEFAULT role...")
+            default_role = await RBACService.create_default_role_for_authenticated_user(
                 user_data['email'],
                 owner_id=user_id,
                 tenant_id=user_tenant_id
             )
             await RBACService.assign_role_to_user(user_id, default_role["roleId"], tenant_id=user_tenant_id)
-            logger.info(f"Created and assigned default role for {user_data['email']}")
+            logger.info(f"Created and assigned DEFAULT role for {user_data['email']}")
 
         # Update last login timestamp
         await cls._update_last_login(user_id, tenant_id=user_tenant_id)
@@ -297,23 +330,7 @@ class AuthService:
                 detail="Failed to create user organization. OAuth registration aborted."
             )
 
-        # Create default role
-        try:
-            logger.info(f"Creating default role for new Google OAuth user: {user_info['email']}")
-            default_role = await RBACService.create_default_user_role(
-                user_info['email'],
-                owner_id=new_user_id,
-                tenant_id=default_tenant['tenantId']
-            )
-            logger.info(f"Created default role: {default_role['roleId']} for {user_info['email']}")
-        except Exception as e:
-            # Clean up: delete the tenant since role creation failed
-            await MongoStorageService.delete_one("tenants", {"ownerId": new_user_id})
-            logger.error(f"Failed to create default role for Google OAuth user {user_info['email']}: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to create user security profile. OAuth registration aborted."
-            )
+        # Note: Default role creation moved to after successful authentication
 
         # Create user
         current_time = datetime.utcnow()
@@ -351,7 +368,7 @@ class AuthService:
             await MongoStorageService.insert_one("users", new_user, tenant_id=default_tenant['tenantId'])
             logger.info(f"Created new Google OAuth user: {user_info['email']}")
         except Exception as e:
-            # Clean up: delete the tenant and role since user creation failed
+            # Clean up: delete the tenant since user creation failed
             await MongoStorageService.delete_one("tenants", {"ownerId": new_user_id})
             logger.error(f"Failed to create Google OAuth user {new_user_id}: {e}")
             raise HTTPException(
@@ -359,19 +376,8 @@ class AuthService:
                 detail="Failed to create user account. OAuth registration aborted."
             )
 
-        # Assign role to user
-        try:
-            await RBACService.assign_role_to_user(new_user_id, default_role["roleId"], tenant_id=default_tenant['tenantId'])
-            logger.info(f"Assigned role {default_role['roleId']} to user {new_user_id}")
-        except Exception as e:
-            # Clean up: delete the user and tenant since role assignment failed
-            await MongoStorageService.delete_one("users", {"_id": new_user_id}, tenant_id=default_tenant['tenantId'])
-            await MongoStorageService.delete_one("tenants", {"ownerId": new_user_id})
-            logger.error(f"Failed to assign role to Google OAuth user {new_user_id}: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to assign security role. OAuth registration aborted."
-            )
+        # Note: Role assignment moved to after successful authentication
+        # Default role will be created on first authenticated request
 
         return {
             "id": new_user['_id'],  # Use _id to match updated structure
@@ -441,23 +447,7 @@ class AuthService:
                 detail="Failed to create user organization. OAuth registration aborted."
             )
 
-        # Create default role
-        try:
-            logger.info(f"Creating default role for new Microsoft OAuth user: {user_info['email']}")
-            default_role = await RBACService.create_default_user_role(
-                user_info['email'],
-                owner_id=new_user_id,
-                tenant_id=default_tenant['tenantId']
-            )
-            logger.info(f"Created default role: {default_role['roleId']} for {user_info['email']}")
-        except Exception as e:
-            # Clean up: delete the tenant since role creation failed
-            await MongoStorageService.delete_one("tenants", {"ownerId": new_user_id})
-            logger.error(f"Failed to create default role for Microsoft OAuth user {user_info['email']}: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to create user security profile. OAuth registration aborted."
-            )
+        # Note: Default role creation moved to after successful authentication
 
         # Create user
         random_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
@@ -489,7 +479,7 @@ class AuthService:
             await MongoStorageService.insert_one("users", new_user, tenant_id=default_tenant['tenantId'])
             logger.info(f"Created new Microsoft OAuth user: {user_info['email']}")
         except Exception as e:
-            # Clean up: delete the tenant and role since user creation failed
+            # Clean up: delete the tenant since user creation failed
             await MongoStorageService.delete_one("tenants", {"ownerId": new_user_id})
             logger.error(f"Failed to create Microsoft OAuth user {new_user_id}: {e}")
             raise HTTPException(
@@ -497,19 +487,8 @@ class AuthService:
                 detail="Failed to create user account. OAuth registration aborted."
             )
 
-        # Assign role to user
-        try:
-            await RBACService.assign_role_to_user(new_user_id, default_role["roleId"], tenant_id=default_tenant['tenantId'])
-            logger.info(f"Assigned role {default_role['roleId']} to user {new_user_id}")
-        except Exception as e:
-            # Clean up: delete the user and tenant since role assignment failed
-            await MongoStorageService.delete_one("users", {"id": new_user_id}, tenant_id=default_tenant['tenantId'])
-            await MongoStorageService.delete_one("tenants", {"ownerId": new_user_id})
-            logger.error(f"Failed to assign role to Microsoft OAuth user {new_user_id}: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to assign security role. OAuth registration aborted."
-            )
+        # Note: Role assignment moved to after successful authentication
+        # Default role will be created on first authenticated request
 
         return {
             "id": new_user['id'],

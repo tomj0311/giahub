@@ -51,7 +51,9 @@ async def google_auth(request: Request):
     logger.info("[OAUTH] Initiating Google OAuth flow")
     try:
         oauth_client = get_oauth_client()
-        redirect_uri = f"{request.url.scheme}://{request.url.netloc}/auth/google/callback"
+        # Use CLIENT_URL from environment for consistent redirect URI
+        base_url = os.getenv('CLIENT_URL', f"{request.url.scheme}://{request.url.netloc}")
+        redirect_uri = f"{base_url}/auth/google/callback"
         logger.debug(f"[OAUTH] Redirect URI: {redirect_uri}")
         
         # Generate the authorization URL with proper state handling
@@ -94,6 +96,15 @@ async def google_callback(request: Request):
         user_data = await AuthService.handle_google_oauth_callback(user_info)
         logger.info(f"[OAUTH] User authenticated: {user_data.get('email', 'unknown')}")
         
+        # Ensure user has DEFAULT role after successful authentication
+        if user_data.get('new_user', False):
+            await AuthService._ensure_user_has_default_role(
+                user_data['id'],
+                user_data['email'],
+                tenant_id=user_data.get('tenantId')
+            )
+            logger.info(f"[OAUTH] Created DEFAULT role for new user: {user_data.get('email', 'unknown')}")
+        
         auth_token = generate_token({
             "id": user_data['id'],
             "role": user_data['role'],
@@ -102,8 +113,9 @@ async def google_callback(request: Request):
         })
         client_url = os.getenv('CLIENT_URL', 'http://localhost:5173')
         logger.info(f"[OAUTH] Redirecting user to frontend: {client_url}")
+        # Redirect to root with hash to avoid nginx routing issues
         return RedirectResponse(
-            url=f"{client_url}/auth/callback?token={auth_token}&name={user_data['name']}"
+            url=f"{client_url}/#/auth/callback?token={auth_token}&name={user_data['name']}"
         )
     except Exception as e:
         logger.error(f"[OAUTH] Exception during callback: {str(e)}")
@@ -115,7 +127,9 @@ async def google_callback(request: Request):
                 import httpx
                 code = request.query_params.get('code')
                 if code:
-                    redirect_uri = f"{request.url.scheme}://{request.url.netloc}/auth/google/callback"
+                    # Use CLIENT_URL from environment for consistent redirect URI
+                    base_url = os.getenv('CLIENT_URL', f"{request.url.scheme}://{request.url.netloc}")
+                    redirect_uri = f"{base_url}/auth/google/callback"
                     
                     # Exchange code for token manually
                     token_data = {
@@ -152,7 +166,7 @@ async def google_callback(request: Request):
                             })
                             client_url = os.getenv('CLIENT_URL', 'http://localhost:5173')
                             return RedirectResponse(
-                                url=f"{client_url}/auth/callback?token={auth_token}&name={user_data['name']}"
+                                url=f"{client_url}/#/auth/callback?token={auth_token}&name={user_data['name']}"
                             )
             except Exception as fallback_error:
                 logger.error(f"[OAUTH] Manual token exchange also failed: {str(fallback_error)}")
@@ -170,7 +184,9 @@ async def microsoft_auth(request: Request):
     logger.info("[OAUTH] Initiating Microsoft OAuth flow")
     try:
         oauth_client = get_microsoft_oauth_client()
-        redirect_uri = f"{request.url.scheme}://{request.url.netloc}/auth/microsoft/callback"
+        # Use CLIENT_URL from environment for consistent redirect URI
+        base_url = os.getenv('CLIENT_URL', f"{request.url.scheme}://{request.url.netloc}")
+        redirect_uri = f"{base_url}/auth/microsoft/callback"
         logger.debug(f"[OAUTH] Microsoft Redirect URI: {redirect_uri}")
         response = await oauth_client.authorize_redirect(request, redirect_uri)
         logger.info("[OAUTH] Redirecting to Microsoft OAuth")
@@ -206,6 +222,15 @@ async def microsoft_callback(request: Request):
         user_data = await AuthService.handle_microsoft_oauth_callback(user_data_raw)
         logger.info(f"[OAUTH] Microsoft user authenticated: {user_data.get('email', 'unknown')}")
         
+        # Ensure user has DEFAULT role after successful authentication
+        if user_data.get('new_user', False):
+            await AuthService._ensure_user_has_default_role(
+                user_data['id'],
+                user_data['email'],
+                tenant_id=user_data.get('tenantId')
+            )
+            logger.info(f"[OAUTH] Created DEFAULT role for new Microsoft user: {user_data.get('email', 'unknown')}")
+        
         token = generate_token({
             "id": user_data['id'],
             "role": user_data['role'],
@@ -215,7 +240,7 @@ async def microsoft_callback(request: Request):
         client_url = os.getenv('CLIENT_URL', 'http://localhost:5173')
         logger.info(f"[OAUTH] Redirecting Microsoft user to frontend: {client_url}")
         return RedirectResponse(
-            url=f"{client_url}/auth/callback?token={token}&name={user_data['name']}"
+            url=f"{client_url}/#/auth/callback?token={token}&name={user_data['name']}"
         )
     except HTTPException:
         logger.error("[OAUTH] HTTPException during Microsoft callback")
