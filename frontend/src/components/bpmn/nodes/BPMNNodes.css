@@ -98,8 +98,8 @@
   bottom: -4px;
 }
 
-/* Enhanced visibility for task node handles */
-.task-node:hover .handle {
+/* Enhanced visibility for task node handles - show on selection only */
+.task-node.selected .handle {
   opacity: 1 !important;
   width: 12px !important;
   height: 12px !important;
@@ -163,8 +163,8 @@
   transform: translateX(-50%) !important;
 }
 
-/* Enhanced visibility for gateway node handles */
-.gateway-node:hover .handle {
+/* Enhanced visibility for gateway node handles - show on selection only */
+.gateway-node.selected .handle {
   opacity: 1 !important;
   width: 12px !important;
   height: 12px !important;
@@ -263,8 +263,8 @@
   background: var(--accent-color);
 }
 
-/* Connection spots that appear on node hover */
-.react-flow__node:hover .handle {
+/* Connection spots that appear on node selection only */
+.react-flow__node.selected .handle {
   opacity: 1;
   width: 12px;
   height: 12px;
@@ -273,8 +273,8 @@
   box-shadow: 0 0 0 1px var(--accent-color), 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-/* Enhanced hover state for handles when ready to connect */
-.react-flow__node:hover .handle.connectable {
+/* Enhanced state for handles when ready to connect */
+.react-flow__node.selected .handle.connectable {
   background: var(--accent-color);
   cursor: crosshair;
   animation: pulse-connection 1.5s infinite;

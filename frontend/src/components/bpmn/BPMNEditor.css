@@ -151,8 +151,8 @@
   background: var(--accent-color);
 }
 
-/* Show handles on node hover */
-.react-flow__node:hover .react-flow__handle {
+/* Show handles on node selection only */
+.react-flow__node.selected .react-flow__handle {
   opacity: 1;
   width: 12px;
   height: 12px;
