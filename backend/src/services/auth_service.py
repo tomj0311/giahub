@@ -395,6 +395,14 @@ class AuthService:
         # Note: Role assignment moved to after successful authentication
         # Default role will be created on first authenticated request
 
+        # Check if user is active before allowing login
+        if not new_user.get("active", True):
+            logger.warning(f"[OAUTH] Newly created inactive user attempted login: {new_user['email']}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your account has been created but is not yet activated. Please contact an administrator to activate your account."
+            )
+
         return {
             "id": new_user['_id'],  # Use _id to match updated structure
             "role": "user",
@@ -505,6 +513,14 @@ class AuthService:
 
         # Note: Role assignment moved to after successful authentication
         # Default role will be created on first authenticated request
+
+        # Check if user is active before allowing login
+        if not new_user.get("active", True):
+            logger.warning(f"[OAUTH] Newly created inactive Microsoft user attempted login: {new_user['email']}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your account has been created but is not yet activated. Please contact an administrator to activate your account."
+            )
 
         return {
             "id": new_user['id'],
