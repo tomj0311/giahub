@@ -17,6 +17,17 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 # 02110-1301  USA
 
+import sys
+import os
+
+# Add project root to path to import logger
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.abspath(os.path.join(_current_dir, "..", ".."))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
+from logger.logger import get_logger
+
 from spiffworkflow.task import Task
 from spiffworkflow.util.task import TaskState
 from spiffworkflow.exceptions import WorkflowException
@@ -31,6 +42,8 @@ from spiffworkflow.bpmn.specs.control import BoundaryEventSplit
 from spiffworkflow.bpmn.util.subworkflow import BpmnBaseWorkflow, BpmnSubWorkflow
 
 from .script_engine.python_engine import PythonScriptEngine
+
+logger = get_logger("spiffworkflow.bpmn")
 
 
 class BpmnWorkflow(BpmnBaseWorkflow):
@@ -164,31 +177,63 @@ class BpmnWorkflow(BpmnBaseWorkflow):
         :param will_complete_task: Callback that will be called prior to completing a task
         :param did_complete_task: Callback that will be called after completing a task
         """
+        logger.debug(f"[SPIFF] ========== do_engine_steps STARTED ==========")
+        
         def update_workflow(wf):
             count = 0
             # Wanted to use the iterator method here, but at least this is a shorter list
-            for task in wf.get_tasks(state=TaskState.READY):
-                if not task.task_spec.manual:
+            ready_tasks = wf.get_tasks(state=TaskState.READY)
+            logger.debug(f"[SPIFF] update_workflow - Found {len(ready_tasks)} READY tasks in workflow")
+            
+            for task in ready_tasks:
+                task_type = type(task.task_spec).__name__
+                task_name = getattr(task.task_spec, 'bpmn_name', task.task_spec.name)
+                task_id = getattr(task.task_spec, 'bpmn_id', task.task_spec.name)
+                is_manual = task.task_spec.manual
+                
+                logger.debug(f"[SPIFF] Processing task: {task_id} ({task_name}) - Type: {task_type}, Manual: {is_manual}, State: {task.state}")
+                
+                if not is_manual:
+                    logger.info(f"[SPIFF] >> EXECUTING non-manual task: {task_id} ({task_type})")
                     if will_complete_task is not None:
                         will_complete_task(task)
                     task.run()
                     count += 1
+                    logger.info(f"[SPIFF] << COMPLETED task: {task_id} ({task_type}) - Total executed: {count}")
                     if did_complete_task is not None:
                         did_complete_task(task)
+                else:
+                    logger.debug(f"[SPIFF] Skipping manual task: {task_id} ({task_type})")
+            
+            logger.debug(f"[SPIFF] update_workflow - Executed {count} tasks")
             return count
 
         active_subprocesses = self.get_active_subprocesses()
+        logger.debug(f"[SPIFF] Found {len(active_subprocesses)} active subprocesses")
+        
         for subprocess in sorted(active_subprocesses, key=lambda v: v.depth, reverse=True):
+            logger.debug(f"[SPIFF] Processing subprocess at depth {subprocess.depth}")
             count = None
+            iteration = 0
             while count is None or count > 0:
+                iteration += 1
+                logger.debug(f"[SPIFF] Subprocess iteration {iteration}")
                 count = update_workflow(subprocess)
             if subprocess.parent_task_id is not None:
                 task = self.get_task_from_id(subprocess.parent_task_id)
                 task.task_spec._update(task)
 
+        logger.debug(f"[SPIFF] Processing main workflow")
         count = update_workflow(self)
-        if count > 0 or len(self.get_active_subprocesses()) > len(active_subprocesses):
+        logger.debug(f"[SPIFF] Main workflow executed {count} tasks")
+        
+        new_subprocesses = len(self.get_active_subprocesses())
+        if count > 0 or new_subprocesses > len(active_subprocesses):
+            logger.debug(f"[SPIFF] Recursing into do_engine_steps (count={count}, new_subprocesses={new_subprocesses})")
             self.do_engine_steps(will_complete_task, did_complete_task)
+        else:
+            logger.debug(f"[SPIFF] ========== do_engine_steps COMPLETED ==========")
+
 
     def refresh_waiting_tasks(self, will_refresh_task=None, did_refresh_task=None):
         """
