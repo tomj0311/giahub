@@ -148,11 +148,13 @@ def health_check():
 
 
 if __name__ == "__main__":
-    # FORCE PORT 4000 
+    # Get port from environment variable
+    port = int(os.getenv('PORT', 4000))
+    host = os.getenv('HOST', '0.0.0.0')
     uvicorn.run(
         app,
-        host="0.0.0.0",
-        port=4000,
+        host=host,
+        port=port,
         reload=False,
         access_log=False
     )
