@@ -74,7 +74,7 @@ class UserService:
             
             user_record = {
                 "_id": user_id,
-                "id": user_id,  # Backward compatibility field
+                "id": user_id,
                 "firstName": user_data["firstName"].strip(),
                 "lastName": user_data["lastName"].strip(),
                 "name": f"{user_data['firstName'].strip()} {user_data['lastName'].strip()}",
@@ -84,7 +84,7 @@ class UserService:
                 "role": "user",
                 "verified": False,
                 "emailVerified": False,  # Standardized field name
-                "active": True,
+                "active": False,  # User requires manual activation by admin
                 "verification_token": verification_token,
                 "created_at": current_time,
                 "updated_at": current_time,
@@ -116,7 +116,7 @@ class UserService:
             
             logger.info(f"[USER] Successfully registered user: {email}")
             return {
-                "message": "Registration successful. Please check your email to verify your account.",
+                "message": "Registration successful. Please check your email to verify your account. After verification, an administrator will need to activate your account.",
                 "user_id": user_id,
                 "tenant_id": tenant_info["tenantId"]
             }
@@ -155,7 +155,7 @@ class UserService:
                 logger.info(f"[USER] User already verified: {user.get('email')}")
                 return {"message": "Email already verified"}
             
-            # Update user as verified and activated (for invited users)
+            # Update user as verified but NOT activated (requires manual admin activation)
             current_time = datetime.utcnow()
             update_data = {
                 "verified": True,
@@ -165,10 +165,9 @@ class UserService:
                 "updatedAt": current_time.timestamp() * 1000  # Timestamp in milliseconds
             }
             
-            # If user was invited, activate their account
-            if user.get("isInvited", False):
-                update_data["active"] = True
-                logger.info(f"[USER] Activating invited user: {user.get('email')}")
+            # Note: We no longer automatically activate users after email verification
+            # Admin must manually activate users regardless of invitation status
+            logger.info(f"[USER] Email verified for user: {user.get('email')} - awaiting manual activation by admin")
             
             await MongoStorageService.update_one("users",
                 {"_id": user["_id"]},
@@ -183,14 +182,17 @@ class UserService:
             # Return appropriate message based on user type
             if user.get("isInvited", False):
                 return {
-                    "message": "Email verified successfully! Your account has been activated and you can now log in.",
+                    "message": "Email verified successfully! Your account is awaiting activation by an administrator.",
                     "userType": "invited",
-                    "activated": True
+                    "activated": False,
+                    "requiresManualActivation": True
                 }
             else:
                 return {
-                    "message": "Email verified successfully!",
-                    "userType": "registered"
+                    "message": "Email verified successfully! Your account is awaiting activation by an administrator.",
+                    "userType": "registered",
+                    "activated": False,
+                    "requiresManualActivation": True
                 }
             
         except HTTPException:
