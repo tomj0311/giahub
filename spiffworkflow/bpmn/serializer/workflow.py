@@ -22,8 +22,6 @@ import json, gzip
 from .migration.version_migration import MIGRATIONS
 from .helpers import DefaultRegistry
 
-from .config import DEFAULT_CONFIG
-
 # This is the default version set on the workflow, it can be overridden in init
 VERSION = "1.4"
 
@@ -76,7 +74,7 @@ class BpmnWorkflowSerializer:
             spec_config (dict): a mapping of class -> objects containing `BpmnConverter`
             registry (`DictionaryConverter`): with conversions for custom data (if applicable)
         """
-        config = config or DEFAULT_CONFIG
+        config = config or {}
         if registry is None:
             registry = DefaultRegistry()
         for target_class, converter_class in config.items():

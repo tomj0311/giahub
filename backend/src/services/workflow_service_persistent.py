@@ -13,7 +13,7 @@ import importlib
 import inspect
 import asyncio
 from typing import Any, Dict, Optional
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from fastapi import HTTPException, status
 
 # Add the root directory to Python path so we can import spiffworkflow
@@ -224,7 +224,7 @@ class WorkflowServicePersistent:
         # Structure error response
         error_response = {
             'error': str(error),
-            'timestamp': datetime.now(UTC).isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
         task.data.update(error_response)
         task.error()
@@ -251,7 +251,7 @@ class WorkflowServicePersistent:
                         'bpmn_name': task_name,
                         'response': None,
                         'error': f"Engine step failed: {str(error)}",
-                        'date': datetime.now(UTC).isoformat()
+                        'date': datetime.now(timezone.utc).isoformat()
                     }
                 }
                 task.data.update(error_response)
@@ -330,7 +330,7 @@ class WorkflowServicePersistent:
                             logger.warning(f"[WORKFLOW] Skipping non-serializable variable '{key}' of type {type(value).__name__}")
             
             # Add timestamp to output variables
-            output_vars[f'timestamp'] = datetime.now(UTC).isoformat()
+            output_vars[f'timestamp'] = datetime.now(timezone.utc).isoformat()
             
             # Serialize into one object and update task.data
             task.data.update(output_vars)
@@ -421,7 +421,7 @@ class WorkflowServicePersistent:
                 # Serialize response data before updating task.data with timestamp
                 response = {
                     f'response': response_data, 
-                    f'timestamp': datetime.now(UTC).isoformat()
+                    f'timestamp': datetime.now(timezone.utc).isoformat()
                 }
                 
                 # Update task data with structured response
@@ -473,7 +473,7 @@ class WorkflowServicePersistent:
                 # Add timestamp to task data
                 task_data_with_timestamp = {
                     **task_data,
-                    f"timestamp": datetime.now(UTC).isoformat()
+                    f"timestamp": datetime.now(timezone.utc).isoformat()
                 }                
                 current_task.data.update(task_data_with_timestamp)
                 current_task.complete()
@@ -540,7 +540,7 @@ class WorkflowServicePersistent:
                     "user_task": data["user_task"],
                 },
                 "$setOnInsert": {
-                    "created_at": datetime.now(UTC),
+                    "created_at": datetime.now(timezone.utc),
                 }
             }
             
@@ -584,7 +584,7 @@ class WorkflowServicePersistent:
             update_data = {
                 "serialized_data": json.loads(serialized_json),
                 "user_task": [],
-                "updated_at": datetime.now(UTC),
+                "updated_at": datetime.now(timezone.utc),
             }
 
             await MongoStorageService.update_one(
@@ -771,7 +771,7 @@ class WorkflowServicePersistent:
         
         workflow.data.update({
             "workflow_status": status_data,
-            "last_updated": datetime.now(UTC).isoformat()
+            "last_updated": datetime.now(timezone.utc).isoformat()
         })
         
         if step_count is not None:
