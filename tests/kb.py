@@ -92,7 +92,7 @@ def list_all_collections_and_documents():
         
     except Exception as e:
         print(f"❌ Error connecting to Qdrant database: {e}")
-        print("Make sure Qdrant is running on localhost:8805")
+        print("Make sure Qdrant is running on the configured port")
 
 def delete_collection_by_number():
     """Delete a collection by selecting its number from the list."""
@@ -967,7 +967,7 @@ def delete_all_collections():
             
     except Exception as e:
         print(f"❌ Error deleting all collections: {e}")
-        print("Make sure Qdrant is running on localhost:8805")
+        print("Make sure Qdrant is running on the configured port")
 
 def main_menu():
     """Main interactive menu."""

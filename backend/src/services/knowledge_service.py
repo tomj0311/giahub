@@ -926,8 +926,8 @@ class KnowledgeService:
         
         return {
             "minioImport": minio_status,
-            "endpoint": os.getenv("MINIO_ENDPOINT", "127.0.0.1:8803"),
-            "bucket": os.getenv("MINIO_BUCKET", "hcp"),
+            "endpoint": os.getenv("MINIO_ENDPOINT"),
+            "bucket": os.getenv("MINIO_BUCKET"),
         }
     
     @classmethod

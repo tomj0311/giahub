@@ -87,10 +87,10 @@ class VectorService:
 
         
         return {
-            "host": os.getenv("QDRANT_HOST", "localhost"),
-            "port": int(os.getenv("QDRANT_PORT", "8805")),
+            "host": os.getenv("QDRANT_HOST"),
+            "port": int(os.getenv("QDRANT_PORT")),
             "https": os.getenv("QDRANT_HTTPS", "false").lower() == "true",
-            "api_key": os.getenv("QDRANT_API_KEY", None),
+            "api_key": os.getenv("QDRANT_API_KEY"),
             "embedder": embedder_instance,
         }
     
@@ -115,10 +115,10 @@ class VectorService:
         
         # Simple config without tenant-specific settings
         qdrant_config = {
-            "host": os.getenv("QDRANT_HOST", "localhost"),
-            "port": int(os.getenv("QDRANT_PORT", "8805")),
+            "host": os.getenv("QDRANT_HOST"),
+            "port": int(os.getenv("QDRANT_PORT")),
             "https": os.getenv("QDRANT_HTTPS", "false").lower() == "true",
-            "api_key": os.getenv("QDRANT_API_KEY", None),
+            "api_key": os.getenv("QDRANT_API_KEY"),
         }
         
         return Qdrant(

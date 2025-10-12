@@ -460,9 +460,9 @@ class FileService:
         from minio import Minio
 
         return Minio(
-            f"{os.getenv('MINIO_HOST', 'localhost')}:{os.getenv('MINIO_PORT', '8803')}",
-            access_key=os.getenv("MINIO_ACCESS_KEY", "minio"),
-            secret_key=os.getenv("MINIO_SECRET_KEY", "minio8888"),
+            f"{os.getenv('MINIO_HOST')}:{os.getenv('MINIO_PORT')}",
+            access_key=os.getenv("MINIO_ACCESS_KEY"),
+            secret_key=os.getenv("MINIO_SECRET_KEY"),
             secure=os.getenv("MINIO_SECURE", "false").lower() == "true",
         )
 

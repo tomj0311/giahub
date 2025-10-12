@@ -64,8 +64,8 @@ def _create_multi_collection_retriever(collection_names: list = None, conv_id: s
                 from ai.vectordb.qdrant import Qdrant
                 
                 # Get Qdrant configuration from environment variables
-                qdrant_host = os.getenv('QDRANT_HOST', 'localhost')
-                qdrant_port = int(os.getenv('QDRANT_PORT', 8805))
+                qdrant_host = os.getenv('QDRANT_HOST')
+                qdrant_port = int(os.getenv('QDRANT_PORT'))
                 
                 vector_db = Qdrant(
                     collection=collection,
@@ -127,8 +127,8 @@ class AgentRuntimeService:
                 return images
             
             # Get MinIO base URL for image URLs
-            minio_host = os.getenv('MINIO_HOST', 'localhost')
-            minio_port = os.getenv('MINIO_PORT', '8803')
+            minio_host = os.getenv('MINIO_HOST')
+            minio_port = os.getenv('MINIO_PORT')
             minio_secure = os.getenv('MINIO_SECURE', 'false').lower() == 'true'
             protocol = 'https' if minio_secure else 'http'
             minio_base_url = f"{protocol}://{minio_host}:{minio_port}"

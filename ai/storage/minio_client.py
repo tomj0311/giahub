@@ -49,14 +49,14 @@ class MinioClient:
                 secure = CONFIG.minio_secure if secure is None else secure
                 default_bucket = default_bucket or CONFIG.minio_bucket
             except Exception:
-                # As a last resort, use envs with sensible defaults
-                host = os.getenv("MINIO_HOST", "localhost")
-                port = int(os.getenv("MINIO_PORT", "8803"))
+                # As a last resort, use envs
+                host = os.getenv("MINIO_HOST")
+                port = int(os.getenv("MINIO_PORT"))
                 endpoint = endpoint or f"{host}:{port}"
-                access_key = access_key or os.getenv("MINIO_ACCESS_KEY", "minioadmin")
-                secret_key = secret_key or os.getenv("MINIO_SECRET_KEY", "minioadmin")
+                access_key = access_key or os.getenv("MINIO_ACCESS_KEY")
+                secret_key = secret_key or os.getenv("MINIO_SECRET_KEY")
                 secure = (os.getenv("MINIO_SECURE", "false").lower() == "true") if secure is None else secure
-                default_bucket = default_bucket or os.getenv("MINIO_BUCKET", "h8gia")
+                default_bucket = default_bucket or os.getenv("MINIO_BUCKET")
 
         self._cfg = MinioConfig(
             endpoint=endpoint, access_key=access_key, secret_key=secret_key, secure=bool(secure), bucket=default_bucket  # type: ignore[arg-type]
