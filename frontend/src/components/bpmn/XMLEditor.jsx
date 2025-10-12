@@ -207,7 +207,7 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
             }
           }
         }));
-      } else if (taskType === 'serviceTask') {
+      } else if (taskType === 'serviceTask' || taskType === 'callActivity') {
         // Parse serviceTask configuration
         const serviceConfig = doc.querySelector('serviceConfiguration');
         console.log('🔍 Found serviceConfiguration:', !!serviceConfig);
@@ -326,7 +326,7 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
   // Load modules when component mounts for serviceTask
   useEffect(() => {
     const taskType = selectedNode?.data?.taskType || elementType;
-    if (taskType === 'serviceTask') {
+    if (taskType === 'serviceTask' || taskType === 'callActivity') {
       loadModules();
     }
   }, [elementType, selectedNode]);
@@ -1301,8 +1301,8 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                   </div>
                 )}
 
-                {/* ServiceTask Properties */}
-                {(selectedNode?.data?.taskType || elementType) === 'serviceTask' && (
+                {/* ServiceTask and CallActivity Properties */}
+                {((selectedNode?.data?.taskType || elementType) === 'serviceTask' || (selectedNode?.data?.taskType || elementType) === 'callActivity') && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {/* Module and Function Selection in one line */}
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
@@ -1624,7 +1624,7 @@ ${assigneeFields.map(field => {
                         generatedXml = assigneeXml ? 
                           formDataXml.replace('</extensionElements>', `${assigneeXml}\n</extensionElements>`) : 
                           formDataXml;
-                      } else if (taskType === 'serviceTask') {
+                      } else if (taskType === 'serviceTask' || taskType === 'callActivity') {
                         // Only function configuration is supported
                         const configXml = `    <function>
       <moduleName>${xmlProperties.serviceTask.function.moduleName}</moduleName>
