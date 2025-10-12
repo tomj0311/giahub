@@ -118,6 +118,7 @@ async def google_callback(request: Request):
             url=f"{redirect_url}/auth/callback?token={auth_token}&name={user_data['name']}"
         )
     except HTTPException as http_exc:
+        logger.error(f"[OAUTH] HTTPException caught in Google callback: {http_exc.detail}")
         redirect_url = os.getenv('REDIRECT_URL', 'http://localhost:5173')
         from urllib.parse import quote
         return RedirectResponse(url=f"{redirect_url}/login?error={quote(str(http_exc.detail))}")
@@ -172,6 +173,12 @@ async def google_callback(request: Request):
                             return RedirectResponse(
                                 url=f"{redirect_url}/auth/callback?token={auth_token}&name={user_data['name']}"
                             )
+            except HTTPException as http_exc:
+                logger.error(f"[OAUTH] HTTPException during manual token exchange: {http_exc.detail}")
+                redirect_url = os.getenv('REDIRECT_URL', 'http://localhost:5173')
+                from urllib.parse import quote
+                error_msg = quote(str(http_exc.detail))
+                return RedirectResponse(url=f"{redirect_url}/login?error={error_msg}")
             except Exception as fallback_error:
                 logger.error(f"[OAUTH] Manual token exchange also failed: {str(fallback_error)}")
         
@@ -248,11 +255,11 @@ async def microsoft_callback(request: Request):
         return RedirectResponse(
             url=f"{redirect_url}/auth/callback?token={token}&name={user_data['name']}"
         )
-    except HTTPException:
-        logger.error("[OAUTH] HTTPException during Microsoft callback")
+    except HTTPException as http_exc:
+        logger.error(f"[OAUTH] HTTPException during Microsoft callback: {http_exc.detail}")
         redirect_url = os.getenv('REDIRECT_URL', 'http://localhost:5173')
         from urllib.parse import quote
-        error_msg = quote("Authentication failed. Please try again.")
+        error_msg = quote(str(http_exc.detail))
         return RedirectResponse(url=f"{redirect_url}/login?error={error_msg}")
     except Exception as e:
         logger.error(f"[OAUTH] Exception during Microsoft callback: {str(e)}")
