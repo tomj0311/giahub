@@ -90,7 +90,7 @@ export default function LoginPage({ onLogin }) {
     e.preventDefault()
     setLoading(true)
     try {
-      const resp = await apiCall('/api/users', {
+      const resp = await apiCall('/api/users/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ firstName, lastName, email, password, confirmPassword })
