@@ -1,18 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Box,
   Button,
   Card,
   CardContent,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  TextField,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
   Table,
   TableBody,
   TableCell,
@@ -25,21 +17,19 @@ import {
   Typography,
   Tabs,
   Tab,
-  CircularProgress,
-  Paper,
-  Autocomplete
+  CircularProgress
 } from '@mui/material'
-import { Plus, Edit, Trash2, Calendar, CheckCircle, Circle, Flag } from 'lucide-react'
+import { Plus, Edit, Trash2, CheckCircle, Circle, Flag } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { useConfirmation } from '../contexts/ConfirmationContext'
 import { apiCall } from '../config/api'
 
 const ACTIVITY_TYPES = ['MILESTONE', 'PHASE', 'TASK']
-const STATUS_OPTIONS = ['New', 'In Progress', 'On Hold', 'Completed', 'Cancelled']
-const PRIORITY_OPTIONS = ['Low', 'Normal', 'High', 'Urgent']
 
 function ProjectPlanning({ user, projectId }) {
   const token = user?.token
+  const navigate = useNavigate()
+  const location = useLocation()
   const { showSuccess, showError } = useSnackbar()
   const { showDeleteConfirmation } = useConfirmation()
 
@@ -48,33 +38,16 @@ function ProjectPlanning({ user, projectId }) {
 
   const [activities, setActivities] = useState([])
   const [projects, setProjects] = useState([])
-  const [tenantUsers, setTenantUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [pagination, setPagination] = useState({
     page: 0,
     rowsPerPage: 50,
     total: 0
   })
-  const [currentTab, setCurrentTab] = useState(0)
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [isEditMode, setIsEditMode] = useState(false)
-  const [formErrors, setFormErrors] = useState({})
-  const [form, setForm] = useState({
-    id: null,
-    project_id: projectId || '',
-    subject: '',
-    type: 'TASK',
-    description: '',
-    status: 'New',
-    priority: 'Normal',
-    assignee: '',
-    approver: '',
-    due_date: '',
-    start_date: '',
-    progress: 0,
-    estimated_time: '',
-    spent_time: 0
-  })
+  
+  // Check if we should restore tab from location state
+  const initialTab = location.state?.tab ?? 0
+  const [currentTab, setCurrentTab] = useState(initialTab)
 
   const activityTypeFilter = ACTIVITY_TYPES[currentTab] || null
 
@@ -104,39 +77,7 @@ function ProjectPlanning({ user, projectId }) {
       }
     }
 
-    const loadTenantUsers = async () => {
-      try {
-        const res = await apiCall('/api/users/', {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` }
-        })
-
-        if (!res.ok) {
-          const error = await res.json()
-          console.error('[ProjectPlanning] Failed to load users:', error)
-          return
-        }
-
-        const users = await res.json()
-        
-        if (isMountedRef.current) {
-          // Map users to include display name and email
-          const mappedUsers = users.map(u => ({
-            id: u.id,
-            email: u.email,
-            firstName: u.firstName || '',
-            lastName: u.lastName || '',
-            displayName: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email
-          }))
-          setTenantUsers(mappedUsers)
-        }
-      } catch (error) {
-        console.error('[ProjectPlanning] Error loading users:', error)
-      }
-    }
-
     loadProjects()
-    loadTenantUsers()
 
     return () => {
       isMountedRef.current = false
@@ -253,156 +194,21 @@ function ProjectPlanning({ user, projectId }) {
   }
 
   const openCreate = (type = 'TASK') => {
-    setForm({
-      id: null,
-      project_id: projectId || '',
-      subject: '',
-      type: type,
-      description: '',
-      status: 'New',
-      priority: 'Normal',
-      assignee: '',
-      approver: '',
-      due_date: '',
-      start_date: '',
-      progress: 0,
-      estimated_time: '',
-      spent_time: 0
+    navigate('/dashboard/projects/activity/new', {
+      state: {
+        type,
+        projectId: projectId || '',
+        returnTo: '/dashboard/projects'
+      }
     })
-    setIsEditMode(false)
-    setFormErrors({})
-    setDialogOpen(true)
   }
 
-  const openEdit = async (activityId) => {
-    try {
-      const res = await apiCall(`/api/projects/activities/${activityId}`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.detail || 'Failed to load activity')
+  const openEdit = (activityId) => {
+    navigate(`/dashboard/projects/activity/${activityId}`, {
+      state: {
+        returnTo: '/dashboard/projects'
       }
-
-      const response = await res.json()
-
-      setForm({
-        id: response.id,
-        project_id: response.project_id || '',
-        subject: response.subject || '',
-        type: response.type || 'TASK',
-        description: response.description || '',
-        status: response.status || 'New',
-        priority: response.priority || 'Normal',
-        assignee: response.assignee || '',
-        approver: response.approver || '',
-        due_date: response.due_date || '',
-        start_date: response.start_date || '',
-        progress: response.progress || 0,
-        estimated_time: response.estimated_time || '',
-        spent_time: response.spent_time || 0
-      })
-      setIsEditMode(true)
-      setFormErrors({})
-      setDialogOpen(true)
-    } catch (error) {
-      showError('Failed to load activity details')
-    }
-  }
-
-  const saveActivity = async () => {
-    // Clear previous errors
-    const errors = {}
-    
-    // Validate required fields
-    if (!form.subject.trim()) {
-      errors.subject = 'Activity subject is required'
-    }
-
-    if (!form.project_id) {
-      errors.project_id = 'Please select a project'
-    }
-
-    // Required fields for all activity types
-    if (!form.assignee?.trim()) {
-      errors.assignee = 'Assignee is required'
-    }
-    if (!form.approver?.trim()) {
-      errors.approver = 'Approver is required'
-    }
-
-    // Validate that assignee and approver are not the same
-    if (form.assignee && form.approver && form.assignee === form.approver) {
-      errors.approver = 'Approver must be different from Assignee'
-    }
-
-    if (!form.start_date) {
-      errors.start_date = 'Start date is required'
-    }
-    if (!form.due_date) {
-      errors.due_date = 'Due date is required'
-    }
-
-    // Validate that start_date is before due_date
-    if (form.start_date && form.due_date) {
-      const startDate = new Date(form.start_date)
-      const dueDate = new Date(form.due_date)
-      if (startDate >= dueDate) {
-        errors.due_date = 'Due date must be after start date'
-      }
-    }
-
-    // If there are errors, set them and return
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors)
-      return
-    }
-
-    // Clear errors if validation passes
-    setFormErrors({})
-
-    try {
-      const payload = { ...form }
-      delete payload.id
-
-      if (isEditMode) {
-        const res = await apiCall(`/api/projects/activities/${form.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify(payload)
-        })
-        if (!res.ok) {
-          const error = await res.json()
-          throw new Error(error.detail || 'Failed to update activity')
-        }
-        showSuccess('Activity updated successfully')
-        setDialogOpen(false)
-        loadActivities(pagination.page + 1, pagination.rowsPerPage)
-      } else {
-        const res = await apiCall('/api/projects/activities', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify(payload)
-        })
-        if (!res.ok) {
-          const error = await res.json()
-          throw new Error(error.detail || 'Failed to create activity')
-        }
-        showSuccess('Activity created successfully')
-        setDialogOpen(false)
-        loadActivities(pagination.page + 1, pagination.rowsPerPage)
-      }
-    } catch (error) {
-      showError(error.message || 'Failed to save activity')
-    }
+    })
   }
 
   const deleteActivity = async (activityId, activitySubject) => {
@@ -578,208 +384,6 @@ function ProjectPlanning({ user, projectId }) {
           )}
         </CardContent>
       </Card>
-
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{isEditMode ? 'Edit Activity' : `Create New ${form.type}`}</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-            <FormControl fullWidth>
-              <InputLabel>Type</InputLabel>
-              <Select
-                value={form.type}
-                label="Type"
-                onChange={(e) => setForm({ ...form, type: e.target.value })}
-                disabled={isEditMode}
-              >
-                {ACTIVITY_TYPES.map((type) => (
-                  <MenuItem key={type} value={type}>
-                    {type}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Autocomplete
-              options={projects}
-              getOptionLabel={(option) => option.name || ''}
-              value={projects.find(p => p.id === form.project_id) || null}
-              onChange={(event, newValue) => {
-                setForm({ ...form, project_id: newValue ? newValue.id : '' })
-                setFormErrors({ ...formErrors, project_id: undefined })
-              }}
-              renderInput={(params) => (
-                <TextField 
-                  {...params} 
-                  label="Project" 
-                  required
-                  error={!!formErrors.project_id}
-                  helperText={formErrors.project_id || (projects.length === 0 ? "No projects found. Create a project first." : `${projects.length} projects available`)}
-                />
-              )}
-              fullWidth
-              noOptionsText={projects.length === 0 ? "No projects found. Create a project first." : "No matching projects"}
-            />
-            <TextField
-              label="Subject"
-              value={form.subject}
-              onChange={(e) => {
-                setForm({ ...form, subject: e.target.value })
-                setFormErrors({ ...formErrors, subject: undefined })
-              }}
-              fullWidth
-              required
-              error={!!formErrors.subject}
-              helperText={formErrors.subject}
-            />
-            <TextField
-              label="Description"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              fullWidth
-              multiline
-              rows={3}
-            />
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-              <FormControl fullWidth>
-                <InputLabel>Status</InputLabel>
-                <Select
-                  value={form.status}
-                  label="Status"
-                  onChange={(e) => setForm({ ...form, status: e.target.value })}
-                >
-                  {STATUS_OPTIONS.map((status) => (
-                    <MenuItem key={status} value={status}>
-                      {status}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl fullWidth>
-                <InputLabel>Priority</InputLabel>
-                <Select
-                  value={form.priority}
-                  label="Priority"
-                  onChange={(e) => setForm({ ...form, priority: e.target.value })}
-                >
-                  {PRIORITY_OPTIONS.map((priority) => (
-                    <MenuItem key={priority} value={priority}>
-                      {priority}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <Autocomplete
-                options={tenantUsers}
-                getOptionLabel={(option) => option.displayName}
-                value={tenantUsers.find(u => u.email === form.assignee) || null}
-                onChange={(event, newValue) => {
-                  setForm({ ...form, assignee: newValue ? newValue.email : '' })
-                  setFormErrors({ ...formErrors, assignee: undefined, approver: undefined })
-                }}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Assignee"
-                    required
-                    error={!!formErrors.assignee}
-                    helperText={formErrors.assignee || 'Required'}
-                  />
-                )}
-                renderOption={(props, option) => (
-                  <li {...props} key={option.id}>
-                    <Box>
-                      <Typography variant="body1">{option.displayName}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {option.email}
-                      </Typography>
-                    </Box>
-                  </li>
-                )}
-                fullWidth
-                isOptionEqualToValue={(option, value) => option.email === value.email}
-              />
-              <Autocomplete
-                options={tenantUsers.filter(u => u.email !== form.assignee)}
-                getOptionLabel={(option) => option.displayName}
-                value={tenantUsers.find(u => u.email === form.approver) || null}
-                onChange={(event, newValue) => {
-                  setForm({ ...form, approver: newValue ? newValue.email : '' })
-                  setFormErrors({ ...formErrors, approver: undefined })
-                }}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Approver"
-                    required
-                    error={!!formErrors.approver}
-                    helperText={formErrors.approver || 'Required - Must be different from Assignee'}
-                  />
-                )}
-                renderOption={(props, option) => (
-                  <li {...props} key={option.id}>
-                    <Box>
-                      <Typography variant="body1">{option.displayName}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {option.email}
-                      </Typography>
-                    </Box>
-                  </li>
-                )}
-                fullWidth
-                isOptionEqualToValue={(option, value) => option.email === value.email}
-              />
-              <TextField
-                label="Start Date"
-                type="date"
-                value={form.start_date}
-                onChange={(e) => {
-                  setForm({ ...form, start_date: e.target.value })
-                  setFormErrors({ ...formErrors, start_date: undefined, due_date: undefined })
-                }}
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-                required
-                error={!!formErrors.start_date}
-                helperText={formErrors.start_date || 'Required'}
-              />
-              <TextField
-                label="Due Date"
-                type="date"
-                value={form.due_date}
-                onChange={(e) => {
-                  setForm({ ...form, due_date: e.target.value })
-                  setFormErrors({ ...formErrors, due_date: undefined })
-                }}
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-                required
-                error={!!formErrors.due_date}
-                helperText={formErrors.due_date || 'Required'}
-              />
-              <TextField
-                label="Progress (%)"
-                type="number"
-                value={form.progress}
-                onChange={(e) => setForm({ ...form, progress: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) })}
-                fullWidth
-                inputProps={{ min: 0, max: 100 }}
-              />
-              <TextField
-                label="Estimated Time (hours)"
-                type="number"
-                value={form.estimated_time}
-                onChange={(e) => setForm({ ...form, estimated_time: e.target.value })}
-                fullWidth
-              />
-            </Box>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-          <Button onClick={saveActivity} variant="contained">
-            {isEditMode ? 'Update' : 'Create'}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   )
 }

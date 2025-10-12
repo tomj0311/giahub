@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Box, Tabs, Tab, Typography, List, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material'
 import ProjectTreeView from './ProjectTreeView'
 import ProjectPlanning from './ProjectPlanning'
@@ -6,7 +7,18 @@ import ProjectDashboard from './ProjectGantt'
 import { FolderKanban, ListChecks, BarChart3 } from 'lucide-react'
 
 function Projects({ user }) {
-  const [activeTab, setActiveTab] = useState(0)
+  const location = useLocation()
+  
+  // Check if we should restore tab from location state
+  const initialTab = location.state?.tab ?? 0
+  const [activeTab, setActiveTab] = useState(initialTab)
+
+  // Update tab when location state changes
+  useEffect(() => {
+    if (location.state?.tab !== undefined) {
+      setActiveTab(location.state.tab)
+    }
+  }, [location.state?.tab])
 
   const handleTabChange = (newValue) => {
     setActiveTab(newValue)
