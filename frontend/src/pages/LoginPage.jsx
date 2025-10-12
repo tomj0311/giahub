@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import TextField from '@mui/material/TextField'
@@ -11,6 +11,7 @@ import Box from '@mui/material/Box'
 import PasswordField from '../components/PasswordField'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { apiCall, API_BASE_URL } from '../config/api'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 
 // Microsoft icon as SVG component
 const MicrosoftIcon = (props) => (
@@ -32,6 +33,18 @@ export default function LoginPage({ onLogin }) {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const { showError, showSuccess } = useSnackbar()
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+
+  // Check for error parameter from OAuth redirect
+  useEffect(() => {
+    const error = searchParams.get('error')
+    if (error) {
+      showError(decodeURIComponent(error))
+      // Clean up URL by removing error parameter
+      navigate('/login', { replace: true })
+    }
+  }, [searchParams, showError, navigate])
 
   const resetForm = () => {
     setUsername('')

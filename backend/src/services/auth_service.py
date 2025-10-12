@@ -268,6 +268,22 @@ class AuthService:
                 detail="User document missing both _id and id fields"
             )
 
+        # Check if user is verified
+        if not user_data.get("verified", False):
+            logger.warning(f"[OAUTH] Unverified user attempted login: {user_data['email']}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Please verify your email before logging in"
+            )
+
+        # Check if user is active
+        if not user_data.get("active", True):
+            logger.warning(f"[OAUTH] Inactive user attempted login: {user_data['email']}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your account is not yet activated. Please contact an administrator to activate your account."
+            )
+
         # Ensure user has roles and tenantId
         user_tenant_id = await TenantService.get_user_tenant_id(user_id)
 

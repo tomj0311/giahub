@@ -117,6 +117,10 @@ async def google_callback(request: Request):
         return RedirectResponse(
             url=f"{redirect_url}/auth/callback?token={auth_token}&name={user_data['name']}"
         )
+    except HTTPException as http_exc:
+        redirect_url = os.getenv('REDIRECT_URL', 'http://localhost:5173')
+        from urllib.parse import quote
+        return RedirectResponse(url=f"{redirect_url}/login?error={quote(str(http_exc.detail))}")
     except Exception as e:
         logger.error(f"[OAUTH] Exception during callback: {str(e)}")
         # For state mismatch errors, try a simpler approach
@@ -171,10 +175,12 @@ async def google_callback(request: Request):
             except Exception as fallback_error:
                 logger.error(f"[OAUTH] Manual token exchange also failed: {str(fallback_error)}")
         
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"OAuth callback failed: {str(e)}"
-        )
+        # Redirect to login page with error
+        redirect_url = os.getenv('REDIRECT_URL', 'http://localhost:5173')
+        logger.info(f"[OAUTH] Redirecting to login due to error")
+        from urllib.parse import quote
+        error_msg = quote("Authentication failed. Please try again.")
+        return RedirectResponse(url=f"{redirect_url}/login?error={error_msg}")
 
 
 # Microsoft OAuth routes
@@ -244,13 +250,16 @@ async def microsoft_callback(request: Request):
         )
     except HTTPException:
         logger.error("[OAUTH] HTTPException during Microsoft callback")
-        raise
+        redirect_url = os.getenv('REDIRECT_URL', 'http://localhost:5173')
+        from urllib.parse import quote
+        error_msg = quote("Authentication failed. Please try again.")
+        return RedirectResponse(url=f"{redirect_url}/login?error={error_msg}")
     except Exception as e:
         logger.error(f"[OAUTH] Exception during Microsoft callback: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Microsoft OAuth callback failed: {str(e)}"
-        )
+        redirect_url = os.getenv('REDIRECT_URL', 'http://localhost:5173')
+        from urllib.parse import quote
+        error_msg = quote("Authentication failed. Please try again.")
+        return RedirectResponse(url=f"{redirect_url}/login?error={error_msg}")
 
 
 @router.post("/logout")
