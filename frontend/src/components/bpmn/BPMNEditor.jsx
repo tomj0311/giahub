@@ -371,6 +371,8 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
         }
         
       } catch (error) {
+        console.error('BPMN Parse Error:', error);
+        
         // Show error in diagram
         setNodes([{
           id: 'bpmn-error',
@@ -382,6 +384,10 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
           },
         }]);
         setEdges([]);
+        
+        // Show alert with error message - same as paste XML validation
+        const fullErrorMessage = `Failed to parse BPMN XML: ${error.message}`;
+        alert(fullErrorMessage);
       }
     }
   }, [initialBPMN, reactFlowInstance]);
