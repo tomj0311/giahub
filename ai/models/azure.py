@@ -26,11 +26,11 @@ class Azure(AzureOpenAIChatBase):
         azure_ad_token_provider: Optional[Any] = None,
         
         # Fine-tuning parameters - optimized for intelligent search
-        temperature: float = 0.3,  # Low temperature for more focused, factual responses
+        temperature: float = None,  # Low temperature for more focused, factual responses
         max_tokens: int = None,  # Sufficient for detailed search results
-        top_p: float = 0.9,  # Nucleus sampling for balanced diversity
-        frequency_penalty: float = 0.3,  # Reduce repetition in search results
-        presence_penalty: float = 0.2,  # Encourage topic diversity
+        top_p: float = None,  # Nucleus sampling for balanced diversity
+        frequency_penalty: float = None,  # Reduce repetition in search results
+        presence_penalty: float = None,  # Encourage topic diversity
         stop: Optional[Union[str, List[str]]] = None,
         seed: Optional[int] = None,
         
