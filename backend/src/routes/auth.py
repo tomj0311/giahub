@@ -93,7 +93,23 @@ async def google_callback(request: Request):
             )
         
         logger.info(f"[OAUTH] Processing user data for: {user_info.get('email', 'unknown')}")
-        user_data = await AuthService.handle_google_oauth_callback(user_info)
+        
+        # Store the Google OAuth tokens for later use with Gmail/Drive APIs
+        google_tokens = {
+            'access_token': token.get('access_token'),
+            'refresh_token': token.get('refresh_token'),
+            'expires_at': token.get('expires_at'),
+            'token_type': token.get('token_type', 'Bearer')
+        }
+        
+        # Log token reception (without exposing the actual token values)
+        logger.info(f"[OAUTH] Received tokens - Access Token: {'✅' if google_tokens['access_token'] else '❌'}, Refresh Token: {'✅' if google_tokens['refresh_token'] else '❌'}")
+        if google_tokens.get('expires_at'):
+            from datetime import datetime
+            expiry_time = datetime.fromtimestamp(google_tokens['expires_at'])
+            logger.info(f"[OAUTH] Access token expires at: {expiry_time}")
+        
+        user_data = await AuthService.handle_google_oauth_callback(user_info, google_tokens)
         logger.info(f"[OAUTH] User authenticated: {user_data.get('email', 'unknown')}")
         
         # Ensure user has DEFAULT role after successful authentication
@@ -160,8 +176,16 @@ async def google_callback(request: Request):
                             )
                             user_info = user_response.json()
                             
+                            # Prepare Google tokens for storage
+                            google_tokens = {
+                                'access_token': token_json.get('access_token'),
+                                'refresh_token': token_json.get('refresh_token'),
+                                'expires_at': token_json.get('expires_in'),  # Note: expires_in, not expires_at
+                                'token_type': token_json.get('token_type', 'Bearer')
+                            }
+                            
                             logger.info(f"[OAUTH] Manual token exchange successful for: {user_info.get('email', 'unknown')}")
-                            user_data = await AuthService.handle_google_oauth_callback(user_info)
+                            user_data = await AuthService.handle_google_oauth_callback(user_info, google_tokens)
                             
                             auth_token = generate_token({
                                 "id": user_data['id'],

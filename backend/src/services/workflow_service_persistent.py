@@ -226,7 +226,7 @@ class WorkflowServicePersistent:
             'error': str(error),
             'timestamp': datetime.now(timezone.utc).isoformat()
         }
-        task.data.update(error_response)
+        task.data[task.task_spec.bpmn_id] = error_response
         task.error()
         
         # Update status with task error information
@@ -333,15 +333,13 @@ class WorkflowServicePersistent:
             output_vars[f'timestamp'] = datetime.now(timezone.utc).isoformat()
             
             # Serialize into one object and update task.data
-            task.data.update(output_vars)
+            task.data[task.task_spec.bpmn_id] = output_vars
             task.complete()
             
             logger.info(f"[WORKFLOW] ScriptTask {bpmn_id} completed with outputs: {list(output_vars.keys())}")
                 
         except Exception as e:
             logger.error(f"[WORKFLOW] Error handling ScriptTask {task.task_spec.bpmn_id}: {e}")
-            bpmn_id = task.task_spec.bpmn_id
-            
             raise
 
     @classmethod
@@ -425,13 +423,13 @@ class WorkflowServicePersistent:
                 }
                 
                 # Update task data with structured response
-                task.data.update(response)
+                task.data[task.task_spec.bpmn_id] = response
                 task.complete()
             else:
                 # Empty response - treat as error
-                logger.warning(f"[WORKFLOW] ServiceTask {bpmn_id} received empty response")
-                
-                raise Exception(f"ServiceTask {bpmn_id} failed: Empty response from service")
+                logger.warning(f"[WORKFLOW] ServiceTask {task.task_spec.bpmn_id} received empty response")
+
+                raise Exception(f"ServiceTask {task.task_spec.bpmn_id} failed: Empty response from service")
             
         except Exception as e:
             logger.error(f"[WORKFLOW] Error handling ServiceTask {task.task_spec.bpmn_id}: {e}")
@@ -475,7 +473,7 @@ class WorkflowServicePersistent:
                     **task_data,
                     f"timestamp": datetime.now(timezone.utc).isoformat()
                 }                
-                current_task.data.update(task_data_with_timestamp)
+                current_task.data[current_task.task_spec.bpmn_id] = task_data_with_timestamp
                 current_task.complete()
                 logger.info(f"[WORKFLOW] Task {task_id} completed successfully")
                 
