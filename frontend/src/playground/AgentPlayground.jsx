@@ -472,9 +472,6 @@ export default function AgentPlayground({ user }) {
   
   // Track audio data for messages (map of message timestamp to audio data)
   const [messageAudio, setMessageAudio] = useState({})
-  
-  // Buffer for smooth word-by-word streaming
-  const streamBufferRef = useRef({ buffer: '', words: [], isProcessing: false, timeoutId: null })
 
   // File uploads (optional knowledge)
   const [stagedFiles, setStagedFiles] = useState([])
@@ -671,12 +668,6 @@ export default function AgentPlayground({ user }) {
       setAbortController(null)
       setRunning(false)
 
-      // Clear stream buffer and stop any pending word rendering
-      if (streamBufferRef.current.timeoutId) {
-        clearTimeout(streamBufferRef.current.timeoutId)
-      }
-      streamBufferRef.current = { buffer: '', words: [], isProcessing: false, timeoutId: null }
-
       // Remove the streaming message and add a cancellation message
       setMessages(prev => {
         const filtered = prev.filter(msg => !msg.streaming)
@@ -688,70 +679,6 @@ export default function AgentPlayground({ user }) {
       })
     }
   }, [abortController])
-
-  // Smooth word-by-word rendering function
-  const processWordBuffer = useCallback((agentMsgId, isComplete = false) => {
-    const buffer = streamBufferRef.current
-    
-    if (buffer.isProcessing) return
-    
-    // Split buffer into words while preserving spaces
-    const newWords = buffer.buffer.match(/\S+\s*/g) || []
-    
-    if (newWords.length === 0 && !isComplete) return
-    
-    buffer.words = [...buffer.words, ...newWords]
-    buffer.buffer = ''
-    buffer.isProcessing = true
-    
-    const renderNextWord = () => {
-      if (buffer.words.length === 0) {
-        buffer.isProcessing = false
-        return
-      }
-      
-      const word = buffer.words.shift()
-      
-      setMessages(prev => {
-        return prev.map(msg =>
-          msg.ts === agentMsgId && msg.streaming
-            ? { ...msg, content: msg.content + word }
-            : msg
-        )
-      })
-      
-      // Continue rendering with smooth timing
-      if (buffer.words.length > 0) {
-        // Adaptive delay: faster when more words queued, slower for smoother reading
-        const delay = buffer.words.length > 50 ? 10 : buffer.words.length > 20 ? 20 : 30
-        buffer.timeoutId = setTimeout(renderNextWord, delay)
-      } else {
-        buffer.isProcessing = false
-        
-        // If stream is complete, mark message as non-streaming
-        if (isComplete) {
-          setMessages(prev => {
-            return prev.map(msg =>
-              msg.ts === agentMsgId
-                ? { ...msg, streaming: false }
-                : msg
-            )
-          })
-        }
-      }
-    }
-    
-    renderNextWord()
-  }, [])
-
-  // Cleanup stream buffer on unmount
-  useEffect(() => {
-    return () => {
-      if (streamBufferRef.current.timeoutId) {
-        clearTimeout(streamBufferRef.current.timeoutId)
-      }
-    }
-  }, [])
 
   // Helper function to format chat history as plain text
   const formatHistoryAsText = (messages, numMessages) => {
@@ -773,12 +700,6 @@ export default function AgentPlayground({ user }) {
   const runAgent = useCallback(async () => {
     if (!selected || !prompt.trim()) return
     setRunning(true)
-
-    // Clear any previous stream buffer
-    if (streamBufferRef.current.timeoutId) {
-      clearTimeout(streamBufferRef.current.timeoutId)
-    }
-    streamBufferRef.current = { buffer: '', words: [], isProcessing: false, timeoutId: null }
 
     const userMsg = { role: 'user', content: prompt, ts: Date.now() }
     const newMessages = [...messages, userMsg]
@@ -890,11 +811,16 @@ export default function AgentPlayground({ user }) {
                     // Filter out "None" strings from content
                     const filteredContent = event.payload.content === 'None' ? '' : event.payload.content
                     
-                    // Add content to buffer for smooth word-by-word rendering
-                    if (filteredContent) {
-                      streamBufferRef.current.buffer += filteredContent
-                      processWordBuffer(agentMsgId, false)
-                    }
+                    // Update the streaming message with new content (streaming mode)
+                    setMessages(prev => {
+                      const updated = prev.map(msg =>
+                        msg.ts === agentMsgId && msg.streaming
+                          ? { ...msg, content: msg.content + filteredContent }
+                          : msg
+                      )
+                      finalMessages = updated
+                      return updated
+                    })
                   }
                   
                   // Store audio data if present - accumulate audio chunks
@@ -963,9 +889,16 @@ export default function AgentPlayground({ user }) {
                     }))
                   }
                 } else if (event.type === 'agent_run_complete') {
-                  // Flush remaining buffer and mark streaming as complete
-                  streamBufferRef.current.buffer = streamBufferRef.current.buffer + ''
-                  processWordBuffer(agentMsgId, true)
+                  // Mark streaming as complete - conversation saving is handled by backend
+                  setMessages(prev => {
+                    const updated = prev.map(msg =>
+                      msg.ts === agentMsgId
+                        ? { ...msg, streaming: false }
+                        : msg
+                    )
+                    finalMessages = updated
+                    return updated
+                  })
                 } else if (event.type === 'error' || event.error) {
                   const errorMsg = {
                     role: 'system',
@@ -1112,12 +1045,6 @@ export default function AgentPlayground({ user }) {
   }
 
   const clearChat = useCallback(() => {
-    // Clear stream buffer
-    if (streamBufferRef.current.timeoutId) {
-      clearTimeout(streamBufferRef.current.timeoutId)
-    }
-    streamBufferRef.current = { buffer: '', words: [], isProcessing: false, timeoutId: null }
-    
     setMessages([])
     setUploadedFiles([])
     setStagedFiles([])
