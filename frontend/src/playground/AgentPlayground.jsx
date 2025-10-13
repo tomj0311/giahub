@@ -47,12 +47,13 @@ import ReplayIcon from '@mui/icons-material/Replay'
 import { agentService } from '../services/agentService'
 import { agentRuntimeService } from '../services/agentRuntimeService'
 import sharedApiService from '../utils/apiService'
+import { parseBPMNXML } from '../components/bpmn/utils/bpmnParser'
 
 // Simple function to detect and extract BPMN content
 const detectBPMN = (content) => {
   // Debug logs removed for production cleanliness
   
-  if (!content) return { hasBPMN: false, bpmnXML: null, contentWithoutBPMN: content }
+  if (!content) return { hasBPMN: false, bpmnXML: null, contentWithoutBPMN: content, error: null }
   
   // Look for BPMN 2.0 XML patterns - support both namespaced and non-namespaced definitions
   const bpmnRegexes = [
@@ -63,16 +64,30 @@ const detectBPMN = (content) => {
   for (const regex of bpmnRegexes) {
     const match = content.match(regex)
     if (match) {
+      const bpmnXML = match[0]
       
-      // Keep the original content intact, just mark that BPMN was found
-      return {
-        hasBPMN: true,
-        bpmnXML: match[0],
-        contentWithoutBPMN: content // Keep original content with XML visible
+      // Validate BPMN by calling parseBPMNXML
+      try {
+        parseBPMNXML(bpmnXML)
+        // If parsing succeeds, BPMN is valid
+        return {
+          hasBPMN: true,
+          bpmnXML: bpmnXML,
+          contentWithoutBPMN: content,
+          error: null
+        }
+      } catch (error) {
+        // If parsing fails, return error
+        return {
+          hasBPMN: true,
+          bpmnXML: null,
+          contentWithoutBPMN: content,
+          error: error.message || 'Invalid BPMN XML'
+        }
       }
     }
   }
-  return { hasBPMN: false, bpmnXML: null, contentWithoutBPMN: content }
+  return { hasBPMN: false, bpmnXML: null, contentWithoutBPMN: content, error: null }
 }
 
 // Simple function to detect and extract JSX code blocks
@@ -1350,7 +1365,31 @@ export default function AgentPlayground({ user }) {
                         )}
                         
                         {/* Additionally show BPMN diagram if detected */}
-                        {bpmnData.hasBPMN && (
+                        {bpmnData.hasBPMN && bpmnData.error && (
+                          <Box sx={{ mt: 2, border: '1px solid', borderColor: 'error.main', borderRadius: 1, overflow: 'hidden', bgcolor: alpha(theme.palette.error.main, 0.05) }}>
+                            <Box sx={{ 
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              alignItems: 'center',
+                              bgcolor: alpha(theme.palette.error.main, 0.1), 
+                              px: 1, 
+                              py: 0.5, 
+                              borderBottom: '1px solid', 
+                              borderColor: 'error.main'
+                            }}>
+                              <Typography variant="caption" sx={{ fontWeight: 600, color: 'error.main' }}>
+                                ⚠️ BPMN Validation Error
+                              </Typography>
+                            </Box>
+                            <Box sx={{ p: 2 }}>
+                              <Typography variant="body2" sx={{ color: 'error.main', fontFamily: 'monospace' }}>
+                                {bpmnData.error}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        )}
+                        
+                        {bpmnData.hasBPMN && !bpmnData.error && bpmnData.bpmnXML && (
                           <Box sx={{ mt: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
                             <Box sx={{ 
                               display: 'flex', 
