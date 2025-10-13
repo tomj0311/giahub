@@ -16,13 +16,13 @@ class OpenAI(OpenAIChat):
     def __init__(
         self,
         # Core parameters
-        id: str = "gpt-4o",
+        id: str = None,
         api_key: str = None,
         
         # Fine-tuning parameters - commonly used OpenAI settings
-        temperature: float = None,
-        max_tokens: int = None,
-        top_p: float = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        top_p: Optional[float] = None,
         frequency_penalty: Optional[float] = None,
         presence_penalty: Optional[float] = None,
         stop: Optional[Union[str, List[str]]] = None,
@@ -34,8 +34,8 @@ class OpenAI(OpenAIChat):
         top_logprobs: Optional[int] = None,
         
         # Audio parameters - for audio-enabled models
-        modalities: Union[str, List[str]] = None,
-        audio: Union[str, Dict[str, Any]] = None,
+        modalities: Optional[Union[str, List[str]]] = None,
+        audio: Optional[Union[str, Dict[str, Any]]] = None,
         
         # Client configuration
         base_url: str = None,
