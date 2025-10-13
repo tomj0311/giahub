@@ -174,9 +174,9 @@ This is an automated message. Please do not reply to this email.
 
 
 async def send_invitation_email(
-    to: str, verify_token: str, invited_by_user: dict = None
+    to: str, verify_token: str, invited_by_user: dict = None, temp_password: str = None
 ):
-    """Send an invitation email with verification token"""
+    """Send an invitation email with verification token and temporary password"""
     logger.info(f"[EMAIL] Sending invitation email to: {to}")
 
     if not SMTP_HOST:
@@ -191,23 +191,36 @@ async def send_invitation_email(
         if invited_by_user:
             inviter_name = invited_by_user.get("name") or invited_by_user.get("firstName", "a team member")
 
-        # Create HTML content
+        # Create HTML content with temporary password
         logger.debug("[EMAIL] Creating invitation email HTML content")
+        
+        # Build password section if temp_password is provided
+        password_section = ""
+        if temp_password:
+            password_section = f"""
+            <p style="background:#fff3cd;border-left:4px solid #ffc107;padding:12px;margin:16px 0;">
+                <strong>Your Temporary Login Credentials:</strong><br>
+                <span style="font-family:monospace;font-size:14px;">Email: {to}</span><br>
+                <span style="font-family:monospace;font-size:14px;">Password: <strong>{temp_password}</strong></span>
+            </p>
+            <p><strong>Important:</strong> Please verify your email address first, then you can log in with the credentials above. We recommend changing your password after your first login.</p>
+            """
+        else:
+            password_section = """
+            <p><strong>Note:</strong> You'll be able to set your own secure password during the setup process.</p>
+            """
+        
         html_content = f"""
         <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.5;font-size:15px;color:#222;">
             <h2 style="margin:0 0 16px;">You're Invited to Join GIA!</h2>
             <p>Hello!</p>
             <p>You have been invited by <strong>{inviter_name}</strong> to join the GIA Platform.</p>
-            <p>To complete your account setup, please follow these steps:</p>
-            <ol>
-                <li><strong>Verify your email</strong> by clicking the button below</li>
-                <li><strong>Set your password</strong> to secure your account</li>
-                <li><strong>Start using the platform!</strong></li>
-            </ol>
+            {password_section}
+            <p>To activate your account, please verify your email address by clicking the button below:</p>
             <p>
                 <a href="{verification_link}" 
                    style="background:#1976d2;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:bold;">
-                   Start Account Setup
+                   Verify Email Address
                 </a>
             </p>
             <p style="background:#f5f5f5;padding:12px 16px;border-radius:6px;font-size:14px;letter-spacing:1px;text-align:center;">
@@ -218,7 +231,6 @@ async def send_invitation_email(
                 If the button doesn't work, you can copy and paste this URL into your browser:<br>
                 <span style="word-break:break-all;">{verification_link}</span>
             </p>
-            <p><strong>Note:</strong> You'll be able to set your own secure password during the setup process.</p>
             <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;">
             <p style="font-size:12px;color:#666;">
                 This invitation was sent by {inviter_name}. If you believe you received this email in error, please ignore it.<br>
@@ -228,6 +240,19 @@ async def send_invitation_email(
         """
 
         # Create text content
+        password_text = ""
+        if temp_password:
+            password_text = f"""
+Your Temporary Login Credentials:
+Email: {to}
+Password: {temp_password}
+
+Important: Please verify your email address first, then you can log in with the credentials above. 
+We recommend changing your password after your first login.
+"""
+        else:
+            password_text = "Note: You'll be able to set your own secure password during the setup process."
+        
         text_content = f"""
 You're Invited to Join GIA!
 
@@ -235,13 +260,13 @@ Hello!
 
 You have been invited by {inviter_name} to join the GIA Platform.
 
-To complete your account setup and start using the platform, please verify your email address.
+{password_text}
+
+To activate your account, please verify your email address.
 
 Verification Code: {verify_token}
 
 Verification Link: {verification_link}
-
-Note: Your account will remain inactive until you verify your email address.
 
 This invitation was sent by {inviter_name}. If you believe you received this email in error, please ignore it.
 This is an automated message. Please do not reply to this email.
@@ -254,3 +279,4 @@ This is an automated message. Please do not reply to this email.
     except Exception as e:
         logger.error(f"Failed to send invitation email to {to}: {e}")
         # Don't raise - invitation should succeed even if email fails
+

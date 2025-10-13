@@ -129,7 +129,7 @@ export default function UserInvitation({ user }) {
 
       if (response.ok) {
         const data = await response.json()
-        showSuccess(`User invited successfully! Temporary password: ${data.tempPassword}`, 8000)
+        showSuccess(`User invited successfully! An invitation email has been sent to ${formData.email} with login credentials. Temporary password: ${data.tempPassword}`, 10000)
         setOpenInviteDialog(false)
         setFormData({ firstName: '', lastName: '', email: '', selectedRoles: [] })
         fetchUsers()

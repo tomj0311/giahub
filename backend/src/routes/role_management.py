@@ -155,9 +155,14 @@ async def invite_user(
         for role_id in incoming_role_ids:
             await RBACService.assign_role_to_user(new_user_id, role_id, tenant_id=inviter_tenant_id)
 
-        # Send invitation email with verification token
+        # Send invitation email with verification token and temp password
         try:
-            await send_invitation_email(user_data["email"], verification_token, invited_by_user=user)
+            await send_invitation_email(
+                user_data["email"], 
+                verification_token, 
+                invited_by_user=user, 
+                temp_password=temp_password
+            )
         except Exception as e:
             logger.warning(f"Failed to send invitation email to {user_data['email']}: {e}")
             pass

@@ -41,20 +41,15 @@ export default function VerifyPage() {
       if (response.ok) {
         const data = await response.json()
         
-        // Check if this is an invited user that needs to set password
-        if (data.userType === 'invited' && data.requiresPasswordSetup) {
-          setStatus('success')
-          setMessage(data.message || 'Email verified successfully!')
-          showSuccess('Email verified! Please set your password to complete setup.')
-          
-          // Redirect to password setup page with the verification token
-          setTimeout(() => {
-            navigate(`/set-password?token=${encodeURIComponent(data.verificationToken || token)}`)
-          }, 2000)
+        // For invited users, they're activated immediately and can log in
+        // For regular users, they need admin activation
+        setStatus('success')
+        setMessage(data.message || 'Email verified successfully!')
+        
+        if (data.userType === 'invited' && data.activated) {
+          showSuccess('Email verified! You can now log in with the password from your invitation email.')
         } else {
-          setStatus('success')
-          setMessage(data.message || 'Email verified successfully!')
-          showSuccess('Email verified successfully! You can now log in.')
+          showSuccess('Email verified successfully!')
         }
       } else {
         const errorData = await response.json()

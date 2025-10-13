@@ -165,14 +165,17 @@ class UserService:
                 "updatedAt": current_time.timestamp() * 1000  # Timestamp in milliseconds
             }
             
-            # For invited users, keep verification token for password setup
+            # For invited users, activate immediately since they have a password
             # For regular users, remove token and require admin activation
             if user.get("isInvited", False):
-                logger.info(f"[USER] Email verified for invited user: {user.get('email')} - password setup required")
+                logger.info(f"[USER] Email verified for invited user: {user.get('email')} - account activated, user can now log in")
+                update_data["active"] = True  # Activate invited user immediately
                 await MongoStorageService.update_one("users",
                     {"_id": user["_id"]},
-                    {"$set": update_data}
-                    # Keep verification_token for password setup
+                    {
+                        "$set": update_data,
+                        "$unset": {"verification_token": ""}  # Remove token after verification
+                    }
                 )
             else:
                 logger.info(f"[USER] Email verified for regular user: {user.get('email')} - awaiting manual activation by admin")
@@ -189,11 +192,10 @@ class UserService:
             # Return appropriate message based on user type
             if user.get("isInvited", False):
                 return {
-                    "message": "Email verified successfully! Please set your password to complete account setup.",
+                    "message": "Email verified successfully! You can now log in with the password provided in the invitation email.",
                     "userType": "invited", 
-                    "activated": False,
-                    "requiresPasswordSetup": True,
-                    "verificationToken": token  # Keep token for password setup
+                    "activated": True,
+                    "requiresPasswordSetup": False
                 }
             else:
                 return {
