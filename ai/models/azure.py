@@ -27,7 +27,7 @@ class Azure(AzureOpenAIChatBase):
         
         # Fine-tuning parameters - optimized for intelligent search
         temperature: float = 0.3,  # Low temperature for more focused, factual responses
-        max_tokens: int = 32000,  # Sufficient for detailed search results
+        max_tokens: int = None,  # Sufficient for detailed search results
         top_p: float = 0.9,  # Nucleus sampling for balanced diversity
         frequency_penalty: float = 0.3,  # Reduce repetition in search results
         presence_penalty: float = 0.2,  # Encourage topic diversity
