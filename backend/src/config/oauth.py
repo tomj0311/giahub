@@ -54,7 +54,14 @@ if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
         userinfo_endpoint='https://openidconnect.googleapis.com/v1/userinfo',
         jwks_uri='https://www.googleapis.com/oauth2/v3/certs',
         client_kwargs={
-            'scope': 'openid email profile'
+            'scope': 'openid email profile '
+                     'https://www.googleapis.com/auth/gmail.readonly '
+                     'https://www.googleapis.com/auth/gmail.send '
+                     'https://www.googleapis.com/auth/gmail.modify '
+                     'https://www.googleapis.com/auth/drive.readonly '
+                     'https://www.googleapis.com/auth/drive.file',
+            'access_type': 'offline',  # Request refresh token
+            'prompt': 'consent'  # Force consent screen to get refresh token
         }
     )
     logger.info('✅ Google OAuth configured successfully')

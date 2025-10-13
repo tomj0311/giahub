@@ -228,7 +228,7 @@ class AuthService:
         }
 
     @classmethod
-    async def handle_google_oauth_callback(cls, user_info: Dict[str, Any]) -> Dict[str, Any]:
+    async def handle_google_oauth_callback(cls, user_info: Dict[str, Any], google_tokens: Dict[str, Any] = None) -> Dict[str, Any]:
         """Handle Google OAuth callback and process user data"""
         import secrets
         import string
@@ -248,13 +248,13 @@ class AuthService:
 
         if existing_user:
             # Handle existing user
-            return await cls._handle_existing_oauth_user(existing_user)
+            return await cls._handle_existing_oauth_user(existing_user, google_tokens)
         else:
             # Handle new user
-            return await cls._handle_new_oauth_user(user_info)
+            return await cls._handle_new_oauth_user(user_info, google_tokens)
 
     @classmethod
-    async def _handle_existing_oauth_user(cls, user_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _handle_existing_oauth_user(cls, user_data: Dict[str, Any], google_tokens: Dict[str, Any] = None) -> Dict[str, Any]:
         """Handle existing OAuth user login"""
         from ..services.rbac_service import RBACService
 
@@ -267,6 +267,36 @@ class AuthService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="User document missing both _id and id fields"
             )
+
+        # Store/update Google OAuth tokens if provided
+        if google_tokens:
+            from datetime import datetime
+            update_data = {
+                "googleAccessToken": google_tokens.get('access_token'),
+                "googleTokenType": google_tokens.get('token_type', 'Bearer'),
+                "googleTokenExpiry": google_tokens.get('expires_at'),
+                "googleTokenUpdatedAt": datetime.utcnow()
+            }
+            # Only store refresh token if provided (it's only given on first auth or if prompt=consent)
+            if google_tokens.get('refresh_token'):
+                update_data["googleRefreshToken"] = google_tokens.get('refresh_token')
+                logger.info(f"[OAUTH] Storing refresh token for user: {user_data['email']}")
+            else:
+                logger.warning(f"[OAUTH] No refresh token received for user: {user_data['email']} - user may need to re-authenticate with prompt=consent")
+            
+            # Get tenant_id for the update
+            temp_tenant_id = await TenantService.get_user_tenant_id(user_id)
+            if temp_tenant_id:
+                await MongoStorageService.update_one(
+                    "users",
+                    {"_id": user_id},
+                    {"$set": update_data},
+                    tenant_id=temp_tenant_id
+                )
+                logger.info(f"[OAUTH] ✅ Successfully updated Google tokens for user: {user_data['email']}")
+                logger.debug(f"[OAUTH] Token expiry: {google_tokens.get('expires_at')}, Type: {google_tokens.get('token_type')}")
+            else:
+                logger.error(f"[OAUTH] ❌ Failed to update tokens - no tenant_id found for user: {user_data['email']}")
 
         # Check if user is verified
         if not user_data.get("verified", False):
@@ -323,7 +353,7 @@ class AuthService:
         }
 
     @classmethod
-    async def _handle_new_oauth_user(cls, user_info: Dict[str, Any]) -> Dict[str, Any]:
+    async def _handle_new_oauth_user(cls, user_info: Dict[str, Any], google_tokens: Dict[str, Any] = None) -> Dict[str, Any]:
         """Handle new OAuth user registration"""
         import secrets
         import string
@@ -371,6 +401,21 @@ class AuthService:
             "createdAt": current_time.timestamp() * 1000,
             "updatedAt": current_time.timestamp() * 1000
         }
+
+        # Add Google OAuth tokens if provided
+        if google_tokens:
+            new_user.update({
+                "googleAccessToken": google_tokens.get('access_token'),
+                "googleRefreshToken": google_tokens.get('refresh_token'),
+                "googleTokenType": google_tokens.get('token_type', 'Bearer'),
+                "googleTokenExpiry": google_tokens.get('expires_at'),
+                "googleTokenUpdatedAt": current_time
+            })
+            logger.info(f"[OAUTH] Adding Google tokens to new user: {user_info['email']}")
+            if google_tokens.get('refresh_token'):
+                logger.info(f"[OAUTH] ✅ Refresh token included for new user")
+            else:
+                logger.warning(f"[OAUTH] ⚠️ No refresh token for new user - they may need to re-authenticate")
 
         # Validate tenantId is present
         if not new_user.get("tenantId"):
