@@ -47,10 +47,6 @@ yarn-error.log*
 # Environment variables
 .env.local
 
-# API keys and secrets
-secrets.py
-config.py
-
 # Logs
 logs/*.log
 !logs/.gitkeep
