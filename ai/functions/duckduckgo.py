@@ -5,9 +5,9 @@ from ai.tools import Toolkit
 from ai.utils.log import logger
 
 try:
-    from duckduckgo_search import DDGS
+    from ddgs import DDGS
 except ImportError:
-    raise ImportError("`duckduckgo-search` not installed. Please install using `pip install duckduckgo-search`")
+    raise ImportError("`ddgs` not installed. Please install using `pip install ddgs`")
 
 
 class DuckDuckGoTools(Toolkit):
@@ -20,11 +20,9 @@ class DuckDuckGoTools(Toolkit):
         news: Register the news search tool.
         modifier: Optional leading modifier added to every query.
         fixed_max_results: Optional fixed max results; overrides per-call value when set.
-        headers: Optional headers forwarded to DDGS.
         proxy: Optional proxy string.
-        proxies: Optional proxies mapping.
-        timeout: Timeout in seconds for network requests.
-        verify_ssl: Whether to verify SSL certificates.
+        timeout: Timeout in seconds for network requests. Defaults to 10.
+        verify_ssl: Whether to verify SSL certificates. Defaults to True.
         show_results: If True, logs the formatted results at info level.
     """
 
@@ -34,18 +32,14 @@ class DuckDuckGoTools(Toolkit):
         news: bool = True,
         modifier: Optional[str] = None,
         fixed_max_results: Optional[int] = None,
-        headers: Optional[Any] = None,
         proxy: Optional[str] = None,
-        proxies: Optional[Any] = None,
         timeout: Optional[int] = 10,
         verify_ssl: bool = True,
         show_results: bool = False,
     ):
         super().__init__(name="duckduckgo")
 
-        self.headers: Optional[Any] = headers
         self.proxy: Optional[str] = proxy
-        self.proxies: Optional[Any] = proxies
         self.timeout: Optional[int] = timeout
         self.fixed_max_results: Optional[int] = fixed_max_results
         self.modifier: Optional[str] = modifier
@@ -64,22 +58,23 @@ class DuckDuckGoTools(Toolkit):
 
     def _client(self) -> DDGS:
         return DDGS(
-            headers=self.headers,
             proxy=self.proxy,
-            proxies=self.proxies,
             timeout=self.timeout,
             verify=self.verify_ssl,
         )
 
     def duckduckgo_search(self, query: str, max_results: int = 5) -> str:
-        """Use this function to search DuckDuckGo for a query.
+        """Search DuckDuckGo for information. Provide a search query string to find relevant results.
 
         Args:
-            query: The query to search for.
-            max_results: The maximum number of results to return. Default is 5.
+            query (str): The search query string. Required. Example: "Epic: The Musical song list"
+            max_results (int): The maximum number of results to return. Optional, defaults to 5.
 
         Returns:
-            JSON string with search results.
+            str: JSON string containing search results with titles, links, and snippets.
+        
+        Example:
+            duckduckgo_search(query="Python programming tutorial", max_results=10)
         """
         logger.info(f"DuckDuckGoTools search requested for: '{query}'")
         effective_max = self.fixed_max_results or max_results
@@ -92,7 +87,7 @@ class DuckDuckGoTools(Toolkit):
             ddgs = self._client()
             q = f"{self.modifier} {query}".strip() if self.modifier else query
             logger.debug(f"Executing DDG text search with query='{q}'")
-            results = ddgs.text(keywords=q, max_results=effective_max)
+            results = ddgs.text(query=q, max_results=effective_max)
             formatted = json.dumps(results, indent=2)
             logger.debug(f"Formatted results JSON length: {len(formatted)}")
             if self.show_results:
@@ -106,14 +101,17 @@ class DuckDuckGoTools(Toolkit):
             return f"Error searching DuckDuckGo: {e}"
 
     def duckduckgo_news(self, query: str, max_results: int = 5) -> str:
-        """Use this function to get the latest news from DuckDuckGo.
+        """Get the latest news from DuckDuckGo. Provide a news search query string.
 
         Args:
-            query: The query to search for.
-            max_results: The maximum number of results to return. Default is 5.
+            query (str): The news search query string. Required. Example: "artificial intelligence latest news"
+            max_results (int): The maximum number of results to return. Optional, defaults to 5.
 
         Returns:
-            JSON string with news results.
+            str: JSON string containing news results with titles, links, dates, and sources.
+        
+        Example:
+            duckduckgo_news(query="technology news today", max_results=10)
         """
         logger.info(f"DuckDuckGoTools news requested for: '{query}'")
         effective_max = self.fixed_max_results or max_results
@@ -126,7 +124,7 @@ class DuckDuckGoTools(Toolkit):
             ddgs = self._client()
             q = f"{self.modifier} {query}".strip() if self.modifier else query
             logger.debug(f"Executing DDG news search with query='{q}'")
-            results = ddgs.news(keywords=q, max_results=effective_max)
+            results = ddgs.news(query=q, max_results=effective_max)
             formatted = json.dumps(results, indent=2)
             logger.debug(f"Formatted news JSON length: {len(formatted)}")
             if self.show_results:
