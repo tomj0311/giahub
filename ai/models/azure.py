@@ -1,6 +1,7 @@
 """
 Azure Models - Simplified interface
 """
+import json
 from typing import Optional, List, Dict, Any, Union
 from ai.model.azure.openai_chat import AzureOpenAIChat as AzureOpenAIChatBase
 
@@ -24,14 +25,18 @@ class Azure(AzureOpenAIChatBase):
         azure_ad_token: Optional[str] = None,
         azure_ad_token_provider: Optional[Any] = None,
         
-        # Fine-tuning parameters - commonly used Azure OpenAI settings
-        temperature: float = None,
-        max_tokens: Optional[int] = None,
-        top_p: float = None,
-        frequency_penalty: Optional[float] = None,
-        presence_penalty: Optional[float] = None,
+        # Fine-tuning parameters - optimized for intelligent search
+        temperature: float = 0.3,  # Low temperature for more focused, factual responses
+        max_tokens: int = 2048,  # Sufficient for detailed search results
+        top_p: float = 0.9,  # Nucleus sampling for balanced diversity
+        frequency_penalty: float = 0.3,  # Reduce repetition in search results
+        presence_penalty: float = 0.2,  # Encourage topic diversity
         stop: Optional[Union[str, List[str]]] = None,
         seed: Optional[int] = None,
+        
+        # Audio parameters - for audio-enabled models
+        modalities: Optional[Union[str, List[str]]] = None,
+        audio: Optional[Union[str, Dict[str, Any]]] = None,
         
         # Response format and structure
         response_format: Optional[Any] = None,
@@ -65,6 +70,8 @@ class Azure(AzureOpenAIChatBase):
             presence_penalty: Penalize new topics (-2.0 to 2.0)
             stop: Stop sequences for completion
             seed: Random seed for deterministic outputs
+            modalities: List of modalities or JSON string (e.g., ["text", "audio"] or '["text", "audio"]')
+            audio: Audio config dict or JSON string (e.g., {"voice": "alloy", "format": "wav"} or '{"voice": "alloy", "format": "wav"}')
             response_format: Response format specification
             logprobs: Return log probabilities
             top_logprobs: Number of top logprobs to return
@@ -74,6 +81,20 @@ class Azure(AzureOpenAIChatBase):
             organization: Azure organization ID
             **kwargs: Additional parameters passed to underlying implementation
         """
+        # Convert modalities from string to list if needed
+        if modalities is not None and isinstance(modalities, str):
+            try:
+                modalities = json.loads(modalities)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid modalities JSON string: {modalities}. Error: {e}")
+        
+        # Convert audio from string to dict if needed
+        if audio is not None and isinstance(audio, str):
+            try:
+                audio = json.loads(audio)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid audio JSON string: {audio}. Error: {e}")
+        
         super().__init__(
             id=id,
             api_key=api_key,
@@ -89,6 +110,8 @@ class Azure(AzureOpenAIChatBase):
             presence_penalty=presence_penalty,
             stop=stop,
             seed=seed,
+            modalities=modalities,
+            audio=audio,
             response_format=response_format,
             logprobs=logprobs,
             top_logprobs=top_logprobs,
