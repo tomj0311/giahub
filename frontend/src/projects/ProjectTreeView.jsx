@@ -28,12 +28,6 @@ import {
   alpha,
   useTheme,
   Badge,
-  Popover,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemText,
-  Divider,
   Stack,
   TablePagination
 } from '@mui/material'
@@ -83,8 +77,7 @@ function ProjectTreeView({ user }) {
   const [sortField, setSortField] = useState(null)
   const [sortOrder, setSortOrder] = useState('asc')
   
-  // Filter popup state
-  const [filterAnchorEl, setFilterAnchorEl] = useState(null)
+  // Filter dialog state
   const [filterDialogOpen, setFilterDialogOpen] = useState(false)
   const [currentFilter, setCurrentFilter] = useState({
     field: '',
@@ -263,16 +256,7 @@ function ProjectTreeView({ user }) {
   }
 
   // Filter handlers
-  const handleOpenFilterPopup = (event) => {
-    setFilterAnchorEl(event.currentTarget)
-  }
-
-  const handleCloseFilterPopup = () => {
-    setFilterAnchorEl(null)
-  }
-
   const handleOpenFilterDialog = () => {
-    handleCloseFilterPopup()
     setFilterDialogOpen(true)
   }
 
@@ -774,7 +758,7 @@ function ProjectTreeView({ user }) {
             </Box>
             <Box>
               <Tooltip title="Filter & Sort">
-                <IconButton onClick={handleOpenFilterPopup}>
+                <IconButton onClick={handleOpenFilterDialog}>
                   <Badge badgeContent={filters.length} color="primary">
                     <Filter size={20} />
                   </Badge>
@@ -862,36 +846,6 @@ function ProjectTreeView({ user }) {
           )}
         </CardContent>
       </Card>
-
-      {/* Filter Popup Menu */}
-      <Popover
-        open={Boolean(filterAnchorEl)}
-        anchorEl={filterAnchorEl}
-        onClose={handleCloseFilterPopup}
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'right',
-        }}
-        transformOrigin={{
-          vertical: 'top',
-          horizontal: 'right',
-        }}
-      >
-        <List sx={{ width: 200 }}>
-          <ListItem>
-            <ListItemText primary="Filter & Sort Options" primaryTypographyProps={{ variant: 'subtitle2', fontWeight: 'bold' }} />
-          </ListItem>
-          <Divider />
-          <ListItemButton onClick={handleOpenFilterDialog}>
-            <ListItemText primary="Add Filter" />
-          </ListItemButton>
-          {filters.length > 0 && (
-            <ListItemButton onClick={handleClearAllFilters}>
-              <ListItemText primary="Clear All Filters" />
-            </ListItemButton>
-          )}
-        </List>
-      </Popover>
 
       {/* Filter Dialog */}
       <Dialog open={filterDialogOpen} onClose={handleCloseFilterDialog} maxWidth="sm" fullWidth>
