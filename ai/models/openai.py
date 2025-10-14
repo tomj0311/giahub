@@ -20,17 +20,17 @@ class OpenAI(OpenAIChat):
         api_key: str = None,
         
         # Fine-tuning parameters - optimized for intelligent search
-        temperature: float = None,  # Low temperature for more focused, factual responses
-        max_tokens: Optional[int] = None,  # Sufficient for detailed search results
-        top_p: float = None,  # Nucleus sampling for balanced diversity
-        frequency_penalty: float =None,  # Reduce repetition in search results
-        presence_penalty: float = None,  # Encourage topic diversity
+        temperature: Optional[float] = None,          # Low temperature for more focused, factual responses
+        top_p: Optional[float] = None,                # Nucleus sampling for balanced diversity
+        max_tokens: Optional[int] = None,   # Sufficient for detailed search results
+        frequency_penalty: Optional[float] = None,    # Reduce repetition in search results
+        presence_penalty: Optional[float] = None,     # Encourage topic diversity
         stop: Optional[Union[str, List[str]]] = None,
         seed: Optional[int] = None,
 
         # Audio parameters - for audio-enabled models
-        modalities: Optional[Union[str, List[str]]] = None,
-        audio: Optional[Union[str, Dict[str, Any]]] = None,
+        modalities: Union[str, List[str]] = None,
+        audio: Union[str, Dict[str, Any]] = None,
 
         # Response format and structure
         response_format: Optional[Any] = None,
@@ -39,7 +39,7 @@ class OpenAI(OpenAIChat):
                 
         # Client configuration
         base_url: str = None,
-        timeout: Optional[float] = None,  # 60 seconds timeout for search operations
+        timeout: Optional[float] = None,    # 60 seconds timeout for search operations
         max_retries: Optional[int] = None,  # Retry failed requests up to 3 times
         organization: Optional[str] = None,
         
