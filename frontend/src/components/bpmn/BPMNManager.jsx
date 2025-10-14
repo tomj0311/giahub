@@ -129,7 +129,6 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false, minioFullPa
              xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
              xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0"
              xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0"
-             xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
              id="${originalDefinitionsId}"
              targetNamespace="http://example.com/bpmn"
              xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL http://www.omg.org/spec/BPMN/2.0/20100501/BPMN20.xsd">`;
@@ -187,17 +186,19 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false, minioFullPa
         });
         // Process attributes/documentation preserved from import, if available
         const procAttrsMap = participant?.data?.originalProcessAttributes || {};
-        // Try to preserve isExecutable either from process attrs or from any of its elements
+        // Set isExecutable to true by default, but preserve if explicitly set
         let isExecutable = procAttrsMap?.isExecutable;
         if (isExecutable === undefined) {
           const anyElem = participantElements[0];
           if (anyElem && anyElem.data?.originalIsExecutable !== undefined) {
             isExecutable = anyElem.data.originalIsExecutable;
+          } else {
+            isExecutable = "true"; // Default to true
           }
         }
         const procAttrStr = buildAttributesString(procAttrsMap, {
           exclude: ['id', 'name', 'isExecutable'],
-          overrides: isExecutable !== undefined ? { isExecutable } : {}
+          overrides: isExecutable !== undefined ? { isExecutable } : { isExecutable: "true" }
         });
         const procDocs = [];
         if (Array.isArray(participant?.data?.originalProcessDocumentation)) {
@@ -270,9 +271,9 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false, minioFullPa
 
     } else {
       // No participants - single process  
-      // Preserve original isExecutable value
+      // Set isExecutable to true by default
       const isExecutable = regularNodes.length > 0 && regularNodes[0].data?.originalIsExecutable !== undefined
-        ? regularNodes[0].data.originalIsExecutable : "false";
+        ? regularNodes[0].data.originalIsExecutable : "true";
       
       // Check for process-level documentation (only add once, don't duplicate)
       const procDocs = [];
