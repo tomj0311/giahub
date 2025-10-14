@@ -430,9 +430,17 @@ function GanttChart({ user, projectId: propProjectId }) {
         {isExpanded && hasActivities && activitiesByProject[proj.id].map(activity => (
           <TableRow
             key={`activity-${activity.id}`}
+            onClick={() => navigate(`/dashboard/projects/activity/${activity.id}`, {
+              state: {
+                returnTo: '/dashboard/projects/gantt',
+                projectId: projectId,
+                projectName: projectName
+              }
+            })}
             sx={{
               '&:hover': {
-                bgcolor: 'action.hover'
+                bgcolor: 'action.hover',
+                cursor: 'pointer'
               },
               bgcolor: alpha('#000', 0.02 + 0.01 * level)
             }}
@@ -508,16 +516,32 @@ function GanttChart({ user, projectId: propProjectId }) {
             bgcolor: alpha('#000', 0.02 + 0.01 * level)
           }}>
             {activity.start_date && activity.due_date && (
-              <Box sx={{
-                position: 'absolute',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                height: 16,
-                backgroundColor: 'info.main',
-                opacity: 0.6,
-                borderRadius: 1,
-                ...calculateBarPosition(activity.start_date, activity.due_date)
-              }} />
+              <Box 
+                onClick={() => navigate(`/dashboard/projects/activity/${activity.id}`, {
+                  state: {
+                    returnTo: '/dashboard/projects/gantt',
+                    projectId: projectId,
+                    projectName: projectName
+                  }
+                })}
+                sx={{
+                  position: 'absolute',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  height: 16,
+                  backgroundColor: 'info.main',
+                  opacity: 0.6,
+                  borderRadius: 1,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  '&:hover': {
+                    opacity: 0.9,
+                    height: 20,
+                    backgroundColor: 'info.dark'
+                  },
+                  ...calculateBarPosition(activity.start_date, activity.due_date)
+                }} 
+              />
             )}
           </Box>
         ))}

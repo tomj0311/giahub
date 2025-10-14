@@ -318,12 +318,20 @@ function ActivityForm({ user, projectId: propProjectId }) {
       }
       
       // Navigate back to the previous page or to the planning page
-      navigate(location.state?.returnTo || '/dashboard/projects', { 
-        state: { 
-          tab: 1, // Return to Planning tab
-          planningTab: location.state?.planningTab // Preserve the planning sub-tab
-        }
-      })
+      const returnPath = location.state?.returnTo || '/dashboard/projects'
+      const navigationState = returnPath === '/dashboard/projects' 
+        ? { 
+            tab: 1, // Return to Planning tab
+            planningTab: location.state?.planningTab // Preserve the planning sub-tab
+          }
+        : returnPath === '/dashboard/projects/gantt'
+        ? {
+            projectId: location.state?.projectId,
+            projectName: location.state?.projectName
+          }
+        : {}
+      
+      navigate(returnPath, { state: navigationState })
     } catch (error) {
       showError(error.message || 'Failed to save activity')
     } finally {
@@ -332,12 +340,20 @@ function ActivityForm({ user, projectId: propProjectId }) {
   }
 
   const handleCancel = () => {
-    navigate(location.state?.returnTo || '/dashboard/projects', {
-      state: { 
-        tab: 1, // Return to Planning tab
-        planningTab: location.state?.planningTab // Preserve the planning sub-tab
-      }
-    })
+    const returnPath = location.state?.returnTo || '/dashboard/projects'
+    const navigationState = returnPath === '/dashboard/projects' 
+      ? { 
+          tab: 1, // Return to Planning tab
+          planningTab: location.state?.planningTab // Preserve the planning sub-tab
+        }
+      : returnPath === '/dashboard/projects/gantt'
+      ? {
+          projectId: location.state?.projectId,
+          projectName: location.state?.projectName
+        }
+      : {}
+    
+    navigate(returnPath, { state: navigationState })
   }
 
   if (loading && isEditMode) {

@@ -11,7 +11,7 @@ function Projects({ user }) {
   const location = useLocation()
   
   // Check if we should restore tab from location state
-  const initialTab = location.state?.tab ?? 0
+  const initialTab = location.state?.tab ?? 3
   const [activeTab, setActiveTab] = useState(initialTab)
 
   // Update tab when location state changes
@@ -27,7 +27,6 @@ function Projects({ user }) {
 
   const menuItems = [
     { label: 'Home', icon: <Home size={20} />, index: 3 },
-    { label: 'Gantt Chart', icon: <BarChart3 size={20} />, index: 2 },
     { label: 'Portfolio', icon: <FolderKanban size={20} />, index: 0 },
     { label: 'Planning', icon: <ListChecks size={20} />, index: 1 },
   ]

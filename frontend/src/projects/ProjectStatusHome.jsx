@@ -226,11 +226,11 @@ export default function ProjectStatusHome({ user }) {
   }
 
   const handleViewReport = (district) => {
-    // Navigate to projects page with the district selected
-    navigate('/dashboard/projects', {
+    // Navigate to Gantt chart page with the selected district project
+    navigate('/dashboard/projects/gantt', {
       state: {
-        tab: 0, // Portfolio tab
-        selectedProjectId: district.id
+        projectId: district.id,
+        projectName: district.name
       }
     })
   }
