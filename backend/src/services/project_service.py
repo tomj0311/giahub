@@ -31,7 +31,7 @@ class ProjectService:
     
     @classmethod
     async def create_project(cls, project: dict, user: dict) -> dict:
-        """Create a new project"""
+        """Create a new project - stores payload as-is"""
         logger.info(f"[PROJECT] Creating project: {project.get('name')}")
         
         tenant_id = await cls.validate_tenant_access(user)
@@ -56,83 +56,13 @@ class ProjectService:
                 detail="Project with this name already exists"
             )
 
-        # Validate required fields
-        missing_fields = []
-        assignee = project.get("assignee", "").strip()
-        approver = project.get("approver", "").strip()
-        start_date = project.get("start_date")
-        due_date = project.get("due_date")
-        
-        if not assignee:
-            missing_fields.append("assignee")
-        if not approver:
-            missing_fields.append("approver")
-        if not start_date:
-            missing_fields.append("start_date")
-        if not due_date:
-            missing_fields.append("due_date")
-        
-        if missing_fields:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"The following fields are mandatory: {', '.join(missing_fields)}"
-            )
-
-        # Validate start_date and due_date
-        if start_date and due_date:
-            try:
-                from datetime import datetime as dt
-                start = dt.fromisoformat(start_date.replace('Z', '+00:00'))
-                end = dt.fromisoformat(due_date.replace('Z', '+00:00'))
-                if start >= end:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Start date must be before due date"
-                    )
-            except ValueError:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid date format. Please use ISO format (YYYY-MM-DD)"
-                )
-
-        # Get parent project if specified
-        parent_id = project.get("parent_id")
-        if parent_id and parent_id != "root":
-            try:
-                from bson import ObjectId
-                parent_obj_id = ObjectId(parent_id)
-                parent_project = await MongoStorageService.find_one("projects", 
-                    {"_id": parent_obj_id}, 
-                    tenant_id=tenant_id
-                )
-                if not parent_project:
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail="Parent project not found"
-                    )
-            except Exception as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid parent project ID"
-                )
-
-        doc = {
-            "name": name,
-            "description": project.get("description", ""),
-            "parent_id": parent_id or "root",
-            "status": project.get("status", "ON_TRACK"),
-            "priority": project.get("priority", "Normal"),
-            "assignee": project.get("assignee"),
-            "approver": project.get("approver"),
-            "due_date": project.get("due_date"),
-            "start_date": project.get("start_date"),
-            "progress": project.get("progress", 0),
-            "is_public": project.get("is_public", False),
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow(),
-            "tenantId": tenant_id,
-            "userId": user_id
-        }
+        # Store entire payload as-is with metadata
+        doc = dict(project)
+        doc["name"] = name  # Use trimmed name
+        doc["created_at"] = datetime.utcnow()
+        doc["updated_at"] = datetime.utcnow()
+        doc["tenantId"] = tenant_id
+        doc["userId"] = user_id
 
         result_id = await MongoStorageService.insert_one("projects", doc, tenant_id=tenant_id)
         return {"id": str(result_id), "name": name}
@@ -196,19 +126,11 @@ class ProjectService:
                 sort_order=sort_direction
             )
             
+            # Return projects as-is from database, only convert _id to id
             projects = []
             for project in projects_list:
                 project_dict = dict(project)
                 project_dict["id"] = str(project_dict.pop("_id"))
-                
-                # Get child count
-                child_count = await MongoStorageService.count_documents(
-                    "projects",
-                    {"parent_id": project_dict["id"]},
-                    tenant_id=tenant_id
-                )
-                project_dict["child_count"] = child_count
-                
                 projects.append(project_dict)
             
             logger.info(f"[PROJECT] Found {len(projects)}/{total_count} projects")
@@ -234,7 +156,7 @@ class ProjectService:
 
     @classmethod
     async def get_project_by_id(cls, project_id: str, user: dict) -> dict:
-        """Get project by ID"""
+        """Get project by ID - returns everything as-is"""
         from bson import ObjectId
         tenant_id = await cls.validate_tenant_access(user)
         
@@ -251,16 +173,9 @@ class ProjectService:
                     detail="Project not found"
                 )
             
+            # Return project as-is from database, only convert _id to id
             project_dict = dict(project)
             project_dict["id"] = str(project_dict.pop("_id"))
-            
-            # Get child count
-            child_count = await MongoStorageService.count_documents(
-                "projects",
-                {"parent_id": project_dict["id"]},
-                tenant_id=tenant_id
-            )
-            project_dict["child_count"] = child_count
             
             return project_dict
             
@@ -275,7 +190,7 @@ class ProjectService:
 
     @classmethod
     async def update_project(cls, project_id: str, updates: dict, user: dict) -> dict:
-        """Update a project"""
+        """Update a project - stores entire payload as-is"""
         from bson import ObjectId
         tenant_id = await cls.validate_tenant_access(user)
         logger.info(f"[PROJECT] Updating project ID '{project_id}' for tenant: {tenant_id}")
@@ -288,7 +203,7 @@ class ProjectService:
                 detail="Invalid project ID format"
             )
         
-        # Get current project to check existing dates if needed
+        # Check if project exists
         current_project = await MongoStorageService.find_one("projects",
             {"_id": object_id},
             tenant_id=tenant_id
@@ -300,48 +215,8 @@ class ProjectService:
                 detail="Project not found"
             )
         
-        # Validate required fields
-        assignee = updates.get("assignee", current_project.get("assignee", "")).strip() if "assignee" in updates else current_project.get("assignee", "").strip()
-        approver = updates.get("approver", current_project.get("approver", "")).strip() if "approver" in updates else current_project.get("approver", "").strip()
-        start_date = updates.get("start_date", current_project.get("start_date"))
-        due_date = updates.get("due_date", current_project.get("due_date"))
-        
-        missing_fields = []
-        if not assignee:
-            missing_fields.append("assignee")
-        if not approver:
-            missing_fields.append("approver")
-        if not start_date:
-            missing_fields.append("start_date")
-        if not due_date:
-            missing_fields.append("due_date")
-        
-        if missing_fields:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"The following fields are mandatory: {', '.join(missing_fields)}"
-            )
-        
-        # Validate start_date and due_date
-        if start_date and due_date:
-            try:
-                from datetime import datetime as dt
-                start = dt.fromisoformat(start_date.replace('Z', '+00:00'))
-                end = dt.fromisoformat(due_date.replace('Z', '+00:00'))
-                if start >= end:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Start date must be before due date"
-                    )
-            except ValueError:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid date format. Please use ISO format (YYYY-MM-DD)"
-                )
-        
+        # Store entire payload as-is, only add updated_at timestamp
         update_data = dict(updates)
-        if "name" in update_data and isinstance(update_data["name"], str):
-            update_data["name"] = update_data["name"].strip()
         update_data["updated_at"] = datetime.utcnow()
         
         result = await MongoStorageService.update_one("projects",
