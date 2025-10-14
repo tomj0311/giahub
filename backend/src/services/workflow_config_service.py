@@ -193,6 +193,48 @@ class WorkflowConfigService:
             )
     
     @classmethod
+    async def get_workflow_config_by_name(cls, workflow_name: str, user: dict) -> Optional[Dict[str, Any]]:
+        """Get workflow configuration by name"""
+        tenant_id = await cls.validate_tenant_access(user)
+        
+        try:
+            # Normalize the workflow name
+            normalized_name = workflow_name.strip()
+            
+            # Query by name within tenant
+            doc = await MongoStorageService.find_one(
+                "workflowConfig", 
+                {"name": normalized_name}, 
+                tenant_id=tenant_id
+            )
+            
+            if not doc:
+                logger.warning(f"[WORKFLOW] Workflow config not found by name: {normalized_name}")
+                return None
+            
+            config = {
+                "id": str(doc["_id"]),
+                "name": doc.get("name"),
+                "category": doc.get("category", ""),
+                "description": doc.get("description", ""),
+                "bpmn_filename": doc.get("bpmn_filename"),
+                "bpmn_file_path": doc.get("bpmn_file_path"),
+                "created_at": doc.get("createdAt"),
+                "updated_at": doc.get("updatedAt"),
+                "is_active": doc.get("is_active", True)
+            }
+            
+            logger.info(f"[WORKFLOW] Found workflow config by name '{normalized_name}': {config['id']}")
+            return config
+            
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Failed to get workflow config by name '{workflow_name}': {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to get workflow configuration: {str(e)}"
+            )
+    
+    @classmethod
     async def create_workflow_config(cls, config_data: dict, bpmn_file: UploadFile, user: dict) -> Dict[str, Any]:
         """Create new workflow configuration with BPMN file"""
         tenant_id = await cls.validate_tenant_access(user)

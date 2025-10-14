@@ -13,6 +13,7 @@ import json
 
 from ..utils.auth import verify_token_middleware
 from ..services.workflow_service_persistent import WorkflowServicePersistent
+from ..services.workflow_config_service import WorkflowConfigService
 from ..services.file_service import FileService
 from ..utils.log import logger
 
@@ -63,6 +64,68 @@ async def start_workflow_by_workflow_id(
         "workflow_id": workflow_id,
         "instance_id": instance_id
     }
+
+
+@router.post("/workflows/by-name/{workflow_name}/start")
+async def start_workflow_by_name(
+    workflow_name: str,
+    request: dict,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(verify_token_middleware)
+):
+    """Start a new workflow instance using workflow name"""
+    try:
+        # Validate tenant access
+        tenant_id = await WorkflowServicePersistent.validate_tenant_access(user)
+        
+        # Find workflow configuration by name
+        logger.info(f"[WORKFLOW] Looking up workflow by name: {workflow_name}")
+        workflow_config = await WorkflowConfigService.get_workflow_config_by_name(workflow_name, user)
+        
+        if not workflow_config:
+            logger.warning(f"[WORKFLOW] Workflow not found: {workflow_name}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Workflow '{workflow_name}' not found"
+            )
+        
+        workflow_id = workflow_config.get("id")
+        
+        # Add tenant info to initial data
+        initial_data = request.get('initial_data', {})
+        
+        # Generate instance_id first
+        instance_id = uuid.uuid4().hex[:6]
+
+        initial_data.update({
+            "workflow_id": workflow_id,
+            "workflow_name": workflow_name,
+            "instance_id": instance_id,
+            "tenant_id": tenant_id,
+            "started_by": user.get('username') or user.get('email', 'unknown'),
+            "started_at": str(datetime.now())
+        })
+        
+        # Start workflow in background with instance_id
+        background_tasks.add_task(_run_workflow_background, workflow_id, instance_id, initial_data, user)
+        
+        logger.info(f"[WORKFLOW] Started workflow '{workflow_name}' (ID: {workflow_id}) with instance: {instance_id}")
+        
+        return {
+            "success": True,
+            "message": "Workflow started in background",
+            "workflow_name": workflow_name,
+            "workflow_id": workflow_id,
+            "instance_id": instance_id
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[WORKFLOW] Failed to start workflow by name '{workflow_name}': {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to start workflow: {str(e)}"
+        )
 
 
 @router.get("/workflows/health")
