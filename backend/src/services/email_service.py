@@ -14,8 +14,8 @@ SMTP_USER = os.getenv("SMTP_USER")
 SMTP_PASS = os.getenv("SMTP_PASS")
 SMTP_SECURE = os.getenv("SMTP_SECURE", "false").lower() == "true"
 
-# Client URL for verification links
-CLIENT_URL = os.getenv("CLIENT_URL", "http://localhost:5173")
+# Client URL for verification links - use REDIRECT_URL (frontend) instead of CLIENT_URL (backend)
+CLIENT_URL = os.getenv("REDIRECT_URL", "http://localhost:5173")
 
 
 async def send_email(
