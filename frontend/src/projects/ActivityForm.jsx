@@ -380,7 +380,7 @@ function ActivityForm({ user, projectId: propProjectId }) {
         <Link
           component="button"
           variant="body1"
-          onClick={() => navigate('/dashboard/projects', { state: { tab: 1 } })}
+          onClick={() => navigate('/dashboard/projects/planning')}
           sx={{ cursor: 'pointer', textDecoration: 'none' }}
         >
           Planning
