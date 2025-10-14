@@ -50,7 +50,9 @@ const ToolConfig = lazy(() => import('../agents/ToolConfig'))
 const KnowledgeConfig = lazy(() => import('../agents/KnowledgeConfig'))
 const Agent = lazy(() => import('../agents/Agent'))
 const AgentPlayground = lazy(() => import('../playground/AgentPlayground'))
-const Projects = lazy(() => import('../projects/Projects'))
+const ProjectStatusHome = lazy(() => import('../projects/ProjectStatusHome'))
+const ProjectTreeView = lazy(() => import('../projects/ProjectTreeView'))
+const ProjectPlanning = lazy(() => import('../projects/ProjectPlanning'))
 const ActivityForm = lazy(() => import('../projects/ActivityForm'))
 const GanttChart = lazy(() => import('../projects/GanttChart'))
 const WorkflowConfig = lazy(() => import('../workflows/WorkflowConfig'))
@@ -96,9 +98,19 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			order: 15,
 			children: [
 				{
-					label: 'Overview',
+					label: 'Home',
 					to: '/dashboard/projects',
-					icon: 'LayoutDashboard'
+					icon: 'Home'
+				},
+				{
+					label: 'Portfolio',
+					to: '/dashboard/projects/portfolio',
+					icon: 'FolderKanban'
+				},
+				{
+					label: 'Planning',
+					to: '/dashboard/projects/planning',
+					icon: 'ListChecks'
 				}
 			]
 		},
@@ -858,7 +870,9 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 			<Route path="users" element={<Users user={user} />} />
 			<Route path="role-management" element={<RoleManagement user={user} />} />
 			<Route path="user-invitation" element={<UserInvitation user={user} />} />
-			<Route path="projects" element={<Projects user={user} />} />
+			<Route path="projects" element={<ProjectStatusHome user={user} />} />
+				<Route path="projects/portfolio" element={<ProjectTreeView user={user} />} />
+				<Route path="projects/planning" element={<ProjectPlanning user={user} />} />
 				<Route path="projects/activity/new" element={<ActivityForm user={user} />} />
 				<Route path="projects/activity/:activityId" element={<ActivityForm user={user} />} />
 				<Route path="projects/gantt" element={<GanttChart user={user} />} />
