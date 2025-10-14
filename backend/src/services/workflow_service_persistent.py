@@ -122,6 +122,7 @@ class WorkflowServicePersistent:
                     workflow.do_engine_steps()
                 except Exception as engine_error:
                     logger.error(f"[WORKFLOW] Engine step {step_count} failed: {engine_error}")
+                    await cls._handle_task_error(workflow, instance_id, tenant_id, task, engine_error, "Engine")
                     await cls._handle_engine_error(workflow, instance_id, tenant_id, engine_error, step_count)
                     raise HTTPException(status_code=500, detail=f"Workflow engine error: {str(engine_error)}")
                 
