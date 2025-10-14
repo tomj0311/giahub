@@ -52,6 +52,7 @@ const Agent = lazy(() => import('../agents/Agent'))
 const AgentPlayground = lazy(() => import('../playground/AgentPlayground'))
 const Projects = lazy(() => import('../projects/Projects'))
 const ActivityForm = lazy(() => import('../projects/ActivityForm'))
+const GanttChart = lazy(() => import('../projects/GanttChart'))
 const WorkflowConfig = lazy(() => import('../workflows/WorkflowConfig'))
 const WorkflowDashboard = lazy(() => import('../workflows/WorkflowDashboard'))
 const WorkflowExecution = lazy(() => import('../workflows/WorkflowExecution'))
@@ -763,8 +764,8 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 				<Toolbar />
 				<Box sx={{
 					width: '100%',
-					// Conditional styling for BPMN, workflow-execution, workflow-ui, and projects routes
-					...(location.pathname === '/dashboard/bpmn' || location.pathname === '/dashboard/workflow-execution' || location.pathname === '/dashboard/workflow-ui' || location.pathname === '/dashboard/projects' ? {
+					// Conditional styling for BPMN, workflow-execution, workflow-ui, projects, and gantt routes
+					...(location.pathname === '/dashboard/bpmn' || location.pathname === '/dashboard/workflow-execution' || location.pathname === '/dashboard/workflow-ui' || location.pathname === '/dashboard/projects' || location.pathname === '/dashboard/projects/gantt' ? {
 						// Full width with minimal padding
 						maxWidth: 'none',
 						mx: 0,
@@ -851,15 +852,16 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 			<Route path="task/:workflowId/:instanceId" element={<TaskCompletion user={user} />} />
 			
 			{/* All other routes with dashboard layout */}
-			<Route path="/" element={<DashboardLayout user={user} onLogout={onLogout} themeKey={themeKey} setThemeKey={setThemeKey} />}>
-				<Route index element={<Navigate to="home" replace />} />
-				<Route path="home" element={<Home user={user} />} />
-				<Route path="users" element={<Users user={user} />} />
-				<Route path="role-management" element={<RoleManagement user={user} />} />
-				<Route path="user-invitation" element={<UserInvitation user={user} />} />
-				<Route path="projects" element={<Projects user={user} />} />
+		<Route path="/" element={<DashboardLayout user={user} onLogout={onLogout} themeKey={themeKey} setThemeKey={setThemeKey} />}>
+			<Route index element={<Navigate to="home" replace />} />
+			<Route path="home" element={<Home user={user} />} />
+			<Route path="users" element={<Users user={user} />} />
+			<Route path="role-management" element={<RoleManagement user={user} />} />
+			<Route path="user-invitation" element={<UserInvitation user={user} />} />
+			<Route path="projects" element={<Projects user={user} />} />
 				<Route path="projects/activity/new" element={<ActivityForm user={user} />} />
 				<Route path="projects/activity/:activityId" element={<ActivityForm user={user} />} />
+				<Route path="projects/gantt" element={<GanttChart user={user} />} />
 				<Route path="agents" element={<Agent user={user} />} />
 				<Route path="models" element={<ModelConfig user={user} />} />
 				<Route path="tools" element={<ToolConfig user={user} />} />

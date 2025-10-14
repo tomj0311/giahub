@@ -31,7 +31,7 @@ class ProjectService:
     
     @classmethod
     async def create_project(cls, project: dict, user: dict) -> dict:
-        """Create a new project"""
+        """Create a new project - stores payload as-is"""
         logger.info(f"[PROJECT] Creating project: {project.get('name')}")
         
         tenant_id = await cls.validate_tenant_access(user)
@@ -56,83 +56,13 @@ class ProjectService:
                 detail="Project with this name already exists"
             )
 
-        # Validate required fields
-        missing_fields = []
-        assignee = project.get("assignee", "").strip()
-        approver = project.get("approver", "").strip()
-        start_date = project.get("start_date")
-        due_date = project.get("due_date")
-        
-        if not assignee:
-            missing_fields.append("assignee")
-        if not approver:
-            missing_fields.append("approver")
-        if not start_date:
-            missing_fields.append("start_date")
-        if not due_date:
-            missing_fields.append("due_date")
-        
-        if missing_fields:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"The following fields are mandatory: {', '.join(missing_fields)}"
-            )
-
-        # Validate start_date and due_date
-        if start_date and due_date:
-            try:
-                from datetime import datetime as dt
-                start = dt.fromisoformat(start_date.replace('Z', '+00:00'))
-                end = dt.fromisoformat(due_date.replace('Z', '+00:00'))
-                if start >= end:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Start date must be before due date"
-                    )
-            except ValueError:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid date format. Please use ISO format (YYYY-MM-DD)"
-                )
-
-        # Get parent project if specified
-        parent_id = project.get("parent_id")
-        if parent_id and parent_id != "root":
-            try:
-                from bson import ObjectId
-                parent_obj_id = ObjectId(parent_id)
-                parent_project = await MongoStorageService.find_one("projects", 
-                    {"_id": parent_obj_id}, 
-                    tenant_id=tenant_id
-                )
-                if not parent_project:
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail="Parent project not found"
-                    )
-            except Exception as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid parent project ID"
-                )
-
-        doc = {
-            "name": name,
-            "description": project.get("description", ""),
-            "parent_id": parent_id or "root",
-            "status": project.get("status", "ON_TRACK"),
-            "priority": project.get("priority", "Normal"),
-            "assignee": project.get("assignee"),
-            "approver": project.get("approver"),
-            "due_date": project.get("due_date"),
-            "start_date": project.get("start_date"),
-            "progress": project.get("progress", 0),
-            "is_public": project.get("is_public", False),
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow(),
-            "tenantId": tenant_id,
-            "userId": user_id
-        }
+        # Store entire payload as-is with metadata
+        doc = dict(project)
+        doc["name"] = name  # Use trimmed name
+        doc["created_at"] = datetime.utcnow()
+        doc["updated_at"] = datetime.utcnow()
+        doc["tenantId"] = tenant_id
+        doc["userId"] = user_id
 
         result_id = await MongoStorageService.insert_one("projects", doc, tenant_id=tenant_id)
         return {"id": str(result_id), "name": name}
@@ -196,19 +126,11 @@ class ProjectService:
                 sort_order=sort_direction
             )
             
+            # Return projects as-is from database, only convert _id to id
             projects = []
             for project in projects_list:
                 project_dict = dict(project)
                 project_dict["id"] = str(project_dict.pop("_id"))
-                
-                # Get child count
-                child_count = await MongoStorageService.count_documents(
-                    "projects",
-                    {"parent_id": project_dict["id"]},
-                    tenant_id=tenant_id
-                )
-                project_dict["child_count"] = child_count
-                
                 projects.append(project_dict)
             
             logger.info(f"[PROJECT] Found {len(projects)}/{total_count} projects")
@@ -234,7 +156,7 @@ class ProjectService:
 
     @classmethod
     async def get_project_by_id(cls, project_id: str, user: dict) -> dict:
-        """Get project by ID"""
+        """Get project by ID - returns everything as-is"""
         from bson import ObjectId
         tenant_id = await cls.validate_tenant_access(user)
         
@@ -251,16 +173,9 @@ class ProjectService:
                     detail="Project not found"
                 )
             
+            # Return project as-is from database, only convert _id to id
             project_dict = dict(project)
             project_dict["id"] = str(project_dict.pop("_id"))
-            
-            # Get child count
-            child_count = await MongoStorageService.count_documents(
-                "projects",
-                {"parent_id": project_dict["id"]},
-                tenant_id=tenant_id
-            )
-            project_dict["child_count"] = child_count
             
             return project_dict
             
@@ -275,7 +190,7 @@ class ProjectService:
 
     @classmethod
     async def update_project(cls, project_id: str, updates: dict, user: dict) -> dict:
-        """Update a project"""
+        """Update a project - stores entire payload as-is"""
         from bson import ObjectId
         tenant_id = await cls.validate_tenant_access(user)
         logger.info(f"[PROJECT] Updating project ID '{project_id}' for tenant: {tenant_id}")
@@ -288,7 +203,7 @@ class ProjectService:
                 detail="Invalid project ID format"
             )
         
-        # Get current project to check existing dates if needed
+        # Check if project exists
         current_project = await MongoStorageService.find_one("projects",
             {"_id": object_id},
             tenant_id=tenant_id
@@ -300,48 +215,8 @@ class ProjectService:
                 detail="Project not found"
             )
         
-        # Validate required fields
-        assignee = updates.get("assignee", current_project.get("assignee", "")).strip() if "assignee" in updates else current_project.get("assignee", "").strip()
-        approver = updates.get("approver", current_project.get("approver", "")).strip() if "approver" in updates else current_project.get("approver", "").strip()
-        start_date = updates.get("start_date", current_project.get("start_date"))
-        due_date = updates.get("due_date", current_project.get("due_date"))
-        
-        missing_fields = []
-        if not assignee:
-            missing_fields.append("assignee")
-        if not approver:
-            missing_fields.append("approver")
-        if not start_date:
-            missing_fields.append("start_date")
-        if not due_date:
-            missing_fields.append("due_date")
-        
-        if missing_fields:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"The following fields are mandatory: {', '.join(missing_fields)}"
-            )
-        
-        # Validate start_date and due_date
-        if start_date and due_date:
-            try:
-                from datetime import datetime as dt
-                start = dt.fromisoformat(start_date.replace('Z', '+00:00'))
-                end = dt.fromisoformat(due_date.replace('Z', '+00:00'))
-                if start >= end:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Start date must be before due date"
-                    )
-            except ValueError:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid date format. Please use ISO format (YYYY-MM-DD)"
-                )
-        
+        # Store entire payload as-is, only add updated_at timestamp
         update_data = dict(updates)
-        if "name" in update_data and isinstance(update_data["name"], str):
-            update_data["name"] = update_data["name"].strip()
         update_data["updated_at"] = datetime.utcnow()
         
         result = await MongoStorageService.update_one("projects",
@@ -399,6 +274,233 @@ class ProjectService:
         
         logger.info(f"[PROJECT] Successfully deleted project '{project_id}'")
         return {"message": "Project deleted successfully"}
+
+    @classmethod
+    async def get_field_metadata(cls, user: dict) -> dict:
+        """Dynamically discover fields from actual project documents"""
+        tenant_id = await cls.validate_tenant_access(user)
+        
+        # Get a sample of projects to analyze fields
+        projects = await MongoStorageService.find_many(
+            "projects",
+            {},
+            tenant_id=tenant_id,
+            limit=100
+        )
+        
+        if not projects:
+            return {"fields": []}
+        
+        # Discover all unique fields across projects
+        all_fields = set()
+        field_samples = {}
+        
+        for project in projects:
+            for key, value in project.items():
+                if key not in ['_id', 'tenantId', 'userId']:
+                    all_fields.add(key)
+                    if key not in field_samples:
+                        field_samples[key] = []
+                    if value is not None:
+                        field_samples[key].append(value)
+        
+        # Infer field types and build metadata
+        fields = []
+        for field_name in sorted(all_fields):
+            samples = field_samples.get(field_name, [])
+            field_meta = {
+                "name": field_name,
+                "label": field_name.replace('_', ' ').title(),
+                "sortable": True,
+                "filterable": True
+            }
+            
+            # Infer type from samples
+            if not samples:
+                field_meta["type"] = "text"
+                field_meta["operators"] = ["equals", "contains"]
+            else:
+                sample = samples[0]
+                
+                # Check if it's a date
+                if 'date' in field_name.lower() or 'at' in field_name.lower():
+                    field_meta["type"] = "date"
+                    field_meta["operators"] = ["equals", "before", "after", "between"]
+                # Check if it's a number
+                elif isinstance(sample, (int, float)):
+                    field_meta["type"] = "number"
+                    field_meta["operators"] = ["equals", "greater_than", "less_than", "between"]
+                # Check if it's a boolean
+                elif isinstance(sample, bool):
+                    field_meta["type"] = "boolean"
+                    field_meta["operators"] = ["equals"]
+                    field_meta["options"] = [True, False]
+                # Check if it's from a limited set (enum)
+                else:
+                    unique_values = list(set([str(s) for s in samples if s is not None]))
+                    if len(unique_values) <= 10:  # If <= 10 unique values, treat as select
+                        field_meta["type"] = "select"
+                        field_meta["operators"] = ["equals", "not_equals", "in"]
+                        field_meta["options"] = unique_values
+                    else:
+                        field_meta["type"] = "text"
+                        field_meta["operators"] = ["equals", "contains", "starts_with", "ends_with"]
+            
+            fields.append(field_meta)
+        
+        return {"fields": fields}
+
+    @classmethod
+    async def _build_filter_query(cls, filters: Optional[str]) -> dict:
+        """Build MongoDB filter query from JSON filters"""
+        import json
+        
+        if not filters:
+            return {}
+        
+        try:
+            filter_list = json.loads(filters)
+            if not isinstance(filter_list, list):
+                return {}
+            
+            query = {}
+            
+            for filter_item in filter_list:
+                field = filter_item.get("field")
+                operator = filter_item.get("operator")
+                value = filter_item.get("value")
+                
+                if not field or not operator:
+                    continue
+                
+                # Text operators
+                if operator == "contains":
+                    query[field] = {"$regex": str(value), "$options": "i"}
+                elif operator == "equals":
+                    query[field] = value
+                elif operator == "not_equals":
+                    query[field] = {"$ne": value}
+                elif operator == "starts_with":
+                    query[field] = {"$regex": f"^{value}", "$options": "i"}
+                elif operator == "ends_with":
+                    query[field] = {"$regex": f"{value}$", "$options": "i"}
+                
+                # Number operators
+                elif operator == "greater_than":
+                    query[field] = {"$gt": float(value)}
+                elif operator == "less_than":
+                    query[field] = {"$lt": float(value)}
+                elif operator == "between" and isinstance(value, list) and len(value) == 2:
+                    query[field] = {"$gte": float(value[0]), "$lte": float(value[1])}
+                
+                # Date operators
+                elif operator == "before":
+                    query[field] = {"$lt": value}
+                elif operator == "after":
+                    query[field] = {"$gt": value}
+                
+                # Array operators
+                elif operator == "in" and isinstance(value, list):
+                    query[field] = {"$in": value}
+            
+            return query
+            
+        except json.JSONDecodeError:
+            logger.error(f"[PROJECT] Invalid JSON in filters: {filters}")
+            return {}
+        except Exception as e:
+            logger.error(f"[PROJECT] Error building filter query: {e}")
+            return {}
+
+    @classmethod
+    async def get_project_tree_paginated(
+        cls, 
+        user: dict, 
+        root_id: str = "root",
+        page: int = 1,
+        page_size: int = 20,
+        filters: Optional[str] = None,
+        sort_field: Optional[str] = None,
+        sort_order: str = "asc"
+    ) -> dict:
+        """Get hierarchical project tree with server-side filtering, sorting, and pagination"""
+        tenant_id = await cls.validate_tenant_access(user)
+        
+        # Build base filter for parent
+        base_filter = {"parent_id": root_id}
+        
+        # Add dynamic filters
+        filter_query = await cls._build_filter_query(filters)
+        base_filter.update(filter_query)
+        
+        # Get total count
+        total_count = await MongoStorageService.count_documents(
+            "projects",
+            base_filter,
+            tenant_id=tenant_id
+        )
+        
+        # Calculate pagination
+        skip = (page - 1) * page_size
+        total_pages = (total_count + page_size - 1) // page_size if page_size > 0 else 1
+        has_next = page < total_pages
+        has_prev = page > 1
+        
+        # Determine sort
+        sort_field_name = sort_field or "name"
+        sort_direction = 1 if sort_order == "asc" else -1
+        
+        # Get paginated root level projects
+        projects = await MongoStorageService.find_many(
+            "projects",
+            base_filter,
+            tenant_id=tenant_id,
+            sort_field=sort_field_name,
+            sort_order=sort_direction,
+            skip=skip,
+            limit=page_size
+        )
+        
+        # Build tree with children
+        async def build_tree_with_children(project_dict: dict) -> dict:
+            """Recursively build children for a project"""
+            project_id = str(project_dict["_id"])
+            project_dict["id"] = project_id
+            project_dict.pop("_id", None)
+            
+            # Get children
+            children = await MongoStorageService.find_many(
+                "projects",
+                {"parent_id": project_id},
+                tenant_id=tenant_id,
+                sort_field="name",
+                sort_order=1
+            )
+            
+            project_dict["children"] = []
+            for child in children:
+                child_dict = await build_tree_with_children(child)
+                project_dict["children"].append(child_dict)
+            
+            return project_dict
+        
+        # Build tree structure
+        tree = []
+        for project in projects:
+            project_dict = await build_tree_with_children(project)
+            tree.append(project_dict)
+        
+        return {
+            "tree": tree,
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total": total_count,
+                "total_pages": total_pages,
+                "has_next": has_next,
+                "has_prev": has_prev
+            }
+        }
 
     @classmethod
     async def get_project_tree(cls, user: dict, root_id: str = "root") -> List[dict]:

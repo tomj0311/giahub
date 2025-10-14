@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, memo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Box,
     Button,
@@ -33,6 +34,7 @@ import { useConfirmation } from '../contexts/ConfirmationContext';
 function WorkflowConfig({ user }) {
     // Use the user token from props (same pattern as other dashboard components)
     const token = user?.token;
+    const navigate = useNavigate();
 
     const { showSuccess, showError, showWarning, showInfo } = useSnackbar();
     const { showDeleteConfirmation } = useConfirmation();
@@ -453,7 +455,17 @@ function WorkflowConfig({ user }) {
                                     </TableRow>
                                 ) : (
                                     existingConfigs.map(cfg => (
-                                        <TableRow key={cfg.id || cfg.name} hover>
+                                        <TableRow 
+                                            key={cfg.id || cfg.name} 
+                                            hover
+                                            sx={{ 
+                                                cursor: 'pointer',
+                                                '&:hover': {
+                                                    backgroundColor: 'action.hover'
+                                                }
+                                            }}
+                                            onClick={() => navigate(`/dashboard/workflow-execution?workflow=${cfg.id}`)}
+                                        >
                                             <TableCell>{cfg.name}</TableCell>
                                             <TableCell>
                                                 {cfg.category ? (
@@ -468,7 +480,13 @@ function WorkflowConfig({ user }) {
                                                         <Typography variant="body2" sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                             {cfg.bpmn_filename}
                                                         </Typography>
-                                                        <IconButton size="small" onClick={() => downloadBPMN(cfg.id, cfg.bpmn_filename)}>
+                                                        <IconButton 
+                                                            size="small" 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                downloadBPMN(cfg.id, cfg.bpmn_filename);
+                                                            }}
+                                                        >
                                                             <DownloadIcon size={14} />
                                                         </IconButton>
                                                     </Box>
@@ -477,7 +495,14 @@ function WorkflowConfig({ user }) {
                                                 )}
                                             </TableCell>
                                             <TableCell align="right">
-                                                <IconButton size="small" color="primary" onClick={() => openEdit(cfg.name)}>
+                                                <IconButton 
+                                                    size="small" 
+                                                    color="primary" 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openEdit(cfg.name);
+                                                    }}
+                                                >
                                                     <EditIcon size={16} />
                                                 </IconButton>
                                             </TableCell>

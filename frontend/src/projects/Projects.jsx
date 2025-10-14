@@ -4,13 +4,14 @@ import { Box, Tabs, Tab, Typography, List, ListItem, ListItemButton, ListItemIco
 import ProjectTreeView from './ProjectTreeView'
 import ProjectPlanning from './ProjectPlanning'
 import ProjectDashboard from './ProjectGantt'
-import { FolderKanban, ListChecks, BarChart3 } from 'lucide-react'
+import ProjectStatusHome from './ProjectStatusHome'
+import { FolderKanban, ListChecks, BarChart3, Home } from 'lucide-react'
 
 function Projects({ user }) {
   const location = useLocation()
   
   // Check if we should restore tab from location state
-  const initialTab = location.state?.tab ?? 0
+  const initialTab = location.state?.tab ?? 3
   const [activeTab, setActiveTab] = useState(initialTab)
 
   // Update tab when location state changes
@@ -25,7 +26,7 @@ function Projects({ user }) {
   }
 
   const menuItems = [
-    { label: 'Gantt Chart', icon: <BarChart3 size={20} />, index: 2 },
+    { label: 'Home', icon: <Home size={20} />, index: 3 },
     { label: 'Portfolio', icon: <FolderKanban size={20} />, index: 0 },
     { label: 'Planning', icon: <ListChecks size={20} />, index: 1 },
   ]
@@ -99,6 +100,7 @@ function Projects({ user }) {
           {activeTab === 0 && <ProjectTreeView user={user} />}
           {activeTab === 1 && <ProjectPlanning user={user} />}
           {activeTab === 2 && <ProjectDashboard user={user} />}
+          {activeTab === 3 && <ProjectStatusHome user={user} />}
         </Box>
       </Box>
     </Box>
