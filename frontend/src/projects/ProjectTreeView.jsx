@@ -14,7 +14,6 @@ import {
   IconButton,
   Chip,
   Typography,
-  Paper,
   CircularProgress,
   Autocomplete,
   Tooltip,
@@ -27,7 +26,16 @@ import {
   Card,
   CardContent,
   alpha,
-  useTheme
+  useTheme,
+  Badge,
+  Popover,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemText,
+  Divider,
+  Stack,
+  TablePagination
 } from '@mui/material'
 import {
   Plus,
@@ -35,7 +43,11 @@ import {
   Trash2,
   ChevronRight,
   ChevronDown,
-  Circle
+  Filter,
+  X,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { useConfirmation } from '../contexts/ConfirmationContext'
@@ -53,11 +65,34 @@ function ProjectTreeView({ user }) {
   const isMountedRef = useRef(true)
   const isLoadingRef = useRef(false)
 
+  // Data state
   const [projectTree, setProjectTree] = useState([])
-  const [allProjects, setAllProjects] = useState([]) // Flat list for parent selection
-  const [tenantUsers, setTenantUsers] = useState([]) // Users in the same tenant
+  const [allProjects, setAllProjects] = useState([])
+  const [tenantUsers, setTenantUsers] = useState([])
+  const [fieldMetadata, setFieldMetadata] = useState([]) // DYNAMIC - from API
   const [loading, setLoading] = useState(true)
-  const [expanded, setExpanded] = useState({}) // Track expanded nodes
+  const [expanded, setExpanded] = useState({})
+  
+  // Pagination state
+  const [page, setPage] = useState(0) // MUI uses 0-based
+  const [rowsPerPage, setRowsPerPage] = useState(20)
+  const [totalCount, setTotalCount] = useState(0)
+  
+  // Filter and sort state
+  const [filters, setFilters] = useState([])
+  const [sortField, setSortField] = useState(null)
+  const [sortOrder, setSortOrder] = useState('asc')
+  
+  // Filter popup state
+  const [filterAnchorEl, setFilterAnchorEl] = useState(null)
+  const [filterDialogOpen, setFilterDialogOpen] = useState(false)
+  const [currentFilter, setCurrentFilter] = useState({
+    field: '',
+    operator: '',
+    value: ''
+  })
+  
+  // Project dialog state
   const [dialogOpen, setDialogOpen] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
   const [formErrors, setFormErrors] = useState({})
@@ -76,13 +111,54 @@ function ProjectTreeView({ user }) {
     is_public: false
   })
 
+  // Load field metadata from API - NO HARDCODING!
+  const loadFieldMetadata = useCallback(async () => {
+    try {
+      const res = await apiCall('/api/projects/projects/fields-metadata', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.detail || 'Failed to load field metadata')
+      }
+
+      const response = await res.json()
+      
+      if (isMountedRef.current) {
+        setFieldMetadata(response.fields || [])
+      }
+    } catch (error) {
+      console.error('Failed to load field metadata:', error)
+      if (isMountedRef.current) {
+        showError(error.message || 'Failed to load field metadata')
+      }
+    }
+  }, [token, showError])
+
   const loadProjectTree = useCallback(async () => {
     if (isLoadingRef.current || !isMountedRef.current) return
     isLoadingRef.current = true
     setLoading(true)
 
     try {
-      const res = await apiCall('/api/projects/projects/tree?root_id=root', {
+      const params = new URLSearchParams({
+        root_id: 'root',
+        page: (page + 1).toString(), // Backend uses 1-based
+        page_size: rowsPerPage.toString()
+      })
+      
+      if (sortField) {
+        params.append('sort_field', sortField)
+        params.append('sort_order', sortOrder)
+      }
+      
+      if (filters.length > 0) {
+        params.append('filters', JSON.stringify(filters))
+      }
+
+      const res = await apiCall(`/api/projects/projects/tree?${params.toString()}`, {
         method: 'GET',
         headers: { Authorization: `Bearer ${token}` }
       })
@@ -96,7 +172,8 @@ function ProjectTreeView({ user }) {
 
       if (isMountedRef.current) {
         setProjectTree(response.tree || [])
-        // Also create a flat list for parent selection
+        setTotalCount(response.pagination?.total || 0)
+        
         const flatList = flattenTree(response.tree || [])
         setAllProjects(flatList)
       }
@@ -111,7 +188,7 @@ function ProjectTreeView({ user }) {
         isLoadingRef.current = false
       }
     }
-  }, [token, showError])
+  }, [token, showError, page, rowsPerPage, filters, sortField, sortOrder])
 
   const loadTenantUsers = useCallback(async () => {
     try {
@@ -128,7 +205,6 @@ function ProjectTreeView({ user }) {
       const users = await res.json()
       
       if (isMountedRef.current) {
-        // Map users to include display name and email
         const mappedUsers = users.map(u => ({
           id: u.id,
           email: u.email,
@@ -146,7 +222,6 @@ function ProjectTreeView({ user }) {
     }
   }, [token, showError])
 
-  // Flatten tree for parent selection dropdown
   const flattenTree = (tree, level = 0) => {
     let result = []
     tree.forEach(node => {
@@ -165,13 +240,78 @@ function ProjectTreeView({ user }) {
 
   useEffect(() => {
     isMountedRef.current = true
-    loadProjectTree()
+    loadFieldMetadata() // Load metadata first
     loadTenantUsers()
 
     return () => {
       isMountedRef.current = false
     }
   }, [])
+
+  useEffect(() => {
+    loadProjectTree()
+  }, [loadProjectTree])
+
+  // Pagination handlers
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage)
+  }
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10))
+    setPage(0)
+  }
+
+  // Filter handlers
+  const handleOpenFilterPopup = (event) => {
+    setFilterAnchorEl(event.currentTarget)
+  }
+
+  const handleCloseFilterPopup = () => {
+    setFilterAnchorEl(null)
+  }
+
+  const handleOpenFilterDialog = () => {
+    handleCloseFilterPopup()
+    setFilterDialogOpen(true)
+  }
+
+  const handleCloseFilterDialog = () => {
+    setFilterDialogOpen(false)
+    setCurrentFilter({ field: '', operator: '', value: '' })
+  }
+
+  const handleAddFilter = () => {
+    if (!currentFilter.field || !currentFilter.operator || !currentFilter.value) {
+      showError('Please fill all filter fields')
+      return
+    }
+
+    setFilters(prev => [...prev, { ...currentFilter }])
+    handleCloseFilterDialog()
+    setPage(0)
+  }
+
+  const handleRemoveFilter = (index) => {
+    setFilters(prev => prev.filter((_, i) => i !== index))
+    setPage(0)
+  }
+
+  const handleClearAllFilters = () => {
+    setFilters([])
+    setPage(0)
+  }
+
+  // Sort handler
+  const handleSort = (fieldName) => {
+    if (sortField === fieldName) {
+      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(fieldName)
+      setSortOrder('asc')
+    }
+    setPage(0)
+  }
 
   const toggleExpand = (projectId) => {
     setExpanded(prev => ({
@@ -237,10 +377,8 @@ function ProjectTreeView({ user }) {
   }
 
   const saveProject = async () => {
-    // Clear previous errors
     const errors = {}
     
-    // Validate required fields
     if (!form.name.trim()) {
       errors.name = 'Project name is required'
     }
@@ -253,7 +391,6 @@ function ProjectTreeView({ user }) {
       errors.approver = 'Approver is required'
     }
 
-    // Validate that assignee and approver are not the same
     if (form.assignee && form.approver && form.assignee === form.approver) {
       errors.approver = 'Approver must be different from Assignee'
     }
@@ -266,7 +403,6 @@ function ProjectTreeView({ user }) {
       errors.due_date = 'Due date is required'
     }
 
-    // Validate that start_date is before due_date
     if (form.start_date && form.due_date) {
       const startDate = new Date(form.start_date)
       const dueDate = new Date(form.due_date)
@@ -275,13 +411,11 @@ function ProjectTreeView({ user }) {
       }
     }
 
-    // If there are errors, set them and return
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors)
       return
     }
 
-    // Clear errors if validation passes
     setFormErrors({})
 
     try {
@@ -372,14 +506,154 @@ function ProjectTreeView({ user }) {
     return labels[status] || status
   }
 
-  const getPriorityColor = (priority) => {
-    const colors = {
-      Urgent: 'error',
-      High: 'warning',
-      Normal: 'info',
-      Low: 'default'
+  // Get field definition by name
+  const getFieldDef = (fieldName) => {
+    return fieldMetadata.find(f => f.name === fieldName)
+  }
+
+  // Get operator label
+  const getOperatorLabel = (operator) => {
+    const labels = {
+      equals: 'Equals',
+      not_equals: 'Not Equals',
+      contains: 'Contains',
+      starts_with: 'Starts With',
+      ends_with: 'Ends With',
+      greater_than: 'Greater Than',
+      less_than: 'Less Than',
+      between: 'Between',
+      before: 'Before',
+      after: 'After',
+      in: 'In'
     }
-    return colors[priority] || 'default'
+    return labels[operator] || operator
+  }
+
+  // Render filter value based on type
+  const renderFilterValueInput = () => {
+    const fieldDef = getFieldDef(currentFilter.field)
+    if (!fieldDef) return null
+
+    const operator = currentFilter.operator
+
+    // Between operator needs two inputs
+    if (operator === 'between') {
+      return (
+        <Stack direction="row" spacing={1}>
+          <TextField
+            label="From"
+            type={fieldDef.type === 'date' ? 'date' : fieldDef.type === 'number' ? 'number' : 'text'}
+            value={Array.isArray(currentFilter.value) ? currentFilter.value[0] || '' : ''}
+            onChange={(e) => {
+              const val = Array.isArray(currentFilter.value) ? [...currentFilter.value] : ['', '']
+              val[0] = e.target.value
+              setCurrentFilter({ ...currentFilter, value: val })
+            }}
+            InputLabelProps={{ shrink: true }}
+            fullWidth
+          />
+          <TextField
+            label="To"
+            type={fieldDef.type === 'date' ? 'date' : fieldDef.type === 'number' ? 'number' : 'text'}
+            value={Array.isArray(currentFilter.value) ? currentFilter.value[1] || '' : ''}
+            onChange={(e) => {
+              const val = Array.isArray(currentFilter.value) ? [...currentFilter.value] : ['', '']
+              val[1] = e.target.value
+              setCurrentFilter({ ...currentFilter, value: val })
+            }}
+            InputLabelProps={{ shrink: true }}
+            fullWidth
+          />
+        </Stack>
+      )
+    }
+
+    // "In" operator for select fields
+    if (operator === 'in' && fieldDef.type === 'select') {
+      return (
+        <Autocomplete
+          multiple
+          options={fieldDef.options || []}
+          value={Array.isArray(currentFilter.value) ? currentFilter.value : []}
+          onChange={(event, newValue) => {
+            setCurrentFilter({ ...currentFilter, value: newValue })
+          }}
+          renderInput={(params) => <TextField {...params} label="Select values" />}
+        />
+      )
+    }
+
+    // Select type with options
+    if (fieldDef.type === 'select' && fieldDef.options) {
+      return (
+        <FormControl fullWidth>
+          <InputLabel>Value</InputLabel>
+          <Select
+            value={currentFilter.value}
+            label="Value"
+            onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
+          >
+            {fieldDef.options.map(opt => (
+              <MenuItem key={opt} value={opt}>{opt}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      )
+    }
+
+    // Boolean type
+    if (fieldDef.type === 'boolean') {
+      return (
+        <FormControl fullWidth>
+          <InputLabel>Value</InputLabel>
+          <Select
+            value={currentFilter.value}
+            label="Value"
+            onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
+          >
+            <MenuItem value={true}>True</MenuItem>
+            <MenuItem value={false}>False</MenuItem>
+          </Select>
+        </FormControl>
+      )
+    }
+
+    // Date type
+    if (fieldDef.type === 'date') {
+      return (
+        <TextField
+          label="Value"
+          type="date"
+          value={currentFilter.value}
+          onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
+          InputLabelProps={{ shrink: true }}
+          fullWidth
+        />
+      )
+    }
+
+    // Number type
+    if (fieldDef.type === 'number') {
+      return (
+        <TextField
+          label="Value"
+          type="number"
+          value={currentFilter.value}
+          onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
+          fullWidth
+        />
+      )
+    }
+
+    // Default text input
+    return (
+      <TextField
+        label="Value"
+        value={currentFilter.value}
+        onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
+        fullWidth
+      />
+    )
   }
 
   const renderTreeNode = (node, level = 0) => {
@@ -396,7 +670,6 @@ function ProjectTreeView({ user }) {
             bgcolor: level > 0 ? alpha('#000', 0.01) : 'transparent'
           }}
         >
-          {/* Subject with expand/collapse */}
           <TableCell sx={{ pl: 2 + level * 4, borderLeft: '3px solid', borderLeftColor: `${getStatusColor(node.status)}.main` }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               {hasChildren ? (
@@ -416,10 +689,8 @@ function ProjectTreeView({ user }) {
             </Box>
           </TableCell>
 
-          {/* Priority */}
           <TableCell>{node.priority}</TableCell>
 
-          {/* Status */}
           <TableCell>
             <Chip
               label={getStatusLabel(node.status)}
@@ -428,18 +699,14 @@ function ProjectTreeView({ user }) {
             />
           </TableCell>
 
-          {/* Assignee */}
           <TableCell>{node.assignee || '-'}</TableCell>
 
-          {/* Due Date */}
           <TableCell>
             {node.due_date ? new Date(node.due_date).toLocaleDateString() : '-'}
           </TableCell>
 
-          {/* Progress */}
           <TableCell>{node.progress}%</TableCell>
 
-          {/* Actions */}
           <TableCell align="right">
             <IconButton size="small" onClick={() => openCreate(node.id)}>
               <Plus size={18} />
@@ -457,20 +724,9 @@ function ProjectTreeView({ user }) {
           </TableCell>
         </TableRow>
 
-        {/* Render children */}
         {hasChildren && isExpanded && node.children.map(child => renderTreeNode(child, level + 1))}
       </React.Fragment>
     )
-  }
-
-  const getStatusColorHex = (status) => {
-    const colors = {
-      ON_TRACK: theme.palette.success.main,
-      AT_RISK: theme.palette.warning.main,
-      OFF_TRACK: theme.palette.error.main,
-      COMPLETED: theme.palette.info.main
-    }
-    return colors[status] || theme.palette.text.secondary
   }
 
   return (
@@ -497,6 +753,36 @@ function ProjectTreeView({ user }) {
       {/* Card Container */}
       <Card>
         <CardContent>
+          {/* Filter Bar */}
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+              {filters.map((filter, index) => (
+                <Chip
+                  key={index}
+                  label={`${getFieldDef(filter.field)?.label || filter.field}: ${getOperatorLabel(filter.operator)} ${filter.value}`}
+                  onDelete={() => handleRemoveFilter(index)}
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                />
+              ))}
+              {filters.length > 0 && (
+                <Button size="small" onClick={handleClearAllFilters}>
+                  Clear All
+                </Button>
+              )}
+            </Box>
+            <Box>
+              <Tooltip title="Filter & Sort">
+                <IconButton onClick={handleOpenFilterPopup}>
+                  <Badge badgeContent={filters.length} color="primary">
+                    <Filter size={20} />
+                  </Badge>
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </Box>
+
           {loading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
               <CircularProgress />
@@ -507,12 +793,42 @@ function ProjectTreeView({ user }) {
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableCell>Subject</TableCell>
-                      <TableCell>Priority</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell>Assignee</TableCell>
-                      <TableCell>Due Date</TableCell>
-                      <TableCell>Progress</TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort('name')}>
+                          Subject
+                          {sortField === 'name' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort('priority')}>
+                          Priority
+                          {sortField === 'priority' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort('status')}>
+                          Status
+                          {sortField === 'status' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort('assignee')}>
+                          Assignee
+                          {sortField === 'assignee' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort('due_date')}>
+                          Due Date
+                          {sortField === 'due_date' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort('progress')}>
+                          Progress
+                          {sortField === 'progress' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                        </Box>
+                      </TableCell>
                       <TableCell align="right">Actions</TableCell>
                     </TableRow>
                   </TableHead>
@@ -531,12 +847,104 @@ function ProjectTreeView({ user }) {
                   </TableBody>
                 </Table>
               </TableContainer>
+
+              {/* Pagination */}
+              <TablePagination
+                component="div"
+                count={totalCount}
+                page={page}
+                onPageChange={handleChangePage}
+                rowsPerPage={rowsPerPage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+                rowsPerPageOptions={[10, 20, 50, 100]}
+              />
             </>
           )}
         </CardContent>
       </Card>
 
-      {/* Create/Edit Dialog */}
+      {/* Filter Popup Menu */}
+      <Popover
+        open={Boolean(filterAnchorEl)}
+        anchorEl={filterAnchorEl}
+        onClose={handleCloseFilterPopup}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+      >
+        <List sx={{ width: 200 }}>
+          <ListItem>
+            <ListItemText primary="Filter & Sort Options" primaryTypographyProps={{ variant: 'subtitle2', fontWeight: 'bold' }} />
+          </ListItem>
+          <Divider />
+          <ListItemButton onClick={handleOpenFilterDialog}>
+            <ListItemText primary="Add Filter" />
+          </ListItemButton>
+          {filters.length > 0 && (
+            <ListItemButton onClick={handleClearAllFilters}>
+              <ListItemText primary="Clear All Filters" />
+            </ListItemButton>
+          )}
+        </List>
+      </Popover>
+
+      {/* Filter Dialog */}
+      <Dialog open={filterDialogOpen} onClose={handleCloseFilterDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Add Filter</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+            {/* Field Selection - DYNAMIC from API */}
+            <FormControl fullWidth>
+              <InputLabel>Field</InputLabel>
+              <Select
+                value={currentFilter.field}
+                label="Field"
+                onChange={(e) => setCurrentFilter({ field: e.target.value, operator: '', value: '' })}
+              >
+                {fieldMetadata.filter(f => f.filterable).map(field => (
+                  <MenuItem key={field.name} value={field.name}>
+                    {field.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            {/* Operator Selection - DYNAMIC based on field type */}
+            {currentFilter.field && (
+              <FormControl fullWidth>
+                <InputLabel>Operator</InputLabel>
+                <Select
+                  value={currentFilter.operator}
+                  label="Operator"
+                  onChange={(e) => setCurrentFilter({ ...currentFilter, operator: e.target.value, value: '' })}
+                >
+                  {(getFieldDef(currentFilter.field)?.operators || []).map(op => (
+                    <MenuItem key={op} value={op}>
+                      {getOperatorLabel(op)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+
+            {/* Value Input - DYNAMIC based on field type and operator */}
+            {currentFilter.field && currentFilter.operator && renderFilterValueInput()}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseFilterDialog}>Cancel</Button>
+          <Button onClick={handleAddFilter} variant="contained">
+            Add Filter
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Create/Edit Project Dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>{isEditMode ? 'Edit Project' : 'Create New Project'}</DialogTitle>
         <DialogContent>

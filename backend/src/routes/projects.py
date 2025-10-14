@@ -14,6 +14,21 @@ from ..services.project_service import ProjectService
 router = APIRouter(tags=["projects"])
 
 
+@router.get("/projects/fields-metadata")
+async def get_project_fields_metadata(
+    user: dict = Depends(verify_token_middleware)
+):
+    """Get dynamically discovered field metadata from actual project documents"""
+    try:
+        result = await ProjectService.get_field_metadata(user)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[PROJECT] Error fetching field metadata: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch field metadata")
+
+
 @router.post("/projects", status_code=status.HTTP_201_CREATED)
 async def create_project(
     project: dict,
@@ -67,12 +82,25 @@ async def get_projects(
 @router.get("/projects/tree")
 async def get_project_tree(
     user: dict = Depends(verify_token_middleware),
-    root_id: str = Query("root", description="Root project ID")
+    root_id: str = Query("root", description="Root project ID"),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    page_size: int = Query(20, ge=1, le=1000, description="Items per page"),
+    filters: Optional[str] = Query(None, description="JSON-encoded filters array"),
+    sort_field: Optional[str] = Query(None, description="Field name to sort by"),
+    sort_order: str = Query("asc", description="Sort order: asc or desc")
 ):
-    """Get hierarchical project tree"""
+    """Get hierarchical project tree with server-side filtering, sorting, and pagination"""
     try:
-        result = await ProjectService.get_project_tree(user, root_id)
-        return {"tree": result}
+        result = await ProjectService.get_project_tree_paginated(
+            user=user,
+            root_id=root_id,
+            page=page,
+            page_size=page_size,
+            filters=filters,
+            sort_field=sort_field,
+            sort_order=sort_order
+        )
+        return result
     except HTTPException:
         raise
     except Exception as e:

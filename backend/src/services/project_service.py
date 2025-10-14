@@ -276,6 +276,233 @@ class ProjectService:
         return {"message": "Project deleted successfully"}
 
     @classmethod
+    async def get_field_metadata(cls, user: dict) -> dict:
+        """Dynamically discover fields from actual project documents"""
+        tenant_id = await cls.validate_tenant_access(user)
+        
+        # Get a sample of projects to analyze fields
+        projects = await MongoStorageService.find_many(
+            "projects",
+            {},
+            tenant_id=tenant_id,
+            limit=100
+        )
+        
+        if not projects:
+            return {"fields": []}
+        
+        # Discover all unique fields across projects
+        all_fields = set()
+        field_samples = {}
+        
+        for project in projects:
+            for key, value in project.items():
+                if key not in ['_id', 'tenantId', 'userId']:
+                    all_fields.add(key)
+                    if key not in field_samples:
+                        field_samples[key] = []
+                    if value is not None:
+                        field_samples[key].append(value)
+        
+        # Infer field types and build metadata
+        fields = []
+        for field_name in sorted(all_fields):
+            samples = field_samples.get(field_name, [])
+            field_meta = {
+                "name": field_name,
+                "label": field_name.replace('_', ' ').title(),
+                "sortable": True,
+                "filterable": True
+            }
+            
+            # Infer type from samples
+            if not samples:
+                field_meta["type"] = "text"
+                field_meta["operators"] = ["equals", "contains"]
+            else:
+                sample = samples[0]
+                
+                # Check if it's a date
+                if 'date' in field_name.lower() or 'at' in field_name.lower():
+                    field_meta["type"] = "date"
+                    field_meta["operators"] = ["equals", "before", "after", "between"]
+                # Check if it's a number
+                elif isinstance(sample, (int, float)):
+                    field_meta["type"] = "number"
+                    field_meta["operators"] = ["equals", "greater_than", "less_than", "between"]
+                # Check if it's a boolean
+                elif isinstance(sample, bool):
+                    field_meta["type"] = "boolean"
+                    field_meta["operators"] = ["equals"]
+                    field_meta["options"] = [True, False]
+                # Check if it's from a limited set (enum)
+                else:
+                    unique_values = list(set([str(s) for s in samples if s is not None]))
+                    if len(unique_values) <= 10:  # If <= 10 unique values, treat as select
+                        field_meta["type"] = "select"
+                        field_meta["operators"] = ["equals", "not_equals", "in"]
+                        field_meta["options"] = unique_values
+                    else:
+                        field_meta["type"] = "text"
+                        field_meta["operators"] = ["equals", "contains", "starts_with", "ends_with"]
+            
+            fields.append(field_meta)
+        
+        return {"fields": fields}
+
+    @classmethod
+    async def _build_filter_query(cls, filters: Optional[str]) -> dict:
+        """Build MongoDB filter query from JSON filters"""
+        import json
+        
+        if not filters:
+            return {}
+        
+        try:
+            filter_list = json.loads(filters)
+            if not isinstance(filter_list, list):
+                return {}
+            
+            query = {}
+            
+            for filter_item in filter_list:
+                field = filter_item.get("field")
+                operator = filter_item.get("operator")
+                value = filter_item.get("value")
+                
+                if not field or not operator:
+                    continue
+                
+                # Text operators
+                if operator == "contains":
+                    query[field] = {"$regex": str(value), "$options": "i"}
+                elif operator == "equals":
+                    query[field] = value
+                elif operator == "not_equals":
+                    query[field] = {"$ne": value}
+                elif operator == "starts_with":
+                    query[field] = {"$regex": f"^{value}", "$options": "i"}
+                elif operator == "ends_with":
+                    query[field] = {"$regex": f"{value}$", "$options": "i"}
+                
+                # Number operators
+                elif operator == "greater_than":
+                    query[field] = {"$gt": float(value)}
+                elif operator == "less_than":
+                    query[field] = {"$lt": float(value)}
+                elif operator == "between" and isinstance(value, list) and len(value) == 2:
+                    query[field] = {"$gte": float(value[0]), "$lte": float(value[1])}
+                
+                # Date operators
+                elif operator == "before":
+                    query[field] = {"$lt": value}
+                elif operator == "after":
+                    query[field] = {"$gt": value}
+                
+                # Array operators
+                elif operator == "in" and isinstance(value, list):
+                    query[field] = {"$in": value}
+            
+            return query
+            
+        except json.JSONDecodeError:
+            logger.error(f"[PROJECT] Invalid JSON in filters: {filters}")
+            return {}
+        except Exception as e:
+            logger.error(f"[PROJECT] Error building filter query: {e}")
+            return {}
+
+    @classmethod
+    async def get_project_tree_paginated(
+        cls, 
+        user: dict, 
+        root_id: str = "root",
+        page: int = 1,
+        page_size: int = 20,
+        filters: Optional[str] = None,
+        sort_field: Optional[str] = None,
+        sort_order: str = "asc"
+    ) -> dict:
+        """Get hierarchical project tree with server-side filtering, sorting, and pagination"""
+        tenant_id = await cls.validate_tenant_access(user)
+        
+        # Build base filter for parent
+        base_filter = {"parent_id": root_id}
+        
+        # Add dynamic filters
+        filter_query = await cls._build_filter_query(filters)
+        base_filter.update(filter_query)
+        
+        # Get total count
+        total_count = await MongoStorageService.count_documents(
+            "projects",
+            base_filter,
+            tenant_id=tenant_id
+        )
+        
+        # Calculate pagination
+        skip = (page - 1) * page_size
+        total_pages = (total_count + page_size - 1) // page_size if page_size > 0 else 1
+        has_next = page < total_pages
+        has_prev = page > 1
+        
+        # Determine sort
+        sort_field_name = sort_field or "name"
+        sort_direction = 1 if sort_order == "asc" else -1
+        
+        # Get paginated root level projects
+        projects = await MongoStorageService.find_many(
+            "projects",
+            base_filter,
+            tenant_id=tenant_id,
+            sort_field=sort_field_name,
+            sort_order=sort_direction,
+            skip=skip,
+            limit=page_size
+        )
+        
+        # Build tree with children
+        async def build_tree_with_children(project_dict: dict) -> dict:
+            """Recursively build children for a project"""
+            project_id = str(project_dict["_id"])
+            project_dict["id"] = project_id
+            project_dict.pop("_id", None)
+            
+            # Get children
+            children = await MongoStorageService.find_many(
+                "projects",
+                {"parent_id": project_id},
+                tenant_id=tenant_id,
+                sort_field="name",
+                sort_order=1
+            )
+            
+            project_dict["children"] = []
+            for child in children:
+                child_dict = await build_tree_with_children(child)
+                project_dict["children"].append(child_dict)
+            
+            return project_dict
+        
+        # Build tree structure
+        tree = []
+        for project in projects:
+            project_dict = await build_tree_with_children(project)
+            tree.append(project_dict)
+        
+        return {
+            "tree": tree,
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total": total_count,
+                "total_pages": total_pages,
+                "has_next": has_next,
+                "has_prev": has_prev
+            }
+        }
+
+    @classmethod
     async def get_project_tree(cls, user: dict, root_id: str = "root") -> List[dict]:
         """Get hierarchical project tree"""
         tenant_id = await cls.validate_tenant_access(user)
