@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Box,
   Button,
@@ -41,7 +42,8 @@ import {
   X,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  BarChart3
 } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { useConfirmation } from '../contexts/ConfirmationContext'
@@ -52,6 +54,7 @@ const PRIORITY_OPTIONS = ['Low', 'Normal', 'High', 'Urgent']
 
 function ProjectTreeView({ user }) {
   const theme = useTheme()
+  const navigate = useNavigate()
   const token = user?.token
   const { showSuccess, showError } = useSnackbar()
   const { showDeleteConfirmation } = useConfirmation()
@@ -692,6 +695,17 @@ function ProjectTreeView({ user }) {
           <TableCell>{node.progress}%</TableCell>
 
           <TableCell align="right">
+            <Tooltip title="View Gantt Chart">
+              <IconButton 
+                size="small" 
+                color="primary"
+                onClick={() => navigate('/dashboard/projects/gantt', { 
+                  state: { projectId: node.id, projectName: node.name } 
+                })}
+              >
+                <BarChart3 size={18} />
+              </IconButton>
+            </Tooltip>
             <IconButton size="small" onClick={() => openCreate(node.id)}>
               <Plus size={18} />
             </IconButton>
