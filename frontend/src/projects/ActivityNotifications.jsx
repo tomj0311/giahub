@@ -458,57 +458,91 @@ function ActivityNotifications({ user, activityId, projectId }) {
           </Typography>
         ) : (
           <List>
-            {notifications.map((notification, index) => (
-              <React.Fragment key={notification.id || index}>
-                <ListItem alignItems="flex-start" sx={{ px: 0 }}>
-                  <ListItemText
-                    primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                        <Typography variant="body2" fontWeight="medium">
-                          {notification.sender_name || notification.sender_email}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {notification.created_at ? new Date(notification.created_at).toLocaleString() : 'Just now'}
-                        </Typography>
-                      </Box>
-                    }
-                    secondary={
-                      <Box>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mb: 1 }}>
-                          {notification.message}
-                        </Typography>
-                        
-                        {notification.mentioned_users?.length > 0 && (
-                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
-                            {notification.mentioned_users.map((email, i) => (
-                              <Chip key={i} label={email} size="small" variant="outlined" />
-                            ))}
-                          </Box>
-                        )}
-                        
-                        {notification.files?.length > 0 && (
-                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                            {notification.files.map((file, i) => (
-                              <Chip
-                                key={i}
-                                label={file.filename}
-                                size="small"
-                                icon={<Download size={14} />}
-                                onClick={() => {
-                                  // Download file logic can be added here
-                                  window.open(`/api/download/${file.path}`, '_blank')
-                                }}
-                              />
-                            ))}
-                          </Box>
-                        )}
-                      </Box>
-                    }
-                  />
-                </ListItem>
-                {index < notifications.length - 1 && <Divider />}
-              </React.Fragment>
-            ))}
+            {notifications.map((notification, index) => {
+              // Get current user email from localStorage
+              const currentUserEmail = localStorage.getItem('email')
+              const isCurrentUser = notification.sender_email === currentUserEmail
+              
+              return (
+                <React.Fragment key={notification.id || index}>
+                  <ListItem 
+                    alignItems="flex-start" 
+                    sx={{ 
+                      px: 0,
+                      flexDirection: isCurrentUser ? 'row-reverse' : 'row',
+                      justifyContent: isCurrentUser ? 'flex-end' : 'flex-start'
+                    }}
+                  >
+                    <ListItemText
+                      sx={{
+                        textAlign: isCurrentUser ? 'right' : 'left',
+                        maxWidth: '90%'
+                      }}
+                      primary={
+                        <Box sx={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: 1, 
+                          mb: 0.5,
+                          justifyContent: isCurrentUser ? 'flex-end' : 'flex-start'
+                        }}>
+                          <Typography variant="body2" fontWeight="medium">
+                            {notification.sender_name || notification.sender_email}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {notification.created_at ? new Date(notification.created_at).toLocaleString() : 'Just now'}
+                          </Typography>
+                        </Box>
+                      }
+                      secondary={
+                        <Box>
+                          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mb: 1 }}>
+                            {notification.message}
+                          </Typography>
+                          
+                          {notification.mentioned_users?.length > 0 && (
+                            <Box sx={{ 
+                              display: 'flex', 
+                              flexWrap: 'wrap', 
+                              gap: 0.5, 
+                              mb: 1,
+                              justifyContent: isCurrentUser ? 'flex-end' : 'flex-start'
+                            }}>
+                              {notification.mentioned_users.map((email, i) => (
+                                <Chip key={i} label={email} size="small" variant="outlined" />
+                              ))}
+                            </Box>
+                          )}
+                          
+                          {notification.files?.length > 0 && (
+                            <Box sx={{ 
+                              display: 'flex', 
+                              flexWrap: 'wrap', 
+                              gap: 0.5,
+                              justifyContent: isCurrentUser ? 'flex-end' : 'flex-start'
+                            }}>
+                              {notification.files.map((file, i) => (
+                                <Chip
+                                  key={i}
+                                  label={file.filename}
+                                  size="small"
+                                  icon={<Download size={14} />}
+                                  onClick={() => {
+                                    // Download file logic can be added here
+                                    window.open(`/api/download/${file.path}`, '_blank')
+                                  }}
+                                />
+                              ))}
+                            </Box>
+                          )}
+                        </Box>
+                      }
+                    />
+                  </ListItem>
+                  {index < notifications.length - 1 && <Divider />}
+                </React.Fragment>
+              )
+            })}
           </List>
         )}
       </CardContent>
