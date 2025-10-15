@@ -249,8 +249,8 @@ function ActivityNotifications({ user, activityId, projectId }) {
         const formData = new FormData()
         selectedFiles.forEach(file => formData.append('files', file))
 
-        // Upload to projectId/activityId/
-        const uploadPath = `${projectId}/${activityId}`
+        // Upload to projects/projectId/activityId/
+        const uploadPath = `projects/${projectId}/${activityId}`
         const uploadRes = await apiCall(`/api/upload/${uploadPath}`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
