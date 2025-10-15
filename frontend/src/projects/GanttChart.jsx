@@ -327,13 +327,26 @@ function GanttChart({ user, projectId: propProjectId }) {
 
     // Generate weeks (starting on Monday)
     current = new Date(start)
+    current.setHours(0, 0, 0, 0)
+    
     // Adjust to start of week (Monday)
     const dayOfWeek = current.getDay()
     const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
     current.setDate(current.getDate() + diff)
     
-    while (current <= end) {
-      weeks.push(new Date(current))
+    // Ensure we include weeks that cover the entire timeline
+    const endDate = new Date(end)
+    endDate.setDate(endDate.getDate() + 7) // Add buffer to ensure we cover the end
+    
+    while (current <= endDate) {
+      const weekEnd = new Date(current)
+      weekEnd.setDate(weekEnd.getDate() + 6)
+      
+      // Only include weeks that overlap with our timeline
+      if (weekEnd >= start) {
+        weeks.push(new Date(current))
+      }
+      
       current = new Date(current.getFullYear(), current.getMonth(), current.getDate() + 7)
     }
 
@@ -350,25 +363,94 @@ function GanttChart({ user, projectId: propProjectId }) {
     const start = parseDate(startDate)
     const due = parseDate(dueDate)
     
-    let unitWidth, msPerUnit
-    const msPerDay = 1000 * 60 * 60 * 24
+    let leftPx = 0
+    let widthPx = 0
 
     if (viewMode === 'daily') {
-      unitWidth = 30 * zoomLevel
-      msPerUnit = msPerDay
+      // Calculate position based on days array
+      const unitWidth = 30 * zoomLevel
+      const msPerDay = 1000 * 60 * 60 * 24
+      
+      const daysFromStart = (start - timelineStart) / msPerDay
+      const duration = (due - start) / msPerDay
+      
+      leftPx = Math.max(0, daysFromStart * unitWidth)
+      widthPx = Math.max(unitWidth * 0.3, duration * unitWidth)
+      
     } else if (viewMode === 'weekly') {
-      unitWidth = 80 * zoomLevel
-      msPerUnit = msPerDay * 7
+      // Calculate position based on weeks array
+      const unitWidth = 80 * zoomLevel
+      
+      // Find which week the start and due dates fall into
+      let startWeekIndex = 0
+      let dueWeekIndex = 0
+      
+      for (let i = 0; i < timelineWeeks.length; i++) {
+        const weekStart = timelineWeeks[i]
+        const weekEnd = new Date(weekStart)
+        weekEnd.setDate(weekEnd.getDate() + 6)
+        weekEnd.setHours(23, 59, 59, 999)
+        
+        if (start >= weekStart && start <= weekEnd) {
+          startWeekIndex = i
+          // Calculate fractional position within the week
+          const msPerDay = 1000 * 60 * 60 * 24
+          const dayInWeek = (start - weekStart) / msPerDay
+          leftPx = (i * unitWidth) + (dayInWeek / 7 * unitWidth)
+        }
+        
+        if (due >= weekStart && due <= weekEnd) {
+          dueWeekIndex = i
+        }
+      }
+      
+      // If start is before first week, position at beginning
+      if (start < timelineWeeks[0]) {
+        leftPx = 0
+      }
+      
+      // Calculate width
+      const msPerDay = 1000 * 60 * 60 * 24
+      const totalDays = (due - start) / msPerDay
+      widthPx = Math.max(unitWidth * 0.3, (totalDays / 7) * unitWidth)
+      
     } else { // monthly
-      unitWidth = 120 * zoomLevel
-      msPerUnit = msPerDay * 30 // Approximate
+      // Calculate position based on months array
+      const unitWidth = 120 * zoomLevel
+      
+      // Find which month the start and due dates fall into
+      let startMonthIndex = 0
+      let dueMonthIndex = 0
+      
+      for (let i = 0; i < timelineMonths.length; i++) {
+        const month = timelineMonths[i]
+        const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0)
+        monthEnd.setHours(23, 59, 59, 999)
+        
+        if (start >= month && start <= monthEnd) {
+          startMonthIndex = i
+          // Calculate fractional position within the month
+          const daysInMonth = monthEnd.getDate()
+          const dayInMonth = start.getDate() - 1 // 0-indexed
+          leftPx = (i * unitWidth) + (dayInMonth / daysInMonth * unitWidth)
+        }
+        
+        if (due >= month && due <= monthEnd) {
+          dueMonthIndex = i
+        }
+      }
+      
+      // If start is before first month, position at beginning
+      if (timelineMonths.length > 0 && start < timelineMonths[0]) {
+        leftPx = 0
+      }
+      
+      // Calculate width based on actual time span
+      const msPerDay = 1000 * 60 * 60 * 24
+      const totalDays = (due - start) / msPerDay
+      const avgDaysPerMonth = 30.44 // More accurate average
+      widthPx = Math.max(unitWidth * 0.3, (totalDays / avgDaysPerMonth) * unitWidth)
     }
-    
-    const unitsFromStart = (start - timelineStart) / msPerUnit
-    const durationInUnits = (due - start) / msPerUnit
-    
-    const leftPx = Math.max(0, unitsFromStart * unitWidth)
-    const widthPx = Math.max(unitWidth * 0.3, durationInUnits * unitWidth)
 
     return {
       left: `${leftPx}px`,
