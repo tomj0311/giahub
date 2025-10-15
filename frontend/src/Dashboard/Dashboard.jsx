@@ -789,8 +789,8 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 						px: {
 							xs: 2,    // 16px on mobile
 							sm: 3,    // 24px on small tablets
-							md: 4,    // 32px on medium screens
-							lg: 6,    // 48px on large screens
+							md: 3,    // 32px on medium screens
+							lg: 4,    // 32px on large screens
 						},
 						py: 4
 					})
