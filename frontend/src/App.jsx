@@ -21,23 +21,28 @@ import { apiCall } from './config/api'
 function useAuth() {
   const [token, setToken] = useState(() => localStorage.getItem('token'))
   const [name, setName] = useState(() => localStorage.getItem('name'))
+  const [email, setEmail] = useState(() => localStorage.getItem('email'))
 
-  const login = useCallback((t, n) => {
+  const login = useCallback((t, n, e) => {
     localStorage.setItem('token', t)
     localStorage.setItem('name', n || '')
+    localStorage.setItem('email', e || '')
     setToken(t)
     setName(n || '')
+    setEmail(e || '')
   }, [])
   
   const logout = useCallback(async () => {
     try { await apiCall('/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }) } catch { }
     localStorage.removeItem('token')
     localStorage.removeItem('name')
+    localStorage.removeItem('email')
     setToken(null)
     setName(null)
+    setEmail(null)
   }, [token])
   
-  return { token, name, login, logout }
+  return { token, name, email, login, logout }
 }
 
 function AppShell({ children, themeKey, setThemeKey, isAuthenticated }) {
