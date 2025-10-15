@@ -476,7 +476,7 @@ function ActivityNotifications({ user, activityId, projectId }) {
                     <ListItemText
                       sx={{
                         textAlign: isCurrentUser ? 'right' : 'left',
-                        maxWidth: '90%'
+                        p:2
                       }}
                       primary={
                         <Box sx={{ 
