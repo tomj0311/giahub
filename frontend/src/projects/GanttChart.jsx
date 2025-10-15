@@ -632,40 +632,40 @@ function GanttChart({ user, projectId: propProjectId }) {
         </Box>
       </Box>
 
-      {/* Gantt Chart */}
-      <Box sx={{ display: 'flex', border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-        {/* Left side - Project/Activity List */}
-        <Card sx={{ minWidth: 800, borderRadius: 0, boxShadow: 'none', borderRight: 1, borderColor: 'divider' }}>
-          <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Subject</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Assignee</TableCell>
-                    <TableCell>Due Date</TableCell>
-                    <TableCell>Progress</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {projectTree.map(proj => renderGanttProjectNode(proj, 0))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
+      {/* Project/Activity List */}
+      <Card sx={{ border: 1, borderColor: 'divider', borderRadius: 1, mb: 3 }}>
+        <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Subject</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Assignee</TableCell>
+                  <TableCell>Due Date</TableCell>
+                  <TableCell>Progress</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {projectTree.map(proj => renderGanttProjectNode(proj, 0))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
 
-        {/* Right side - Timeline */}
-        <Box 
-          ref={ganttRef}
-          sx={{ 
-            flex: 1, 
-            minWidth: 600,
-            overflow: 'auto',
-            position: 'relative'
-          }}
-        >
+      {/* Timeline Section - Completely Separate */}
+      <Card sx={{ border: 1, borderColor: 'divider', borderRadius: 1 }}>
+        <CardContent sx={{ p: 2 }}>
+          <Typography variant="h6" gutterBottom>Timeline View</Typography>
+          <Box 
+            ref={ganttRef}
+            sx={{ 
+              width: '100%',
+              overflow: 'auto',
+              position: 'relative'
+            }}
+          >
           {/* Timeline Header */}
           <Box sx={{ 
             position: 'sticky',
@@ -766,7 +766,8 @@ function GanttChart({ user, projectId: propProjectId }) {
             {projectTree.map(proj => renderTimelineNode(proj, 0))}
           </Box>
         </Box>
-      </Box>
+        </CardContent>
+      </Card>
     </Box>
   )
 }
