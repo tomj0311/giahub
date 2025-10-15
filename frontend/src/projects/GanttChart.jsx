@@ -608,10 +608,10 @@ function GanttChart({ user, projectId: propProjectId }) {
         </Typography>
         <Button
           startIcon={<ArrowLeft size={20} />}
-          onClick={() => navigate('/dashboard/projects')}
+          onClick={() => navigate(-1)}
           sx={{ mt: 2 }}
         >
-          Back to Projects
+          Back
         </Button>
       </Box>
     )
@@ -633,10 +633,10 @@ function GanttChart({ user, projectId: propProjectId }) {
         </Typography>
         <Button
           startIcon={<ArrowLeft size={20} />}
-          onClick={() => navigate('/dashboard/projects')}
+          onClick={() => navigate(-1)}
           sx={{ mt: 2 }}
         >
-          Back to Projects
+          Back
         </Button>
       </Box>
     )
@@ -649,11 +649,11 @@ function GanttChart({ user, projectId: propProjectId }) {
         <Box>
           <Button
             startIcon={<ArrowLeft size={20} />}
-            onClick={() => navigate('/dashboard/projects')}
+            onClick={() => navigate(-1)}
             sx={{ mb: 1 }}
             size="small"
           >
-            Back to Portfolio
+            Back
           </Button>
           <Typography variant="h4" gutterBottom>
             Gantt Chart: {project.name}
