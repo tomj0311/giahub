@@ -395,8 +395,12 @@ function GanttChart({ user, projectId: propProjectId }) {
           startWeekIndex = i
           // Calculate fractional position within the week
           const msPerDay = 1000 * 60 * 60 * 24
-          const dayInWeek = (start - weekStart) / msPerDay
-          leftPx = (i * unitWidth) + (dayInWeek / 7 * unitWidth)
+          const normalizedStart = new Date(start)
+          normalizedStart.setHours(0, 0, 0, 0)
+          const normalizedWeekStart = new Date(weekStart)
+          normalizedWeekStart.setHours(0, 0, 0, 0)
+          const dayInWeek = Math.floor((normalizedStart - normalizedWeekStart) / msPerDay)
+          leftPx = (i * unitWidth) + ((dayInWeek / 7) * unitWidth)
         }
         
         if (due >= weekStart && due <= weekEnd) {
@@ -405,14 +409,18 @@ function GanttChart({ user, projectId: propProjectId }) {
       }
       
       // If start is before first week, position at beginning
-      if (start < timelineWeeks[0]) {
+      if (timelineWeeks.length > 0 && start < timelineWeeks[0]) {
         leftPx = 0
       }
       
       // Calculate width
       const msPerDay = 1000 * 60 * 60 * 24
-      const totalDays = (due - start) / msPerDay
-      widthPx = Math.max(unitWidth * 0.3, (totalDays / 7) * unitWidth)
+      const normalizedStart = new Date(start)
+      normalizedStart.setHours(0, 0, 0, 0)
+      const normalizedDue = new Date(due)
+      normalizedDue.setHours(23, 59, 59, 999)
+      const totalDays = Math.max(1, Math.ceil((normalizedDue - normalizedStart) / msPerDay) + 1)
+      widthPx = Math.max(unitWidth * 0.6, (totalDays / 7) * unitWidth)
       
     } else { // monthly
       // Calculate position based on months array
