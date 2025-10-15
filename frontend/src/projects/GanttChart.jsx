@@ -686,8 +686,8 @@ function GanttChart({ user, projectId: propProjectId }) {
       {/* Timeline Section - Completely Separate */}
       <Card sx={{ border: 1, borderColor: 'divider', borderRadius: 1 }}>
         <CardContent sx={{ p: 2 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">Timeline View</Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mb: 2, position: 'relative' }}>
+            <Typography variant="h6" sx={{ position: 'absolute', left: 0 }}>Timeline View</Typography>
             <ToggleButtonGroup
               value={viewMode}
               exclusive
