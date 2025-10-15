@@ -55,7 +55,7 @@ import { useSnackbar } from '../contexts/SnackbarContext'
 import { useConfirmation } from '../contexts/ConfirmationContext'
 import { apiCall } from '../config/api'
 
-const STATUS_OPTIONS = ['ON_TRACK', 'AT_RISK', 'OFF_TRACK', 'COMPLETED']
+const STATUS_OPTIONS = ['ON_TRACK', 'AT_RISK', 'OFF_TRACK', 'ON_HOLD', 'COMPLETED']
 const PRIORITY_OPTIONS = ['Low', 'Normal', 'High', 'Urgent']
 
 function ProjectTreeView({ user }) {

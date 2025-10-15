@@ -188,6 +188,10 @@ function GanttChart({ user, projectId: propProjectId }) {
       if (res.ok) {
         const data = await res.json()
         console.log(`[GanttChart] Loaded ${data.activities?.length || 0} activities for project ${projId}`)
+        if (data.activities && data.activities.length > 0) {
+          console.log('[GanttChart] Sample activity:', data.activities[0])
+          console.log('[GanttChart] Activity fields:', Object.keys(data.activities[0]))
+        }
         if (isMountedRef.current) {
           setActivitiesByProject(prev => ({
             ...prev,
@@ -450,6 +454,12 @@ function GanttChart({ user, projectId: propProjectId }) {
 
           <TableCell>{proj.assignee || '-'}</TableCell>
 
+          <TableCell>{proj.approver || '-'}</TableCell>
+
+          <TableCell>
+            {proj.start_date ? new Date(proj.start_date).toLocaleDateString() : '-'}
+          </TableCell>
+
           <TableCell>
             {proj.due_date ? new Date(proj.due_date).toLocaleDateString() : '-'}
           </TableCell>
@@ -491,6 +501,10 @@ function GanttChart({ user, projectId: propProjectId }) {
               />
             </TableCell>
             <TableCell>{activity.assignee || '-'}</TableCell>
+            <TableCell>{activity.approver || '-'}</TableCell>
+            <TableCell>
+              {activity.start_date ? new Date(activity.start_date).toLocaleDateString() : '-'}
+            </TableCell>
             <TableCell>
               {activity.due_date ? new Date(activity.due_date).toLocaleDateString() : '-'}
             </TableCell>
@@ -594,10 +608,10 @@ function GanttChart({ user, projectId: propProjectId }) {
         </Typography>
         <Button
           startIcon={<ArrowLeft size={20} />}
-          onClick={() => navigate('/dashboard/projects')}
+          onClick={() => navigate(-1)}
           sx={{ mt: 2 }}
         >
-          Back to Projects
+          Back
         </Button>
       </Box>
     )
@@ -619,10 +633,10 @@ function GanttChart({ user, projectId: propProjectId }) {
         </Typography>
         <Button
           startIcon={<ArrowLeft size={20} />}
-          onClick={() => navigate('/dashboard/projects')}
+          onClick={() => navigate(-1)}
           sx={{ mt: 2 }}
         >
-          Back to Projects
+          Back
         </Button>
       </Box>
     )
@@ -635,11 +649,11 @@ function GanttChart({ user, projectId: propProjectId }) {
         <Box>
           <Button
             startIcon={<ArrowLeft size={20} />}
-            onClick={() => navigate('/dashboard/projects')}
+            onClick={() => navigate(-1)}
             sx={{ mb: 1 }}
             size="small"
           >
-            Back to Portfolio
+            Back
           </Button>
           <Typography variant="h4" gutterBottom>
             Gantt Chart: {project.name}
@@ -671,6 +685,8 @@ function GanttChart({ user, projectId: propProjectId }) {
                   <TableCell>Subject</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Assignee</TableCell>
+                  <TableCell>Approver</TableCell>
+                  <TableCell>Start Date</TableCell>
                   <TableCell>Due Date</TableCell>
                   <TableCell>Progress</TableCell>
                 </TableRow>
