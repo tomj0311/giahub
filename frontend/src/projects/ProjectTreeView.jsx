@@ -30,7 +30,11 @@ import {
   useTheme,
   Badge,
   Stack,
-  TablePagination
+  TablePagination,
+  Menu,
+  ListItemIcon,
+  ListItemText,
+  Divider
 } from '@mui/material'
 import {
   Plus,
@@ -43,7 +47,9 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  BarChart3
+  BarChart3,
+  SortAsc,
+  SortDesc
 } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { useConfirmation } from '../contexts/ConfirmationContext'
@@ -87,6 +93,9 @@ function ProjectTreeView({ user }) {
     operator: '',
     value: ''
   })
+  
+  // Sort menu state
+  const [sortMenuAnchor, setSortMenuAnchor] = useState(null)
   
   // Project dialog state
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -688,6 +697,12 @@ function ProjectTreeView({ user }) {
 
           <TableCell>{node.assignee || '-'}</TableCell>
 
+          <TableCell>{node.approver || '-'}</TableCell>
+
+          <TableCell>
+            {node.start_date ? new Date(node.start_date).toLocaleDateString() : '-'}
+          </TableCell>
+
           <TableCell>
             {node.due_date ? new Date(node.due_date).toLocaleDateString() : '-'}
           </TableCell>
@@ -751,9 +766,21 @@ function ProjectTreeView({ user }) {
       {/* Card Container */}
       <Card>
         <CardContent>
-          {/* Filter Bar */}
-          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* Header Bar with Title, Filters, and Actions */}
+          <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+            {/* LEFT SIDE: Table Heading */}
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary', mb: 0.5 }}>
+                Projects List
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {totalCount} {totalCount === 1 ? 'project' : 'projects'} total
+              </Typography>
+            </Box>
+
+            {/* RIGHT SIDE: Filters and Action Buttons */}
+            <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Active Filter Chips */}
               {filters.map((filter, index) => (
                 <Chip
                   key={index}
@@ -762,21 +789,59 @@ function ProjectTreeView({ user }) {
                   size="small"
                   color="primary"
                   variant="outlined"
+                  sx={{ fontWeight: 500 }}
                 />
               ))}
               {filters.length > 0 && (
-                <Button size="small" onClick={handleClearAllFilters}>
+                <Button 
+                  size="small" 
+                  onClick={handleClearAllFilters}
+                  sx={{ textTransform: 'none', fontWeight: 500 }}
+                >
                   Clear All
                 </Button>
               )}
-            </Box>
-            <Box>
-              <Tooltip title="Filter & Sort">
-                <IconButton onClick={handleOpenFilterDialog}>
-                  <Badge badgeContent={filters.length} color="primary">
-                    <Filter size={20} />
-                  </Badge>
-                </IconButton>
+
+              {/* Sort Button */}
+              <Tooltip title="Sort">
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={sortOrder === 'asc' ? <SortAsc size={18} /> : <SortDesc size={18} />}
+                  onClick={(e) => setSortMenuAnchor(e.currentTarget)}
+                  sx={{ 
+                    textTransform: 'none',
+                    fontWeight: 500,
+                    minWidth: '100px',
+                    borderColor: sortField ? 'primary.main' : 'divider',
+                    color: sortField ? 'primary.main' : 'text.secondary'
+                  }}
+                >
+                  {sortField ? `${getFieldDef(sortField)?.label || sortField}` : 'Sort'}
+                </Button>
+              </Tooltip>
+
+              {/* Filter Button */}
+              <Tooltip title="Add Filter">
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={
+                    <Badge badgeContent={filters.length} color="primary">
+                      <Filter size={18} />
+                    </Badge>
+                  }
+                  onClick={handleOpenFilterDialog}
+                  sx={{ 
+                    textTransform: 'none',
+                    fontWeight: 500,
+                    minWidth: '100px',
+                    borderColor: filters.length > 0 ? 'primary.main' : 'divider',
+                    color: filters.length > 0 ? 'primary.main' : 'text.secondary'
+                  }}
+                >
+                  {filters.length > 0 ? `${filters.length} Filter${filters.length > 1 ? 's' : ''}` : 'Filter'}
+                </Button>
               </Tooltip>
             </Box>
           </Box>
@@ -816,6 +881,18 @@ function ProjectTreeView({ user }) {
                         </Box>
                       </TableCell>
                       <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort('approver')}>
+                          Approver
+                          {sortField === 'approver' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort('start_date')}>
+                          Start Date
+                          {sortField === 'start_date' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort('due_date')}>
                           Due Date
                           {sortField === 'due_date' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
@@ -833,7 +910,7 @@ function ProjectTreeView({ user }) {
                   <TableBody>
                     {projectTree.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} align="center">
+                        <TableCell colSpan={9} align="center">
                           <Typography variant="body2" color="text.secondary">
                             No projects found. Create one to get started.
                           </Typography>
@@ -860,6 +937,67 @@ function ProjectTreeView({ user }) {
           )}
         </CardContent>
       </Card>
+
+      {/* Sort Menu */}
+      <Menu
+        anchorEl={sortMenuAnchor}
+        open={Boolean(sortMenuAnchor)}
+        onClose={() => setSortMenuAnchor(null)}
+        PaperProps={{
+          sx: { minWidth: 200 }
+        }}
+      >
+        <MenuItem disabled>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+            SORT BY
+          </Typography>
+        </MenuItem>
+        <Divider />
+        {fieldMetadata.filter(f => f.sortable).map((field) => (
+          <MenuItem
+            key={field.name}
+            onClick={() => {
+              if (sortField === field.name) {
+                setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')
+              } else {
+                setSortField(field.name)
+                setSortOrder('asc')
+              }
+              setPage(0)
+              setSortMenuAnchor(null)
+            }}
+            selected={sortField === field.name}
+          >
+            <ListItemIcon>
+              {sortField === field.name && (
+                sortOrder === 'asc' ? <ArrowUp size={18} /> : <ArrowDown size={18} />
+              )}
+            </ListItemIcon>
+            <ListItemText>
+              {field.label}
+            </ListItemText>
+          </MenuItem>
+        ))}
+        {sortField && (
+          <>
+            <Divider />
+            <MenuItem
+              onClick={() => {
+                setSortField(null)
+                setSortOrder('asc')
+                setPage(0)
+                setSortMenuAnchor(null)
+              }}
+              sx={{ color: 'error.main' }}
+            >
+              <ListItemIcon>
+                <X size={18} />
+              </ListItemIcon>
+              <ListItemText>Clear Sort</ListItemText>
+            </MenuItem>
+          </>
+        )}
+      </Menu>
 
       {/* Filter Dialog */}
       <Dialog open={filterDialogOpen} onClose={handleCloseFilterDialog} maxWidth="sm" fullWidth>
