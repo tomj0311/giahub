@@ -620,7 +620,7 @@ function ActivityForm({ user, projectId: propProjectId }) {
         <ActivityNotifications 
           user={stableUser} 
           activityId={activityId} 
-          projectName={projectName}
+          projectId={form.project_id}
         />
       </Box>
     )}

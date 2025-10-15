@@ -22,53 +22,15 @@ import { Send, Paperclip, X, Download } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { apiCall } from '../config/api'
 
-// GLOBAL cache to prevent duplicate API calls across component mounts
-const notificationCache = {
-  data: {},
-  loading: new Set(),
-  
-  get(activityId) {
-    return this.data[activityId]
-  },
-  
-  set(activityId, notifications) {
-    this.data[activityId] = {
-      notifications,
-      timestamp: Date.now()
-    }
-  },
-  
-  isLoading(activityId) {
-    return this.loading.has(activityId)
-  },
-  
-  setLoading(activityId, isLoading) {
-    if (isLoading) {
-      this.loading.add(activityId)
-    } else {
-      this.loading.delete(activityId)
-    }
-  },
-  
-  invalidate(activityId) {
-    delete this.data[activityId]
-  }
-}
-
 // GLOBAL user cache to prevent duplicate user loads
 let globalUserCache = null
 let globalUserCacheLoading = false
-let globalUserCachePromise = null // Store the promise so concurrent loads can await it
 
-function ActivityNotifications({ user, activityId, projectName }) {
+function ActivityNotifications({ user, activityId, projectId }) {
   const token = user?.token
   const { showSuccess, showError } = useSnackbar()
   
-  // Use refs for values that shouldn't trigger re-renders
-  const tokenRef = useRef(token)
-  const activityIdRef = useRef(activityId)
-  
-  console.log('[NOTIFICATION RENDER]', { activityId, hasToken: !!token, projectName })
+  console.log('[NOTIFICATION RENDER]', { activityId, hasToken: !!token, projectId })
   
   const [message, setMessage] = useState('')
   const [mentionedUsers, setMentionedUsers] = useState([])
@@ -86,17 +48,10 @@ function ActivityNotifications({ user, activityId, projectName }) {
   
   const textFieldRef = useRef(null)
   const fileInputRef = useRef(null)
-  const hasLoadedRef = useRef(false)
-  
-  // Update refs when props change
-  useEffect(() => {
-    tokenRef.current = token
-    activityIdRef.current = activityId
-  }, [token, activityId])
 
   // Load users for mentions
   useEffect(() => {
-    if (!tokenRef.current) return
+    if (!token) return
     
     // Check global cache first
     if (globalUserCache) {
@@ -130,7 +85,7 @@ function ActivityNotifications({ user, activityId, projectName }) {
         console.log('[ACTIVITYNOTIFICATIONS] Making API call to /api/users/')
         const res = await apiCall('/api/users/', {
           method: 'GET',
-          headers: { Authorization: `Bearer ${tokenRef.current}` }
+          headers: { Authorization: `Bearer ${token}` }
         })
 
         console.log('[ACTIVITYNOTIFICATIONS] /api/users/ response status:', res.status)
@@ -154,83 +109,42 @@ function ActivityNotifications({ user, activityId, projectName }) {
     }
 
     loadUsers()
-  }, []) // Only load once on mount
+  }, [token]) // Only load once when token is available
 
   // Load existing notifications
   useEffect(() => {
-    if (!activityIdRef.current || !tokenRef.current) return
-    
-    // CRITICAL: Reset hasLoadedRef when activityId changes
-    // This ensures notifications are reloaded for each new activity
-    if (hasLoadedRef.current && hasLoadedRef.current !== activityIdRef.current) {
-      console.log('[NOTIFICATION] Activity changed from', hasLoadedRef.current, 'to', activityIdRef.current, '- resetting hasLoadedRef')
-      hasLoadedRef.current = false
-      // CLEAR old notifications immediately when switching activities
-      setNotifications([])
-    }
-    
-    // Check if already loading globally
-    if (notificationCache.isLoading(activityIdRef.current)) {
-      console.log('[NOTIFICATION] Already loading for activity:', activityIdRef.current)
-      return
-    }
-    
-    // Check if we have cached data (within 30 seconds)
-    const cached = notificationCache.get(activityIdRef.current)
-    if (cached && (Date.now() - cached.timestamp) < 30000) {
-      console.log('[NOTIFICATION] Using cached data for activity:', activityIdRef.current)
-      setNotifications(cached.notifications)
-      return
-    }
-    
-    // Prevent duplicate loads for the same activity
-    if (hasLoadedRef.current === activityIdRef.current) {
-      console.log('[NOTIFICATION] Skipping load - already loaded for activity:', activityIdRef.current)
-      return
-    }
+    if (!activityId || !token) return
     
     const loadNotifications = async () => {
-      console.log('[NOTIFICATION] Loading notifications for activity:', activityIdRef.current)
+      console.log('[NOTIFICATION] 📡 Fetching notifications from database for activity:', activityId)
       setLoading(true)
-      hasLoadedRef.current = activityIdRef.current
-      notificationCache.setLoading(activityIdRef.current, true)
       
       try {
-        const res = await apiCall(`/api/projects/activities/${activityIdRef.current}/notifications`, {
+        const res = await apiCall(`/api/projects/activities/${activityId}/notifications`, {
           method: 'GET',
-          headers: { Authorization: `Bearer ${tokenRef.current}` }
+          headers: { Authorization: `Bearer ${token}` }
         })
 
         console.log('[NOTIFICATION] Load response status:', res.status)
 
         if (res.ok) {
           const data = await res.json()
-          console.log('[NOTIFICATION] Loaded notifications:', data)
+          console.log('[NOTIFICATION] ✅ Loaded notifications:', data)
+          console.log('[NOTIFICATION] ✅ Notification count:', data.notifications?.length || 0)
           setNotifications(data.notifications || [])
-          // Cache the results
-          notificationCache.set(activityIdRef.current, data.notifications || [])
         } else {
           const error = await res.json()
-          console.error('[NOTIFICATION] Load error:', error)
+          console.error('[NOTIFICATION] ❌ Load error:', error)
         }
       } catch (error) {
-        console.error('[NOTIFICATION] Error loading notifications:', error)
+        console.error('[NOTIFICATION] ❌ Error loading notifications:', error)
       } finally {
         setLoading(false)
-        notificationCache.setLoading(activityIdRef.current, false)
       }
     }
 
     loadNotifications()
-  }, [activityId]) // Only reload when activityId changes
-
-  // Reset loaded ref when activityId changes
-  useEffect(() => {
-    return () => {
-      // Clear the ref when component unmounts or activityId changes
-      hasLoadedRef.current = false
-    }
-  }, [activityId])
+  }, [activityId, token]) // Reload whenever activityId or token changes
 
   // Handle text input changes and detect @ mentions
   const handleMessageChange = (e) => {
@@ -335,8 +249,8 @@ function ActivityNotifications({ user, activityId, projectName }) {
         const formData = new FormData()
         selectedFiles.forEach(file => formData.append('files', file))
 
-        // Upload to uploads/{projectName}/{activityId}/
-        const uploadPath = `uploads/${user.id}/${projectName}/${activityId}`
+        // Upload to projectId/activityId/
+        const uploadPath = `${projectId}/${activityId}`
         const uploadRes = await apiCall(`/api/upload/${uploadPath}`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
@@ -385,17 +299,12 @@ function ActivityNotifications({ user, activityId, projectName }) {
       console.log('[NOTIFICATION] Success response:', result)
       console.log('[NOTIFICATION] Notification object:', result.notification)
       
-      // Invalidate cache for this activity
-      notificationCache.invalidate(activityId)
-      
-      // Add new notification to list
+      // Add new notification to list immediately for instant feedback
       setNotifications(prev => {
         console.log('[NOTIFICATION] Previous notifications:', prev)
         console.log('[NOTIFICATION] Adding to notifications list. Current count:', prev.length)
         const updated = [result.notification, ...prev]
         console.log('[NOTIFICATION] New notifications array:', updated)
-        // Update cache with new data
-        notificationCache.set(activityId, updated)
         return updated
       })
       
@@ -608,17 +517,19 @@ function ActivityNotifications({ user, activityId, projectName }) {
 }
 
 // Memoize with custom comparison to prevent unnecessary re-renders
-// Only re-render when activityId or token changes, NOT when projectName changes
+// Only re-render when activityId or token changes, NOT when projectId changes
 export default React.memo(ActivityNotifications, (prevProps, nextProps) => {
   const shouldSkipRender = (
     prevProps.activityId === nextProps.activityId &&
-    prevProps.user?.token === nextProps.user?.token
+    prevProps.user?.token === nextProps.user?.token &&
+    prevProps.projectId === nextProps.projectId
   )
   
   if (!shouldSkipRender) {
     console.log('[NOTIFICATION MEMO] Props changed, will re-render:', {
       activityIdChanged: prevProps.activityId !== nextProps.activityId,
-      tokenChanged: prevProps.user?.token !== nextProps.user?.token
+      tokenChanged: prevProps.user?.token !== nextProps.user?.token,
+      projectIdChanged: prevProps.projectId !== nextProps.projectId
     })
   }
   
