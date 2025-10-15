@@ -38,6 +38,7 @@ function ActivityNotifications({ user, activityId, projectId }) {
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
+  const [imagePreviews, setImagePreviews] = useState({}) // Store blob URLs for image previews
   
   // User mention autocomplete
   const [allUsers, setAllUsers] = useState([])
@@ -145,6 +146,53 @@ function ActivityNotifications({ user, activityId, projectId }) {
 
     loadNotifications()
   }, [activityId, token]) // Reload whenever activityId or token changes
+
+  // Load image previews for notifications with image files
+  useEffect(() => {
+    if (!notifications.length || !token) return
+    
+    const loadImagePreviews = async () => {
+      const newPreviews = {}
+      
+      for (const notification of notifications) {
+        if (!notification.files) continue
+        
+        for (const file of notification.files) {
+          const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(file.filename)
+          if (!isImage) continue
+          
+          const cacheKey = file.path
+          if (imagePreviews[cacheKey]) continue // Already loaded
+          
+          try {
+            const res = await apiCall(`/api/download/${file.path}`, {
+              method: 'GET',
+              headers: { Authorization: `Bearer ${token}` }
+            })
+            
+            if (res.ok) {
+              const blob = await res.blob()
+              const url = URL.createObjectURL(blob)
+              newPreviews[cacheKey] = url
+            }
+          } catch (error) {
+            console.error('Failed to load image preview:', error)
+          }
+        }
+      }
+      
+      if (Object.keys(newPreviews).length > 0) {
+        setImagePreviews(prev => ({ ...prev, ...newPreviews }))
+      }
+    }
+    
+    loadImagePreviews()
+    
+    // Cleanup blob URLs on unmount
+    return () => {
+      Object.values(imagePreviews).forEach(url => URL.revokeObjectURL(url))
+    }
+  }, [notifications, token])
 
   // Handle text input changes and detect @ mentions
   const handleMessageChange = (e) => {
@@ -518,21 +566,117 @@ function ActivityNotifications({ user, activityId, projectId }) {
                             <Box sx={{ 
                               display: 'flex', 
                               flexWrap: 'wrap', 
-                              gap: 0.5,
+                              gap: 1,
                               justifyContent: isCurrentUser ? 'flex-end' : 'flex-start'
                             }}>
-                              {notification.files.map((file, i) => (
-                                <Chip
-                                  key={i}
-                                  label={file.filename}
-                                  size="small"
-                                  icon={<Download size={14} />}
-                                  onClick={() => {
-                                    // Download file logic can be added here
-                                    window.open(`/api/download/${file.path}`, '_blank')
-                                  }}
-                                />
-                              ))}
+                              {notification.files.map((file, i) => {
+                                const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(file.filename)
+                                const imageUrl = imagePreviews[file.path]
+                                
+                                const handleDownload = async () => {
+                                  try {
+                                    const res = await apiCall(`/api/download/${file.path}`, {
+                                      method: 'GET',
+                                      headers: { Authorization: `Bearer ${token}` }
+                                    })
+                                    
+                                    if (!res.ok) {
+                                      showError('Failed to download file')
+                                      return
+                                    }
+                                    
+                                    const blob = await res.blob()
+                                    const url = window.URL.createObjectURL(blob)
+                                    const a = document.createElement('a')
+                                    a.href = url
+                                    a.download = file.filename
+                                    document.body.appendChild(a)
+                                    a.click()
+                                    window.URL.revokeObjectURL(url)
+                                    document.body.removeChild(a)
+                                  } catch (error) {
+                                    console.error('Download error:', error)
+                                    showError('Failed to download file')
+                                  }
+                                }
+                                
+                                if (isImage && imageUrl) {
+                                  return (
+                                    <Box
+                                      key={i}
+                                      sx={{
+                                        position: 'relative',
+                                        cursor: 'pointer',
+                                        borderRadius: 1,
+                                        overflow: 'hidden',
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        '&:hover .download-overlay': {
+                                          opacity: 1
+                                        }
+                                      }}
+                                      onClick={handleDownload}
+                                    >
+                                      <img
+                                        src={imageUrl}
+                                        alt={file.filename}
+                                        style={{
+                                          maxWidth: '200px',
+                                          maxHeight: '150px',
+                                          display: 'block',
+                                          objectFit: 'cover'
+                                        }}
+                                      />
+                                      <Box
+                                        className="download-overlay"
+                                        sx={{
+                                          position: 'absolute',
+                                          top: 0,
+                                          left: 0,
+                                          right: 0,
+                                          bottom: 0,
+                                          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          opacity: 0,
+                                          transition: 'opacity 0.2s'
+                                        }}
+                                      >
+                                        <Download size={24} color="white" />
+                                      </Box>
+                                      <Typography
+                                        variant="caption"
+                                        sx={{
+                                          position: 'absolute',
+                                          bottom: 0,
+                                          left: 0,
+                                          right: 0,
+                                          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                                          color: 'white',
+                                          padding: '4px 8px',
+                                          fontSize: '0.7rem',
+                                          whiteSpace: 'nowrap',
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis'
+                                        }}
+                                      >
+                                        {file.filename}
+                                      </Typography>
+                                    </Box>
+                                  )
+                                }
+                                
+                                return (
+                                  <Chip
+                                    key={i}
+                                    label={file.filename}
+                                    size="small"
+                                    icon={<Download size={14} />}
+                                    onClick={handleDownload}
+                                  />
+                                )
+                              })}
                             </Box>
                           )}
                         </Box>
