@@ -776,8 +776,8 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 				<Toolbar />
 				<Box sx={{
 					width: '100%',
-					// Conditional styling for BPMN, workflow-execution, workflow-ui, projects, and gantt routes
-					...(location.pathname === '/dashboard/bpmn' || location.pathname === '/dashboard/workflow-execution' || location.pathname === '/dashboard/workflow-ui' || location.pathname === '/dashboard/projects' || location.pathname === '/dashboard/projects/gantt' ? {
+					// Conditional styling for BPMN, workflow-execution, workflow-ui, projects, portfolio, planning, and gantt routes
+					...(location.pathname === '/dashboard/bpmn' || location.pathname === '/dashboard/workflow-execution' || location.pathname === '/dashboard/workflow-ui' || location.pathname === '/dashboard/projects' || location.pathname === '/dashboard/projects/portfolio' || location.pathname === '/dashboard/projects/planning' || location.pathname === '/dashboard/projects/gantt' ? {
 						// Full width with minimal padding
 						maxWidth: 'none',
 						mx: 0,
@@ -789,8 +789,8 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 						px: {
 							xs: 2,    // 16px on mobile
 							sm: 3,    // 24px on small tablets
-							md: 4,    // 32px on medium screens
-							lg: 6,    // 48px on large screens
+							md: 3,    // 32px on medium screens
+							lg: 4,    // 32px on large screens
 						},
 						py: 4
 					})

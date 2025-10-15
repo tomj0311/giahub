@@ -198,6 +198,85 @@ async def download_file(
         )
 
 
+@router.get("/download/{file_path:path}")
+async def download_file_by_path(
+    file_path: str,
+    user: dict = Depends(verify_token_middleware)
+):
+    """Download a file from MinIO by its full path"""
+    logger.info(f"DOWNLOAD START: file_path={file_path}, user={user.get('id')}")
+    
+    user_id = user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid user")
+    
+    try:
+        # Get file content from storage (MinIO or disk)
+        content = await FileService.get_file_content(file_path)
+        
+        if not content:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        # Extract filename from path
+        filename = file_path.split('/')[-1]
+        
+        logger.info(f"DOWNLOAD SUCCESS: {filename} ({len(content)} bytes)")
+        
+        def iterfile():
+            yield content
+
+        return StreamingResponse(
+            iterfile(),
+            media_type="application/octet-stream",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"DOWNLOAD ERROR: {e}")
+        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
+
+
+@router.get("/download/{path:path}")
+async def download_file_by_path(
+    path: str,
+    user: dict = Depends(verify_token_middleware)
+):
+    """Download a file by its full path"""
+    user_id = user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user"
+        )
+    
+    try:
+        # Get the file content
+        content = await FileService.get_file_content(path)
+        
+        # Extract filename from path
+        filename = path.split('/')[-1]
+
+        def iterfile():
+            yield content
+
+        return StreamingResponse(
+            iterfile(),
+            media_type="application/octet-stream",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Download error for path {path}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to download file"
+        )
+
+
 @router.get("/diag")
 async def uploads_diagnostics():
     """Lightweight diagnostics to debug upload 500s without changing code."""

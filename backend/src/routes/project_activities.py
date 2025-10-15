@@ -14,6 +14,21 @@ from ..services.project_activity_service import ProjectActivityService
 router = APIRouter(tags=["project-activities"])
 
 
+@router.get("/activities/fields-metadata")
+async def get_activity_fields_metadata(
+    user: dict = Depends(verify_token_middleware)
+):
+    """Get dynamically discovered field metadata from actual activity documents"""
+    try:
+        result = await ProjectActivityService.get_field_metadata(user)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[ACTIVITY] Error fetching field metadata: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch field metadata")
+
+
 @router.post("/activities", status_code=status.HTTP_201_CREATED)
 async def create_activity(
     activity: dict,
@@ -42,6 +57,7 @@ async def get_activities(
     page_size: int = Query(50, ge=1, le=200, description="Items per page"),
     search: Optional[str] = Query(None, description="Search in subject and description"),
     status: Optional[str] = Query(None, description="Filter by status"),
+    filters: Optional[str] = Query(None, description="JSON-encoded filters array"),
     sort_by: str = Query("created_at", description="Sort field"),
     sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order")
 ):
@@ -55,6 +71,7 @@ async def get_activities(
             page_size=page_size,
             search=search,
             status=status,
+            filters=filters,
             sort_by=sort_by,
             sort_order=sort_order
         )

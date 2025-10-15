@@ -88,6 +88,7 @@ class ActivityNotificationService:
         }
         
         logger.info(f"[NOTIFICATION_CREATE] Storing notification with activity_id='{activity_id}' (type: {type(activity_id).__name__})")
+        logger.info(f"[NOTIFICATION_CREATE] Document to be inserted: {doc}")
         
         # Save to MongoDB
         notification_id = await MongoStorageService.insert_one(
@@ -95,6 +96,28 @@ class ActivityNotificationService:
             doc,
             tenant_id=tenant_id
         )
+        
+        if not notification_id:
+            logger.error(f"[NOTIFICATION_CREATE] ❌ Failed to save notification - insert_one returned None")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to save notification to database"
+            )
+        
+        logger.info(f"[NOTIFICATION_CREATE] ✅ Successfully saved notification with ID: {notification_id}")
+        
+        # VERIFY: Read back the saved notification to confirm it's in the database
+        from bson import ObjectId
+        saved_notification = await MongoStorageService.find_one(
+            "activityNotifications",
+            {"_id": ObjectId(notification_id)},
+            tenant_id=tenant_id
+        )
+        
+        if saved_notification:
+            logger.info(f"[NOTIFICATION_CREATE] ✅ VERIFIED: Notification exists in database with activity_id={saved_notification.get('activity_id')}")
+        else:
+            logger.error(f"[NOTIFICATION_CREATE] ❌ VERIFICATION FAILED: Notification not found in database after insert!")
         
         # Send emails to mentioned users
         if mentioned_users:
@@ -119,6 +142,8 @@ class ActivityNotificationService:
             "created_at": doc["created_at"].isoformat(),
             "tenantId": tenant_id,
         }
+        
+        logger.info(f"[NOTIFICATION_CREATE] ✅ Returning response: {response_doc}")
         
         return {
             "message": "Notification created successfully",
@@ -207,6 +232,20 @@ You were mentioned in a notification for activity: <strong>{activity_subject}</s
             # Fetch notifications with EXACT match on activity_id
             query_filter = {"activity_id": activity_id}
             logger.info(f"[NOTIFICATION_QUERY] Query filter: {query_filter}")
+            logger.info(f"[NOTIFICATION_QUERY] Tenant ID: {tenant_id}")
+            
+            # ALSO query ALL notifications for this tenant to see what's in the database
+            all_notifications = await MongoStorageService.find_many(
+                "activityNotifications",
+                {},
+                tenant_id=tenant_id,
+                sort_field="created_at",
+                sort_order=-1
+            )
+            logger.info(f"[NOTIFICATION_QUERY] 🔍 Total notifications in database for tenant: {len(all_notifications)}")
+            if all_notifications:
+                for idx, notif in enumerate(all_notifications[:5]):  # Show first 5
+                    logger.info(f"[NOTIFICATION_QUERY] 🔍 Sample {idx+1}: activity_id={notif.get('activity_id')}, created_at={notif.get('created_at')}")
             
             notifications = await MongoStorageService.find_many(
                 "activityNotifications",
@@ -216,7 +255,12 @@ You were mentioned in a notification for activity: <strong>{activity_subject}</s
                 sort_order=-1
             )
             
-            logger.info(f"[NOTIFICATION_QUERY] Raw query returned {len(notifications)} notifications")
+            logger.info(f"[NOTIFICATION_QUERY] ✅ Raw query returned {len(notifications)} notifications for activity_id={activity_id}")
+            
+            if notifications:
+                logger.info(f"[NOTIFICATION_QUERY] First notification sample: {notifications[0]}")
+            else:
+                logger.warning(f"[NOTIFICATION_QUERY] ⚠️ NO notifications found for activity_id={activity_id}")
             
             # Format notifications and FILTER again to be absolutely sure
             notification_list = []

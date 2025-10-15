@@ -104,6 +104,8 @@ class MongoStorageService:
             filter_dict = filter_dict or {}
             filter_dict = cls._ensure_tenant_filter(filter_dict, tenant_id, collection_name)
             
+            logger.info(f"[MONGO_FIND] Collection: {collection_name}, Filter: {filter_dict}, Limit: {limit}")
+            
             cursor = collection.find(filter_dict, projection)
             
             if sort_field:
@@ -119,6 +121,8 @@ class MongoStorageService:
                 results = await cursor.to_list(length=limit)
             else:
                 results = await cursor.to_list(length=None)
+            
+            logger.info(f"[MONGO_FIND] ✅ Found {len(results)} documents in {collection_name}")
             
             return results
         except Exception as e:
@@ -158,11 +162,14 @@ class MongoStorageService:
             collections = cls._get_collections()
             collection = collections.get(collection_name)
             if collection is None:
-                logger.warning(f"{collection_name} collection not available")
+                logger.error(f"[MONGO_INSERT] ❌ Collection '{collection_name}' not available!")
+                logger.error(f"[MONGO_INSERT] Available collections: {list(collections.keys())}")
                 return None
             
             logger.debug(f"[MONGO] Ensuring tenant data for {collection_name}")
             document = cls._ensure_tenant_data(document, tenant_id, collection_name)
+            
+            logger.debug(f"[MONGO] Document after tenant data: {document.get('tenantId', 'NO_TENANT')}")
             
             # Add timestamps if not present
             logger.debug(f"[MONGO] Adding timestamps to document in {collection_name}")
@@ -173,11 +180,20 @@ class MongoStorageService:
                 document['updated_at'] = now
             
             logger.debug(f"[MONGO] Executing insert_one on {collection_name}")
+            logger.info(f"[MONGO_INSERT] Collection: {collection_name}, TenantId: {document.get('tenantId', 'N/A')}, Keys: {list(document.keys())}")
+            
             result = await collection.insert_one(document)
             
             if result.acknowledged:
-                logger.info(f"Inserted document in {collection_name} with ID: {result.inserted_id}")
+                logger.info(f"[MONGO_INSERT] ✅ Inserted document in {collection_name} with ID: {result.inserted_id}")
+                
+                # VERIFY: Count documents in collection
+                count = await collection.count_documents({"_id": result.inserted_id})
+                logger.info(f"[MONGO_INSERT] ✅ VERIFICATION: Document exists in collection (count={count})")
+                
                 return str(result.inserted_id)
+            else:
+                logger.error(f"[MONGO_INSERT] ❌ Insert NOT acknowledged for {collection_name}")
             
             return None
         except Exception as e:

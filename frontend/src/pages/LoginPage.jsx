@@ -75,7 +75,7 @@ export default function LoginPage({ onLogin }) {
       
       if (resp.ok) {
         const data = await resp.json()
-        onLogin(data.token, data.name)
+        onLogin(data.token, data.name, username)
         return
       }
       

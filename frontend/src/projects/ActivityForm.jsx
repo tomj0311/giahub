@@ -317,21 +317,8 @@ function ActivityForm({ user, projectId: propProjectId }) {
         showSuccess('Activity created successfully')
       }
       
-      // Navigate back to the previous page or to the planning page
-      const returnPath = location.state?.returnTo || '/dashboard/projects'
-      const navigationState = returnPath === '/dashboard/projects' 
-        ? { 
-            tab: 1, // Return to Planning tab
-            planningTab: location.state?.planningTab // Preserve the planning sub-tab
-          }
-        : returnPath === '/dashboard/projects/gantt'
-        ? {
-            projectId: location.state?.projectId,
-            projectName: location.state?.projectName
-          }
-        : {}
-      
-      navigate(returnPath, { state: navigationState })
+      // Navigate back to the previous page using browser history
+      navigate(-1)
     } catch (error) {
       showError(error.message || 'Failed to save activity')
     } finally {
@@ -340,20 +327,8 @@ function ActivityForm({ user, projectId: propProjectId }) {
   }
 
   const handleCancel = () => {
-    const returnPath = location.state?.returnTo || '/dashboard/projects'
-    const navigationState = returnPath === '/dashboard/projects' 
-      ? { 
-          tab: 1, // Return to Planning tab
-          planningTab: location.state?.planningTab // Preserve the planning sub-tab
-        }
-      : returnPath === '/dashboard/projects/gantt'
-      ? {
-          projectId: location.state?.projectId,
-          projectName: location.state?.projectName
-        }
-      : {}
-    
-    navigate(returnPath, { state: navigationState })
+    // Navigate back to the previous page using browser history
+    navigate(-1)
   }
 
   if (loading && isEditMode) {
@@ -645,7 +620,7 @@ function ActivityForm({ user, projectId: propProjectId }) {
         <ActivityNotifications 
           user={stableUser} 
           activityId={activityId} 
-          projectName={projectName}
+          projectId={form.project_id}
         />
       </Box>
     )}

@@ -22,53 +22,15 @@ import { Send, Paperclip, X, Download } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { apiCall } from '../config/api'
 
-// GLOBAL cache to prevent duplicate API calls across component mounts
-const notificationCache = {
-  data: {},
-  loading: new Set(),
-  
-  get(activityId) {
-    return this.data[activityId]
-  },
-  
-  set(activityId, notifications) {
-    this.data[activityId] = {
-      notifications,
-      timestamp: Date.now()
-    }
-  },
-  
-  isLoading(activityId) {
-    return this.loading.has(activityId)
-  },
-  
-  setLoading(activityId, isLoading) {
-    if (isLoading) {
-      this.loading.add(activityId)
-    } else {
-      this.loading.delete(activityId)
-    }
-  },
-  
-  invalidate(activityId) {
-    delete this.data[activityId]
-  }
-}
-
 // GLOBAL user cache to prevent duplicate user loads
 let globalUserCache = null
 let globalUserCacheLoading = false
-let globalUserCachePromise = null // Store the promise so concurrent loads can await it
 
-function ActivityNotifications({ user, activityId, projectName }) {
+function ActivityNotifications({ user, activityId, projectId }) {
   const token = user?.token
   const { showSuccess, showError } = useSnackbar()
   
-  // Use refs for values that shouldn't trigger re-renders
-  const tokenRef = useRef(token)
-  const activityIdRef = useRef(activityId)
-  
-  console.log('[NOTIFICATION RENDER]', { activityId, hasToken: !!token, projectName })
+  console.log('[NOTIFICATION RENDER]', { activityId, hasToken: !!token, projectId })
   
   const [message, setMessage] = useState('')
   const [mentionedUsers, setMentionedUsers] = useState([])
@@ -76,6 +38,7 @@ function ActivityNotifications({ user, activityId, projectName }) {
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
+  const [imagePreviews, setImagePreviews] = useState({}) // Store blob URLs for image previews
   
   // User mention autocomplete
   const [allUsers, setAllUsers] = useState([])
@@ -86,17 +49,10 @@ function ActivityNotifications({ user, activityId, projectName }) {
   
   const textFieldRef = useRef(null)
   const fileInputRef = useRef(null)
-  const hasLoadedRef = useRef(false)
-  
-  // Update refs when props change
-  useEffect(() => {
-    tokenRef.current = token
-    activityIdRef.current = activityId
-  }, [token, activityId])
 
   // Load users for mentions
   useEffect(() => {
-    if (!tokenRef.current) return
+    if (!token) return
     
     // Check global cache first
     if (globalUserCache) {
@@ -130,7 +86,7 @@ function ActivityNotifications({ user, activityId, projectName }) {
         console.log('[ACTIVITYNOTIFICATIONS] Making API call to /api/users/')
         const res = await apiCall('/api/users/', {
           method: 'GET',
-          headers: { Authorization: `Bearer ${tokenRef.current}` }
+          headers: { Authorization: `Bearer ${token}` }
         })
 
         console.log('[ACTIVITYNOTIFICATIONS] /api/users/ response status:', res.status)
@@ -154,83 +110,89 @@ function ActivityNotifications({ user, activityId, projectName }) {
     }
 
     loadUsers()
-  }, []) // Only load once on mount
+  }, [token]) // Only load once when token is available
 
   // Load existing notifications
   useEffect(() => {
-    if (!activityIdRef.current || !tokenRef.current) return
-    
-    // CRITICAL: Reset hasLoadedRef when activityId changes
-    // This ensures notifications are reloaded for each new activity
-    if (hasLoadedRef.current && hasLoadedRef.current !== activityIdRef.current) {
-      console.log('[NOTIFICATION] Activity changed from', hasLoadedRef.current, 'to', activityIdRef.current, '- resetting hasLoadedRef')
-      hasLoadedRef.current = false
-      // CLEAR old notifications immediately when switching activities
-      setNotifications([])
-    }
-    
-    // Check if already loading globally
-    if (notificationCache.isLoading(activityIdRef.current)) {
-      console.log('[NOTIFICATION] Already loading for activity:', activityIdRef.current)
-      return
-    }
-    
-    // Check if we have cached data (within 30 seconds)
-    const cached = notificationCache.get(activityIdRef.current)
-    if (cached && (Date.now() - cached.timestamp) < 30000) {
-      console.log('[NOTIFICATION] Using cached data for activity:', activityIdRef.current)
-      setNotifications(cached.notifications)
-      return
-    }
-    
-    // Prevent duplicate loads for the same activity
-    if (hasLoadedRef.current === activityIdRef.current) {
-      console.log('[NOTIFICATION] Skipping load - already loaded for activity:', activityIdRef.current)
-      return
-    }
+    if (!activityId || !token) return
     
     const loadNotifications = async () => {
-      console.log('[NOTIFICATION] Loading notifications for activity:', activityIdRef.current)
+      console.log('[NOTIFICATION] 📡 Fetching notifications from database for activity:', activityId)
       setLoading(true)
-      hasLoadedRef.current = activityIdRef.current
-      notificationCache.setLoading(activityIdRef.current, true)
       
       try {
-        const res = await apiCall(`/api/projects/activities/${activityIdRef.current}/notifications`, {
+        const res = await apiCall(`/api/projects/activities/${activityId}/notifications`, {
           method: 'GET',
-          headers: { Authorization: `Bearer ${tokenRef.current}` }
+          headers: { Authorization: `Bearer ${token}` }
         })
 
         console.log('[NOTIFICATION] Load response status:', res.status)
 
         if (res.ok) {
           const data = await res.json()
-          console.log('[NOTIFICATION] Loaded notifications:', data)
+          console.log('[NOTIFICATION] ✅ Loaded notifications:', data)
+          console.log('[NOTIFICATION] ✅ Notification count:', data.notifications?.length || 0)
           setNotifications(data.notifications || [])
-          // Cache the results
-          notificationCache.set(activityIdRef.current, data.notifications || [])
         } else {
           const error = await res.json()
-          console.error('[NOTIFICATION] Load error:', error)
+          console.error('[NOTIFICATION] ❌ Load error:', error)
         }
       } catch (error) {
-        console.error('[NOTIFICATION] Error loading notifications:', error)
+        console.error('[NOTIFICATION] ❌ Error loading notifications:', error)
       } finally {
         setLoading(false)
-        notificationCache.setLoading(activityIdRef.current, false)
       }
     }
 
     loadNotifications()
-  }, [activityId]) // Only reload when activityId changes
+  }, [activityId, token]) // Reload whenever activityId or token changes
 
-  // Reset loaded ref when activityId changes
+  // Load image previews for notifications with image files
   useEffect(() => {
-    return () => {
-      // Clear the ref when component unmounts or activityId changes
-      hasLoadedRef.current = false
+    if (!notifications.length || !token) return
+    
+    const loadImagePreviews = async () => {
+      const newPreviews = {}
+      
+      for (const notification of notifications) {
+        if (!notification.files) continue
+        
+        for (const file of notification.files) {
+          const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(file.filename)
+          if (!isImage) continue
+          
+          const cacheKey = file.path
+          if (imagePreviews[cacheKey]) continue // Already loaded
+          
+          try {
+            const res = await apiCall(`/api/download/${file.path}`, {
+              method: 'GET',
+              headers: { Authorization: `Bearer ${token}` }
+            })
+            
+            if (res.ok) {
+              const blob = await res.blob()
+              const url = URL.createObjectURL(blob)
+              newPreviews[cacheKey] = url
+            }
+          } catch (error) {
+            console.error('Failed to load image preview:', error)
+          }
+        }
+      }
+      
+      if (Object.keys(newPreviews).length > 0) {
+        setImagePreviews(prev => ({ ...prev, ...newPreviews }))
+      }
     }
-  }, [activityId])
+    
+    loadImagePreviews()
+    
+    // Cleanup blob URLs on unmount
+    return () => {
+      Object.values(imagePreviews).forEach(url => URL.revokeObjectURL(url))
+    }
+  }, [notifications, token])
 
   // Handle text input changes and detect @ mentions
   const handleMessageChange = (e) => {
@@ -335,8 +297,8 @@ function ActivityNotifications({ user, activityId, projectName }) {
         const formData = new FormData()
         selectedFiles.forEach(file => formData.append('files', file))
 
-        // Upload to uploads/{projectName}/{activityId}/
-        const uploadPath = `uploads/${user.id}/${projectName}/${activityId}`
+        // Upload to projects/projectId/activityId/
+        const uploadPath = `projects/${projectId}/${activityId}`
         const uploadRes = await apiCall(`/api/upload/${uploadPath}`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
@@ -385,17 +347,12 @@ function ActivityNotifications({ user, activityId, projectName }) {
       console.log('[NOTIFICATION] Success response:', result)
       console.log('[NOTIFICATION] Notification object:', result.notification)
       
-      // Invalidate cache for this activity
-      notificationCache.invalidate(activityId)
-      
-      // Add new notification to list
+      // Add new notification to list immediately for instant feedback
       setNotifications(prev => {
         console.log('[NOTIFICATION] Previous notifications:', prev)
         console.log('[NOTIFICATION] Adding to notifications list. Current count:', prev.length)
         const updated = [result.notification, ...prev]
         console.log('[NOTIFICATION] New notifications array:', updated)
-        // Update cache with new data
-        notificationCache.set(activityId, updated)
         return updated
       })
       
@@ -549,57 +506,187 @@ function ActivityNotifications({ user, activityId, projectName }) {
           </Typography>
         ) : (
           <List>
-            {notifications.map((notification, index) => (
-              <React.Fragment key={notification.id || index}>
-                <ListItem alignItems="flex-start" sx={{ px: 0 }}>
-                  <ListItemText
-                    primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                        <Typography variant="body2" fontWeight="medium">
-                          {notification.sender_name || notification.sender_email}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {notification.created_at ? new Date(notification.created_at).toLocaleString() : 'Just now'}
-                        </Typography>
-                      </Box>
-                    }
-                    secondary={
-                      <Box>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mb: 1 }}>
-                          {notification.message}
-                        </Typography>
-                        
-                        {notification.mentioned_users?.length > 0 && (
-                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
-                            {notification.mentioned_users.map((email, i) => (
-                              <Chip key={i} label={email} size="small" variant="outlined" />
-                            ))}
-                          </Box>
-                        )}
-                        
-                        {notification.files?.length > 0 && (
-                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                            {notification.files.map((file, i) => (
-                              <Chip
-                                key={i}
-                                label={file.filename}
-                                size="small"
-                                icon={<Download size={14} />}
-                                onClick={() => {
-                                  // Download file logic can be added here
-                                  window.open(`/api/download/${file.path}`, '_blank')
-                                }}
-                              />
-                            ))}
-                          </Box>
-                        )}
-                      </Box>
-                    }
-                  />
-                </ListItem>
-                {index < notifications.length - 1 && <Divider />}
-              </React.Fragment>
-            ))}
+            {notifications.map((notification, index) => {
+              // Get current user email from localStorage
+              const currentUserEmail = localStorage.getItem('email')
+              const isCurrentUser = notification.sender_email === currentUserEmail
+              
+              return (
+                <React.Fragment key={notification.id || index}>
+                  <ListItem 
+                    alignItems="flex-start" 
+                    sx={{ 
+                      px: 0,
+                      flexDirection: isCurrentUser ? 'row-reverse' : 'row',
+                      justifyContent: isCurrentUser ? 'flex-end' : 'flex-start'
+                    }}
+                  >
+                    <ListItemText
+                      sx={{
+                        textAlign: isCurrentUser ? 'right' : 'left',
+                        p:2
+                      }}
+                      primary={
+                        <Box sx={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: 1, 
+                          mb: 0.5,
+                          justifyContent: isCurrentUser ? 'flex-end' : 'flex-start'
+                        }}>
+                          <Typography variant="body2" fontWeight="medium">
+                            {notification.sender_name || notification.sender_email}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {notification.created_at ? new Date(notification.created_at).toLocaleString() : 'Just now'}
+                          </Typography>
+                        </Box>
+                      }
+                      secondary={
+                        <Box>
+                          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mb: 1 }}>
+                            {notification.message}
+                          </Typography>
+                          
+                          {notification.mentioned_users?.length > 0 && (
+                            <Box sx={{ 
+                              display: 'flex', 
+                              flexWrap: 'wrap', 
+                              gap: 0.5, 
+                              mb: 1,
+                              justifyContent: isCurrentUser ? 'flex-end' : 'flex-start'
+                            }}>
+                              {notification.mentioned_users.map((email, i) => (
+                                <Chip key={i} label={email} size="small" variant="outlined" />
+                              ))}
+                            </Box>
+                          )}
+                          
+                          {notification.files?.length > 0 && (
+                            <Box sx={{ 
+                              display: 'flex', 
+                              flexWrap: 'wrap', 
+                              gap: 1,
+                              justifyContent: isCurrentUser ? 'flex-end' : 'flex-start'
+                            }}>
+                              {notification.files.map((file, i) => {
+                                const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(file.filename)
+                                const imageUrl = imagePreviews[file.path]
+                                
+                                const handleDownload = async () => {
+                                  try {
+                                    const res = await apiCall(`/api/download/${file.path}`, {
+                                      method: 'GET',
+                                      headers: { Authorization: `Bearer ${token}` }
+                                    })
+                                    
+                                    if (!res.ok) {
+                                      showError('Failed to download file')
+                                      return
+                                    }
+                                    
+                                    const blob = await res.blob()
+                                    const url = window.URL.createObjectURL(blob)
+                                    const a = document.createElement('a')
+                                    a.href = url
+                                    a.download = file.filename
+                                    document.body.appendChild(a)
+                                    a.click()
+                                    window.URL.revokeObjectURL(url)
+                                    document.body.removeChild(a)
+                                  } catch (error) {
+                                    console.error('Download error:', error)
+                                    showError('Failed to download file')
+                                  }
+                                }
+                                
+                                if (isImage && imageUrl) {
+                                  return (
+                                    <Box
+                                      key={i}
+                                      sx={{
+                                        position: 'relative',
+                                        cursor: 'pointer',
+                                        borderRadius: 1,
+                                        overflow: 'hidden',
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        '&:hover .download-overlay': {
+                                          opacity: 1
+                                        }
+                                      }}
+                                      onClick={handleDownload}
+                                    >
+                                      <img
+                                        src={imageUrl}
+                                        alt={file.filename}
+                                        style={{
+                                          maxWidth: '200px',
+                                          maxHeight: '150px',
+                                          display: 'block',
+                                          objectFit: 'cover'
+                                        }}
+                                      />
+                                      <Box
+                                        className="download-overlay"
+                                        sx={{
+                                          position: 'absolute',
+                                          top: 0,
+                                          left: 0,
+                                          right: 0,
+                                          bottom: 0,
+                                          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          opacity: 0,
+                                          transition: 'opacity 0.2s'
+                                        }}
+                                      >
+                                        <Download size={24} color="white" />
+                                      </Box>
+                                      <Typography
+                                        variant="caption"
+                                        sx={{
+                                          position: 'absolute',
+                                          bottom: 0,
+                                          left: 0,
+                                          right: 0,
+                                          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                                          color: 'white',
+                                          padding: '4px 8px',
+                                          fontSize: '0.7rem',
+                                          whiteSpace: 'nowrap',
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis'
+                                        }}
+                                      >
+                                        {file.filename}
+                                      </Typography>
+                                    </Box>
+                                  )
+                                }
+                                
+                                return (
+                                  <Chip
+                                    key={i}
+                                    label={file.filename}
+                                    size="small"
+                                    icon={<Download size={14} />}
+                                    onClick={handleDownload}
+                                  />
+                                )
+                              })}
+                            </Box>
+                          )}
+                        </Box>
+                      }
+                    />
+                  </ListItem>
+                  {index < notifications.length - 1 && <Divider />}
+                </React.Fragment>
+              )
+            })}
           </List>
         )}
       </CardContent>
@@ -608,17 +695,19 @@ function ActivityNotifications({ user, activityId, projectName }) {
 }
 
 // Memoize with custom comparison to prevent unnecessary re-renders
-// Only re-render when activityId or token changes, NOT when projectName changes
+// Only re-render when activityId or token changes, NOT when projectId changes
 export default React.memo(ActivityNotifications, (prevProps, nextProps) => {
   const shouldSkipRender = (
     prevProps.activityId === nextProps.activityId &&
-    prevProps.user?.token === nextProps.user?.token
+    prevProps.user?.token === nextProps.user?.token &&
+    prevProps.projectId === nextProps.projectId
   )
   
   if (!shouldSkipRender) {
     console.log('[NOTIFICATION MEMO] Props changed, will re-render:', {
       activityIdChanged: prevProps.activityId !== nextProps.activityId,
-      tokenChanged: prevProps.user?.token !== nextProps.user?.token
+      tokenChanged: prevProps.user?.token !== nextProps.user?.token,
+      projectIdChanged: prevProps.projectId !== nextProps.projectId
     })
   }
   

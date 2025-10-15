@@ -130,8 +130,9 @@ async def google_callback(request: Request):
         redirect_url = os.getenv('REDIRECT_URL', 'http://localhost:5173')
         logger.info(f"[OAUTH] Redirecting user to frontend: {redirect_url}")
         # Redirect to auth callback route
+        from urllib.parse import quote
         return RedirectResponse(
-            url=f"{redirect_url}/auth/callback?token={auth_token}&name={user_data['name']}"
+            url=f"{redirect_url}/auth/callback?token={auth_token}&name={quote(user_data['name'])}&email={quote(user_data.get('email', ''))}"
         )
     except HTTPException as http_exc:
         logger.error(f"[OAUTH] HTTPException caught in Google callback: {http_exc.detail}")
@@ -194,8 +195,9 @@ async def google_callback(request: Request):
                                 "email": user_data.get('email')
                             })
                             redirect_url = os.getenv('REDIRECT_URL', 'http://localhost:5173')
+                            from urllib.parse import quote
                             return RedirectResponse(
-                                url=f"{redirect_url}/auth/callback?token={auth_token}&name={user_data['name']}"
+                                url=f"{redirect_url}/auth/callback?token={auth_token}&name={quote(user_data['name'])}&email={quote(user_data.get('email', ''))}"
                             )
             except HTTPException as http_exc:
                 logger.error(f"[OAUTH] HTTPException during manual token exchange: {http_exc.detail}")
@@ -276,8 +278,9 @@ async def microsoft_callback(request: Request):
         })
         redirect_url = os.getenv('REDIRECT_URL', 'http://localhost:5173')
         logger.info(f"[OAUTH] Redirecting Microsoft user to frontend: {redirect_url}")
+        from urllib.parse import quote
         return RedirectResponse(
-            url=f"{redirect_url}/auth/callback?token={token}&name={user_data['name']}"
+            url=f"{redirect_url}/auth/callback?token={token}&name={quote(user_data['name'])}&email={quote(user_data.get('email', ''))}"
         )
     except HTTPException as http_exc:
         logger.error(f"[OAUTH] HTTPException during Microsoft callback: {http_exc.detail}")

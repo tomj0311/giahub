@@ -16,9 +16,11 @@ import {
   CardContent,
   alpha,
   useTheme,
-  Button
+  Button,
+  ToggleButtonGroup,
+  ToggleButton
 } from '@mui/material'
-import { ChevronRight, ChevronDown, ArrowLeft, ZoomIn, ZoomOut } from 'lucide-react'
+import { ChevronRight, ChevronDown, ArrowLeft, ZoomIn, ZoomOut, Calendar, CalendarDays } from 'lucide-react'
 import { apiCall } from '../config/api'
 import { useSnackbar } from '../contexts/SnackbarContext'
 
@@ -44,7 +46,9 @@ function GanttChart({ user, projectId: propProjectId }) {
   const [timelineEnd, setTimelineEnd] = useState(null)
   const [timelineMonths, setTimelineMonths] = useState([])
   const [timelineDays, setTimelineDays] = useState([])
+  const [timelineWeeks, setTimelineWeeks] = useState([])
   const [zoomLevel, setZoomLevel] = useState(1)
+  const [viewMode, setViewMode] = useState('monthly') // 'daily', 'weekly', 'monthly'
   const ganttRef = useRef(null)
 
   // Handle zoom with mouse wheel
@@ -301,39 +305,66 @@ function GanttChart({ user, projectId: propProjectId }) {
   const generateMonths = (start, end) => {
     const months = []
     const days = []
+    const weeks = []
     let current = new Date(start)
 
+    // Generate months
     while (current <= end) {
       months.push(new Date(current))
       current = new Date(current.getFullYear(), current.getMonth() + 1, 1)
     }
 
+    // Generate days
     current = new Date(start)
     while (current <= end) {
       days.push(new Date(current))
       current = new Date(current.getFullYear(), current.getMonth(), current.getDate() + 1)
     }
 
+    // Generate weeks (starting on Monday)
+    current = new Date(start)
+    // Adjust to start of week (Monday)
+    const dayOfWeek = current.getDay()
+    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+    current.setDate(current.getDate() + diff)
+    
+    while (current <= end) {
+      weeks.push(new Date(current))
+      current = new Date(current.getFullYear(), current.getMonth(), current.getDate() + 7)
+    }
+
     setTimelineMonths(months)
     setTimelineDays(days)
+    setTimelineWeeks(weeks)
   }
 
   const calculateBarPosition = (startDate, dueDate) => {
-    if (!startDate || !dueDate || !timelineStart || !timelineEnd || !timelineDays.length) {
+    if (!startDate || !dueDate || !timelineStart || !timelineEnd) {
       return { left: '0px', width: '0px' }
     }
 
     const start = parseDate(startDate)
     const due = parseDate(dueDate)
     
-    const dayWidth = 30 * zoomLevel
+    let unitWidth, msPerUnit
     const msPerDay = 1000 * 60 * 60 * 24
+
+    if (viewMode === 'daily') {
+      unitWidth = 30 * zoomLevel
+      msPerUnit = msPerDay
+    } else if (viewMode === 'weekly') {
+      unitWidth = 80 * zoomLevel
+      msPerUnit = msPerDay * 7
+    } else { // monthly
+      unitWidth = 120 * zoomLevel
+      msPerUnit = msPerDay * 30 // Approximate
+    }
     
-    const daysFromStart = (start - timelineStart) / msPerDay
-    const durationInDays = (due - start) / msPerDay
+    const unitsFromStart = (start - timelineStart) / msPerUnit
+    const durationInUnits = (due - start) / msPerUnit
     
-    const leftPx = Math.max(0, daysFromStart * dayWidth)
-    const widthPx = Math.max(dayWidth, durationInDays * dayWidth)
+    const leftPx = Math.max(0, unitsFromStart * unitWidth)
+    const widthPx = Math.max(unitWidth * 0.3, durationInUnits * unitWidth)
 
     return {
       left: `${leftPx}px`,
@@ -489,7 +520,6 @@ function GanttChart({ user, projectId: propProjectId }) {
       <React.Fragment key={proj.id}>
         <Box sx={{ 
           height: 41, 
-          borderBottom: 1, borderColor: 'divider',
           position: 'relative',
           bgcolor: level > 0 ? alpha('#000', 0.01 * level) : 'transparent'
         }}>
@@ -511,7 +541,6 @@ function GanttChart({ user, projectId: propProjectId }) {
         {isExpanded && hasActivities && activitiesByProject[proj.id].map(activity => (
           <Box key={`timeline-activity-${activity.id}`} sx={{ 
             height: 41, 
-            borderBottom: 1, borderColor: 'divider',
             position: 'relative',
             bgcolor: alpha('#000', 0.02 + 0.01 * level)
           }}>
@@ -632,40 +661,66 @@ function GanttChart({ user, projectId: propProjectId }) {
         </Box>
       </Box>
 
-      {/* Gantt Chart */}
-      <Box sx={{ display: 'flex', border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-        {/* Left side - Project/Activity List */}
-        <Card sx={{ minWidth: 800, borderRadius: 0, boxShadow: 'none', borderRight: 1, borderColor: 'divider' }}>
-          <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Subject</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Assignee</TableCell>
-                    <TableCell>Due Date</TableCell>
-                    <TableCell>Progress</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {projectTree.map(proj => renderGanttProjectNode(proj, 0))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
+      {/* Project/Activity List */}
+      <Card sx={{ border: 1, borderColor: 'divider', borderRadius: 1, mb: 3 }}>
+        <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Subject</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Assignee</TableCell>
+                  <TableCell>Due Date</TableCell>
+                  <TableCell>Progress</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {projectTree.map(proj => renderGanttProjectNode(proj, 0))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
 
-        {/* Right side - Timeline */}
-        <Box 
-          ref={ganttRef}
-          sx={{ 
-            flex: 1, 
-            minWidth: 600,
-            overflow: 'auto',
-            position: 'relative'
-          }}
-        >
+      {/* Timeline Section - Completely Separate */}
+      <Card sx={{ border: 1, borderColor: 'divider', borderRadius: 1 }}>
+        <CardContent sx={{ p: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mb: 2, position: 'relative' }}>
+            <Typography variant="h6" sx={{ position: 'absolute', left: 0 }}>Timeline View</Typography>
+            <ToggleButtonGroup
+              value={viewMode}
+              exclusive
+              onChange={(e, newMode) => {
+                if (newMode !== null) {
+                  setViewMode(newMode)
+                }
+              }}
+              size="small"
+              aria-label="timeline view mode"
+            >
+              <ToggleButton value="daily" aria-label="daily view">
+                <CalendarDays size={16} style={{ marginRight: '4px' }} />
+                Daily
+              </ToggleButton>
+              <ToggleButton value="weekly" aria-label="weekly view">
+                <Calendar size={16} style={{ marginRight: '4px' }} />
+                Weekly
+              </ToggleButton>
+              <ToggleButton value="monthly" aria-label="monthly view">
+                <Calendar size={16} style={{ marginRight: '4px' }} />
+                Monthly
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+          <Box 
+            ref={ganttRef}
+            sx={{ 
+              width: '100%',
+              overflow: 'auto',
+              position: 'relative'
+            }}
+          >
           {/* Timeline Header */}
           <Box sx={{ 
             position: 'sticky',
@@ -673,100 +728,320 @@ function GanttChart({ user, projectId: propProjectId }) {
             zIndex: 2,
             backgroundColor: 'background.paper'
           }}>
-            {/* Months Row */}
-            <Box sx={{ 
-              display: 'flex', 
-              backgroundColor: 'background.paper', 
-              borderBottom: 1, 
-              borderColor: 'divider',
-              minHeight: '24px',
-              width: `${zoomLevel * 100}%`
-            }}>
-              {timelineMonths.map((month, index) => {
-                const daysInMonth = timelineDays.filter(day => 
-                  day.getMonth() === month.getMonth() && 
-                  day.getFullYear() === month.getFullYear() &&
-                  day >= timelineStart &&
-                  day <= timelineEnd
-                ).length
-                
-                return (
-                  <Box 
-                    key={index} 
-                    sx={{ 
-                      width: `${(daysInMonth * 30 * zoomLevel)}px`,
-                      flexShrink: 0,
-                      py: 0.5,
-                      px: 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      textAlign: 'center', 
-                      borderRight: index < timelineMonths.length - 1 ? 1 : 'none', 
-                      borderColor: 'divider'
-                    }}
-                  >
-                    <Typography variant="caption" fontWeight="bold" sx={{ fontSize: '0.7rem' }}>
-                      {month.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                    </Typography>
-                  </Box>
-                )
-              })}
-            </Box>
+            {viewMode === 'daily' && (
+              <>
+                {/* Months Row */}
+                <Box sx={{ 
+                  display: 'flex', 
+                  backgroundColor: 'background.paper', 
+                  minHeight: '24px',
+                  width: `${zoomLevel * 100}%`
+                }}>
+                  {timelineMonths.map((month, index) => {
+                    const daysInMonth = timelineDays.filter(day => 
+                      day.getMonth() === month.getMonth() && 
+                      day.getFullYear() === month.getFullYear() &&
+                      day >= timelineStart &&
+                      day <= timelineEnd
+                    ).length
+                    
+                    return (
+                      <Box 
+                        key={index} 
+                        sx={{ 
+                          width: `${(daysInMonth * 30 * zoomLevel)}px`,
+                          flexShrink: 0,
+                          py: 0.5,
+                          px: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          textAlign: 'center'
+                        }}
+                      >
+                        <Typography variant="caption" fontWeight="bold" sx={{ fontSize: '0.7rem' }}>
+                          {month.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                        </Typography>
+                      </Box>
+                    )
+                  })}
+                </Box>
 
-            {/* Days Row */}
-            <Box sx={{ 
-              display: 'flex', 
-              backgroundColor: 'background.paper',
-              borderBottom: 2, 
-              borderColor: 'divider',
-              minHeight: '24px',
-              width: `${zoomLevel * 100}%`
-            }}>
-              {timelineDays.map((day, index) => {
-                const isWeekend = day.getDay() === 0 || day.getDay() === 6
-                const isFirstOfMonth = day.getDate() === 1
-                
-                return (
-                  <Box 
-                    key={index} 
-                    sx={{ 
-                      flex: 1,
-                      minWidth: 30 * zoomLevel,
-                      maxWidth: 30 * zoomLevel,
-                      py: 0.5,
-                      px: 0.5,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      textAlign: 'center',
-                      borderRight: isFirstOfMonth ? 1 : 'none',
-                      borderColor: 'divider',
-                      backgroundColor: isWeekend ? alpha('#000', 0.03) : 'transparent'
-                    }}
-                  >
-                    <Typography 
-                      variant="caption" 
-                      sx={{ 
-                        fontSize: '0.65rem',
-                        fontWeight: isFirstOfMonth ? 'bold' : 'normal',
-                        color: isWeekend ? 'text.secondary' : 'text.primary'
-                      }}
-                    >
-                      {day.getDate()}
-                    </Typography>
-                  </Box>
-                )
-              })}
-            </Box>
+                {/* Days Row */}
+                <Box sx={{ 
+                  display: 'flex', 
+                  backgroundColor: 'background.paper',
+                  minHeight: '24px',
+                  width: `${zoomLevel * 100}%`,
+                  mb: 1
+                }}>
+                  {timelineDays.map((day, index) => {
+                    const isWeekend = day.getDay() === 0 || day.getDay() === 6
+                    const isFirstOfMonth = day.getDate() === 1
+                    
+                    return (
+                      <Box 
+                        key={index} 
+                        sx={{ 
+                          flex: 1,
+                          minWidth: 30 * zoomLevel,
+                          maxWidth: 30 * zoomLevel,
+                          py: 0.5,
+                          px: 0.5,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          textAlign: 'center',
+                          backgroundColor: isWeekend ? alpha('#000', 0.03) : 'transparent',
+                          borderLeft: isFirstOfMonth ? 1 : 'none',
+                          borderColor: 'divider'
+                        }}
+                      >
+                        <Typography 
+                          variant="caption" 
+                          sx={{ 
+                            fontSize: '0.65rem',
+                            fontWeight: isFirstOfMonth ? 'bold' : 'normal',
+                            color: isWeekend ? 'text.secondary' : 'text.primary'
+                          }}
+                        >
+                          {day.getDate()}
+                        </Typography>
+                      </Box>
+                    )
+                  })}
+                </Box>
+              </>
+            )}
+
+            {viewMode === 'weekly' && (
+              <>
+                {/* Months Row */}
+                <Box sx={{ 
+                  display: 'flex', 
+                  backgroundColor: 'background.paper', 
+                  minHeight: '24px',
+                  width: `${zoomLevel * 100}%`
+                }}>
+                  {timelineMonths.map((month, index) => {
+                    const weeksInMonth = timelineWeeks.filter(week => {
+                      const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0)
+                      return week.getMonth() === month.getMonth() || 
+                             (week <= monthEnd && week >= month)
+                    }).length
+                    
+                    if (weeksInMonth === 0) return null
+                    
+                    return (
+                      <Box 
+                        key={index} 
+                        sx={{ 
+                          width: `${(weeksInMonth * 80 * zoomLevel)}px`,
+                          flexShrink: 0,
+                          py: 0.5,
+                          px: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          textAlign: 'center'
+                        }}
+                      >
+                        <Typography variant="caption" fontWeight="bold" sx={{ fontSize: '0.7rem' }}>
+                          {month.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                        </Typography>
+                      </Box>
+                    )
+                  })}
+                </Box>
+
+                {/* Weeks Row */}
+                <Box sx={{ 
+                  display: 'flex', 
+                  backgroundColor: 'background.paper',
+                  minHeight: '24px',
+                  width: `${zoomLevel * 100}%`,
+                  mb: 1
+                }}>
+                  {timelineWeeks.map((week, index) => {
+                    const weekEnd = new Date(week)
+                    weekEnd.setDate(weekEnd.getDate() + 6)
+                    const isFirstOfMonth = week.getDate() <= 7
+                    
+                    return (
+                      <Box 
+                        key={index} 
+                        sx={{ 
+                          minWidth: 80 * zoomLevel,
+                          maxWidth: 80 * zoomLevel,
+                          py: 0.5,
+                          px: 0.5,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          textAlign: 'center',
+                          borderLeft: isFirstOfMonth ? 1 : 'none',
+                          borderColor: 'divider'
+                        }}
+                      >
+                        <Typography 
+                          variant="caption" 
+                          sx={{ fontSize: '0.65rem' }}
+                        >
+                          {week.getDate()}/{week.getMonth() + 1}
+                        </Typography>
+                      </Box>
+                    )
+                  })}
+                </Box>
+              </>
+            )}
+
+            {viewMode === 'monthly' && (
+              <>
+                {/* Years Row */}
+                <Box sx={{ 
+                  display: 'flex', 
+                  backgroundColor: 'background.paper', 
+                  minHeight: '24px',
+                  width: `${zoomLevel * 100}%`
+                }}>
+                  {Array.from(new Set(timelineMonths.map(m => m.getFullYear()))).map((year, index) => {
+                    const monthsInYear = timelineMonths.filter(m => m.getFullYear() === year).length
+                    
+                    return (
+                      <Box 
+                        key={index} 
+                        sx={{ 
+                          width: `${(monthsInYear * 120 * zoomLevel)}px`,
+                          flexShrink: 0,
+                          py: 0.5,
+                          px: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          textAlign: 'center'
+                        }}
+                      >
+                        <Typography variant="caption" fontWeight="bold" sx={{ fontSize: '0.75rem' }}>
+                          {year}
+                        </Typography>
+                      </Box>
+                    )
+                  })}
+                </Box>
+
+                {/* Months Row */}
+                <Box sx={{ 
+                  display: 'flex', 
+                  backgroundColor: 'background.paper',
+                  minHeight: '24px',
+                  width: `${zoomLevel * 100}%`,
+                  mb: 1
+                }}>
+                  {timelineMonths.map((month, index) => {
+                    return (
+                      <Box 
+                        key={index} 
+                        sx={{ 
+                          minWidth: 120 * zoomLevel,
+                          maxWidth: 120 * zoomLevel,
+                          py: 0.5,
+                          px: 0.5,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          textAlign: 'center',
+                          borderLeft: 1,
+                          borderColor: 'divider'
+                        }}
+                      >
+                        <Typography 
+                          variant="caption" 
+                          sx={{ fontSize: '0.7rem' }}
+                        >
+                          {month.toLocaleDateString('en-US', { month: 'short' })}
+                        </Typography>
+                      </Box>
+                    )
+                  })}
+                </Box>
+              </>
+            )}
           </Box>
 
           {/* Timeline Bars */}
-          <Box sx={{ width: `${zoomLevel * 100}%` }}>
+          <Box sx={{ width: `${zoomLevel * 100}%`, position: 'relative' }}>
+            {/* Month vertical lines overlay */}
+            <Box sx={{ 
+              position: 'absolute', 
+              top: 0, 
+              left: 0, 
+              width: '100%', 
+              height: '100%',
+              pointerEvents: 'none',
+              display: 'flex'
+            }}>
+              {viewMode === 'daily' && timelineDays.map((day, index) => {
+                const isFirstOfMonth = day.getDate() === 1
+                if (!isFirstOfMonth) return null
+                
+                return (
+                  <Box 
+                    key={index}
+                    sx={{
+                      position: 'absolute',
+                      left: `${index * 30 * zoomLevel}px`,
+                      top: 0,
+                      bottom: 0,
+                      width: '1px',
+                      backgroundColor: 'divider',
+                      opacity: 0.5
+                    }}
+                  />
+                )
+              })}
+              {viewMode === 'weekly' && timelineWeeks.map((week, index) => {
+                const isFirstOfMonth = week.getDate() <= 7
+                if (!isFirstOfMonth) return null
+                
+                return (
+                  <Box 
+                    key={index}
+                    sx={{
+                      position: 'absolute',
+                      left: `${index * 80 * zoomLevel}px`,
+                      top: 0,
+                      bottom: 0,
+                      width: '1px',
+                      backgroundColor: 'divider',
+                      opacity: 0.5
+                    }}
+                  />
+                )
+              })}
+              {viewMode === 'monthly' && timelineMonths.map((month, index) => {
+                return (
+                  <Box 
+                    key={index}
+                    sx={{
+                      position: 'absolute',
+                      left: `${index * 120 * zoomLevel}px`,
+                      top: 0,
+                      bottom: 0,
+                      width: '1px',
+                      backgroundColor: 'divider',
+                      opacity: 0.5
+                    }}
+                  />
+                )
+              })}
+            </Box>
+            
             {projectTree.map(proj => renderTimelineNode(proj, 0))}
           </Box>
         </Box>
-      </Box>
+        </CardContent>
+      </Card>
     </Box>
   )
 }

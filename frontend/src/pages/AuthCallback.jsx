@@ -10,10 +10,11 @@ export default function AuthCallback({ onLogin }) {
   useEffect(() => {
     const token = params.get('token')
     const name = params.get('name')
+    const email = params.get('email')
     
     if (token) {
       try {
-        onLogin(token, name)
+        onLogin(token, name, email)
         // Give a small delay to ensure state updates
         setTimeout(() => {
           navigate('/dashboard', { replace: true })
