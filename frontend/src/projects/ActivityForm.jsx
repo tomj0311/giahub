@@ -97,6 +97,31 @@ function ActivityForm({ user, projectId: propProjectId }) {
     return a > b
   }, [])
 
+  // Calculate due date status for visual indicators
+  const getDueDateStatus = useCallback(() => {
+    if (!form.due_date) return { color: 'inherit', isBold: false }
+    
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const dueDate = new Date(form.due_date + 'T00:00:00')
+    const diffTime = dueDate - today
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    
+    // Red and bold if on or after due date
+    if (diffDays <= 0) {
+      return { color: '#d32f2f', isBold: true } // red
+    }
+    // Yellow if within 3 days
+    if (diffDays <= 3) {
+      return { color: '#ed6c02', isBold: false } // orange/yellow
+    }
+    // Default color
+    return { color: 'inherit', isBold: false }
+  }, [form.due_date])
+
+  const dueDateStatus = useMemo(() => getDueDateStatus(), [getDueDateStatus])
+
   // Update refs when these change
   useEffect(() => {
     showErrorRef.current = showError
@@ -429,8 +454,18 @@ function ActivityForm({ user, projectId: propProjectId }) {
                 <Typography variant="body1">{form.start_date || 'N/A'}</Typography>
               </Box>
               <Box>
-                <Typography variant="caption" color="text.secondary">Due Date</Typography>
-                <Typography variant="body1">{form.due_date || 'N/A'}</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ color: dueDateStatus.color }}>
+                  Due Date
+                </Typography>
+                <Typography 
+                  variant="body1" 
+                  sx={{ 
+                    color: dueDateStatus.color,
+                    fontWeight: dueDateStatus.isBold ? 'bold' : 'normal'
+                  }}
+                >
+                  {form.due_date || 'N/A'}
+                </Typography>
               </Box>
               <Box sx={{ gridColumn: { xs: '1', md: 'span 2' } }}>
                 <Typography variant="caption" color="text.secondary">Description</Typography>

@@ -709,6 +709,34 @@ function ProjectPlanning({ user, projectId }) {
     return icons[type] || <CheckCircle size={18} />
   }
 
+  // Calculate due date styling based on days remaining
+  const getDueDateStyle = useCallback((dueDate, status) => {
+    // If status is Completed, use normal styling
+    if (status === 'Completed') {
+      return { color: 'inherit', fontWeight: 'normal' }
+    }
+
+    if (!dueDate) return { color: 'inherit', fontWeight: 'normal' }
+    
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const due = new Date(dueDate + 'T00:00:00')
+    const diffTime = due - today
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    
+    // Red and bold if on or after due date
+    if (diffDays <= 0) {
+      return { color: '#d32f2f', fontWeight: 'bold' }
+    }
+    // Yellow/Orange if within 3 days
+    if (diffDays <= 3) {
+      return { color: '#ed6c02', fontWeight: 'normal' }
+    }
+    // Default color
+    return { color: 'inherit', fontWeight: 'normal' }
+  }, [])
+
   // Render cell value based on field type
   const renderCellValue = (activity, fieldName) => {
     const value = activity[fieldName]
@@ -751,8 +779,17 @@ function ProjectPlanning({ user, projectId }) {
       )
     }
     
-    if (fieldName === 'start_date' || fieldName === 'due_date') {
+    if (fieldName === 'start_date') {
       return value ? new Date(value).toLocaleDateString() : '-'
+    }
+    
+    if (fieldName === 'due_date') {
+      const dateStyle = getDueDateStyle(value, activity.status)
+      return (
+        <Typography variant="body2" sx={{ color: dateStyle.color, fontWeight: dateStyle.fontWeight }}>
+          {value ? new Date(value).toLocaleDateString() : '-'}
+        </Typography>
+      )
     }
     
     if (fieldName === 'progress') {

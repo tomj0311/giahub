@@ -622,6 +622,34 @@ function ProjectTreeView({ user }) {
     return labels[status] || status
   }
 
+  // Calculate due date styling based on days remaining
+  const getDueDateStyle = useCallback((dueDate, status) => {
+    // If status is Completed, use normal styling
+    if (status === 'COMPLETED') {
+      return { color: 'inherit', fontWeight: 'normal' }
+    }
+
+    if (!dueDate) return { color: 'inherit', fontWeight: 'normal' }
+    
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const due = new Date(dueDate + 'T00:00:00')
+    const diffTime = due - today
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    
+    // Red and bold if on or after due date
+    if (diffDays <= 0) {
+      return { color: '#d32f2f', fontWeight: 'bold' }
+    }
+    // Yellow/Orange if within 3 days
+    if (diffDays <= 3) {
+      return { color: '#ed6c02', fontWeight: 'normal' }
+    }
+    // Default color
+    return { color: 'inherit', fontWeight: 'normal' }
+  }, [])
+
   // Get field definition by name
   const getFieldDef = (fieldName) => {
     return fieldMetadata.find(f => f.name === fieldName)
@@ -823,7 +851,7 @@ function ProjectTreeView({ user }) {
             {formatDate(node.start_date)}
           </TableCell>
 
-          <TableCell>
+          <TableCell sx={getDueDateStyle(node.due_date, node.status)}>
             {formatDate(node.due_date)}
           </TableCell>
 

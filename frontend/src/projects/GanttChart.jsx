@@ -534,6 +534,34 @@ function GanttChart({ user, projectId: propProjectId }) {
     return labels[status] || status
   }
 
+  // Calculate due date styling based on days remaining
+  const getDueDateStyle = (dueDate, status) => {
+    // If status is Completed, use normal styling
+    if (status === 'Completed' || status === 'COMPLETED') {
+      return { color: 'inherit', fontWeight: 'normal' }
+    }
+
+    if (!dueDate) return { color: 'inherit', fontWeight: 'normal' }
+    
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const due = new Date(dueDate + 'T00:00:00')
+    const diffTime = due - today
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    
+    // Red and bold if on or after due date
+    if (diffDays <= 0) {
+      return { color: '#d32f2f', fontWeight: 'bold' }
+    }
+    // Yellow/Orange if within 3 days
+    if (diffDays <= 3) {
+      return { color: '#ed6c02', fontWeight: 'normal' }
+    }
+    // Default color
+    return { color: 'inherit', fontWeight: 'normal' }
+  }
+
   const renderGanttProjectNode = (proj, level = 0) => {
     const hasActivities = activitiesByProject[proj.id] && activitiesByProject[proj.id].length > 0
     const hasChildren = proj.children && proj.children.length > 0
@@ -586,7 +614,7 @@ function GanttChart({ user, projectId: propProjectId }) {
             {proj.start_date ? new Date(proj.start_date).toLocaleDateString() : '-'}
           </TableCell>
 
-          <TableCell>
+          <TableCell sx={getDueDateStyle(proj.due_date, proj.status)}>
             {proj.due_date ? new Date(proj.due_date).toLocaleDateString() : '-'}
           </TableCell>
 
@@ -631,7 +659,7 @@ function GanttChart({ user, projectId: propProjectId }) {
             <TableCell>
               {activity.start_date ? new Date(activity.start_date).toLocaleDateString() : '-'}
             </TableCell>
-            <TableCell>
+            <TableCell sx={getDueDateStyle(activity.due_date, activity.status)}>
               {activity.due_date ? new Date(activity.due_date).toLocaleDateString() : '-'}
             </TableCell>
             <TableCell>{activity.progress || 0}%</TableCell>
