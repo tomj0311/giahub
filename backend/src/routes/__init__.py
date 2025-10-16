@@ -19,6 +19,7 @@ from .dynamic_execution import router as dynamic_execution_router
 from .projects import router as projects_router
 from .project_activities import router as project_activities_router
 from .activity_notifications import router as activity_notifications_router
+from .scheduler import router as scheduler_router
 
 __all__ = [
     "auth_router", 
@@ -42,5 +43,6 @@ __all__ = [
     "projects_router",
     "project_activities_router",
     "activity_notifications_router",
+    "scheduler_router",
 ]
 

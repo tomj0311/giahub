@@ -19,9 +19,10 @@ sys.path.insert(0, str(current_dir))
 sys.path.insert(0, str(project_root))  # Add project root so we can import 'ai' module
 
 from src.db import init_database, close_database
-from src.routes import auth_router, users_router, payments_router, uploads_router, profile_router, roles_router, role_management_router, model_config_router, tool_config_router, knowledge_router, agents_router, workflow_config_router, workflow_router, analytics_router, dynamic_execution_router, projects_router, project_activities_router, activity_notifications_router
+from src.routes import auth_router, users_router, payments_router, uploads_router, profile_router, roles_router, role_management_router, model_config_router, tool_config_router, knowledge_router, agents_router, workflow_config_router, workflow_router, analytics_router, dynamic_execution_router, projects_router, project_activities_router, activity_notifications_router, scheduler_router
 from src.routes.agent_runtime import router as agent_runtime_router
 from src.services.rbac_service import init_default_roles
+from src.scheduler import start_scheduler, shutdown_scheduler
 from src.utils.log import logger
 
 # Load environment variables FIRST
@@ -57,8 +58,19 @@ async def lifespan(app: FastAPI):
     # await init_default_roles()
     # logger.info("Default roles initialized")
     
+    # Start APScheduler
+    logger.debug("[STARTUP] Starting APScheduler")
+    start_scheduler()
+    logger.info("APScheduler started")
+    
     logger.debug("[STARTUP] Application startup completed")
     yield
+    
+    # Shutdown scheduler
+    logger.debug("[SHUTDOWN] Shutting down APScheduler")
+    shutdown_scheduler()
+    logger.info("APScheduler shutdown")
+    
     # Close database on shutdown
     logger.debug("[SHUTDOWN] Closing database connection")
     await close_database()
@@ -130,6 +142,7 @@ app.include_router(activity_notifications_router, prefix="/api/projects")
 app.include_router(agent_runtime_router)
 app.include_router(payments_router, prefix="/api/payments")
 app.include_router(uploads_router, prefix="/api")
+app.include_router(scheduler_router, prefix="/api/scheduler")
 
 
 
