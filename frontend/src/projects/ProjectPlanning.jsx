@@ -111,6 +111,16 @@ function ProjectPlanning({ user, projectId }) {
     return [...fieldMetadata].sort((a, b) => orderIndex(a.name) - orderIndex(b.name))
   }, [fieldMetadata])
 
+  // Format date as dd/mm/yyyy
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '-'
+    const date = new Date(dateStr)
+    const day = String(date.getDate()).padStart(2, '0')
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const year = date.getFullYear()
+    return `${day}/${month}/${year}`
+  }
+
   // Load field metadata from API - NO HARDCODING!
   const loadFieldMetadata = useCallback(async () => {
     if (!isMountedRef.current) return
@@ -780,14 +790,14 @@ function ProjectPlanning({ user, projectId }) {
     }
     
     if (fieldName === 'start_date') {
-      return value ? new Date(value).toLocaleDateString() : '-'
+      return formatDate(value)
     }
     
     if (fieldName === 'due_date') {
       const dateStyle = getDueDateStyle(value, activity.status)
       return (
         <Typography variant="body2" sx={{ color: dateStyle.color, fontWeight: dateStyle.fontWeight }}>
-          {value ? new Date(value).toLocaleDateString() : '-'}
+          {formatDate(value)}
         </Typography>
       )
     }

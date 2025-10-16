@@ -57,6 +57,16 @@ function GanttChart({ user, projectId: propProjectId }) {
   const [viewMode, setViewMode] = useState('monthly') // 'daily', 'weekly', 'monthly'
   const ganttRef = useRef(null)
 
+  // Format date as dd/mm/yyyy
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '-'
+    const date = new Date(dateStr)
+    const day = String(date.getDate()).padStart(2, '0')
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const year = date.getFullYear()
+    return `${day}/${month}/${year}`
+  }
+
   // Handle zoom with mouse wheel
   useEffect(() => {
     const handleWheel = (e) => {
@@ -611,11 +621,11 @@ function GanttChart({ user, projectId: propProjectId }) {
           <TableCell>{proj.approver || '-'}</TableCell>
 
           <TableCell>
-            {proj.start_date ? new Date(proj.start_date).toLocaleDateString() : '-'}
+            {formatDate(proj.start_date)}
           </TableCell>
 
           <TableCell sx={getDueDateStyle(proj.due_date, proj.status)}>
-            {proj.due_date ? new Date(proj.due_date).toLocaleDateString() : '-'}
+            {formatDate(proj.due_date)}
           </TableCell>
 
           <TableCell>{proj.progress}%</TableCell>
@@ -657,10 +667,10 @@ function GanttChart({ user, projectId: propProjectId }) {
             <TableCell>{activity.assignee || '-'}</TableCell>
             <TableCell>{activity.approver || '-'}</TableCell>
             <TableCell>
-              {activity.start_date ? new Date(activity.start_date).toLocaleDateString() : '-'}
+              {formatDate(activity.start_date)}
             </TableCell>
             <TableCell sx={getDueDateStyle(activity.due_date, activity.status)}>
-              {activity.due_date ? new Date(activity.due_date).toLocaleDateString() : '-'}
+              {formatDate(activity.due_date)}
             </TableCell>
             <TableCell>{activity.progress || 0}%</TableCell>
           </TableRow>
