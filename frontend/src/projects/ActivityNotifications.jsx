@@ -391,6 +391,45 @@ function ActivityNotifications({ user, activityId, projectId }) {
       console.log('[NOTIFICATION] Success response:', result)
       console.log('[NOTIFICATION] Notification object:', result.notification)
       
+      // Immediately load image previews for the newly uploaded files
+      if (result.notification?.files?.length > 0) {
+        const newPreviews = {}
+        
+        for (const file of result.notification.files) {
+          if (isImageFilename(file.filename)) {
+            try {
+              const encoded = encodePathSegments(file.path)
+              const imgRes = await apiCall(`/api/download/${encoded}`, {
+                method: 'GET',
+                headers: { Authorization: `Bearer ${token}` }
+              })
+
+              if (imgRes.ok) {
+                const blob = await imgRes.blob()
+                const contentType = blob.type || imgRes.headers.get('content-type') || ''
+                if (contentType.startsWith('image/') || isImageFilename(file.filename)) {
+                  const url = URL.createObjectURL(blob)
+                  newPreviews[file.path] = url
+                  console.log('[NOTIFICATION] Loaded image preview for:', file.filename)
+                }
+              }
+            } catch (error) {
+              console.error('[NOTIFICATION] Failed to load image preview:', error)
+            }
+          }
+        }
+        
+        // Update image previews state with new images
+        if (Object.keys(newPreviews).length > 0) {
+          setImagePreviews(prev => {
+            const merged = { ...prev, ...newPreviews }
+            previewsRef.current = merged
+            console.log('[NOTIFICATION] Updated image previews, total count:', Object.keys(merged).length)
+            return merged
+          })
+        }
+      }
+      
       // Add new notification to list immediately for instant feedback
       setNotifications(prev => {
         console.log('[NOTIFICATION] Previous notifications:', prev)
