@@ -74,6 +74,9 @@ function ActivityForm({ user, projectId: propProjectId }) {
   })
 
   const isEditMode = !!activityId
+  
+  // Check if navigating from Gantt chart
+  const isFromGantt = location.state?.returnTo === '/dashboard/projects/gantt'
 
   // Strict date validation helpers
   const isValidISODateString = useCallback((str, { minYear = 1900, maxYear = 2100 } = {}) => {
@@ -357,6 +360,92 @@ function ActivityForm({ user, projectId: propProjectId }) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
         <CircularProgress />
+      </Box>
+    )
+  }
+
+  // If coming from Gantt chart, show only notifications (no edit form)
+  if (isFromGantt && isEditMode && activityId) {
+    return (
+      <Box sx={{ p: 3 }}>
+        {/* Header */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Button
+              startIcon={<ArrowLeft size={20} />}
+              onClick={handleCancel}
+              variant="outlined"
+            >
+              Back
+            </Button>
+            <Typography variant="h4">
+              Activity Notifications
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Show activity summary info */}
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Project</Typography>
+                <Typography variant="body1" fontWeight="500">{projectName}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Activity</Typography>
+                <Typography variant="body1" fontWeight="500">{form.subject || 'Loading...'}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Type</Typography>
+                <Typography variant="body1">{form.type}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Status</Typography>
+                <Typography variant="body1">{form.status}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Priority</Typography>
+                <Typography variant="body1">{form.priority}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Progress</Typography>
+                <Typography variant="body1">{form.progress}%</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Assignee</Typography>
+                <Typography variant="body1">
+                  {tenantUsers.find(u => u.email === form.assignee)?.displayName || form.assignee || 'N/A'}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Approver</Typography>
+                <Typography variant="body1">
+                  {tenantUsers.find(u => u.email === form.approver)?.displayName || form.approver || 'N/A'}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Start Date</Typography>
+                <Typography variant="body1">{form.start_date || 'N/A'}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Due Date</Typography>
+                <Typography variant="body1">{form.due_date || 'N/A'}</Typography>
+              </Box>
+              <Box sx={{ gridColumn: { xs: '1', md: 'span 2' } }}>
+                <Typography variant="caption" color="text.secondary">Description</Typography>
+                <Typography variant="body1">{form.description || 'N/A'}</Typography>
+              </Box>
+            </Box>
+          </CardContent>
+        </Card>
+
+        {/* Notifications Section */}
+        <ActivityNotifications 
+          user={stableUser} 
+          activityId={activityId} 
+          projectId={form.project_id}
+        />
       </Box>
     )
   }
