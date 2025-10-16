@@ -13,8 +13,12 @@ export const api = async (endpoint, options = {}) => {
   const url = `${API_BASE_URL}${endpoint}`
   
   // Add default headers
-  const defaultHeaders = {
-    'Content-Type': 'application/json',
+  const defaultHeaders = {}
+  
+  // Only add Content-Type for non-FormData requests
+  // For FormData, browser sets Content-Type with boundary automatically
+  if (!(options.body instanceof FormData)) {
+    defaultHeaders['Content-Type'] = 'application/json'
   }
   
   // Add auth token if available
