@@ -173,7 +173,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 				{
 					label: 'Scheduler Jobs',
 					to: '/dashboard/scheduler-jobs',
-					icon: 'Clock'
+					icon: 'Timer'
 				},
 				{
 					label: 'Utilities',

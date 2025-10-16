@@ -27,6 +27,7 @@ import {
 	Package,
 	Box,
 	FolderKanban,
+	Timer,
 	// New unique icons for the reorganized menu
 	Star,
 	Gamepad2,
@@ -66,6 +67,7 @@ export const iconMap = {
 	Package,
 	Box,
 	FolderKanban,
+	Timer,
 	LayoutDashboard,
 	Users,
 	Shield,
