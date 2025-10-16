@@ -409,67 +409,98 @@ function ActivityForm({ user, projectId: propProjectId }) {
           </Box>
         </Box>
 
-        {/* Show activity summary info */}
+        {/* Show activity summary info (view-only) */}
         <Card sx={{ mb: 3 }}>
           <CardContent>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+            {/* Two-column layout: Left = Subject + Description, Right = other meta fields */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1.2fr 1fr' }, gap: 3 }}>
+              {/* Left column: Subject and Description */}
               <Box>
-                <Typography variant="caption" color="text.secondary">Project</Typography>
-                <Typography variant="body1" fontWeight="500">{projectName}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary">Activity</Typography>
-                <Typography variant="body1" fontWeight="500">{form.subject || 'Loading...'}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary">Type</Typography>
-                <Typography variant="body1">{form.type}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary">Status</Typography>
-                <Typography variant="body1">{form.status}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary">Priority</Typography>
-                <Typography variant="body1">{form.priority}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary">Progress</Typography>
-                <Typography variant="body1">{form.progress}%</Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary">Assignee</Typography>
-                <Typography variant="body1">
-                  {tenantUsers.find(u => u.email === form.assignee)?.displayName || form.assignee || 'N/A'}
-                </Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary">Approver</Typography>
-                <Typography variant="body1">
-                  {tenantUsers.find(u => u.email === form.approver)?.displayName || form.approver || 'N/A'}
-                </Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary">Start Date</Typography>
-                <Typography variant="body1">{form.start_date || 'N/A'}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ color: dueDateStatus.color }}>
-                  Due Date
-                </Typography>
+                <Typography variant="caption" color="text.secondary">Subject</Typography>
                 <Typography 
                   variant="body1" 
-                  sx={{ 
-                    color: dueDateStatus.color,
-                    fontWeight: dueDateStatus.isBold ? 'bold' : 'normal'
-                  }}
+                  fontWeight="500"
+                  sx={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                 >
-                  {form.due_date || 'N/A'}
+                  {form.subject || 'Loading...'}
                 </Typography>
+
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="caption" color="text.secondary">Description</Typography>
+                  {/* Scrollable viewport for long description text */}
+                  <Box
+                    sx={{
+                      mt: 1,
+                      p: 1.5,
+                      borderRadius: 1,
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      bgcolor: 'background.paper',
+                      maxHeight: { xs: 100, md: 220 },
+                      overflowY: 'auto'
+                    }}
+                  >
+                    <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                      {form.description || 'N/A'}
+                    </Typography>
+                  </Box>
+                </Box>
               </Box>
-              <Box sx={{ gridColumn: { xs: '1', md: 'span 2' } }}>
-                <Typography variant="caption" color="text.secondary">Description</Typography>
-                <Typography variant="body1">{form.description || 'N/A'}</Typography>
+
+              {/* Right column: Other details */}
+              <Box>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 2 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Project</Typography>
+                    <Typography variant="body1" fontWeight="500">{projectName}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Type</Typography>
+                    <Typography variant="body1">{form.type}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Status</Typography>
+                    <Typography variant="body1">{form.status}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Priority</Typography>
+                    <Typography variant="body1">{form.priority}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Progress</Typography>
+                    <Typography variant="body1">{form.progress}%</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Assignee</Typography>
+                    <Typography variant="body1">
+                      {tenantUsers.find(u => u.email === form.assignee)?.displayName || form.assignee || 'N/A'}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Approver</Typography>
+                    <Typography variant="body1">
+                      {tenantUsers.find(u => u.email === form.approver)?.displayName || form.approver || 'N/A'}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Start Date</Typography>
+                    <Typography variant="body1">{form.start_date || 'N/A'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ color: dueDateStatus.color }}>
+                      Due Date
+                    </Typography>
+                    <Typography
+                      variant="body1"
+                      sx={{
+                        color: dueDateStatus.color,
+                        fontWeight: dueDateStatus.isBold ? 'bold' : 'normal'
+                      }}
+                    >
+                      {form.due_date || 'N/A'}
+                    </Typography>
+                  </Box>
+                </Box>
               </Box>
             </Box>
           </CardContent>
