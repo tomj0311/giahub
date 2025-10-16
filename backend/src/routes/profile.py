@@ -32,32 +32,28 @@ class ProfileCompletenessResponse(BaseModel):
 async def get_profile(user: dict = Depends(verify_token_middleware)):
     """Get user profile"""
     user_id = user.get("id")
-    logger.info(f"[PROFILE] Getting profile for user: {user_id}")
-    
     role = user.get("role")
     tenant_id = user.get("tenantId")
     
     if not role or not user_id:
-        logger.warning(f"[PROFILE] Invalid user data for profile request: {user}")
+        logger.warning(f"Invalid user data for profile request: {user}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid user data"
         )
     
     if not tenant_id:
-        logger.warning(f"[PROFILE] Missing tenant information for user: {user_id}")
+        logger.warning(f"Missing tenant information for user: {user_id}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User tenant information missing. Please re-login."
         )
     
     try:
-        logger.debug(f"[PROFILE] Fetching profile data for user: {user_id}")
         profile = await UserService.get_user_profile(user_id)
-        logger.info(f"[PROFILE] Successfully retrieved profile for user: {user_id}")
         return profile
     except Exception as e:
-        logger.error(f"[PROFILE] Failed to get profile for user {user_id}: {str(e)}")
+        logger.error(f"Failed to get profile for user {user_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get profile"
@@ -71,14 +67,11 @@ async def update_profile(
 ):
     """Update user profile"""
     user_id = user.get("id")
-    logger.info(f"[PROFILE] Updating profile for user: {user_id}")
-    logger.debug(f"[PROFILE] Update data: {profile_update.dict(exclude_unset=True)}")
-    
     role = user.get("role")
     tenant_id = user.get("tenantId")
     
     if not role or not user_id:
-        logger.warning(f"[PROFILE] Invalid user data for profile update: {user}")
+        logger.warning(f"Invalid user data for profile update: {user}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid user data"

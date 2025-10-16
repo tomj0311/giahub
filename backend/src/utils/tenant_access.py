@@ -57,8 +57,6 @@ def with_tenant_db(func: Callable) -> Callable:
         # Replace or inject tenant-aware collections
         kwargs['collections'] = tenant_collections
         
-        logger.debug(f"[TENANT_ACCESS] Injected tenant-aware collections for user: {user_id}")
-        
         return await func(*args, **kwargs)
     
     return wrapper
@@ -99,8 +97,6 @@ def with_tenant_database(func: Callable) -> Callable:
         
         # Replace or inject tenant-aware database
         kwargs['db'] = tenant_db
-        
-        logger.debug(f"[TENANT_ACCESS] Injected tenant-aware database for user: {user_id}")
         
         return await func(*args, **kwargs)
     
@@ -201,9 +197,6 @@ def require_tenant_access(collection_names: list = None):
                     detail="User tenant information missing. Please re-login."
                 )
             
-            collections_msg = f" (accessing: {', '.join(collection_names)})" if collection_names else ""
-            logger.debug(f"[TENANT_ACCESS] User {user_id} from tenant {tenant_id} accessing function {func.__name__}{collections_msg}")
-            
             return await func(*args, **kwargs)
         
         return wrapper
@@ -231,7 +224,7 @@ async def get_tenant_database(user_id: str):
 
 def log_tenant_operation(operation: str, collection_name: str, user_id: str, details: str = ""):
     """Log tenant-aware database operations for audit purposes"""
-    log_msg = f"[TENANT_AUDIT] {operation} on {collection_name} by user {user_id}"
+    log_msg = f"Tenant operation: {operation} on {collection_name} by user {user_id}"
     if details:
         log_msg += f" - {details}"
     logger.info(log_msg)

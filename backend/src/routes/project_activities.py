@@ -25,7 +25,7 @@ async def get_activity_fields_metadata(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[ACTIVITY] Error fetching field metadata: {e}")
+        logger.error(f"Error fetching field metadata: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch field metadata")
 
 
@@ -41,7 +41,7 @@ async def create_activity(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[ACTIVITY] Failed to create activity: {e}")
+        logger.error(f"Failed to create activity: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create activity"
@@ -79,7 +79,7 @@ async def get_activities(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[ACTIVITY] Error fetching activities: {e}")
+        logger.error(f"Error fetching activities: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch activities")
 
 
@@ -95,7 +95,7 @@ async def get_activity(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[ACTIVITY] Failed to fetch activity {activity_id}: {e}")
+        logger.error(f"Failed to fetch activity {activity_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch activity"
@@ -115,7 +115,7 @@ async def update_activity(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[ACTIVITY] Error updating activity {activity_id}: {e}")
+        logger.error(f"Error updating activity {activity_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to update activity")
 
 
@@ -131,5 +131,5 @@ async def delete_activity(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[ACTIVITY] Error deleting activity {activity_id}: {e}")
+        logger.error(f"Error deleting activity {activity_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete activity")

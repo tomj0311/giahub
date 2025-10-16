@@ -25,7 +25,7 @@ async def get_defaults(user: dict = Depends(verify_token_middleware)):
         result = await KnowledgeService.get_defaults(user)
         return result
     except Exception as e:
-        logger.error(f"[KNOWLEDGE] Error retrieving defaults: {str(e)}")
+        logger.error(f"Error retrieving defaults: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -36,7 +36,7 @@ async def list_categories(user: dict = Depends(verify_token_middleware)):
         result = await KnowledgeService.get_categories(user)
         return result
     except Exception as e:
-        logger.error(f"[KNOWLEDGE] Error retrieving categories: {str(e)}")
+        logger.error(f"Error retrieving categories: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -49,8 +49,8 @@ async def list_knowledge_configs(user: dict = Depends(verify_token_middleware)):
     except Exception as e:
         import traceback
         error_msg = str(e) if str(e) else repr(e)
-        logger.error(f"[KNOWLEDGE] Error listing configurations: {error_msg}")
-        logger.error(f"[KNOWLEDGE] Configurations error traceback: {traceback.format_exc()}")
+        logger.error(f"Error listing configurations: {error_msg}")
+        logger.error(f"Configurations error traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=error_msg)
 
 
@@ -79,8 +79,8 @@ async def list_collections(
     except Exception as e:
         import traceback
         error_msg = str(e) if str(e) else repr(e)
-        logger.error(f"[KNOWLEDGE] Error listing collections: {error_msg}")
-        logger.error(f"[KNOWLEDGE] Collections error traceback: {traceback.format_exc()}")
+        logger.error(f"Error listing collections: {error_msg}")
+        logger.error(f"Collections error traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=error_msg)
 
 
@@ -91,24 +91,22 @@ async def get_collection(collection: str, user: dict = Depends(verify_token_midd
         result = await KnowledgeService.get_collection(collection, user)
         return result
     except Exception as e:
-        logger.error(f"[KNOWLEDGE] Error retrieving collection {collection}: {str(e)}")
+        logger.error(f"Error retrieving collection {collection}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/collection/save")
 async def save_collection(payload: dict, user: dict = Depends(verify_token_middleware)):
     """Create or update a knowledge collection configuration in MongoDB and trigger indexing."""
-    logger.info(f"[KNOWLEDGE] Saving collection: {payload.get('collection', 'Unnamed')}")
-    logger.debug(f"[KNOWLEDGE] Collection payload: {payload}")
     try:
         result = await KnowledgeService.save_collection(payload, user)
-        logger.info(f"[KNOWLEDGE] Successfully saved collection: {payload.get('collection', 'Unnamed')}")
+        logger.info(f"Successfully saved collection: {payload.get('collection', 'Unnamed')}")
         return result
     except Exception as e:
         import traceback
         error_msg = str(e) if str(e) else repr(e)
-        logger.error(f"[KNOWLEDGE] Error saving collection: {error_msg}")
-        logger.error(f"[KNOWLEDGE] Save error traceback: {traceback.format_exc()}")
+        logger.error(f"Error saving collection: {error_msg}")
+        logger.error(f"Save error traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=error_msg)
 
 
@@ -125,13 +123,12 @@ async def delete_file_from_collection(
     user: dict = Depends(verify_token_middleware)
 ):
     """Delete a specific file from a knowledge collection."""
-    logger.info(f"[KNOWLEDGE] Deleting file '{filename}' from collection '{collection}'")
     try:
         result = await KnowledgeService.delete_file_from_collection(collection, filename, user)
-        logger.info(f"[KNOWLEDGE] Successfully deleted file '{filename}' from collection '{collection}'")
+        logger.info(f"Successfully deleted file '{filename}' from collection '{collection}'")
         return result
     except Exception as e:
-        logger.error(f"[KNOWLEDGE] Error deleting file '{filename}' from collection '{collection}': {str(e)}")
+        logger.error(f"Error deleting file '{filename}' from collection '{collection}': {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -152,7 +149,7 @@ async def upload_knowledge_files(
             payload_dict = json.loads(payload)
         except Exception:
             # Don't fail upload for bad payload, log and continue
-            logger.warning("[KNOWLEDGE] Ignoring invalid payload JSON in upload request")
+            logger.warning("Ignoring invalid payload JSON in upload request")
             payload_dict = None
 
     return await KnowledgeService.upload_knowledge_files(files, user, payload_dict)

@@ -11,8 +11,6 @@ from fastapi import HTTPException, status
 from ..utils.log import logger
 from ..utils.mongo_storage import MongoStorageService
 
-logger.debug("[PROJECT] Service module loaded")
-
 
 class ProjectService:
     """Service for managing projects"""

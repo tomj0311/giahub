@@ -12,9 +12,6 @@ from fastapi import HTTPException, status
 from ..utils.log import logger
 from ..utils.mongo_storage import MongoStorageService
 
-# Module loaded log
-logger.debug("[MODEL] Service module loaded")
-
 
 class ModelConfigService:
     """Service for managing model configurations"""
@@ -38,7 +35,6 @@ class ModelConfigService:
         
         try:
             docs = await MongoStorageService.find_many("modelConfig", {}, tenant_id=tenant_id, sort_field="name", sort_order=1)
-            logger.debug(f"[MODEL] Found {len(docs)} model configs for tenant: {tenant_id}")
             
             configs = []
             for doc in docs:
@@ -77,7 +73,6 @@ class ModelConfigService:
     ) -> Dict[str, Any]:
         """List model configurations with pagination, filtering, and sorting"""
         tenant_id = await cls.validate_tenant_access(user)
-        logger.debug(f"[MODELS] Listing models for tenant: {tenant_id}, page: {page}, category: {category}")
         
         try:
             # Build filter query

@@ -22,6 +22,7 @@ import {
 } from '@mui/material'
 import { ChevronRight, ChevronDown, ArrowLeft, ZoomIn, ZoomOut, Calendar, CalendarDays } from 'lucide-react'
 import { apiCall } from '../config/api'
+import sharedApiService from '../utils/apiService'
 import { useSnackbar } from '../contexts/SnackbarContext'
 
 function GanttChart({ user, projectId: propProjectId }) {
@@ -29,9 +30,14 @@ function GanttChart({ user, projectId: propProjectId }) {
   const navigate = useNavigate()
   const location = useLocation()
   const token = user?.token
+  const tokenRef = useRef(token)
+  tokenRef.current = token
+  
   const { showError } = useSnackbar()
   const isMountedRef = useRef(true)
-  const isLoadingRef = useRef(false)
+  const isLoadingProjectRef = useRef(false)
+  const isLoadingTreeRef = useRef(false)
+  const isLoadingActivitiesRef = useRef(false)
 
   // Get project ID from props or location state
   const projectId = propProjectId || location.state?.projectId
@@ -50,6 +56,16 @@ function GanttChart({ user, projectId: propProjectId }) {
   const [zoomLevel, setZoomLevel] = useState(1)
   const [viewMode, setViewMode] = useState('monthly') // 'daily', 'weekly', 'monthly'
   const ganttRef = useRef(null)
+
+  // Format date as dd/mm/yyyy
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '-'
+    const date = new Date(dateStr)
+    const day = String(date.getDate()).padStart(2, '0')
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const year = date.getFullYear()
+    return `${day}/${month}/${year}`
+  }
 
   // Handle zoom with mouse wheel
   useEffect(() => {
@@ -82,26 +98,31 @@ function GanttChart({ user, projectId: propProjectId }) {
   }, [projectId])
 
   const loadProjectData = async () => {
-    if (isLoadingRef.current || !projectId) return
-    isLoadingRef.current = true
-    setLoading(true)
-
+    if (isLoadingProjectRef.current || !projectId) return
+    
     try {
-      // First, load the single project details
-      const projectRes = await apiCall(`/api/projects/projects/${projectId}`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      isLoadingProjectRef.current = true
+      setLoading(true)
 
-      if (!projectRes.ok) {
-        const error = await projectRes.json()
-        throw new Error(error.detail || 'Failed to load project')
-      }
+      // First, load the single project details using sharedApiService
+      const projectResult = await sharedApiService.makeRequest(
+        `/api/projects/projects/${projectId}`,
+        {
+          headers: { Authorization: `Bearer ${tokenRef.current}` }
+        },
+        { 
+          projectId,
+          token: tokenRef.current?.substring(0, 10)
+        }
+      )
 
-      const projectData = await projectRes.json()
-      
       if (!isMountedRef.current) return
       
+      if (!projectResult.success) {
+        throw new Error(projectResult.error || 'Failed to load project')
+      }
+
+      const projectData = projectResult.data
       console.log('[GanttChart] Loaded project:', projectData)
       setProject(projectData)
 
@@ -114,20 +135,25 @@ function GanttChart({ user, projectId: propProjectId }) {
 
       let tree = []
       
-      const treeRes = await apiCall(`/api/projects/projects/tree?${params.toString()}`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const treeResult = await sharedApiService.makeRequest(
+        `/api/projects/projects/tree?${params.toString()}`,
+        {
+          headers: { Authorization: `Bearer ${tokenRef.current}` }
+        },
+        { 
+          root_id: projectId,
+          page: 1,
+          page_size: 1000,
+          token: tokenRef.current?.substring(0, 10)
+        }
+      )
 
-      if (!treeRes.ok) {
+      if (!treeResult.success) {
         console.warn('[GanttChart] Failed to load project tree, will show single project only')
-        // If tree fails, just use the single project
         tree = [projectData]
       } else {
-        const treeData = await treeRes.json()
-        console.log('[GanttChart] Loaded tree:', treeData)
-        
-        tree = treeData.tree || []
+        console.log('[GanttChart] Loaded tree:', treeResult.data)
+        tree = treeResult.data.tree || []
         if (tree.length === 0) {
           tree = [projectData]
         }
@@ -165,7 +191,7 @@ function GanttChart({ user, projectId: propProjectId }) {
         setProject(null) // Ensure project is null to show error state
       }
     } finally {
-      isLoadingRef.current = false
+      isLoadingProjectRef.current = false
       if (isMountedRef.current) {
         setLoading(false)
       }
@@ -173,20 +199,31 @@ function GanttChart({ user, projectId: propProjectId }) {
   }
 
   const loadActivitiesForProject = async (projId) => {
+    if (isLoadingActivitiesRef.current) return
+    
     try {
+      isLoadingActivitiesRef.current = true
+      
       const params = new URLSearchParams({
         page: '1',
         page_size: '200',
         project_id: projId
       })
       
-      const res = await apiCall(`/api/projects/activities?${params}`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const result = await sharedApiService.makeRequest(
+        `/api/projects/activities?${params}`,
+        {
+          headers: { Authorization: `Bearer ${tokenRef.current}` }
+        },
+        { 
+          project_id: projId,
+          page: 1,
+          token: tokenRef.current?.substring(0, 10)
+        }
+      )
 
-      if (res.ok) {
-        const data = await res.json()
+      if (result.success) {
+        const data = result.data
         console.log(`[GanttChart] Loaded ${data.activities?.length || 0} activities for project ${projId}`)
         if (data.activities && data.activities.length > 0) {
           console.log('[GanttChart] Sample activity:', data.activities[0])
@@ -206,6 +243,8 @@ function GanttChart({ user, projectId: propProjectId }) {
       }
     } catch (error) {
       console.error('[GanttChart] Error loading activities:', error)
+    } finally {
+      isLoadingActivitiesRef.current = false
     }
   }
 
@@ -225,7 +264,7 @@ function GanttChart({ user, projectId: propProjectId }) {
     }
     collectProjects(tree)
 
-    // Load activities for each project
+    // Load activities for each project using sharedApiService
     for (const proj of allProjects) {
       try {
         const params = new URLSearchParams({
@@ -234,13 +273,20 @@ function GanttChart({ user, projectId: propProjectId }) {
           project_id: proj.id
         })
         
-        const res = await apiCall(`/api/projects/activities?${params}`, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` }
-        })
+        const result = await sharedApiService.makeRequest(
+          `/api/projects/activities?${params}`,
+          {
+            headers: { Authorization: `Bearer ${tokenRef.current}` }
+          },
+          { 
+            project_id: proj.id,
+            page: 1,
+            token: tokenRef.current?.substring(0, 10)
+          }
+        )
 
-        if (res.ok) {
-          const data = await res.json()
+        if (result.success) {
+          const data = result.data
           allActivities[proj.id] = data.activities || []
           console.log(`[GanttChart] Loaded ${data.activities?.length || 0} activities for project ${proj.id}`)
         }
@@ -498,6 +544,34 @@ function GanttChart({ user, projectId: propProjectId }) {
     return labels[status] || status
   }
 
+  // Calculate due date styling based on days remaining
+  const getDueDateStyle = (dueDate, status) => {
+    // If status is Completed, use normal styling
+    if (status === 'Completed' || status === 'COMPLETED') {
+      return { color: 'inherit', fontWeight: 'normal' }
+    }
+
+    if (!dueDate) return { color: 'inherit', fontWeight: 'normal' }
+    
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const due = new Date(dueDate + 'T00:00:00')
+    const diffTime = due - today
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    
+    // Red and bold if on or after due date
+    if (diffDays <= 0) {
+      return { color: '#d32f2f', fontWeight: 'bold' }
+    }
+    // Yellow/Orange if within 3 days
+    if (diffDays <= 3) {
+      return { color: '#ed6c02', fontWeight: 'normal' }
+    }
+    // Default color
+    return { color: 'inherit', fontWeight: 'normal' }
+  }
+
   const renderGanttProjectNode = (proj, level = 0) => {
     const hasActivities = activitiesByProject[proj.id] && activitiesByProject[proj.id].length > 0
     const hasChildren = proj.children && proj.children.length > 0
@@ -547,11 +621,11 @@ function GanttChart({ user, projectId: propProjectId }) {
           <TableCell>{proj.approver || '-'}</TableCell>
 
           <TableCell>
-            {proj.start_date ? new Date(proj.start_date).toLocaleDateString() : '-'}
+            {formatDate(proj.start_date)}
           </TableCell>
 
-          <TableCell>
-            {proj.due_date ? new Date(proj.due_date).toLocaleDateString() : '-'}
+          <TableCell sx={getDueDateStyle(proj.due_date, proj.status)}>
+            {formatDate(proj.due_date)}
           </TableCell>
 
           <TableCell>{proj.progress}%</TableCell>
@@ -593,10 +667,10 @@ function GanttChart({ user, projectId: propProjectId }) {
             <TableCell>{activity.assignee || '-'}</TableCell>
             <TableCell>{activity.approver || '-'}</TableCell>
             <TableCell>
-              {activity.start_date ? new Date(activity.start_date).toLocaleDateString() : '-'}
+              {formatDate(activity.start_date)}
             </TableCell>
-            <TableCell>
-              {activity.due_date ? new Date(activity.due_date).toLocaleDateString() : '-'}
+            <TableCell sx={getDueDateStyle(activity.due_date, activity.status)}>
+              {formatDate(activity.due_date)}
             </TableCell>
             <TableCell>{activity.progress || 0}%</TableCell>
           </TableRow>

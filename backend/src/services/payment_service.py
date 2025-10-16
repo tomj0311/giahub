@@ -35,13 +35,10 @@ class PaymentService:
         
         try:
             price = cls.PLAN_PRICES.get(plan, 0)
-            logger.debug(f"[PAYMENT] Plan price: ${price/100:.2f} for plan: {plan}")
             
             client_url = os.getenv('CLIENT_URL', 'http://localhost:5173')
-            logger.debug(f"[PAYMENT] Using client URL: {client_url}")
             
             # Create Stripe checkout session
-            logger.debug(f"[PAYMENT] Creating Stripe checkout session for user: {user_id}")
             session = stripe.checkout.Session.create(
                 payment_method_types=['card'],
                 line_items=[{

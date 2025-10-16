@@ -19,50 +19,40 @@ sys.path.insert(0, str(current_dir))
 sys.path.insert(0, str(project_root))  # Add project root so we can import 'ai' module
 
 from src.db import init_database, close_database
-from src.routes import auth_router, users_router, payments_router, uploads_router, profile_router, roles_router, role_management_router, model_config_router, tool_config_router, knowledge_router, agents_router, workflow_config_router, workflow_router, analytics_router, dynamic_execution_router, projects_router, project_activities_router, activity_notifications_router
+from src.routes import auth_router, users_router, payments_router, uploads_router, profile_router, roles_router, role_management_router, model_config_router, tool_config_router, knowledge_router, agents_router, workflow_config_router, workflow_router, analytics_router, dynamic_execution_router, projects_router, project_activities_router, activity_notifications_router, scheduler_router
 from src.routes.agent_runtime import router as agent_runtime_router
 from src.services.rbac_service import init_default_roles
+from src.scheduler import start_scheduler, shutdown_scheduler
 from src.utils.log import logger
 
 # Load environment variables FIRST
 load_dotenv()
 
-# Debug: Check if Google OAuth variables are loaded
-logger.info("🔍 Environment Variables Check:")
-logger.info(f"- GOOGLE_CLIENT_ID: {'Loaded ✅' if os.getenv('GOOGLE_CLIENT_ID') else 'Missing ❌'}")
-logger.info(f"- GOOGLE_CLIENT_SECRET: {'Loaded ✅' if os.getenv('GOOGLE_CLIENT_SECRET') else 'Missing ❌'}")
+# Environment check removed - use DEBUG mode if needed
 
-# Basic startup diagnostics (non-sensitive)
 if not os.getenv('JWT_SECRET'):
     os.environ['JWT_SECRET'] = 'dev_jwt_secret'
-    logger.warning('[WARN] JWT_SECRET not set; using insecure development fallback.')
+    logger.warning('JWT_SECRET not set; using insecure development fallback')
 
-logger.info('[BOOT] Starting API with config: {}'.format({
-    'PORT': os.getenv('PORT', 4000),
-    'CLIENT_URL': os.getenv('CLIENT_URL'),
-    'TLS': bool(os.getenv('TLS_KEY') and os.getenv('TLS_CERT')),
-    'ENVIRONMENT': os.getenv('ENVIRONMENT', 'development')
-}))
+logger.info(f"Starting API - Port: {os.getenv('PORT', 4000)}, Env: {os.getenv('ENVIRONMENT', 'development')}")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.debug("[STARTUP] Starting application lifespan")
     # Initialize database on startup
-    logger.debug("[STARTUP] Initializing database connection")
     await init_database()
     logger.info("Database initialized")
     
-    # Initialize default roles - DISABLED due to tenant enforcement
-    # await init_default_roles()
-    # logger.info("Default roles initialized")
+    # Start APScheduler
+    start_scheduler()
+    logger.info("APScheduler started")
     
-    logger.debug("[STARTUP] Application startup completed")
     yield
-    # Close database on shutdown
-    logger.debug("[SHUTDOWN] Closing database connection")
+    
+    # Shutdown scheduler and database
+    shutdown_scheduler()
     await close_database()
-    logger.info("Database closed")
+    logger.info("Application shutdown complete")
 
 
 def custom_openapi():
@@ -130,6 +120,7 @@ app.include_router(activity_notifications_router, prefix="/api/projects")
 app.include_router(agent_runtime_router)
 app.include_router(payments_router, prefix="/api/payments")
 app.include_router(uploads_router, prefix="/api")
+app.include_router(scheduler_router, prefix="/api/scheduler")
 
 
 
@@ -140,7 +131,6 @@ async def root():
 
 @app.get("/health")
 def health_check():
-    logger.debug("[HEALTH] Health check endpoint called")
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 

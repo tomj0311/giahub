@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import {
   Box,
   Button,
   Card,
   CardContent,
+  CardActions,
   TextField,
   Select,
   MenuItem,
@@ -14,8 +15,7 @@ import {
   CircularProgress,
   Paper,
   Autocomplete,
-  Breadcrumbs,
-  Link
+  
 } from '@mui/material'
 import { ArrowLeft, Save } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
@@ -74,6 +74,53 @@ function ActivityForm({ user, projectId: propProjectId }) {
   })
 
   const isEditMode = !!activityId
+  
+  // Check if navigating from Gantt chart
+  const isFromGantt = location.state?.returnTo === '/dashboard/projects/gantt'
+
+  // Strict date validation helpers
+  const isValidISODateString = useCallback((str, { minYear = 1900, maxYear = 2100 } = {}) => {
+    if (typeof str !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(str)) return false
+    const [y, m, d] = str.split('-').map(Number)
+    if (y < minYear || y > maxYear) return false
+    const dt = new Date(Date.UTC(y, m - 1, d))
+    return (
+      dt.getUTCFullYear() === y &&
+      dt.getUTCMonth() === m - 1 &&
+      dt.getUTCDate() === d
+    )
+  }, [])
+
+  // Compare two ISO date strings (YYYY-MM-DD)
+  const isISOAfter = useCallback((a, b) => {
+    if (!a || !b) return false
+    return a > b
+  }, [])
+
+  // Calculate due date status for visual indicators
+  const getDueDateStatus = useCallback(() => {
+    if (!form.due_date) return { color: 'inherit', isBold: false }
+    
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const dueDate = new Date(form.due_date + 'T00:00:00')
+    const diffTime = dueDate - today
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    
+    // Red and bold if on or after due date
+    if (diffDays <= 0) {
+      return { color: '#d32f2f', isBold: true } // red
+    }
+    // Yellow if within 3 days
+    if (diffDays <= 3) {
+      return { color: '#ed6c02', isBold: false } // orange/yellow
+    }
+    // Default color
+    return { color: 'inherit', isBold: false }
+  }, [form.due_date])
+
+  const dueDateStatus = useMemo(() => getDueDateStatus(), [getDueDateStatus])
 
   // Update refs when these change
   useEffect(() => {
@@ -260,15 +307,18 @@ function ActivityForm({ user, projectId: propProjectId }) {
 
     if (!form.start_date) {
       errors.start_date = 'Start date is required'
-    }
-    if (!form.due_date) {
-      errors.due_date = 'Due date is required'
+    } else if (!isValidISODateString(form.start_date)) {
+      errors.start_date = 'Invalid date. Use YYYY-MM-DD (1900-01-01 to 2100-12-31)'
     }
 
-    if (form.start_date && form.due_date) {
-      const startDate = new Date(form.start_date)
-      const dueDate = new Date(form.due_date)
-      if (startDate >= dueDate) {
+    if (!form.due_date) {
+      errors.due_date = 'Due date is required'
+    } else if (!isValidISODateString(form.due_date)) {
+      errors.due_date = 'Invalid date. Use YYYY-MM-DD (1900-01-01 to 2100-12-31)'
+    }
+
+    if (!errors.start_date && !errors.due_date && form.start_date && form.due_date) {
+      if (!isISOAfter(form.due_date, form.start_date)) {
         errors.due_date = 'Due date must be after start date'
       }
     }
@@ -339,32 +389,105 @@ function ActivityForm({ user, projectId: propProjectId }) {
     )
   }
 
+  // If coming from Gantt chart, show only notifications (no edit form)
+  if (isFromGantt && isEditMode && activityId) {
+    return (
+      <Box sx={{ p: 3 }}>
+        {/* Header */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Button
+              startIcon={<ArrowLeft size={20} />}
+              onClick={handleCancel}
+              variant="outlined"
+            >
+              Back
+            </Button>
+            <Typography variant="h4">
+              Activity Notifications
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Show activity summary info */}
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Project</Typography>
+                <Typography variant="body1" fontWeight="500">{projectName}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Activity</Typography>
+                <Typography variant="body1" fontWeight="500">{form.subject || 'Loading...'}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Type</Typography>
+                <Typography variant="body1">{form.type}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Status</Typography>
+                <Typography variant="body1">{form.status}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Priority</Typography>
+                <Typography variant="body1">{form.priority}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Progress</Typography>
+                <Typography variant="body1">{form.progress}%</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Assignee</Typography>
+                <Typography variant="body1">
+                  {tenantUsers.find(u => u.email === form.assignee)?.displayName || form.assignee || 'N/A'}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Approver</Typography>
+                <Typography variant="body1">
+                  {tenantUsers.find(u => u.email === form.approver)?.displayName || form.approver || 'N/A'}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Start Date</Typography>
+                <Typography variant="body1">{form.start_date || 'N/A'}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ color: dueDateStatus.color }}>
+                  Due Date
+                </Typography>
+                <Typography 
+                  variant="body1" 
+                  sx={{ 
+                    color: dueDateStatus.color,
+                    fontWeight: dueDateStatus.isBold ? 'bold' : 'normal'
+                  }}
+                >
+                  {form.due_date || 'N/A'}
+                </Typography>
+              </Box>
+              <Box sx={{ gridColumn: { xs: '1', md: 'span 2' } }}>
+                <Typography variant="caption" color="text.secondary">Description</Typography>
+                <Typography variant="body1">{form.description || 'N/A'}</Typography>
+              </Box>
+            </Box>
+          </CardContent>
+        </Card>
+
+        {/* Notifications Section */}
+        <ActivityNotifications 
+          user={stableUser} 
+          activityId={activityId} 
+          projectId={form.project_id}
+        />
+      </Box>
+    )
+  }
+
   return (
     <>
     <Box sx={{ p: 3 }}>
-      {/* Breadcrumbs */}
-      <Breadcrumbs sx={{ mb: 3 }}>
-        <Link
-          component="button"
-          variant="body1"
-          onClick={() => navigate('/dashboard/projects')}
-          sx={{ cursor: 'pointer', textDecoration: 'none' }}
-        >
-          Projects
-        </Link>
-        <Link
-          component="button"
-          variant="body1"
-          onClick={() => navigate('/dashboard/projects/planning')}
-          sx={{ cursor: 'pointer', textDecoration: 'none' }}
-        >
-          Planning
-        </Link>
-        <Typography color="text.primary">
-          {isEditMode ? 'Edit Activity' : `Create ${form.type}`}
-        </Typography>
-      </Breadcrumbs>
-
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -379,14 +502,6 @@ function ActivityForm({ user, projectId: propProjectId }) {
             {isEditMode ? 'Edit Activity' : `Create New ${form.type}`}
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<Save size={20} />}
-          onClick={handleSave}
-          disabled={loading}
-        >
-          {loading ? <CircularProgress size={20} /> : (isEditMode ? 'Update' : 'Create')}
-        </Button>
       </Box>
 
       {/* Form - Grid Layout */}
@@ -575,6 +690,7 @@ function ActivityForm({ user, projectId: propProjectId }) {
               }}
               fullWidth
               InputLabelProps={{ shrink: true }}
+              inputProps={{ min: '1900-01-01', max: '2100-12-31' }}
               required
               error={!!formErrors.start_date}
               helperText={formErrors.start_date || 'Required'}
@@ -591,6 +707,7 @@ function ActivityForm({ user, projectId: propProjectId }) {
               }}
               fullWidth
               InputLabelProps={{ shrink: true }}
+              inputProps={{ min: '1900-01-01', max: '2100-12-31' }}
               required
               error={!!formErrors.due_date}
               helperText={formErrors.due_date || 'Required'}
@@ -608,6 +725,16 @@ function ActivityForm({ user, projectId: propProjectId }) {
             />
           </Box>
         </CardContent>
+        <CardActions sx={{ display: 'flex', justifyContent: 'flex-end', p: 2, pt: 0 }}>
+          <Button
+            variant="contained"
+            startIcon={<Save size={20} />}
+            onClick={handleSave}
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={20} /> : (isEditMode ? 'Update' : 'Create')}
+          </Button>
+        </CardActions>
       </Card>
 
       {/* Notifications Section - Only show in edit mode when activity is saved */}

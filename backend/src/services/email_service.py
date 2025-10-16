@@ -29,7 +29,6 @@ async def send_email(
         return
 
     try:
-        logger.debug(f"[EMAIL] Creating email message for: {to}")
         # Create message
         message = MIMEMultipart("alternative")
         message["Subject"] = subject
@@ -38,12 +37,10 @@ async def send_email(
 
         # Add text part if provided
         if text_content:
-            logger.debug("[EMAIL] Adding text content to email")
             text_part = MIMEText(text_content, "plain")
             message.attach(text_part)
 
         # Add HTML part
-        logger.debug("[EMAIL] Adding HTML content to email")
         html_part = MIMEText(html_content, "html")
         message.attach(html_part)
 
@@ -56,7 +53,6 @@ async def send_email(
         # Gmail specific configuration
         is_gmail = "gmail.com" in (SMTP_USER or "") or SMTP_HOST == "smtp.gmail.com"
         if is_gmail:
-            logger.debug("[EMAIL] Configuring for Gmail SMTP")
             smtp_kwargs.update(
                 {
                     "port": int(os.getenv("SMTP_PORT", 465)),
@@ -64,19 +60,12 @@ async def send_email(
                     "start_tls": False,  # For port 465, use SSL not STARTTLS
                 }
             )
-        else:
-            logger.debug("[EMAIL] Configuring for standard SMTP")
-            smtp_kwargs["use_tls"] = SMTP_SECURE
 
         # Add authentication if configured
         if SMTP_USER and SMTP_PASS:
-            logger.debug(f"[EMAIL] Using authentication with user: {SMTP_USER}")
             smtp_kwargs.update({"username": SMTP_USER, "password": SMTP_PASS})
-        else:
-            logger.debug("[EMAIL] No authentication configured")
 
         # Send email
-        logger.debug(f"[EMAIL] Sending email via SMTP: {SMTP_HOST}:{SMTP_PORT}")
         await aiosmtplib.send(message, **smtp_kwargs)
         logger.info(f"[EMAIL] Email sent successfully to {to}")
 
@@ -99,10 +88,8 @@ async def send_registration_email(
         verification_link = None
         if verify_token:
             verification_link = f"{CLIENT_URL}/verify?token={quote_plus(verify_token)}"
-            logger.debug(f"[EMAIL] Generated verification link: {verification_link}")
 
         # Create HTML content
-        logger.debug("[EMAIL] Creating registration email HTML content")
         html_content = f"""
         <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.5;font-size:15px;color:#222;">
             <h2 style="margin:0 0 16px;">Welcome{' ' + role.capitalize() if role else ''}!</h2>
@@ -185,14 +172,12 @@ async def send_invitation_email(
 
     try:
         verification_link = f"{CLIENT_URL}/verify?token={quote_plus(verify_token)}"
-        logger.debug(f"[EMAIL] Generated verification link: {verification_link}")
 
         inviter_name = "the team"
         if invited_by_user:
             inviter_name = invited_by_user.get("name") or invited_by_user.get("firstName", "a team member")
 
         # Create HTML content with temporary password
-        logger.debug("[EMAIL] Creating invitation email HTML content")
         
         # Build password section if temp_password is provided
         password_section = ""

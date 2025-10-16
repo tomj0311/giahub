@@ -29,7 +29,7 @@ async def create_tool_config(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[TOOL_CONFIG] Failed to create configuration: {e}")
+        logger.error(f"Failed to create configuration: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create tool configuration"
@@ -74,7 +74,7 @@ async def get_tool_config(config_name: str, user: dict = Depends(verify_token_mi
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[TOOL_CONFIG] Failed to fetch configuration {config_name}: {e}")
+        logger.error(f"Failed to fetch configuration {config_name}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch tool configuration"

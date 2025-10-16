@@ -37,15 +37,11 @@ class ChangePasswordRequest(BaseModel):
 @router.post("/login", response_model=LoginResponse)
 async def login(request: LoginRequest):
     """Login endpoint for admin and users"""
-    logger.info(f"[LOGIN] Attempting login for user: {request.email}")
-    logger.debug(f"[LOGIN] Login request received with email: {request.email}")
     try:
         result = await AuthService.authenticate_user(request.email, request.password)
-        logger.info(f"[LOGIN] Success for user: {request.email}")
-        logger.debug(f"[LOGIN] Generated response for user: {request.email}")
         return LoginResponse(**result)
     except Exception as e:
-        logger.error(f"[LOGIN] Failed for user: {request.email} - {str(e)}")
+        logger.error(f"Login failed for {request.email}: {str(e)}")
         raise
 
 
@@ -53,20 +49,15 @@ async def login(request: LoginRequest):
 @router.get("/google")
 async def google_auth(request: Request):
     """Initiate Google OAuth flow"""
-    logger.info("[OAUTH] Initiating Google OAuth flow")
     try:
         oauth_client = get_oauth_client()
-        # Use CLIENT_URL from environment for consistent redirect URI
         client_url = os.getenv('CLIENT_URL', f"{request.url.scheme}://{request.url.netloc}")
         redirect_uri = f"{client_url}/auth/google/callback"
-        logger.debug(f"[OAUTH] Redirect URI: {redirect_uri}")
         
-        # Generate the authorization URL with proper state handling
         response = await oauth_client.authorize_redirect(request, redirect_uri)
-        logger.info("[OAUTH] Redirecting to Google OAuth")
         return response
     except Exception as e:
-        logger.error(f"[OAUTH] Failed to initiate Google OAuth: {str(e)}")
+        logger.error(f"Failed to initiate Google OAuth: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"OAuth initialization failed: {str(e)}"
@@ -76,30 +67,23 @@ async def google_auth(request: Request):
 @router.get("/google/callback")
 async def google_callback(request: Request):
     """Handle Google OAuth callback"""
-    logger.info("[OAUTH] Processing Google OAuth callback")
     try:
         oauth_client = get_oauth_client()
         
-        # Use the correct method for Authlib with Starlette
         token = await oauth_client.authorize_access_token(request)
         
-        # Get user info directly from token
         user_info = token.get('userinfo')
         if not user_info:
-            # If userinfo not in token, make a separate request
             resp = await oauth_client.get('https://openidconnect.googleapis.com/v1/userinfo', token=token)
             user_info = resp.json()
         
         if not user_info:
-            logger.error("[OAUTH] Failed to get user information from Google")
+            logger.error("Failed to get user information from Google")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to get user information from Google"
             )
         
-        logger.info(f"[OAUTH] Processing user data for: {user_info.get('email', 'unknown')}")
-        
-        # Store the Google OAuth tokens for later use with Gmail/Drive APIs
         google_tokens = {
             'access_token': token.get('access_token'),
             'refresh_token': token.get('refresh_token'),
@@ -107,24 +91,14 @@ async def google_callback(request: Request):
             'token_type': token.get('token_type', 'Bearer')
         }
         
-        # Log token reception (without exposing the actual token values)
-        logger.info(f"[OAUTH] Received tokens - Access Token: {'✅' if google_tokens['access_token'] else '❌'}, Refresh Token: {'✅' if google_tokens['refresh_token'] else '❌'}")
-        if google_tokens.get('expires_at'):
-            from datetime import datetime
-            expiry_time = datetime.fromtimestamp(google_tokens['expires_at'])
-            logger.info(f"[OAUTH] Access token expires at: {expiry_time}")
-        
         user_data = await AuthService.handle_google_oauth_callback(user_info, google_tokens)
-        logger.info(f"[OAUTH] User authenticated: {user_data.get('email', 'unknown')}")
         
-        # Ensure user has DEFAULT role after successful authentication
         if user_data.get('new_user', False):
             await AuthService._ensure_user_has_default_role(
                 user_data['id'],
                 user_data['email'],
                 tenant_id=user_data.get('tenantId')
             )
-            logger.info(f"[OAUTH] Created DEFAULT role for new user: {user_data.get('email', 'unknown')}")
         
         auth_token = generate_token({
             "id": user_data['id'],
@@ -133,32 +107,25 @@ async def google_callback(request: Request):
             "email": user_data.get('email')
         })
         redirect_url = os.getenv('REDIRECT_URL', 'http://localhost:5173')
-        logger.info(f"[OAUTH] Redirecting user to frontend: {redirect_url}")
-        # Redirect to auth callback route
         from urllib.parse import quote
         return RedirectResponse(
             url=f"{redirect_url}/auth/callback?token={auth_token}&name={quote(user_data['name'])}&email={quote(user_data.get('email', ''))}"
         )
     except HTTPException as http_exc:
-        logger.error(f"[OAUTH] HTTPException caught in Google callback: {http_exc.detail}")
+        logger.error(f"HTTPException in Google callback: {http_exc.detail}")
         redirect_url = os.getenv('REDIRECT_URL', 'http://localhost:5173')
         from urllib.parse import quote
         return RedirectResponse(url=f"{redirect_url}/login?error={quote(str(http_exc.detail))}")
     except Exception as e:
-        logger.error(f"[OAUTH] Exception during callback: {str(e)}")
-        # For state mismatch errors, try a simpler approach
+        logger.error(f"Exception during callback: {str(e)}")
         if "mismatching_state" in str(e).lower() or "csrf" in str(e).lower():
-            logger.info("[OAUTH] State mismatch detected, attempting manual token exchange")
             try:
-                # Manual token exchange as fallback
                 import httpx
                 code = request.query_params.get('code')
                 if code:
-                    # Use CLIENT_URL from environment for consistent redirect URI
                     client_url = os.getenv('CLIENT_URL', f"{request.url.scheme}://{request.url.netloc}")
                     redirect_uri = f"{client_url}/auth/google/callback"
                     
-                    # Exchange code for token manually
                     token_data = {
                         'client_id': os.getenv('GOOGLE_CLIENT_ID'),
                         'client_secret': os.getenv('GOOGLE_CLIENT_SECRET'),
@@ -175,22 +142,19 @@ async def google_callback(request: Request):
                         token_json = token_response.json()
                         
                         if 'access_token' in token_json:
-                            # Get user info with the token
                             user_response = await client.get(
                                 'https://openidconnect.googleapis.com/v1/userinfo',
                                 headers={'Authorization': f"Bearer {token_json['access_token']}"}
                             )
                             user_info = user_response.json()
                             
-                            # Prepare Google tokens for storage
                             google_tokens = {
                                 'access_token': token_json.get('access_token'),
                                 'refresh_token': token_json.get('refresh_token'),
-                                'expires_at': token_json.get('expires_in'),  # Note: expires_in, not expires_at
+                                'expires_at': token_json.get('expires_in'),
                                 'token_type': token_json.get('token_type', 'Bearer')
                             }
                             
-                            logger.info(f"[OAUTH] Manual token exchange successful for: {user_info.get('email', 'unknown')}")
                             user_data = await AuthService.handle_google_oauth_callback(user_info, google_tokens)
                             
                             auth_token = generate_token({
@@ -205,17 +169,15 @@ async def google_callback(request: Request):
                                 url=f"{redirect_url}/auth/callback?token={auth_token}&name={quote(user_data['name'])}&email={quote(user_data.get('email', ''))}"
                             )
             except HTTPException as http_exc:
-                logger.error(f"[OAUTH] HTTPException during manual token exchange: {http_exc.detail}")
+                logger.error(f"HTTPException during manual token exchange: {http_exc.detail}")
                 redirect_url = os.getenv('REDIRECT_URL', 'http://localhost:5173')
                 from urllib.parse import quote
                 error_msg = quote(str(http_exc.detail))
                 return RedirectResponse(url=f"{redirect_url}/login?error={error_msg}")
             except Exception as fallback_error:
-                logger.error(f"[OAUTH] Manual token exchange also failed: {str(fallback_error)}")
+                logger.error(f"Manual token exchange failed: {str(fallback_error)}")
         
-        # Redirect to login page with error
         redirect_url = os.getenv('REDIRECT_URL', 'http://localhost:5173')
-        logger.info(f"[OAUTH] Redirecting to login due to error")
         from urllib.parse import quote
         error_msg = quote("Authentication failed. Please try again.")
         return RedirectResponse(url=f"{redirect_url}/login?error={error_msg}")
@@ -225,18 +187,14 @@ async def google_callback(request: Request):
 @router.get("/microsoft")
 async def microsoft_auth(request: Request):
     """Initiate Microsoft OAuth flow"""
-    logger.info("[OAUTH] Initiating Microsoft OAuth flow")
     try:
         oauth_client = get_microsoft_oauth_client()
-        # Use CLIENT_URL from environment for consistent redirect URI
         client_url = os.getenv('CLIENT_URL', f"{request.url.scheme}://{request.url.netloc}")
         redirect_uri = f"{client_url}/auth/microsoft/callback"
-        logger.debug(f"[OAUTH] Microsoft Redirect URI: {redirect_uri}")
         response = await oauth_client.authorize_redirect(request, redirect_uri)
-        logger.info("[OAUTH] Redirecting to Microsoft OAuth")
         return response
     except Exception as e:
-        logger.error(f"[OAUTH] Failed to initiate Microsoft OAuth: {str(e)}")
+        logger.error(f"Failed to initiate Microsoft OAuth: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Microsoft OAuth initialization failed: {str(e)}"
@@ -246,34 +204,28 @@ async def microsoft_auth(request: Request):
 @router.get("/microsoft/callback")
 async def microsoft_callback(request: Request):
     """Handle Microsoft OAuth callback"""
-    logger.info("[OAUTH] Processing Microsoft OAuth callback")
     try:
         oauth_client = get_microsoft_oauth_client()
         token = await oauth_client.authorize_access_token(request)
         
-        # For Microsoft, we need to make an additional request to get user info
         user_info = await oauth_client.get('https://graph.microsoft.com/v1.0/me', token=token)
         user_data_raw = user_info.json()
         
         if not user_data_raw:
-            logger.error("[OAUTH] Failed to get user information from Microsoft")
+            logger.error("Failed to get user information from Microsoft")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to get user information from Microsoft"
             )
         
-        logger.info(f"[OAUTH] Processing Microsoft user data for: {user_data_raw.get('mail', user_data_raw.get('userPrincipalName', 'unknown'))}")
         user_data = await AuthService.handle_microsoft_oauth_callback(user_data_raw)
-        logger.info(f"[OAUTH] Microsoft user authenticated: {user_data.get('email', 'unknown')}")
         
-        # Ensure user has DEFAULT role after successful authentication
         if user_data.get('new_user', False):
             await AuthService._ensure_user_has_default_role(
                 user_data['id'],
                 user_data['email'],
                 tenant_id=user_data.get('tenantId')
             )
-            logger.info(f"[OAUTH] Created DEFAULT role for new Microsoft user: {user_data.get('email', 'unknown')}")
         
         token = generate_token({
             "id": user_data['id'],
@@ -282,19 +234,18 @@ async def microsoft_callback(request: Request):
             "email": user_data.get('email')
         })
         redirect_url = os.getenv('REDIRECT_URL', 'http://localhost:5173')
-        logger.info(f"[OAUTH] Redirecting Microsoft user to frontend: {redirect_url}")
         from urllib.parse import quote
         return RedirectResponse(
             url=f"{redirect_url}/auth/callback?token={token}&name={quote(user_data['name'])}&email={quote(user_data.get('email', ''))}"
         )
     except HTTPException as http_exc:
-        logger.error(f"[OAUTH] HTTPException during Microsoft callback: {http_exc.detail}")
+        logger.error(f"HTTPException during Microsoft callback: {http_exc.detail}")
         redirect_url = os.getenv('REDIRECT_URL', 'http://localhost:5173')
         from urllib.parse import quote
         error_msg = quote(str(http_exc.detail))
         return RedirectResponse(url=f"{redirect_url}/login?error={error_msg}")
     except Exception as e:
-        logger.error(f"[OAUTH] Exception during Microsoft callback: {str(e)}")
+        logger.error(f"Exception during Microsoft callback: {str(e)}")
         redirect_url = os.getenv('REDIRECT_URL', 'http://localhost:5173')
         from urllib.parse import quote
         error_msg = quote("Authentication failed. Please try again.")
@@ -307,7 +258,6 @@ async def change_password(
     user: dict = Depends(verify_token_middleware)
 ):
     """Change user password (requires authentication)"""
-    logger.info(f"[PASSWORD] Password change request for user: {user.get('id', 'unknown')}")
     try:
         await AuthService.change_password(
             user_id=user.get('id'),
@@ -315,23 +265,19 @@ async def change_password(
             new_password=request.new_password,
             tenant_id=user.get('tenantId')
         )
-        logger.info(f"[PASSWORD] Password changed successfully for user: {user.get('id', 'unknown')}")
         return {"message": "Password changed successfully"}
     except Exception as e:
-        logger.error(f"[PASSWORD] Failed to change password for user {user.get('id', 'unknown')}: {str(e)}")
-        raise
+        logger.error(f"Failed to change password for user {user.get('id')}: {str(e)}")
         raise
 
 
 @router.post("/logout")
 async def logout(user: dict = Depends(verify_token_middleware)):
     """Logout endpoint (token-based, so just return success)"""
-    logger.info(f"[LOGOUT] User {user.get('id', 'unknown')} logged out")
     return {"message": "Logged out successfully"}
 
 
 @router.get("/me")
 async def get_current_user(user: dict = Depends(verify_token_middleware)):
     """Get current user information"""
-    logger.info(f"[USER] Fetching current user info for user: {user.get('id', 'unknown')}")
     return await AuthService.get_current_user_info(user)

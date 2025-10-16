@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Box,
   Card,
@@ -19,7 +19,22 @@ import {
   alpha,
   Fade,
   IconButton,
-  Chip
+  Chip,
+  Badge,
+  Tooltip,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select
 } from '@mui/material'
 import {
   FolderKanban,
@@ -28,12 +43,17 @@ import {
   CheckCircle,
   TrendingUp,
   TrendingDown,
-  Search,
   SortAsc,
-  MoreVertical
+  SortDesc,
+  Filter,
+  MoreVertical,
+  ArrowUp,
+  ArrowDown,
+  X
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { apiCall } from '../config/api'
+import sharedApiService from '../utils/apiService'
 import { useSnackbar } from '../contexts/SnackbarContext'
 
 // Summary Card Component
@@ -123,6 +143,8 @@ export default function ProjectStatusHome({ user }) {
   const { showError } = useSnackbar()
   const isMountedRef = useRef(true)
   const isLoadingRef = useRef(false)
+  const tokenRef = useRef(user?.token)
+  tokenRef.current = user?.token
 
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState({
@@ -133,73 +155,207 @@ export default function ProjectStatusHome({ user }) {
   })
   const [districtData, setDistrictData] = useState([])
   const [projectTree, setProjectTree] = useState([])
+  
+  // Filter and sort state
+  const [filters, setFilters] = useState([])
+  const [sortField, setSortField] = useState(null)
+  const [sortOrder, setSortOrder] = useState('asc')
+  const [filteredAndSortedData, setFilteredAndSortedData] = useState([])
+  
+  // Filter dialog state
+  const [filterDialogOpen, setFilterDialogOpen] = useState(false)
+  const [currentFilter, setCurrentFilter] = useState({
+    field: '',
+    operator: '',
+    value: ''
+  })
+  
+  // Sort menu state
+  const [sortMenuAnchor, setSortMenuAnchor] = useState(null)
 
-  useEffect(() => {
-    isMountedRef.current = true
-    loadProjectData()
+  // Apply filters and sorting to district data
+  const applyFiltersAndSort = useCallback((data) => {
+    let result = [...data]
 
-    return () => {
-      isMountedRef.current = false
+    // Apply filters
+    if (filters.length > 0) {
+      result = result.filter(district => {
+        return filters.every(filter => {
+          const value = district[filter.field]
+          const filterValue = filter.value.toLowerCase()
+          
+          switch (filter.operator) {
+            case 'equals':
+              return value?.toString().toLowerCase() === filterValue
+            case 'not_equals':
+              return value?.toString().toLowerCase() !== filterValue
+            case 'contains':
+              return value?.toString().toLowerCase().includes(filterValue)
+            case 'starts_with':
+              return value?.toString().toLowerCase().startsWith(filterValue)
+            case 'ends_with':
+              return value?.toString().toLowerCase().endsWith(filterValue)
+            case 'greater_than':
+              return Number(value) > Number(filter.value)
+            case 'less_than':
+              return Number(value) < Number(filter.value)
+            default:
+              return true
+          }
+        })
+      })
     }
-  }, [])
 
-  const loadProjectData = async () => {
-    if (isLoadingRef.current || !isMountedRef.current) return
-    isLoadingRef.current = true
-    setLoading(true)
+    // Apply sorting
+    if (sortField) {
+      result.sort((a, b) => {
+        const aVal = a[sortField]
+        const bVal = b[sortField]
+        
+        if (aVal === null || aVal === undefined) return 1
+        if (bVal === null || bVal === undefined) return -1
+        
+        if (typeof aVal === 'number' && typeof bVal === 'number') {
+          return sortOrder === 'asc' ? aVal - bVal : bVal - aVal
+        }
+        
+        const aStr = aVal.toString().toLowerCase()
+        const bStr = bVal.toString().toLowerCase()
+        
+        if (sortOrder === 'asc') {
+          return aStr.localeCompare(bStr)
+        } else {
+          return bStr.localeCompare(aStr)
+        }
+      })
+    }
+
+    return result
+  }, [filters, sortField, sortOrder])
+
+  // Update filtered and sorted data when filters or data change
+  useEffect(() => {
+    const result = applyFiltersAndSort(districtData)
+    setFilteredAndSortedData(result)
+  }, [districtData, applyFiltersAndSort])
+
+  // Filter handlers
+  const handleOpenFilterDialog = () => {
+    setFilterDialogOpen(true)
+  }
+
+  const handleCloseFilterDialog = () => {
+    setFilterDialogOpen(false)
+    setCurrentFilter({ field: '', operator: '', value: '' })
+  }
+
+  const handleAddFilter = () => {
+    if (!currentFilter.field || !currentFilter.operator || !currentFilter.value) {
+      showError('Please fill all filter fields')
+      return
+    }
+
+    setFilters(prev => [...prev, { ...currentFilter }])
+    handleCloseFilterDialog()
+  }
+
+  const handleRemoveFilter = (index) => {
+    setFilters(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleClearAllFilters = () => {
+    setFilters([])
+  }
+
+  // Sort handler
+  const handleSort = (fieldName) => {
+    if (sortField === fieldName) {
+      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(fieldName)
+      setSortOrder('asc')
+    }
+  }
+
+  // Get operator label
+  const getOperatorLabel = (operator) => {
+    const labels = {
+      equals: 'Equals',
+      not_equals: 'Not Equals',
+      contains: 'Contains',
+      starts_with: 'Starts With',
+      ends_with: 'Ends With',
+      greater_than: 'Greater Than',
+      less_than: 'Less Than'
+    }
+    return labels[operator] || operator
+  }
+
+  const loadProjectData = useCallback(async () => {
+    if (!isMountedRef.current) return
+    
+    // Prevent duplicate calls
+    if (isLoadingRef.current) {
+      return
+    }
 
     try {
-      // Load project tree to get first-level projects (districts)
-      const res = await apiCall('/api/projects/projects/tree?root_id=root', {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${user?.token}` }
-      })
+      isLoadingRef.current = true
+      setLoading(true)
 
-      if (!res.ok) {
-        throw new Error('Failed to load projects')
-      }
-
-      const response = await res.json()
-      const tree = response.tree || []
+      // Use sharedApiService like ModelConfig
+      const result = await sharedApiService.makeRequest(
+        '/api/projects/projects/tree?root_id=root',
+        {
+          method: 'GET',
+          headers: tokenRef.current ? { Authorization: `Bearer ${tokenRef.current}` } : {}
+        },
+        { root_id: 'root', token: tokenRef.current?.substring(0, 10) }
+      )
 
       if (!isMountedRef.current) return
 
-      setProjectTree(tree)
+      if (result.success) {
+        const tree = result.data.tree || []
+        setProjectTree(tree)
 
-      // Calculate summary from tree data
-      const allProjects = flattenTree(tree)
-      const summaryData = {
-        total: allProjects.length,
-        inProgress: allProjects.filter(p => p.status === 'ON_TRACK' || p.status === 'AT_RISK').length,
-        onHold: allProjects.filter(p => p.status === 'OFF_TRACK').length,
-        completed: allProjects.filter(p => p.status === 'COMPLETED').length
-      }
-
-      setSummary(summaryData)
-
-      // Process first-level projects as districts
-      const districts = tree.map(district => {
-        const allChildren = flattenTree([district])
-        const total = allChildren.length
-        const inProgress = allChildren.filter(p => p.status === 'ON_TRACK' || p.status === 'AT_RISK').length
-        const onHold = allChildren.filter(p => p.status === 'OFF_TRACK').length
-        const completed = allChildren.filter(p => p.status === 'COMPLETED').length
-
-        return {
-          id: district.id,
-          name: district.name,
-          total,
-          inProgress,
-          onHold,
-          completed,
-          // Calculate percentages for trend display
-          inProgressPercent: total > 0 ? ((inProgress / total) * 100).toFixed(1) : '0',
-          onHoldPercent: total > 0 ? ((onHold / total) * 100).toFixed(1) : '0',
-          completedPercent: total > 0 ? ((completed / total) * 100).toFixed(1) : '0'
+        // Calculate summary from tree data
+        const allProjects = flattenTree(tree)
+        const summaryData = {
+          total: allProjects.length,
+          inProgress: allProjects.filter(p => p.status === 'ON_TRACK' || p.status === 'AT_RISK').length,
+          onHold: allProjects.filter(p => p.status === 'OFF_TRACK').length,
+          completed: allProjects.filter(p => p.status === 'COMPLETED').length
         }
-      })
 
-      setDistrictData(districts)
+        setSummary(summaryData)
+
+        // Process first-level projects as districts
+        const districts = tree.map(district => {
+          const allChildren = flattenTree([district])
+          const total = allChildren.length
+          const inProgress = allChildren.filter(p => p.status === 'ON_TRACK' || p.status === 'AT_RISK').length
+          const onHold = allChildren.filter(p => p.status === 'OFF_TRACK').length
+          const completed = allChildren.filter(p => p.status === 'COMPLETED').length
+
+          return {
+            id: district.id,
+            name: district.name,
+            total,
+            inProgress,
+            onHold,
+            completed,
+            // Calculate percentages for trend display
+            inProgressPercent: total > 0 ? ((inProgress / total) * 100).toFixed(1) : '0',
+            onHoldPercent: total > 0 ? ((onHold / total) * 100).toFixed(1) : '0',
+            completedPercent: total > 0 ? ((completed / total) * 100).toFixed(1) : '0'
+          }
+        })
+
+        setDistrictData(districts)
+      } else {
+        showError(result.error || 'Failed to load project data')
+      }
     } catch (error) {
       console.error('Failed to load project data:', error)
       if (isMountedRef.current) {
@@ -207,11 +363,35 @@ export default function ProjectStatusHome({ user }) {
       }
     } finally {
       if (isMountedRef.current) {
-        setLoading(false)
         isLoadingRef.current = false
+        setLoading(false)
       }
     }
-  }
+  }, []); // Empty dependencies
+
+  // Use exact same pattern as ModelConfig
+  useEffect(() => {
+    const loadData = async () => {
+      if (!isMountedRef.current) return
+      
+      // Set mounted to true
+      isMountedRef.current = true
+      
+      try {
+        await loadProjectData()
+      } catch (err) {
+        console.error('❌ PROJECTSTATUSHOME Error during initialization:', err)
+      }
+    }
+    
+    loadData()
+    
+    return () => {
+      // Set mounted to false FIRST to prevent any state updates
+      isMountedRef.current = false
+      isLoadingRef.current = false
+    }
+  }, []); // EMPTY DEPENDENCIES - NO BULLSHIT
 
   // Helper to flatten tree structure
   const flattenTree = (tree) => {
@@ -268,17 +448,6 @@ export default function ProjectStatusHome({ user }) {
               Kerala • October, 2025
             </Typography>
           </Box>
-          <Box display="flex" gap={1}>
-            <IconButton>
-              <Search size={20} />
-            </IconButton>
-            <IconButton>
-              <SortAsc size={20} />
-            </IconButton>
-            <IconButton>
-              <MoreVertical size={20} />
-            </IconButton>
-          </Box>
         </Box>
       </Box>
 
@@ -329,19 +498,84 @@ export default function ProjectStatusHome({ user }) {
       {/* District-wise Data Table */}
       <Card sx={{ boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}>
         <CardContent sx={{ p: 0 }}>
-          <Box
-            sx={{
-              p: 2,
-              borderBottom: '1px solid',
-              borderColor: 'divider',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1
-            }}
-          >
-            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-              District wise Data
-            </Typography>
+          {/* Header Bar with Title, Count, Filters and Actions */}
+          <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+            {/* LEFT SIDE: Title and Count */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                District wise Data
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {filteredAndSortedData.length} of {districtData.length} {districtData.length === 1 ? 'district' : 'districts'}
+              </Typography>
+            </Box>
+
+            {/* RIGHT SIDE: Filters and Action Buttons */}
+            <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Active Filter Chips */}
+              {filters.map((filter, index) => (
+                <Chip
+                  key={index}
+                  label={`${filter.field}: ${getOperatorLabel(filter.operator)} ${filter.value}`}
+                  onDelete={() => handleRemoveFilter(index)}
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                  sx={{ fontWeight: 500 }}
+                />
+              ))}
+              {filters.length > 0 && (
+                <Button 
+                  size="small" 
+                  onClick={handleClearAllFilters}
+                  sx={{ textTransform: 'none', fontWeight: 500 }}
+                >
+                  Clear All
+                </Button>
+              )}
+
+              {/* Sort Button */}
+              <Tooltip title="Sort">
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={sortOrder === 'asc' ? <SortAsc size={18} /> : <SortDesc size={18} />}
+                  onClick={(e) => setSortMenuAnchor(e.currentTarget)}
+                  sx={{ 
+                    textTransform: 'none',
+                    fontWeight: 500,
+                    minWidth: '100px',
+                    borderColor: sortField ? 'primary.main' : 'divider',
+                    color: sortField ? 'primary.main' : 'text.secondary'
+                  }}
+                >
+                  {sortField ? sortField : 'Sort'}
+                </Button>
+              </Tooltip>
+
+              {/* Filter Button */}
+              <Tooltip title="Add Filter">
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={
+                    <Badge badgeContent={filters.length} color="primary">
+                      <Filter size={18} />
+                    </Badge>
+                  }
+                  onClick={handleOpenFilterDialog}
+                  sx={{ 
+                    textTransform: 'none',
+                    fontWeight: 500,
+                    minWidth: '100px',
+                    borderColor: filters.length > 0 ? 'primary.main' : 'divider',
+                    color: filters.length > 0 ? 'primary.main' : 'text.secondary'
+                  }}
+                >
+                  {filters.length > 0 ? `${filters.length} Filter${filters.length > 1 ? 's' : ''}` : 'Filter'}
+                </Button>
+              </Tooltip>
+            </Box>
           </Box>
 
           <TableContainer>
@@ -349,27 +583,42 @@ export default function ProjectStatusHome({ user }) {
               <TableHead>
                 <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
                   <TableCell sx={{ fontWeight: 'bold', width: '25%' }}>
-                    District
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort('name')}>
+                      District
+                      {sortField === 'name' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                    </Box>
                   </TableCell>
                   <TableCell align="center" sx={{ fontWeight: 'bold' }}>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Total
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', justifyContent: 'center' }} onClick={() => handleSort('total')}>
+                      <Typography variant="body2" color="text.secondary">
+                        Total
+                      </Typography>
+                      {sortField === 'total' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                    </Box>
                   </TableCell>
                   <TableCell align="center" sx={{ fontWeight: 'bold' }}>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      In Progress
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', justifyContent: 'center' }} onClick={() => handleSort('inProgress')}>
+                      <Typography variant="body2" color="text.secondary">
+                        In Progress
+                      </Typography>
+                      {sortField === 'inProgress' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                    </Box>
                   </TableCell>
                   <TableCell align="center" sx={{ fontWeight: 'bold' }}>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      On Hold
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', justifyContent: 'center' }} onClick={() => handleSort('onHold')}>
+                      <Typography variant="body2" color="text.secondary">
+                        On Hold
+                      </Typography>
+                      {sortField === 'onHold' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                    </Box>
                   </TableCell>
                   <TableCell align="center" sx={{ fontWeight: 'bold' }}>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Completed
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', justifyContent: 'center' }} onClick={() => handleSort('completed')}>
+                      <Typography variant="body2" color="text.secondary">
+                        Completed
+                      </Typography>
+                      {sortField === 'completed' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                    </Box>
                   </TableCell>
                   <TableCell align="right" sx={{ fontWeight: 'bold', width: '15%' }}>
                     Actions
@@ -377,16 +626,19 @@ export default function ProjectStatusHome({ user }) {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {districtData.length === 0 ? (
+                {filteredAndSortedData.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                       <Typography variant="body2" color="text.secondary">
-                        No district data available. Create first-level projects to see data.
+                        {districtData.length === 0 
+                          ? 'No district data available. Create first-level projects to see data.'
+                          : 'No districts match the current filters.'
+                        }
                       </Typography>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  districtData.map((district, index) => (
+                  filteredAndSortedData.map((district, index) => (
                     <TableRow
                       key={district.id}
                       sx={{
@@ -394,7 +646,7 @@ export default function ProjectStatusHome({ user }) {
                           bgcolor: 'action.hover'
                         },
                         borderBottom:
-                          index === districtData.length - 1
+                          index === filteredAndSortedData.length - 1
                             ? 'none'
                             : '1px solid',
                         borderColor: 'divider'
@@ -498,6 +750,141 @@ export default function ProjectStatusHome({ user }) {
           </TableContainer>
         </CardContent>
       </Card>
+
+      {/* Sort Menu */}
+      <Menu
+        anchorEl={sortMenuAnchor}
+        open={Boolean(sortMenuAnchor)}
+        onClose={() => setSortMenuAnchor(null)}
+        PaperProps={{
+          sx: { minWidth: 200 }
+        }}
+      >
+        <MenuItem disabled>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+            SORT BY
+          </Typography>
+        </MenuItem>
+        <Divider />
+        {[
+          { key: 'name', label: 'District Name' },
+          { key: 'total', label: 'Total Projects' },
+          { key: 'inProgress', label: 'In Progress' },
+          { key: 'onHold', label: 'On Hold' },
+          { key: 'completed', label: 'Completed' }
+        ].map((field) => (
+          <MenuItem
+            key={field.key}
+            onClick={() => {
+              if (sortField === field.key) {
+                setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')
+              } else {
+                setSortField(field.key)
+                setSortOrder('asc')
+              }
+              setSortMenuAnchor(null)
+            }}
+            selected={sortField === field.key}
+          >
+            <ListItemIcon>
+              {sortField === field.key && (
+                sortOrder === 'asc' ? <ArrowUp size={18} /> : <ArrowDown size={18} />
+              )}
+            </ListItemIcon>
+            <ListItemText>
+              {field.label}
+            </ListItemText>
+          </MenuItem>
+        ))}
+        {sortField && (
+          <>
+            <Divider />
+            <MenuItem
+              onClick={() => {
+                setSortField(null)
+                setSortOrder('asc')
+                setSortMenuAnchor(null)
+              }}
+              sx={{ color: 'error.main' }}
+            >
+              <ListItemIcon>
+                <X size={18} />
+              </ListItemIcon>
+              <ListItemText>Clear Sort</ListItemText>
+            </MenuItem>
+          </>
+        )}
+      </Menu>
+
+      {/* Filter Dialog */}
+      <Dialog open={filterDialogOpen} onClose={handleCloseFilterDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Add Filter</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+            {/* Field Selection */}
+            <FormControl fullWidth>
+              <InputLabel>Field</InputLabel>
+              <Select
+                value={currentFilter.field}
+                label="Field"
+                onChange={(e) => setCurrentFilter({ field: e.target.value, operator: '', value: '' })}
+              >
+                <MenuItem value="name">District Name</MenuItem>
+                <MenuItem value="total">Total Projects</MenuItem>
+                <MenuItem value="inProgress">In Progress</MenuItem>
+                <MenuItem value="onHold">On Hold</MenuItem>
+                <MenuItem value="completed">Completed</MenuItem>
+              </Select>
+            </FormControl>
+
+            {/* Operator Selection */}
+            {currentFilter.field && (
+              <FormControl fullWidth>
+                <InputLabel>Operator</InputLabel>
+                <Select
+                  value={currentFilter.operator}
+                  label="Operator"
+                  onChange={(e) => setCurrentFilter({ ...currentFilter, operator: e.target.value, value: '' })}
+                >
+                  {currentFilter.field === 'name' ? (
+                    <>
+                      <MenuItem value="equals">Equals</MenuItem>
+                      <MenuItem value="not_equals">Not Equals</MenuItem>
+                      <MenuItem value="contains">Contains</MenuItem>
+                      <MenuItem value="starts_with">Starts With</MenuItem>
+                      <MenuItem value="ends_with">Ends With</MenuItem>
+                    </>
+                  ) : (
+                    <>
+                      <MenuItem value="equals">Equals</MenuItem>
+                      <MenuItem value="not_equals">Not Equals</MenuItem>
+                      <MenuItem value="greater_than">Greater Than</MenuItem>
+                      <MenuItem value="less_than">Less Than</MenuItem>
+                    </>
+                  )}
+                </Select>
+              </FormControl>
+            )}
+
+            {/* Value Input */}
+            {currentFilter.field && currentFilter.operator && (
+              <TextField
+                label="Value"
+                type={currentFilter.field === 'name' ? 'text' : 'number'}
+                value={currentFilter.value}
+                onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
+                fullWidth
+              />
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseFilterDialog}>Cancel</Button>
+          <Button onClick={handleAddFilter} variant="contained">
+            Add Filter
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

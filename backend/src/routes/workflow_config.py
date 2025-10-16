@@ -55,8 +55,6 @@ async def create_workflow_config(
     user: dict = Depends(verify_token_middleware)
 ):
     """Create new workflow configuration with BPMN file upload"""
-    logger.info(f"[WORKFLOW_CONFIG] Creating config: {name}")
-    
     config_data = {
         "name": name,
         "category": category,
@@ -80,8 +78,6 @@ async def update_workflow_config(
     user: dict = Depends(verify_token_middleware)
 ):
     """Update existing workflow configuration"""
-    logger.info(f"[WORKFLOW_CONFIG] Updating config: {config_id}")
-    
     config_data = {}
     if name is not None:
         config_data["name"] = name

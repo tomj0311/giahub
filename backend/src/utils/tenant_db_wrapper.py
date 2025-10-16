@@ -77,8 +77,6 @@ class TenantAwareCollection:
         """Find a single document with tenant filtering"""
         filter = filter or {}
         filter = await self._add_tenant_filter(filter)
-        
-        logger.debug(f"[TENANT_DB] find_one on {self._collection_name} with filter: {filter}")
         return await self._collection.find_one(filter, *args, **kwargs)
     
     def find(self, filter: Dict[str, Any] = None, *args, **kwargs):
@@ -86,7 +84,6 @@ class TenantAwareCollection:
         async def _find_with_tenant_filter():
             filter_copy = filter.copy() if filter else {}
             filter_copy = await self._add_tenant_filter(filter_copy)
-            logger.debug(f"[TENANT_DB] find on {self._collection_name} with filter: {filter_copy}")
             return self._collection.find(filter_copy, *args, **kwargs)
         
         # Return a cursor-like object that applies tenant filtering
@@ -100,8 +97,6 @@ class TenantAwareCollection:
         """Count documents with tenant filtering"""
         filter = filter or {}
         filter = await self._add_tenant_filter(filter)
-        
-        logger.debug(f"[TENANT_DB] count_documents on {self._collection_name} with filter: {filter}")
         return await self._collection.count_documents(filter, *args, **kwargs)
     
     async def aggregate(self, pipeline: List[Dict[str, Any]], *args, **kwargs):
@@ -119,15 +114,12 @@ class TenantAwareCollection:
             elif not pipeline or "$match" not in pipeline[0]:
                 pipeline.insert(0, match_stage)
         
-        logger.debug(f"[TENANT_DB] aggregate on {self._collection_name} with pipeline: {pipeline[:1]}...")
         return self._collection.aggregate(pipeline, *args, **kwargs)
     
     # WRITE OPERATIONS
     async def insert_one(self, document: Dict[str, Any], *args, **kwargs) -> InsertOneResult:
         """Insert a single document with tenant_id validation"""
         document = await validate_insert_operation(self._user_id, self._collection_name, document)
-        
-        logger.debug(f"[TENANT_DB] insert_one on {self._collection_name}")
         return await self._collection.insert_one(document, *args, **kwargs)
     
     async def insert_many(self, documents: List[Dict[str, Any]], *args, **kwargs):
@@ -137,7 +129,6 @@ class TenantAwareCollection:
             validated_doc = await validate_insert_operation(self._user_id, self._collection_name, doc)
             validated_documents.append(validated_doc)
         
-        logger.debug(f"[TENANT_DB] insert_many on {self._collection_name} ({len(validated_documents)} documents)")
         return await self._collection.insert_many(validated_documents, *args, **kwargs)
     
     async def update_one(self, filter: Dict[str, Any], update: Dict[str, Any], *args, **kwargs) -> UpdateResult:
@@ -147,8 +138,6 @@ class TenantAwareCollection:
         
         # Validate the update document
         update = await validate_update_operation(self._user_id, self._collection_name, update)
-        
-        logger.debug(f"[TENANT_DB] update_one on {self._collection_name} with filter: {filter}")
         return await self._collection.update_one(filter, update, *args, **kwargs)
     
     async def update_many(self, filter: Dict[str, Any], update: Dict[str, Any], *args, **kwargs) -> UpdateResult:
@@ -158,8 +147,6 @@ class TenantAwareCollection:
         
         # Validate the update document
         update = await validate_update_operation(self._user_id, self._collection_name, update)
-        
-        logger.debug(f"[TENANT_DB] update_many on {self._collection_name} with filter: {filter}")
         return await self._collection.update_many(filter, update, *args, **kwargs)
     
     async def replace_one(self, filter: Dict[str, Any], replacement: Dict[str, Any], *args, **kwargs) -> UpdateResult:
@@ -169,22 +156,16 @@ class TenantAwareCollection:
         
         # Ensure tenant_id is in replacement document
         replacement = await self._ensure_tenant_in_document(replacement)
-        
-        logger.debug(f"[TENANT_DB] replace_one on {self._collection_name} with filter: {filter}")
         return await self._collection.replace_one(filter, replacement, *args, **kwargs)
     
     async def delete_one(self, filter: Dict[str, Any], *args, **kwargs) -> DeleteResult:
         """Delete a single document with tenant filtering"""
         filter = await self._add_tenant_filter(filter)
-        
-        logger.debug(f"[TENANT_DB] delete_one on {self._collection_name} with filter: {filter}")
         return await self._collection.delete_one(filter, *args, **kwargs)
     
     async def delete_many(self, filter: Dict[str, Any], *args, **kwargs) -> DeleteResult:
         """Delete multiple documents with tenant filtering"""
         filter = await self._add_tenant_filter(filter)
-        
-        logger.debug(f"[TENANT_DB] delete_many on {self._collection_name} with filter: {filter}")
         return await self._collection.delete_many(filter, *args, **kwargs)
     
     # UTILITY METHODS
@@ -192,23 +173,17 @@ class TenantAwareCollection:
         """Find and update a single document with tenant filtering"""
         filter = await self._add_tenant_filter(filter)
         update = await validate_update_operation(self._user_id, self._collection_name, update)
-        
-        logger.debug(f"[TENANT_DB] find_one_and_update on {self._collection_name}")
         return await self._collection.find_one_and_update(filter, update, *args, **kwargs)
     
     async def find_one_and_replace(self, filter: Dict[str, Any], replacement: Dict[str, Any], *args, **kwargs):
         """Find and replace a single document with tenant filtering"""
         filter = await self._add_tenant_filter(filter)
         replacement = await self._ensure_tenant_in_document(replacement)
-        
-        logger.debug(f"[TENANT_DB] find_one_and_replace on {self._collection_name}")
         return await self._collection.find_one_and_replace(filter, replacement, *args, **kwargs)
     
     async def find_one_and_delete(self, filter: Dict[str, Any], *args, **kwargs):
         """Find and delete a single document with tenant filtering"""
         filter = await self._add_tenant_filter(filter)
-        
-        logger.debug(f"[TENANT_DB] find_one_and_delete on {self._collection_name}")
         return await self._collection.find_one_and_delete(filter, *args, **kwargs)
     
     # PASS-THROUGH METHODS FOR NON-DATA OPERATIONS

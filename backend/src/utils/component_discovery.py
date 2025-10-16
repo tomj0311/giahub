@@ -113,8 +113,6 @@ def get_detailed_class_info(module_path: str, kind: str = "model", force_reload:
         logger.warning("No module_path provided.")
         return {}
     
-    logger.info(f"🎯 READING FILE DIRECTLY: {module_path}")
-    
     # Get the file path
     current_file_path = Path(__file__).parent.parent.parent.parent  # Go up to giahub root
     module_parts = module_path.split('.')
@@ -122,8 +120,6 @@ def get_detailed_class_info(module_path: str, kind: str = "model", force_reload:
     for part in module_parts:
         file_path = file_path / part
     file_path = file_path.with_suffix('.py')
-    
-    logger.info(f"Reading file: {file_path}")
     
     try:
         # Read the file content directly
@@ -141,7 +137,6 @@ def get_detailed_class_info(module_path: str, kind: str = "model", force_reload:
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
                 class_name = node.name
-                logger.info(f"📋 Found class definition: {class_name}")
                 
                 class_info = {
                     "class_name": class_name,
@@ -152,7 +147,6 @@ def get_detailed_class_info(module_path: str, kind: str = "model", force_reload:
                 # Find __init__ method
                 for item in node.body:
                     if isinstance(item, ast.FunctionDef) and item.name == "__init__":
-                        logger.info(f"Found __init__ for {class_name}")
                         
                         # Get parameters from __init__ signature
                         for arg in item.args.args:
@@ -223,11 +217,10 @@ def get_detailed_class_info(module_path: str, kind: str = "model", force_reload:
                 
                 module_info["classes"][class_name] = class_info
         
-        logger.info(f"✅ File parsing complete! (took {time.time() - start_time:.3f}s)")
         return module_info
         
     except Exception as e:
-        logger.error(f"❌ Failed to parse {file_path}: {e}")
+        logger.error(f"Failed to parse {file_path}: {e}")
         import traceback
         logger.error(f"Full traceback: {traceback.format_exc()}")
         return {}
@@ -237,4 +230,3 @@ def clear_caches():
     """Clear all caches for debugging or when modules change."""
     global _DISCOVERY_CACHE
     _DISCOVERY_CACHE.clear()
-    logger.info("All introspection caches cleared")

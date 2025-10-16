@@ -54,6 +54,7 @@ import {
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { useConfirmation } from '../contexts/ConfirmationContext'
 import { apiCall } from '../config/api'
+import sharedApiService from '../utils/apiService'
 
 const STATUS_OPTIONS = ['ON_TRACK', 'AT_RISK', 'OFF_TRACK', 'ON_HOLD', 'COMPLETED']
 const PRIORITY_OPTIONS = ['Low', 'Normal', 'High', 'Urgent']
@@ -62,11 +63,49 @@ function ProjectTreeView({ user }) {
   const theme = useTheme()
   const navigate = useNavigate()
   const token = user?.token
+  const tokenRef = useRef(token)
+  tokenRef.current = token
+
+  // Consistent date formatter: returns dd/mm/yyyy or '-'
+  const formatDate = useCallback((dateStr) => {
+    if (!dateStr) return '-'
+    try {
+      const d = new Date(dateStr)
+      if (Number.isNaN(d.getTime())) return '-'
+      // Use en-GB locale and UTC timezone to avoid TZ drift and ensure dd/mm/yyyy
+      return d.toLocaleDateString('en-GB', { timeZone: 'UTC' })
+    } catch {
+      return '-'
+    }
+  }, [])
+  
+  // Strict date validation helpers
+  const isValidISODateString = useCallback((str, { minYear = 1900, maxYear = 2100 } = {}) => {
+    if (typeof str !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(str)) return false
+    const [y, m, d] = str.split('-').map(Number)
+    if (y < minYear || y > maxYear) return false
+    // Check actual calendar validity using UTC to avoid TZ issues
+    const dt = new Date(Date.UTC(y, m - 1, d))
+    return (
+      dt.getUTCFullYear() === y &&
+      dt.getUTCMonth() === m - 1 &&
+      dt.getUTCDate() === d
+    )
+  }, [])
+
+  // Compare two ISO dates (YYYY-MM-DD) safely via string comparison
+  const isISOAfter = useCallback((a, b) => {
+    if (!a || !b) return false
+    return a > b
+  }, [])
+  
   const { showSuccess, showError } = useSnackbar()
   const { showDeleteConfirmation } = useConfirmation()
 
   const isMountedRef = useRef(true)
-  const isLoadingRef = useRef(false)
+  const isLoadingTreeRef = useRef(false)
+  const isLoadingMetadataRef = useRef(false)
+  const isLoadingUsersRef = useRef(false)
 
   // Data state
   const [projectTree, setProjectTree] = useState([])
@@ -118,36 +157,45 @@ function ProjectTreeView({ user }) {
 
   // Load field metadata from API - NO HARDCODING!
   const loadFieldMetadata = useCallback(async () => {
+    if (!isMountedRef.current || isLoadingMetadataRef.current) return
+    
     try {
-      const res = await apiCall('/api/projects/projects/fields-metadata', {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.detail || 'Failed to load field metadata')
-      }
-
-      const response = await res.json()
+      isLoadingMetadataRef.current = true
       
-      if (isMountedRef.current) {
-        setFieldMetadata(response.fields || [])
+      const result = await sharedApiService.makeRequest(
+        '/api/projects/projects/fields-metadata',
+        {
+          headers: { Authorization: `Bearer ${tokenRef.current}` }
+        },
+        { token: tokenRef.current?.substring(0, 10) }
+      )
+
+      if (!isMountedRef.current) return
+
+      if (result.success) {
+        setFieldMetadata(result.data.fields || [])
+      } else {
+        showError(result.error || 'Failed to load field metadata')
       }
     } catch (error) {
       console.error('Failed to load field metadata:', error)
       if (isMountedRef.current) {
         showError(error.message || 'Failed to load field metadata')
       }
+    } finally {
+      isLoadingMetadataRef.current = false
     }
-  }, [token, showError])
+  }, [])
 
   const loadProjectTree = useCallback(async () => {
-    if (isLoadingRef.current || !isMountedRef.current) return
-    isLoadingRef.current = true
-    setLoading(true)
-
+    if (isLoadingTreeRef.current || !isMountedRef.current) return
+    
     try {
+      isLoadingTreeRef.current = true
+      setLoading(true)
+
+      // Invalidate cached tree results to avoid stale data and bypass cache for fresh fetch
+      sharedApiService.invalidateCache('/api/projects/projects/tree')
       const params = new URLSearchParams({
         root_id: 'root',
         page: (page + 1).toString(), // Backend uses 1-based
@@ -163,24 +211,32 @@ function ProjectTreeView({ user }) {
         params.append('filters', JSON.stringify(filters))
       }
 
-      const res = await apiCall(`/api/projects/projects/tree?${params.toString()}`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const result = await sharedApiService.makeRequest(
+        `/api/projects/projects/tree?${params.toString()}`,
+        {
+          headers: { Authorization: `Bearer ${tokenRef.current}` }
+        },
+        { 
+          root_id: 'root',
+          page: page + 1,
+          page_size: rowsPerPage,
+          filters: filters.length,
+          sort: sortField,
+          bypassCache: true,
+          token: tokenRef.current?.substring(0, 10)
+        }
+      )
 
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.detail || 'Failed to load projects')
-      }
+      if (!isMountedRef.current) return
 
-      const response = await res.json()
-
-      if (isMountedRef.current) {
-        setProjectTree(response.tree || [])
-        setTotalCount(response.pagination?.total || 0)
+      if (result.success) {
+        setProjectTree(result.data.tree || [])
+        setTotalCount(result.data.pagination?.total || 0)
         
-        const flatList = flattenTree(response.tree || [])
+        const flatList = flattenTree(result.data.tree || [])
         setAllProjects(flatList)
+      } else {
+        showError(result.error || 'Failed to load projects')
       }
     } catch (error) {
       console.error('Failed to load projects:', error)
@@ -190,27 +246,29 @@ function ProjectTreeView({ user }) {
     } finally {
       if (isMountedRef.current) {
         setLoading(false)
-        isLoadingRef.current = false
+        isLoadingTreeRef.current = false
       }
     }
-  }, [token, showError, page, rowsPerPage, filters, sortField, sortOrder])
+  }, [page, rowsPerPage, filters, sortField, sortOrder])
 
   const loadTenantUsers = useCallback(async () => {
+    if (!isMountedRef.current || isLoadingUsersRef.current) return
+    
     try {
-      const res = await apiCall('/api/users/', {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.detail || 'Failed to load users')
-      }
-
-      const users = await res.json()
+      isLoadingUsersRef.current = true
       
-      if (isMountedRef.current) {
-        const mappedUsers = users.map(u => ({
+      const result = await sharedApiService.makeRequest(
+        '/api/users/',
+        {
+          headers: { Authorization: `Bearer ${tokenRef.current}` }
+        },
+        { token: tokenRef.current?.substring(0, 10) }
+      )
+
+      if (!isMountedRef.current) return
+
+      if (result.success) {
+        const mappedUsers = result.data.map(u => ({
           id: u.id,
           email: u.email,
           firstName: u.firstName || '',
@@ -218,14 +276,18 @@ function ProjectTreeView({ user }) {
           displayName: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email
         }))
         setTenantUsers(mappedUsers)
+      } else {
+        showError(result.error || 'Failed to load users')
       }
     } catch (error) {
       console.error('Failed to load tenant users:', error)
       if (isMountedRef.current) {
         showError(error.message || 'Failed to load users')
       }
+    } finally {
+      isLoadingUsersRef.current = false
     }
-  }, [token, showError])
+  }, [])
 
   const flattenTree = (tree, level = 0) => {
     let result = []
@@ -242,6 +304,13 @@ function ProjectTreeView({ user }) {
     })
     return result
   }
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     isMountedRef.current = true
@@ -278,12 +347,61 @@ function ProjectTreeView({ user }) {
   }
 
   const handleAddFilter = () => {
-    if (!currentFilter.field || !currentFilter.operator || !currentFilter.value) {
+    // Robust empty check: allow boolean false and number 0, but disallow empty string/null/undefined and empty arrays
+    const isEmptyValue = (val) => (
+      val === '' || val === null || val === undefined || (Array.isArray(val) && val.length === 0)
+    )
+
+    if (!currentFilter.field || !currentFilter.operator || isEmptyValue(currentFilter.value)) {
       showError('Please fill all filter fields')
       return
     }
 
-    setFilters(prev => [...prev, { ...currentFilter }])
+    // Coerce value types based on field metadata so backend comparisons (especially equals) work
+    const fieldDef = getFieldDef(currentFilter.field)
+    let coercedValue = currentFilter.value
+
+    if (fieldDef) {
+      const op = currentFilter.operator
+
+      // Normalize 'between' to an array [start, end]
+      if (op === 'between') {
+        const parts = Array.isArray(coercedValue)
+          ? coercedValue
+          : String(coercedValue).split(',')
+
+        if (fieldDef.type === 'number') {
+          coercedValue = parts.map(p => (p === '' || p === null || p === undefined) ? undefined : Number(p))
+        } else if (fieldDef.type === 'boolean') {
+          coercedValue = parts.map(p => (p === true || p === 'true'))
+        } else {
+          // date/text/select -> keep as strings
+          coercedValue = parts
+        }
+      }
+      // Normalize 'in' to an array of values
+      else if (op === 'in') {
+        const parts = Array.isArray(coercedValue) ? coercedValue : String(coercedValue).split(',')
+        if (fieldDef.type === 'number') {
+          coercedValue = parts.map(p => Number(p))
+        } else if (fieldDef.type === 'boolean') {
+          coercedValue = parts.map(p => (p === true || p === 'true'))
+        } else {
+          coercedValue = parts
+        }
+      }
+      // For direct comparisons, coerce primitives
+      else {
+        if (fieldDef.type === 'number') {
+          coercedValue = Number(coercedValue)
+        } else if (fieldDef.type === 'boolean') {
+          coercedValue = (coercedValue === true || coercedValue === 'true')
+        }
+        // date/text/select remain as strings
+      }
+    }
+
+    setFilters(prev => [...prev, { ...currentFilter, value: coercedValue }])
     handleCloseFilterDialog()
     setPage(0)
   }
@@ -393,16 +511,18 @@ function ProjectTreeView({ user }) {
 
     if (!form.start_date) {
       errors.start_date = 'Start date is required'
+    } else if (!isValidISODateString(form.start_date)) {
+      errors.start_date = 'Invalid date. Use YYYY-MM-DD (1900-01-01 to 2100-12-31)'
     }
 
     if (!form.due_date) {
       errors.due_date = 'Due date is required'
+    } else if (!isValidISODateString(form.due_date)) {
+      errors.due_date = 'Invalid date. Use YYYY-MM-DD (1900-01-01 to 2100-12-31)'
     }
 
-    if (form.start_date && form.due_date) {
-      const startDate = new Date(form.start_date)
-      const dueDate = new Date(form.due_date)
-      if (startDate >= dueDate) {
+    if (!errors.start_date && !errors.due_date && form.start_date && form.due_date) {
+      if (!isISOAfter(form.due_date, form.start_date)) {
         errors.due_date = 'Due date must be after start date'
       }
     }
@@ -502,6 +622,34 @@ function ProjectTreeView({ user }) {
     return labels[status] || status
   }
 
+  // Calculate due date styling based on days remaining
+  const getDueDateStyle = useCallback((dueDate, status) => {
+    // If status is Completed, use normal styling
+    if (status === 'COMPLETED') {
+      return { color: 'inherit', fontWeight: 'normal' }
+    }
+
+    if (!dueDate) return { color: 'inherit', fontWeight: 'normal' }
+    
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const due = new Date(dueDate + 'T00:00:00')
+    const diffTime = due - today
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    
+    // Red and bold if on or after due date
+    if (diffDays <= 0) {
+      return { color: '#d32f2f', fontWeight: 'bold' }
+    }
+    // Yellow/Orange if within 3 days
+    if (diffDays <= 3) {
+      return { color: '#ed6c02', fontWeight: 'normal' }
+    }
+    // Default color
+    return { color: 'inherit', fontWeight: 'normal' }
+  }, [])
+
   // Get field definition by name
   const getFieldDef = (fieldName) => {
     return fieldMetadata.find(f => f.name === fieldName)
@@ -585,7 +733,7 @@ function ProjectTreeView({ user }) {
         <FormControl fullWidth>
           <InputLabel>Value</InputLabel>
           <Select
-            value={currentFilter.value}
+            value={currentFilter.value ?? ''}
             label="Value"
             onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
           >
@@ -603,9 +751,9 @@ function ProjectTreeView({ user }) {
         <FormControl fullWidth>
           <InputLabel>Value</InputLabel>
           <Select
-            value={currentFilter.value}
+            value={currentFilter.value === true || currentFilter.value === false ? currentFilter.value : ''}
             label="Value"
-            onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
+            onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value === 'true' ? true : e.target.value === 'false' ? false : e.target.value })}
           >
             <MenuItem value={true}>True</MenuItem>
             <MenuItem value={false}>False</MenuItem>
@@ -700,40 +848,42 @@ function ProjectTreeView({ user }) {
           <TableCell>{node.approver || '-'}</TableCell>
 
           <TableCell>
-            {node.start_date ? new Date(node.start_date).toLocaleDateString() : '-'}
+            {formatDate(node.start_date)}
           </TableCell>
 
-          <TableCell>
-            {node.due_date ? new Date(node.due_date).toLocaleDateString() : '-'}
+          <TableCell sx={getDueDateStyle(node.due_date, node.status)}>
+            {formatDate(node.due_date)}
           </TableCell>
 
           <TableCell>{node.progress}%</TableCell>
 
-          <TableCell align="right">
-            <Tooltip title="View Gantt Chart">
-              <IconButton 
-                size="small" 
-                color="primary"
-                onClick={() => navigate('/dashboard/projects/gantt', { 
-                  state: { projectId: node.id, projectName: node.name } 
-                })}
-              >
-                <BarChart3 size={18} />
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap', minWidth: { xs: 120, sm: 160 } }}>
+            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+              <Tooltip title="View Gantt Chart">
+                <IconButton 
+                  size="small" 
+                  color="primary"
+                  onClick={() => navigate('/dashboard/projects/gantt', { 
+                    state: { projectId: node.id, projectName: node.name } 
+                  })}
+                >
+                  <BarChart3 size={18} />
+                </IconButton>
+              </Tooltip>
+              <IconButton size="small" onClick={() => openCreate(node.id)}>
+                <Plus size={18} />
               </IconButton>
-            </Tooltip>
-            <IconButton size="small" onClick={() => openCreate(node.id)}>
-              <Plus size={18} />
-            </IconButton>
-            <IconButton size="small" onClick={() => openEdit(node.id)}>
-              <Edit size={18} />
-            </IconButton>
-            <IconButton
-              size="small"
-              color="error"
-              onClick={() => deleteProject(node.id, node.name)}
-            >
-              <Trash2 size={18} />
-            </IconButton>
+              <IconButton size="small" onClick={() => openEdit(node.id)}>
+                <Edit size={18} />
+              </IconButton>
+              <IconButton
+                size="small"
+                color="error"
+                onClick={() => deleteProject(node.id, node.name)}
+              >
+                <Trash2 size={18} />
+              </IconButton>
+            </Box>
           </TableCell>
         </TableRow>
 
@@ -904,7 +1054,7 @@ function ProjectTreeView({ user }) {
                           {sortField === 'progress' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
                         </Box>
                       </TableCell>
-                      <TableCell align="right">Actions</TableCell>
+                      <TableCell align="right" sx={{ whiteSpace: 'nowrap', minWidth: { xs: 120, sm: 160 } }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1188,6 +1338,7 @@ function ProjectTreeView({ user }) {
                 }}
                 fullWidth
                 InputLabelProps={{ shrink: true }}
+                inputProps={{ min: '1900-01-01', max: '2100-12-31' }}
                 required
                 error={!!formErrors.start_date}
                 helperText={formErrors.start_date || 'Required'}
@@ -1202,6 +1353,7 @@ function ProjectTreeView({ user }) {
                 }}
                 fullWidth
                 InputLabelProps={{ shrink: true }}
+                inputProps={{ min: '1900-01-01', max: '2100-12-31' }}
                 required
                 error={!!formErrors.due_date}
                 helperText={formErrors.due_date || 'Required'}

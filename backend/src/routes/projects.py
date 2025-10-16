@@ -25,7 +25,7 @@ async def get_project_fields_metadata(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[PROJECT] Error fetching field metadata: {e}")
+        logger.error(f"Error fetching field metadata: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch field metadata")
 
 
@@ -41,7 +41,7 @@ async def create_project(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[PROJECT] Failed to create project: {e}")
+        logger.error(f"Failed to create project: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create project"
@@ -75,7 +75,7 @@ async def get_projects(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[PROJECT] Error fetching projects: {e}")
+        logger.error(f"Error fetching projects: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch projects")
 
 
@@ -104,7 +104,7 @@ async def get_project_tree(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[PROJECT] Error fetching project tree: {e}")
+        logger.error(f"Error fetching project tree: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch project tree")
 
 
@@ -120,7 +120,7 @@ async def get_project(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[PROJECT] Failed to fetch project {project_id}: {e}")
+        logger.error(f"Failed to fetch project {project_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch project"
@@ -140,7 +140,7 @@ async def update_project(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[PROJECT] Error updating project {project_id}: {e}")
+        logger.error(f"Error updating project {project_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to update project")
 
 
@@ -156,5 +156,5 @@ async def delete_project(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[PROJECT] Error deleting project {project_id}: {e}")
+        logger.error(f"Error deleting project {project_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete project")

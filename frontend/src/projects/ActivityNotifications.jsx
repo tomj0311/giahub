@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import {
   Box,
   Card,
@@ -21,14 +21,19 @@ import {
 import { Send, Paperclip, X, Download } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { apiCall } from '../config/api'
-
-// GLOBAL user cache to prevent duplicate user loads
-let globalUserCache = null
-let globalUserCacheLoading = false
+import sharedApiService from '../utils/apiService'
 
 function ActivityNotifications({ user, activityId, projectId }) {
   const token = user?.token
+  const tokenRef = useRef(token)
+  tokenRef.current = token
+  
   const { showSuccess, showError } = useSnackbar()
+  
+  // Refs to prevent duplicate calls
+  const isMountedRef = useRef(true)
+  const isLoadingUsersRef = useRef(false)
+  const isLoadingNotificationsRef = useRef(false)
   
   console.log('[NOTIFICATION RENDER]', { activityId, hasToken: !!token, projectId })
   
@@ -39,6 +44,25 @@ function ActivityNotifications({ user, activityId, projectId }) {
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
   const [imagePreviews, setImagePreviews] = useState({}) // Store blob URLs for image previews
+  const [selectedImagePreviews, setSelectedImagePreviews] = useState([]) // Local previews for selected files
+  const previewsRef = useRef({})
+
+  // Image helpers
+  const imageExtensions = useMemo(() => new Set([
+    'jpg','jpeg','png','gif','bmp','webp','svg','tif','tiff','ico','avif','heic','heif'
+  ]), [])
+
+  const isImageFilename = (filename = '') => {
+    const dot = filename.lastIndexOf('.')
+    if (dot === -1) return false
+    const ext = filename.slice(dot + 1).toLowerCase()
+    return imageExtensions.has(ext)
+  }
+
+  const encodePathSegments = (path) => String(path || '')
+    .split('/')
+    .map(seg => encodeURIComponent(seg))
+    .join('/')
   
   // User mention autocomplete
   const [allUsers, setAllUsers] = useState([])
@@ -50,149 +74,145 @@ function ActivityNotifications({ user, activityId, projectId }) {
   const textFieldRef = useRef(null)
   const fileInputRef = useRef(null)
 
-  // Load users for mentions
+  // Cleanup on unmount
   useEffect(() => {
-    if (!token) return
-    
-    // Check global cache first
-    if (globalUserCache) {
-      console.log('[ACTIVITYNOTIFICATIONS] Using globally cached users')
-      setAllUsers(globalUserCache)
-      return
+    return () => {
+      isMountedRef.current = false
+      try {
+        Object.values(previewsRef.current || {}).forEach(url => URL.revokeObjectURL(url))
+      } catch {}
+      try {
+        (selectedImagePreviews || []).forEach(url => { if (url) URL.revokeObjectURL(url) })
+      } catch {}
     }
+  }, [])
+
+  // Load users for mentions using sharedApiService
+  useEffect(() => {
+    if (!token || !isMountedRef.current) return
     
-    // Check if already loading globally
-    if (globalUserCacheLoading) {
-      console.log('[ACTIVITYNOTIFICATIONS] Users already loading globally, waiting...')
-      // Wait for the load to complete
-      const checkInterval = setInterval(() => {
-        if (!globalUserCacheLoading && globalUserCache) {
-          clearInterval(checkInterval)
-          console.log('[ACTIVITYNOTIFICATIONS] Global load complete, using cached users')
-          setAllUsers(globalUserCache)
-        }
-      }, 50)
-      
-      // Cleanup after 5 seconds max
-      setTimeout(() => clearInterval(checkInterval), 5000)
-      return
-    }
-    
-    console.log('[ACTIVITYNOTIFICATIONS] Loading users for mentions...')
-    globalUserCacheLoading = true
+    if (isLoadingUsersRef.current) return
     
     const loadUsers = async () => {
       try {
-        console.log('[ACTIVITYNOTIFICATIONS] Making API call to /api/users/')
-        const res = await apiCall('/api/users/', {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` }
-        })
-
-        console.log('[ACTIVITYNOTIFICATIONS] /api/users/ response status:', res.status)
-        if (!res.ok) return
-
-        const users = await res.json()
-        const mappedUsers = users.map(u => ({
-          id: u.id,
-          email: u.email,
-          name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email
-        }))
+        isLoadingUsersRef.current = true
         
-        // Cache globally
-        globalUserCache = mappedUsers
-        setAllUsers(mappedUsers)
+        const result = await sharedApiService.makeRequest(
+          '/api/users/',
+          {
+            headers: { Authorization: `Bearer ${tokenRef.current}` }
+          },
+          { token: tokenRef.current?.substring(0, 10) }
+        )
+
+        if (!isMountedRef.current) return
+
+        if (result.success) {
+          const mappedUsers = result.data.map(u => ({
+            id: u.id,
+            email: u.email,
+            name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email
+          }))
+          setAllUsers(mappedUsers)
+        }
       } catch (error) {
         console.error('Error loading users:', error)
       } finally {
-        globalUserCacheLoading = false
+        isLoadingUsersRef.current = false
       }
     }
 
     loadUsers()
-  }, [token]) // Only load once when token is available
+  }, [token])
 
-  // Load existing notifications
+  // Load existing notifications using sharedApiService
   useEffect(() => {
-    if (!activityId || !token) return
+    if (!activityId || !token || !isMountedRef.current) return
+    
+    if (isLoadingNotificationsRef.current) return
     
     const loadNotifications = async () => {
-      console.log('[NOTIFICATION] 📡 Fetching notifications from database for activity:', activityId)
-      setLoading(true)
-      
       try {
-        const res = await apiCall(`/api/projects/activities/${activityId}/notifications`, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` }
-        })
+        isLoadingNotificationsRef.current = true
+        setLoading(true)
+        
+        const result = await sharedApiService.makeRequest(
+          `/api/projects/activities/${activityId}/notifications`,
+          {
+            headers: { Authorization: `Bearer ${tokenRef.current}` }
+          },
+          { 
+            activityId,
+            token: tokenRef.current?.substring(0, 10)
+          }
+        )
 
-        console.log('[NOTIFICATION] Load response status:', res.status)
+        if (!isMountedRef.current) return
 
-        if (res.ok) {
-          const data = await res.json()
-          console.log('[NOTIFICATION] ✅ Loaded notifications:', data)
-          console.log('[NOTIFICATION] ✅ Notification count:', data.notifications?.length || 0)
-          setNotifications(data.notifications || [])
+        if (result.success) {
+          setNotifications(result.data.notifications || [])
         } else {
-          const error = await res.json()
-          console.error('[NOTIFICATION] ❌ Load error:', error)
+          console.error('[NOTIFICATION] ❌ Load error:', result.error)
         }
       } catch (error) {
         console.error('[NOTIFICATION] ❌ Error loading notifications:', error)
       } finally {
-        setLoading(false)
+        if (isMountedRef.current) {
+          isLoadingNotificationsRef.current = false
+          setLoading(false)
+        }
       }
     }
 
     loadNotifications()
-  }, [activityId, token]) // Reload whenever activityId or token changes
+  }, [activityId, token])
 
   // Load image previews for notifications with image files
   useEffect(() => {
     if (!notifications.length || !token) return
-    
+
     const loadImagePreviews = async () => {
       const newPreviews = {}
-      
+
       for (const notification of notifications) {
         if (!notification.files) continue
-        
+
         for (const file of notification.files) {
-          const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(file.filename)
-          if (!isImage) continue
-          
           const cacheKey = file.path
           if (imagePreviews[cacheKey]) continue // Already loaded
-          
+
           try {
-            const res = await apiCall(`/api/download/${file.path}`, {
+            const encoded = encodePathSegments(file.path)
+            const res = await apiCall(`/api/download/${encoded}`, {
               method: 'GET',
               headers: { Authorization: `Bearer ${token}` }
             })
-            
+
             if (res.ok) {
               const blob = await res.blob()
-              const url = URL.createObjectURL(blob)
-              newPreviews[cacheKey] = url
+              const contentType = blob.type || res.headers.get('content-type') || ''
+              if (contentType.startsWith('image/') || isImageFilename(file.filename)) {
+                const url = URL.createObjectURL(blob)
+                newPreviews[cacheKey] = url
+              }
             }
           } catch (error) {
             console.error('Failed to load image preview:', error)
           }
         }
       }
-      
+
       if (Object.keys(newPreviews).length > 0) {
-        setImagePreviews(prev => ({ ...prev, ...newPreviews }))
+        setImagePreviews(prev => {
+          const merged = { ...prev, ...newPreviews }
+          previewsRef.current = merged
+          return merged
+        })
       }
     }
-    
+
     loadImagePreviews()
-    
-    // Cleanup blob URLs on unmount
-    return () => {
-      Object.values(imagePreviews).forEach(url => URL.revokeObjectURL(url))
-    }
-  }, [notifications, token])
+  }, [notifications, token, imagePreviews])
 
   // Handle text input changes and detect @ mentions
   const handleMessageChange = (e) => {
@@ -270,8 +290,32 @@ function ActivityNotifications({ user, activityId, projectId }) {
 
   // Remove selected file (before sending)
   const removeFile = (index) => {
+    // Revoke preview if exists
+    const url = selectedImagePreviews[index]
+    if (url) {
+      try { URL.revokeObjectURL(url) } catch {}
+    }
     setSelectedFiles(prev => prev.filter((_, i) => i !== index))
   }
+
+  // Build previews for selected (not yet uploaded) image files
+  useEffect(() => {
+    // Revoke any existing previews for previous selected files
+    try {
+      (selectedImagePreviews || []).forEach(url => { if (url) URL.revokeObjectURL(url) })
+    } catch {}
+    const urls = selectedFiles.map(f => {
+      const byMime = (f?.type || '').startsWith('image/')
+      const byName = isImageFilename(f?.name)
+      if (byMime || byName) {
+        try { return URL.createObjectURL(f) } catch { return null }
+      }
+      return null
+    })
+    setSelectedImagePreviews(urls)
+    // Cleanup handled on unmount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFiles])
 
   // Send notification - Upload files first, then create notification
   const handleSend = async () => {
@@ -346,6 +390,45 @@ function ActivityNotifications({ user, activityId, projectId }) {
       const result = await res.json()
       console.log('[NOTIFICATION] Success response:', result)
       console.log('[NOTIFICATION] Notification object:', result.notification)
+      
+      // Immediately load image previews for the newly uploaded files
+      if (result.notification?.files?.length > 0) {
+        const newPreviews = {}
+        
+        for (const file of result.notification.files) {
+          if (isImageFilename(file.filename)) {
+            try {
+              const encoded = encodePathSegments(file.path)
+              const imgRes = await apiCall(`/api/download/${encoded}`, {
+                method: 'GET',
+                headers: { Authorization: `Bearer ${token}` }
+              })
+
+              if (imgRes.ok) {
+                const blob = await imgRes.blob()
+                const contentType = blob.type || imgRes.headers.get('content-type') || ''
+                if (contentType.startsWith('image/') || isImageFilename(file.filename)) {
+                  const url = URL.createObjectURL(blob)
+                  newPreviews[file.path] = url
+                  console.log('[NOTIFICATION] Loaded image preview for:', file.filename)
+                }
+              }
+            } catch (error) {
+              console.error('[NOTIFICATION] Failed to load image preview:', error)
+            }
+          }
+        }
+        
+        // Update image previews state with new images
+        if (Object.keys(newPreviews).length > 0) {
+          setImagePreviews(prev => {
+            const merged = { ...prev, ...newPreviews }
+            previewsRef.current = merged
+            console.log('[NOTIFICATION] Updated image previews, total count:', Object.keys(merged).length)
+            return merged
+          })
+        }
+      }
       
       // Add new notification to list immediately for instant feedback
       setNotifications(prev => {
@@ -445,16 +528,66 @@ function ActivityNotifications({ user, activityId, projectId }) {
 
           {/* Selected Files (not uploaded yet) */}
           {selectedFiles.length > 0 && (
-            <Box sx={{ mb: 2 }}>
-              {selectedFiles.map((file, index) => (
-                <Chip
-                  key={index}
-                  label={file.name}
-                  size="small"
-                  onDelete={() => removeFile(index)}
-                  sx={{ mr: 1, mb: 1 }}
-                />
-              ))}
+            <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {selectedFiles.map((file, index) => {
+                const previewUrl = selectedImagePreviews[index]
+                if (previewUrl) {
+                  return (
+                    <Box
+                      key={`${file.name}-${file.lastModified}-${index}`}
+                      sx={{
+                        position: 'relative',
+                        borderRadius: 1,
+                        overflow: 'hidden',
+                        border: '1px solid',
+                        borderColor: 'divider'
+                      }}
+                    >
+                      <img
+                        src={previewUrl}
+                        alt={file.name}
+                        style={{ maxWidth: '160px', maxHeight: '120px', objectFit: 'cover', display: 'block' }}
+                      />
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          position: 'absolute',
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          backgroundColor: 'rgba(0,0,0,0.7)',
+                          color: 'white',
+                          p: '2px 6px',
+                          fontSize: '0.7rem',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}
+                        title={file.name}
+                      >
+                        {file.name}
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        onClick={() => removeFile(index)}
+                        sx={{ position: 'absolute', top: 2, right: 2, bgcolor: 'rgba(0,0,0,0.5)' }}
+                        aria-label={`Remove ${file.name}`}
+                      >
+                        <X size={14} color="#fff" />
+                      </IconButton>
+                    </Box>
+                  )
+                }
+                return (
+                  <Chip
+                    key={`${file.name}-${file.lastModified}-${index}`}
+                    label={file.name}
+                    size="small"
+                    onDelete={() => removeFile(index)}
+                    sx={{ mr: 1, mb: 1 }}
+                  />
+                )
+              })}
             </Box>
           )}
 
@@ -467,6 +600,7 @@ function ActivityNotifications({ user, activityId, projectId }) {
                 ref={fileInputRef}
                 onChange={handleFileSelect}
                 style={{ display: 'none' }}
+                accept="*/*"
               />
               <Button
                 startIcon={<Paperclip size={18} />}
@@ -570,12 +704,13 @@ function ActivityNotifications({ user, activityId, projectId }) {
                               justifyContent: isCurrentUser ? 'flex-end' : 'flex-start'
                             }}>
                               {notification.files.map((file, i) => {
-                                const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(file.filename)
+                                const isImage = isImageFilename(file.filename)
                                 const imageUrl = imagePreviews[file.path]
                                 
                                 const handleDownload = async () => {
                                   try {
-                                    const res = await apiCall(`/api/download/${file.path}`, {
+                                    const encoded = encodePathSegments(file.path)
+                                    const res = await apiCall(`/api/download/${encoded}`, {
                                       method: 'GET',
                                       headers: { Authorization: `Bearer ${token}` }
                                     })
@@ -600,7 +735,7 @@ function ActivityNotifications({ user, activityId, projectId }) {
                                   }
                                 }
                                 
-                                if (isImage && imageUrl) {
+                                if (imageUrl) {
                                   return (
                                     <Box
                                       key={i}

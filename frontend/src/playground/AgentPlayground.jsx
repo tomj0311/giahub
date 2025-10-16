@@ -479,7 +479,6 @@ export default function AgentPlayground({ user }) {
   const [selected, setSelected] = useState(null)
 
   // Chat state
-  const [prompt, setPrompt] = useState('')
   const [messages, setMessages] = useState([])
   const [running, setRunning] = useState(false)
   const [abortController, setAbortController] = useState(null)
@@ -712,23 +711,24 @@ export default function AgentPlayground({ user }) {
     return formattedHistory
   }
 
-  const runAgent = useCallback(async () => {
-    if (!selected || !prompt.trim()) return
+  const runAgent = useCallback(async (inputText) => {
+    const promptText = (typeof inputText === 'string' ? inputText : '').trim()
+    if (!selected || !promptText) return
     setRunning(true)
 
-    const userMsg = { role: 'user', content: prompt, ts: Date.now() }
+    const userMsg = { role: 'user', content: promptText, ts: Date.now() }
     const newMessages = [...messages, userMsg]
     setMessages(newMessages)
     
     // Store the last user message for up arrow recall
-    setLastUserMessage(prompt)
+    setLastUserMessage(promptText)
 
     // Generate conversation ID with user ID format
     const convId = currentConversationId || `conv_${Date.now()}`
     if (!currentConversationId) setCurrentConversationId(convId)
 
-    // Get agent configuration to check history settings
-    let finalPrompt = userMsg.content
+  // Get agent configuration to check history settings
+  let finalPrompt = userMsg.content
     try {
       const agentConfig = await agentService.getAgent(selected, token)
       
@@ -768,7 +768,7 @@ export default function AgentPlayground({ user }) {
     const messagesWithPlaceholder = [...newMessages, agentPlaceholder]
     setMessages(messagesWithPlaceholder)
 
-    setPrompt('')
+  // Clear is now handled by ChatInputBar's local state
 
     try {
       let finalMessages = messagesWithPlaceholder
@@ -949,7 +949,7 @@ export default function AgentPlayground({ user }) {
       setUploading(false)
       setAbortController(null)
     }
-  }, [selected, prompt, stagedFiles, uploadedFiles, messages, currentConversationId, sessionCollection, vectorCollectionName, token])
+  }, [selected, stagedFiles, uploadedFiles, messages, currentConversationId, sessionCollection, vectorCollectionName, token])
 
   const openHistory = async (page = 1) => {
     // Only show full loading on initial open, not on pagination
@@ -1541,8 +1541,6 @@ export default function AgentPlayground({ user }) {
         {/* Input row moved to portal */}
         {portalRef.current && createPortal(
           <ChatInputBar
-            prompt={prompt}
-            setPrompt={setPrompt}
             selected={selected}
             running={running}
             runAgent={runAgent}
@@ -1692,8 +1690,6 @@ export function genUuidHex() {
 
 // Portal Chat Input Bar (isolated from main message re-renders to reduce flicker)
 const ChatInputBar = React.memo(function ChatInputBar({
-  prompt,
-  setPrompt,
   selected,
   running,
   runAgent,
@@ -1712,7 +1708,9 @@ const ChatInputBar = React.memo(function ChatInputBar({
 }) {
   const containerRef = useRef(null)
   const inputRef = useRef(null)
+  const [prompt, setPrompt] = useState('')
   const [alignedStyle, setAlignedStyle] = useState({ left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 650 })
+  const lastHeightRef = useRef(-1)
   
   // Dragging state
   const [isDragging, setIsDragging] = useState(false)
@@ -1725,7 +1723,11 @@ const ChatInputBar = React.memo(function ChatInputBar({
     if (!el) return
     const measure = () => {
       const rect = el.getBoundingClientRect()
-      onHeightChange(rect.height + 24) // include spacer buffer
+      const nextH = rect.height + 24
+      if (nextH !== lastHeightRef.current) {
+        lastHeightRef.current = nextH
+        onHeightChange(nextH) // include spacer buffer
+      }
       
       // Only set aligned style if not dragged to a custom position
       if (position.x === null && position.y === null && containerEl) {
@@ -1756,7 +1758,7 @@ const ChatInputBar = React.memo(function ChatInputBar({
       if (ro) ro.disconnect()
       else window.removeEventListener('resize', measure)
     }
-  }, [onHeightChange, stagedFiles, uploadedFiles, running, prompt, containerEl, position])
+  }, [onHeightChange, stagedFiles, uploadedFiles, running, containerEl, position])
 
   // Drag handlers
   const handleMouseDown = (e) => {
@@ -1892,7 +1894,10 @@ const ChatInputBar = React.memo(function ChatInputBar({
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.shiftKey || e.ctrlKey)) {
               e.preventDefault()
-              runAgent()
+              if (prompt.trim()) {
+                runAgent(prompt)
+                setPrompt('')
+              }
             } else if (e.key === 'ArrowUp' && prompt === '' && lastUserMessage) {
               e.preventDefault()
               setPrompt(lastUserMessage)
@@ -1921,7 +1926,7 @@ const ChatInputBar = React.memo(function ChatInputBar({
             <CancelIcon fontSize="small" />
           </IconButton>
         ) : (
-          <IconButton onClick={runAgent} disabled={!selected || !prompt.trim() || uploading} size="small" sx={{ position: 'absolute', top: '50%', right: 6, transform: 'translateY(-50%)' }}>
+          <IconButton onClick={() => { if (prompt.trim()) { runAgent(prompt); setPrompt('') } }} disabled={!selected || !prompt.trim() || uploading} size="small" sx={{ position: 'absolute', top: '50%', right: 6, transform: 'translateY(-50%)' }}>
             {uploading ? <CircularProgress size={18} /> : <SendIcon fontSize="small" />}
           </IconButton>
         )}

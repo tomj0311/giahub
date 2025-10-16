@@ -75,17 +75,16 @@ async def create_role(
     # Check if user is system admin
     user_id = user.get("id")
     if not user_id:
-        logger.error(f"[ROLES] Invalid user attempting to create role: {user}")
+        logger.error(f"Invalid user attempting to create role: {user}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid user"
         )
     
     try:
-        # Determine role name from either field
         role_name = role_data.roleName or role_data.name
         if not role_name:
-            logger.warning(f"[ROLES] Role creation failed - missing name for user: {user_id}")
+            logger.warning(f"Role creation failed - missing name for user: {user_id}")
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="roleName or name is required")
 
         # Get user's tenant ID
@@ -257,15 +256,14 @@ async def assign_role(
     
     user_id = user.get("id")
     if not user_id:
-        logger.error(f"[ROLES] Invalid user attempting role assignment: {user}")
+        logger.error(f"Invalid user attempting role assignment: {user}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid user"
         )
-    # Check ownership of the role
     tenant_id = await TenantService.get_user_tenant_id(user_id)
     if not await RBACService.is_role_owner(user_id, assignment.roleId, tenant_id=tenant_id):
-        logger.warning(f"[ROLES] User {user_id} attempted to assign role {assignment.roleId} without ownership")
+        logger.warning(f"User {user_id} attempted to assign role {assignment.roleId} without ownership")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only role owners can assign roles"
@@ -279,7 +277,7 @@ async def assign_role(
         )
         return {"message": "Role assigned successfully"}
     except Exception as e:
-        logger.error(f"[ROLES] CRITICAL: Failed to assign role {assignment.roleId} to user {assignment.userId}: {e}")
+        logger.error(f"Failed to assign role {assignment.roleId} to user {assignment.userId}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to assign role: {str(e)}"

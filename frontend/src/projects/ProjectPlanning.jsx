@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import {
   Box,
   Button,
@@ -15,8 +15,6 @@ import {
   IconButton,
   Chip,
   Typography,
-  Tabs,
-  Tab,
   CircularProgress,
   Dialog,
   DialogTitle,
@@ -41,18 +39,22 @@ import { Plus, Edit, Trash2, CheckCircle, Circle, Flag, Filter, SortAsc, SortDes
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { useConfirmation } from '../contexts/ConfirmationContext'
 import { apiCall } from '../config/api'
+import sharedApiService from '../utils/apiService'
 
-const ACTIVITY_TYPES = ['MILESTONE', 'PHASE', 'TASK']
+// Showing all activity types together; tabs removed
 
 function ProjectPlanning({ user, projectId }) {
   const token = user?.token
   const navigate = useNavigate()
-  const location = useLocation()
   const { showSuccess, showError } = useSnackbar()
   const { showDeleteConfirmation } = useConfirmation()
 
   const isMountedRef = useRef(true)
   const isLoadingRef = useRef(false)
+  const isLoadingProjectsRef = useRef(false)
+  const isLoadingMetadataRef = useRef(false)
+  const tokenRef = useRef(token)
+  tokenRef.current = token
 
   const [activities, setActivities] = useState([])
   const [projects, setProjects] = useState([])
@@ -84,47 +86,72 @@ function ProjectPlanning({ user, projectId }) {
   const [columnDialogOpen, setColumnDialogOpen] = useState(false)
   // Predefined initial columns (common ones shown by default)
   const [visibleColumns, setVisibleColumns] = useState({
+    project_id: true,
     type: true,
     subject: true,
-    project_id: true,
     status: true,
-    priority: true,
-    assignee: true,
-    approver: true,
     start_date: true,
     due_date: true,
-    progress: true
+    assignee: true,
+    approver: true,
+    progress: true,
+    // Others off by default
+    priority: false
   })
   
-  // Restore tab from location state, or default to tab 0 (Milestones)
-  const initialTab = location.state?.planningTab ?? 0
-  const [currentTab, setCurrentTab] = useState(initialTab)
+  // Tabs removed: show all activity types
+  // Preferred column order
+  const PREFERRED_ORDER = ['project_id', 'type', 'subject', 'status', 'start_date', 'due_date', 'assignee', 'approver', 'progress']
 
-  const activityTypeFilter = ACTIVITY_TYPES[currentTab] || null
+  const orderedFields = React.useMemo(() => {
+    const orderIndex = (name) => {
+      const idx = PREFERRED_ORDER.indexOf(name)
+      return idx === -1 ? Number.MAX_SAFE_INTEGER : idx
+    }
+    return [...fieldMetadata].sort((a, b) => orderIndex(a.name) - orderIndex(b.name))
+  }, [fieldMetadata])
+
+  // Format date as dd/mm/yyyy
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '-'
+    const date = new Date(dateStr)
+    const day = String(date.getDate()).padStart(2, '0')
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const year = date.getFullYear()
+    return `${day}/${month}/${year}`
+  }
 
   // Load field metadata from API - NO HARDCODING!
   const loadFieldMetadata = useCallback(async () => {
+    if (!isMountedRef.current) return
+    
+    // Prevent duplicate calls
+    if (isLoadingMetadataRef.current) {
+      return
+    }
+    
     try {
-      const res = await apiCall('/api/projects/activities/fields-metadata', {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.detail || 'Failed to load field metadata')
-      }
-
-      const response = await res.json()
+      isLoadingMetadataRef.current = true
       
-      if (isMountedRef.current) {
-        setFieldMetadata(response.fields || [])
+      const result = await sharedApiService.makeRequest(
+        '/api/projects/activities/fields-metadata',
+        {
+          method: 'GET',
+          headers: tokenRef.current ? { Authorization: `Bearer ${tokenRef.current}` } : {}
+        },
+        { token: tokenRef.current?.substring(0, 10) }
+      )
+
+      if (!isMountedRef.current) return
+
+      if (result.success) {
+        setFieldMetadata(result.data.fields || [])
         
         // Update visible columns to include any new fields from backend that aren't in the predefined list
         // This ensures all backend fields are available, but keeps the predefined initial visibility
         setVisibleColumns(prev => {
           const updated = { ...prev }
-          response.fields?.forEach(field => {
+          result.data.fields?.forEach(field => {
             // If field is not in predefined list, set it to false (hidden by default)
             if (!(field.name in updated)) {
               updated[field.name] = false
@@ -132,49 +159,84 @@ function ProjectPlanning({ user, projectId }) {
           })
           return updated
         })
+      } else {
+        showError(result.error || 'Failed to load field metadata')
       }
     } catch (error) {
       console.error('[ProjectPlanning] Failed to load field metadata:', error)
       if (isMountedRef.current) {
         showError(error.message || 'Failed to load field metadata')
       }
-    }
-  }, [token, showError])
-
-  useEffect(() => {
-    isMountedRef.current = true
-    
-    loadFieldMetadata() // Load metadata from API
-    
-    const loadProjects = async () => {
-      try {
-        const res = await apiCall('/api/projects/projects?page=1&page_size=1000', {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` }
-        })
-
-        if (!res.ok) {
-          const error = await res.json()
-          console.error('[ProjectPlanning] Load failed:', error)
-          return
-        }
-
-        const response = await res.json()
-        console.log('[ProjectPlanning] Projects loaded:', response.projects?.length || 0, response.projects)
-        if (isMountedRef.current) {
-          setProjects(response.projects || [])
-        }
-      } catch (error) {
-        console.error('[ProjectPlanning] Error:', error)
+    } finally {
+      if (isMountedRef.current) {
+        isLoadingMetadataRef.current = false
       }
     }
+  }, []); // Empty dependencies
 
-    loadProjects()
-
-    return () => {
-      isMountedRef.current = false
+  const loadProjects = useCallback(async () => {
+    if (!isMountedRef.current) return
+    
+    // Prevent duplicate calls
+    if (isLoadingProjectsRef.current) {
+      return
     }
-  }, [token])
+    
+    try {
+      isLoadingProjectsRef.current = true
+      
+      const result = await sharedApiService.makeRequest(
+        '/api/projects/projects?page=1&page_size=1000',
+        {
+          method: 'GET',
+          headers: tokenRef.current ? { Authorization: `Bearer ${tokenRef.current}` } : {}
+        },
+        { page: 1, page_size: 1000, token: tokenRef.current?.substring(0, 10) }
+      )
+
+      if (!isMountedRef.current) return
+
+      if (result.success) {
+        console.log('[ProjectPlanning] Projects loaded:', result.data.projects?.length || 0)
+        setProjects(result.data.projects || [])
+      }
+    } catch (error) {
+      console.error('[ProjectPlanning] Error:', error)
+    } finally {
+      if (isMountedRef.current) {
+        isLoadingProjectsRef.current = false
+      }
+    }
+  }, []); // Empty dependencies
+
+  // Use exact same pattern as ModelConfig
+  useEffect(() => {
+    const loadData = async () => {
+      if (!isMountedRef.current) return
+      
+      // Set mounted to true
+      isMountedRef.current = true
+      
+      try {
+        await Promise.all([
+          loadFieldMetadata(),
+          loadProjects()
+        ])
+      } catch (err) {
+        console.error('❌ PROJECTPLANNING Error during initialization:', err)
+      }
+    }
+    
+    loadData()
+    
+    return () => {
+      // Set mounted to false FIRST to prevent any state updates
+      isMountedRef.current = false
+      isLoadingRef.current = false
+      isLoadingProjectsRef.current = false
+      isLoadingMetadataRef.current = false
+    }
+  }, []); // EMPTY DEPENDENCIES - NO BULLSHIT
 
   useEffect(() => {
     const loadActivities = async (page = 1, pageSize = 50) => {
@@ -183,13 +245,14 @@ function ProjectPlanning({ user, projectId }) {
       setLoading(true)
 
       try {
+        // Invalidate any cached activities responses before fetching fresh data
+        sharedApiService.invalidateCache('/api/projects/activities')
         const params = new URLSearchParams({
           page: page.toString(),
           page_size: pageSize.toString()
         })
 
-        if (projectId) params.append('project_id', projectId)
-        if (activityTypeFilter) params.append('activity_type', activityTypeFilter)
+  if (projectId) params.append('project_id', projectId)
         
         if (sortField) {
           params.append('sort_by', sortField)
@@ -200,25 +263,35 @@ function ProjectPlanning({ user, projectId }) {
           params.append('filters', JSON.stringify(filters))
         }
 
-        const res = await apiCall(`/api/projects/activities?${params}`, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` }
-        })
+        const result = await sharedApiService.makeRequest(
+          `/api/projects/activities?${params}`,
+          {
+            method: 'GET',
+            headers: tokenRef.current ? { Authorization: `Bearer ${tokenRef.current}` } : {}
+          },
+          { 
+            page, 
+            pageSize, 
+            projectId, 
+            sortField, 
+            sortOrder,
+            filters: JSON.stringify(filters),
+            bypassCache: true,
+            token: tokenRef.current?.substring(0, 10) 
+          }
+        )
 
-        if (!res.ok) {
-          const error = await res.json()
-          throw new Error(error.detail || 'Failed to load activities')
-        }
+        if (!isMountedRef.current) return
 
-        const response = await res.json()
-
-        if (isMountedRef.current) {
-          setActivities(response.activities || [])
+        if (result.success) {
+          setActivities(result.data.activities || [])
           setPagination({
-            page: response.pagination.page - 1,
+            page: result.data.pagination.page - 1,
             rowsPerPage: pageSize,
-            total: response.pagination.total
+            total: result.data.pagination.total
           })
+        } else {
+          showError(result.error || 'Failed to load activities')
         }
       } catch (error) {
         if (isMountedRef.current) {
@@ -233,21 +306,23 @@ function ProjectPlanning({ user, projectId }) {
     }
 
     loadActivities(1, pagination.rowsPerPage)
-  }, [currentTab, token, projectId, activityTypeFilter, filters, sortField, sortOrder, showError])
+  }, [token, projectId, filters, sortField, sortOrder, showError])
   
   const loadActivities = useCallback(async (page = 1, pageSize = 50) => {
     if (isLoadingRef.current || !isMountedRef.current) return
-    isLoadingRef.current = true
-    setLoading(true)
-
+    
     try {
+      isLoadingRef.current = true
+      setLoading(true)
+
+      // Invalidate any cached activities responses before fetching fresh data
+      sharedApiService.invalidateCache('/api/projects/activities')
       const params = new URLSearchParams({
         page: page.toString(),
         page_size: pageSize.toString()
       })
 
-      if (projectId) params.append('project_id', projectId)
-      if (activityTypeFilter) params.append('activity_type', activityTypeFilter)
+  if (projectId) params.append('project_id', projectId)
       
       if (sortField) {
         params.append('sort_by', sortField)
@@ -258,25 +333,34 @@ function ProjectPlanning({ user, projectId }) {
         params.append('filters', JSON.stringify(filters))
       }
 
-      const res = await apiCall(`/api/projects/activities?${params}`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const result = await sharedApiService.makeRequest(
+        `/api/projects/activities?${params}`,
+        {
+          headers: { Authorization: `Bearer ${tokenRef.current}` }
+        },
+        { 
+          page, 
+          pageSize, 
+          projectId, 
+          sortField, 
+          sortOrder,
+          filtersCount: filters.length,
+          bypassCache: true,
+          token: tokenRef.current?.substring(0, 10) 
+        }
+      )
 
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.detail || 'Failed to load activities')
-      }
+      if (!isMountedRef.current) return
 
-      const response = await res.json()
-
-      if (isMountedRef.current) {
-        setActivities(response.activities || [])
+      if (result.success) {
+        setActivities(result.data.activities || [])
         setPagination({
-          page: response.pagination.page - 1,
+          page: result.data.pagination.page - 1,
           rowsPerPage: pageSize,
-          total: response.pagination.total
+          total: result.data.pagination.total
         })
+      } else {
+        showError(result.error || 'Failed to load activities')
       }
     } catch (error) {
       if (isMountedRef.current) {
@@ -288,7 +372,7 @@ function ProjectPlanning({ user, projectId }) {
         isLoadingRef.current = false
       }
     }
-  }, [token, projectId, activityTypeFilter, filters, sortField, sortOrder, showError])
+  }, [projectId, filters, sortField, sortOrder])
 
   // Filter handlers
   const handleOpenFilterDialog = () => {
@@ -306,7 +390,51 @@ function ProjectPlanning({ user, projectId }) {
       return
     }
 
-    setFilters(prev => [...prev, { ...currentFilter }])
+    // Coerce value types based on field metadata so backend comparisons (especially equals) work
+    const fieldDef = getFieldDef(currentFilter.field)
+    let coercedValue = currentFilter.value
+
+    if (fieldDef) {
+      const op = currentFilter.operator
+
+      // Normalize 'between' to an array [start, end]
+      if (op === 'between') {
+        const parts = Array.isArray(coercedValue)
+          ? coercedValue
+          : String(coercedValue).split(',')
+
+        if (fieldDef.type === 'number') {
+          coercedValue = parts.map(p => (p === '' || p === null || p === undefined) ? undefined : Number(p))
+        } else if (fieldDef.type === 'boolean') {
+          coercedValue = parts.map(p => (p === true || p === 'true'))
+        } else {
+          // date/text/select -> keep as strings
+          coercedValue = parts
+        }
+      }
+      // Normalize 'in' to an array of values
+      else if (op === 'in') {
+        const parts = Array.isArray(coercedValue) ? coercedValue : String(coercedValue).split(',')
+        if (fieldDef.type === 'number') {
+          coercedValue = parts.map(p => Number(p))
+        } else if (fieldDef.type === 'boolean') {
+          coercedValue = parts.map(p => (p === true || p === 'true'))
+        } else {
+          coercedValue = parts
+        }
+      }
+      // For direct comparisons, coerce primitives
+      else {
+        if (fieldDef.type === 'number') {
+          coercedValue = Number(coercedValue)
+        } else if (fieldDef.type === 'boolean') {
+          coercedValue = (coercedValue === true || coercedValue === 'true')
+        }
+        // date/text/select remain as strings
+      }
+    }
+
+    setFilters(prev => [...prev, { ...currentFilter, value: coercedValue }])
     handleCloseFilterDialog()
     setPagination(prev => ({ ...prev, page: 0 }))
   }
@@ -364,27 +492,45 @@ function ProjectPlanning({ user, projectId }) {
 
     // Between operator needs two inputs
     if (operator === 'between') {
-      const [start, end] = (currentFilter.value || ',').split(',')
+      const raw = currentFilter.value
+      const pair = Array.isArray(raw) ? raw : String(raw || ',').split(',')
+      const [start, end] = pair
       return (
         <Box sx={{ display: 'flex', gap: 2 }}>
           <TextField
             label="Start"
-            type={fieldDef.type === 'date' ? 'date' : 'number'}
+            type={fieldDef.type === 'date' ? 'date' : fieldDef.type === 'number' ? 'number' : 'text'}
             value={start}
             onChange={(e) => {
-              const newValue = `${e.target.value},${end}`
-              setCurrentFilter({ ...currentFilter, value: newValue })
+              const newStart = e.target.value
+              let newPair
+              if (fieldDef.type === 'number') {
+                newPair = [newStart === '' ? '' : Number(newStart), end === '' ? '' : Number(end)]
+              } else if (fieldDef.type === 'boolean') {
+                newPair = [newStart === 'true', end === 'true']
+              } else {
+                newPair = [newStart, end]
+              }
+              setCurrentFilter({ ...currentFilter, value: newPair })
             }}
             InputLabelProps={fieldDef.type === 'date' ? { shrink: true } : {}}
             fullWidth
           />
           <TextField
             label="End"
-            type={fieldDef.type === 'date' ? 'date' : 'number'}
+            type={fieldDef.type === 'date' ? 'date' : fieldDef.type === 'number' ? 'number' : 'text'}
             value={end}
             onChange={(e) => {
-              const newValue = `${start},${e.target.value}`
-              setCurrentFilter({ ...currentFilter, value: newValue })
+              const newEnd = e.target.value
+              let newPair
+              if (fieldDef.type === 'number') {
+                newPair = [start === '' ? '' : Number(start), newEnd === '' ? '' : Number(newEnd)]
+              } else if (fieldDef.type === 'boolean') {
+                newPair = [start === 'true', newEnd === 'true']
+              } else {
+                newPair = [start, newEnd]
+              }
+              setCurrentFilter({ ...currentFilter, value: newPair })
             }}
             InputLabelProps={fieldDef.type === 'date' ? { shrink: true } : {}}
             fullWidth
@@ -400,9 +546,9 @@ function ProjectPlanning({ user, projectId }) {
           <InputLabel>Values</InputLabel>
           <Select
             multiple
-            value={currentFilter.value ? currentFilter.value.split(',') : []}
+            value={Array.isArray(currentFilter.value) ? currentFilter.value : (currentFilter.value ? String(currentFilter.value).split(',') : [])}
             label="Values"
-            onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value.join(',') })}
+            onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
           >
             {(fieldDef.options || []).map(opt => (
               <MenuItem key={opt} value={opt}>{opt}</MenuItem>
@@ -418,7 +564,7 @@ function ProjectPlanning({ user, projectId }) {
         <FormControl fullWidth>
           <InputLabel>Value</InputLabel>
           <Select
-            value={currentFilter.value}
+            value={currentFilter.value ?? ''}
             label="Value"
             onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
           >
@@ -436,12 +582,12 @@ function ProjectPlanning({ user, projectId }) {
         <FormControl fullWidth>
           <InputLabel>Value</InputLabel>
           <Select
-            value={currentFilter.value}
+            value={currentFilter.value === true || currentFilter.value === false ? currentFilter.value : ''}
             label="Value"
-            onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
+            onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value === 'true' ? true : e.target.value === 'false' ? false : e.target.value })}
           >
-            <MenuItem value="true">True</MenuItem>
-            <MenuItem value="false">False</MenuItem>
+            <MenuItem value={true}>True</MenuItem>
+            <MenuItem value={false}>False</MenuItem>
           </Select>
         </FormControl>
       )
@@ -485,9 +631,7 @@ function ProjectPlanning({ user, projectId }) {
     )
   }
 
-  const handleTabChange = (event, newValue) => {
-    setCurrentTab(newValue)
-  }
+  // Tabs removed
 
   const handlePageChange = (event, newPage) => {
     loadActivities(newPage + 1, pagination.rowsPerPage)
@@ -518,8 +662,7 @@ function ProjectPlanning({ user, projectId }) {
       state: {
         type,
         projectId: projectId || '',
-        returnTo: '/dashboard/projects',
-        planningTab: currentTab  // Preserve current tab
+        returnTo: '/dashboard/projects'
       }
     })
   }
@@ -527,8 +670,7 @@ function ProjectPlanning({ user, projectId }) {
   const openEdit = (activityId) => {
     navigate(`/dashboard/projects/activity/${activityId}`, {
       state: {
-        returnTo: '/dashboard/projects',
-        planningTab: currentTab  // Preserve current tab
+        returnTo: '/dashboard/projects'
       }
     })
   }
@@ -577,6 +719,34 @@ function ProjectPlanning({ user, projectId }) {
     return icons[type] || <CheckCircle size={18} />
   }
 
+  // Calculate due date styling based on days remaining
+  const getDueDateStyle = useCallback((dueDate, status) => {
+    // If status is Completed, use normal styling
+    if (status === 'Completed') {
+      return { color: 'inherit', fontWeight: 'normal' }
+    }
+
+    if (!dueDate) return { color: 'inherit', fontWeight: 'normal' }
+    
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const due = new Date(dueDate + 'T00:00:00')
+    const diffTime = due - today
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    
+    // Red and bold if on or after due date
+    if (diffDays <= 0) {
+      return { color: '#d32f2f', fontWeight: 'bold' }
+    }
+    // Yellow/Orange if within 3 days
+    if (diffDays <= 3) {
+      return { color: '#ed6c02', fontWeight: 'normal' }
+    }
+    // Default color
+    return { color: 'inherit', fontWeight: 'normal' }
+  }, [])
+
   // Render cell value based on field type
   const renderCellValue = (activity, fieldName) => {
     const value = activity[fieldName]
@@ -595,17 +765,9 @@ function ProjectPlanning({ user, projectId }) {
     
     if (fieldName === 'subject') {
       return (
-        <>
-          <Typography variant="body2" fontWeight="medium">
-            {value}
-          </Typography>
-          {activity.description && (
-            <Typography variant="caption" color="text.secondary">
-              {activity.description.substring(0, 50)}
-              {activity.description.length > 50 ? '...' : ''}
-            </Typography>
-          )}
-        </>
+        <Typography variant="body2" fontWeight="medium">
+          {value}
+        </Typography>
       )
     }
     
@@ -627,8 +789,17 @@ function ProjectPlanning({ user, projectId }) {
       )
     }
     
-    if (fieldName === 'start_date' || fieldName === 'due_date') {
-      return value ? new Date(value).toLocaleDateString() : '-'
+    if (fieldName === 'start_date') {
+      return formatDate(value)
+    }
+    
+    if (fieldName === 'due_date') {
+      const dateStyle = getDueDateStyle(value, activity.status)
+      return (
+        <Typography variant="body2" sx={{ color: dateStyle.color, fontWeight: dateStyle.fontWeight }}>
+          {formatDate(value)}
+        </Typography>
+      )
     }
     
     if (fieldName === 'progress') {
@@ -646,20 +817,14 @@ function ProjectPlanning({ user, projectId }) {
         <Button
           variant="contained"
           startIcon={<Plus size={20} />}
-          onClick={() => openCreate(ACTIVITY_TYPES[currentTab])}
+          onClick={() => openCreate()}
         >
-          Create {ACTIVITY_TYPES[currentTab]}
+          Create Activity
         </Button>
       </Box>
 
       <Card>
-        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={currentTab} onChange={handleTabChange}>
-            <Tab label="Milestones" />
-            <Tab label="Phases" />
-            <Tab label="Tasks" />
-          </Tabs>
-        </Box>
+        {/* Tabs removed: showing all activity types */}
 
         <CardContent>
           {/* Header Bar with Filters and Actions */}
@@ -667,7 +832,7 @@ function ProjectPlanning({ user, projectId }) {
             {/* LEFT SIDE: Table Info */}
             <Box>
               <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary', mb: 0.5 }}>
-                {ACTIVITY_TYPES[currentTab]} List
+                Activities List
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 {pagination.total} {pagination.total === 1 ? 'item' : 'items'} total
@@ -771,7 +936,7 @@ function ProjectPlanning({ user, projectId }) {
                 <Table>
                   <TableHead>
                     <TableRow>
-                      {fieldMetadata.map((field) => (
+                      {orderedFields.map((field) => (
                         visibleColumns[field.name] && (
                           <TableCell key={field.name}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort(field.name)}>
@@ -789,14 +954,14 @@ function ProjectPlanning({ user, projectId }) {
                       <TableRow>
                         <TableCell colSpan={Object.values(visibleColumns).filter(v => v).length + 1} align="center">
                           <Typography variant="body2" color="text.secondary">
-                            No {ACTIVITY_TYPES[currentTab].toLowerCase()}s found. Create one to get started.
+                            No activities found. Create one to get started.
                           </Typography>
                         </TableCell>
                       </TableRow>
                     ) : (
                       activities.map((activity) => (
                         <TableRow key={activity.id} hover>
-                          {fieldMetadata.map((field) => (
+                          {orderedFields.map((field) => (
                             visibleColumns[field.name] && (
                               <TableCell key={field.name}>
                                 {renderCellValue(activity, field.name)}

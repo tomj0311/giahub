@@ -123,7 +123,6 @@ class AgentRuntimeService:
                 search_paths.append(conv_path)
             
             if not search_paths:
-                logger.debug("[AGENT] No search paths configured for image search")
                 return images
             
             # Get MinIO base URL for image URLs
@@ -136,14 +135,11 @@ class AgentRuntimeService:
             logger.info(f"[AGENT] Searching for images in paths: {search_paths}")
             
             for prefix in search_paths:
-                logger.debug(f"[AGENT] Checking images in prefix: {prefix}")
                 try:
                     # List all files in this path using FileService
                     file_list = await FileService.list_files_at_path(prefix)
                     
                     for file_path in file_list:
-                        logger.debug(f"[AGENT] Found file: {file_path}")
-                        
                         # Check if it's an image file
                         file_ext = os.path.splitext(file_path.lower())[1]
                         if file_ext in image_extensions:
@@ -161,7 +157,6 @@ class AgentRuntimeService:
                             try:
                                 image_data = await FileService.get_file_content_from_path(file_path)
                                 base_64_image = base64.b64encode(image_data).decode("utf-8")
-                                logger.debug(f"[AGENT] Downloaded base64 data for {file_path}, length: {len(base_64_image)}")
                             except Exception as e:
                                 logger.warning(f"[AGENT] Failed to download image {file_path}: {e}")
                             
@@ -211,7 +206,6 @@ class AgentRuntimeService:
                 try:
                     model_id = model_ref if isinstance(model_ref, str) else model_ref.get("id")
                     if model_id:
-                        logger.debug(f"Loading model config for ID: {model_id}")
                         model_config = await ModelConfigService.get_model_config_by_id(model_id, user)
                         if model_config:
                             model_strategy = model_config.get("model", {}).get("strategy")
@@ -221,11 +215,8 @@ class AgentRuntimeService:
                                 model_class = module_loader(model_strategy)
                                 if model_class:
                                     model = model_class(**model_params)
-                                    logger.debug(f"Model created successfully")
                 except Exception as e:
                     logger.warning(f"Failed to load model {model_ref}: {e}")
-                    import traceback
-                    logger.debug(f"Model loading traceback: {traceback.format_exc()}")
             
             # Load tools configurations
             tools = []
@@ -244,18 +235,13 @@ class AgentRuntimeService:
                                     if tool_class:
                                         tool_instance = tool_class(**tool_params)
                                         tools.append(tool_instance)
-                                        logger.debug(f"Tool loaded: {type(tool_instance)}")
                     except Exception as e:
                         logger.warning(f"Failed to load tool {tool_id}: {e}")
-                        import traceback
-                        logger.debug(f"Tool loading traceback: {traceback.format_exc()}")
             
             # Load knowledge collection names and create custom retriever
             collection_names = []
             embedder_config = None
             conv_id = agent_config.get("conv_id")
-            
-            logger.debug(f"Processing collections for conv_id: {conv_id}")
             
             # Handle collections object with multiple collection IDs
             collections_config = agent_config.get("collections", {})
@@ -267,7 +253,6 @@ class AgentRuntimeService:
                             if knowledge_config:
                                 vector_collection_name = knowledge_config.get("vector_collection")
                                 collection_names.append(vector_collection_name)
-                                logger.debug(f"Added collection: {vector_collection_name}")
                                 
                     except Exception as e:
                         logger.warning(f"Failed to load knowledge collection {collection_id}: {e}")
@@ -285,7 +270,6 @@ class AgentRuntimeService:
                         embedder_class = module_loader(embedder_strategy)
                         if embedder_class:
                             embedder = embedder_class(**embedder_params)
-                            logger.debug(f"Embedder created successfully")
                 except Exception as e:
                     logger.warning(f"Failed to load embedder: {e}")
             
@@ -294,15 +278,11 @@ class AgentRuntimeService:
             # Use the current user's ID from the request, not the agent's stored userId
             current_user_id = user.get('id') or user.get('userId')
             session_collection = f"{conv_id}_{current_user_id}"
-            logger.debug(f"Session collection name: {session_collection}")
             if collection_names or conv_id:
-                logger.debug(f"Creating custom retriever with {len(collection_names)} collections")
                 custom_retriever = _create_multi_collection_retriever(collection_names, session_collection, embedder)
             
             memory_config = agent_config.get("memory", {})
             history_config = memory_config.get("history", {})
-            
-            logger.debug(f"Creating Agent instance...")
             
             # Use agent config as-is and add runtime-specific parameters
             kwargs = {
@@ -324,7 +304,6 @@ class AgentRuntimeService:
             
             try:
                 agent = Agent(**kwargs)
-                logger.debug(f"Agent created successfully")
             except Exception as e:
                 logger.error(f"Error creating Agent: {e}")
                 import traceback
@@ -342,15 +321,12 @@ class AgentRuntimeService:
     @classmethod
     async def run_agent_stream(cls, agent: Any, prompt: str, user: Dict[str, Any], conv_id: Optional[str] = None, cancel_event: Optional[asyncio.Event] = None, stream: bool = True) -> AsyncGenerator[Dict[str, Any], None]:
         try:
-            logger.debug(f"Starting run_agent_stream with agent type: {type(agent)}")
-            
             # Search for images to include with the agent run
             agent_images = await cls._search_images_for_agent(user, conv_id)
             images_for_run = []
             
             # Convert image objects to format expected by agent
             if agent_images:
-                logger.debug(f"Processing {len(agent_images)} images")
                 for img in agent_images:
                     if img.get('base_64_image'):
                         # Use base64 data if available
@@ -612,8 +588,6 @@ class AgentRuntimeService:
                             aggregate_metrics["avg_time_to_first_token"] = ttft
                     
                     run_data["metrics"] = aggregate_metrics
-                else:
-                    logger.debug("No metrics found in response or model")
                 
                 run_data["response"] = response_data
                 

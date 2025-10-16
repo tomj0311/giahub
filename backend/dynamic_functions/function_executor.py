@@ -4,6 +4,9 @@ import inspect
 from typing import Dict, List, Any, Callable
 import pkgutil
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class DynamicFunctionExecutor:
@@ -137,7 +140,7 @@ class DynamicFunctionExecutor:
                 if functions:  # Only include modules that have functions
                     all_functions[module_name] = functions
             except Exception as e:
-                print(f"Error loading module '{module_name}': {e}")
+                logger.error(f"Error loading module '{module_name}': {e}")
         
         return all_functions
     

@@ -12,9 +12,6 @@ from ..utils.log import logger
 from ..utils.mongo_storage import MongoStorageService
 from src.utils.component_discovery import discover_components, get_detailed_class_info
 
-# Module loaded log
-logger.debug("[TOOL] Service module loaded")
-
 
 class ToolConfigService:
     """Service for managing tool configurations"""
@@ -81,7 +78,6 @@ class ToolConfigService:
         query = {}
         if category:
             query["category"] = category
-        logger.debug(f"[TOOL] Query filter: {query}")
         
         configs_list = await MongoStorageService.find_many("toolConfig", query, tenant_id=tenant_id)
         configs = []
@@ -109,7 +105,6 @@ class ToolConfigService:
     ) -> Dict[str, Any]:
         """Get tool configurations with pagination, filtering, and sorting"""
         tenant_id = await cls.validate_tenant_access(user)
-        logger.debug(f"[TOOLS] Listing tools for tenant: {tenant_id}, page: {page}, category: {category}")
         
         try:
             # Build filter query
@@ -228,7 +223,6 @@ class ToolConfigService:
         from bson import ObjectId
         tenant_id = await cls.validate_tenant_access(user)
         logger.info(f"[TOOL] Updating tool config ID '{config_id}' for tenant: {tenant_id}")
-        logger.debug(f"[TOOL] Update payload: {updates}")
         
         try:
             object_id = ObjectId(config_id)
@@ -340,7 +334,6 @@ class ToolConfigService:
     async def get_tool_categories(cls, user: dict) -> List[str]:
         """Get all unique categories for the user's tenant"""
         tenant_id = await cls.validate_tenant_access(user)
-        logger.debug(f"[TOOL] Fetching tool categories for tenant: {tenant_id}")
         
         categories = await MongoStorageService.distinct("toolConfig", "category", {}, tenant_id=tenant_id)
         

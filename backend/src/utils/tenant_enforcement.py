@@ -37,13 +37,12 @@ def validate_tenant_id_required(operation: str, collection_name: str, data: Dict
     """
     # Skip validation for exempt collections
     if collection_name in EXEMPT_COLLECTIONS:
-        logger.debug(f"[TENANT_ENFORCEMENT] Skipping tenant_id validation for exempt collection: {collection_name}")
         return
     
     # Check if tenant_id is present
     tenant_id = data.get("tenantId")
     if not tenant_id:
-        error_msg = f"[TENANT_ENFORCEMENT] CRITICAL: {operation} operation on '{collection_name}' collection REQUIRES tenant_id but none found!"
+        error_msg = f"CRITICAL: {operation} operation on '{collection_name}' collection REQUIRES tenant_id but none found!"
         if user_id:
             error_msg += f" User ID: {user_id}"
         logger.error(error_msg)
@@ -88,7 +87,6 @@ async def ensure_tenant_id_in_record(user_id: str, record: Dict[str, Any], colle
     
     record = record.copy()
     record["tenantId"] = user_tenant_id
-    logger.debug(f"[TENANT_ENFORCEMENT] Added tenant_id {user_tenant_id} to {collection_name} record")
     return record
 
 async def validate_tenant_query(user_id: str, query: Dict[str, Any], collection_name: str) -> Dict[str, Any]:
@@ -118,7 +116,6 @@ async def validate_tenant_query(user_id: str, query: Dict[str, Any], collection_
     query = query.copy()
     if "tenantId" not in query:
         query["tenantId"] = user_tenant_id
-        logger.debug(f"[TENANT_ENFORCEMENT] Added tenant filter {user_tenant_id} to {collection_name} query")
     
     return query
 
@@ -132,7 +129,7 @@ def tenant_enforcement_decorator(func):
         try:
             return await func(*args, **kwargs)
         except TenantEnforcementError as e:
-            logger.error(f"[TENANT_ENFORCEMENT] {str(e)}")
+            logger.error(f"Tenant enforcement error: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e)

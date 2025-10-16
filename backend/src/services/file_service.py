@@ -77,7 +77,6 @@ class FileService:
 
         # Check file extension
         file_extension = os.path.splitext(file.filename.lower())[1]
-        logger.debug(f"[FILE] File extension: {file_extension}")
 
         if file_extension not in cls.ALLOWED_EXTENSIONS:
             logger.warning(
@@ -298,7 +297,6 @@ class FileService:
         try:
             if os.path.exists(file_path):
                 os.remove(file_path)
-                logger.debug(f"[FILE] Cleaned up temp file: {file_path}")
         except Exception as e:
             logger.warning(f"[FILE] Failed to cleanup temp file {file_path}: {e}")
 
@@ -430,7 +428,6 @@ class FileService:
                         
                     if success:
                         deleted_files.append(file_path)
-                        logger.debug(f"[FILE] Deleted file: {file_path}")
                     else:
                         failed_files.append(file_path)
                         logger.warning(f"[FILE] Failed to delete file: {file_path}")

@@ -38,33 +38,25 @@ async def stream_agent_response(
 ) -> AsyncGenerator[str, None]:
     """Stream agent response using Server-Sent Events format."""
     
-    # Generate correlation ID
     correlation_id = str(uuid.uuid4())
-    logger.info(f"[AGENT_RUNTIME] Starting agent response stream with correlation ID: {correlation_id}")
-    logger.debug(f"[AGENT_RUNTIME] Request parameters - agent: {agent_name}, conv_id: {conv_id}, user: {user_id}, tenant: {tenant_id}")
     
     try:
-        # Create user object for service calls
         user = {"id": user_id, "userId": user_id, "tenantId": tenant_id}
         
-        # Send start event
         yield f"data: {json.dumps({'type': 'agent_run_started', 'correlation_id': correlation_id, 'payload': {'file': agent_name}})}\n\n"
         
-        # Execute agent using the runtime service
         async for response in AgentRuntimeService.execute_agent(
             agent_name=agent_name,
             prompt=prompt,
             user=user,
             conv_id=conv_id
         ):
-            # Add correlation ID to response
             response['correlation_id'] = correlation_id
             
-            # Send event as SSE
             yield f"data: {json.dumps(response)}\n\n"
             
     except Exception as e:
-        logger.error(f"[AGENT_RUNTIME] Error in agent response stream: {e}")
+        logger.error(f"Error in agent response stream: {e}")
         yield f"data: {json.dumps({'type': 'error', 'error': str(e), 'correlation_id': correlation_id})}\n\n"
 
 
@@ -112,15 +104,11 @@ async def run_agent(
                 valid_files.append(f)
         
         if valid_files:
-            logger.info(f"[AGENT_RUNTIME] Processing {len(valid_files)} uploaded files")
-            
-            # Use conversation ID as collection name for file storage
             collection_name = conv_id or f"conv_{uuid.uuid4()}"
             if not conv_id:
                 conv_id = collection_name
             
             try:
-                # Upload files using FileService
                 for file in valid_files:
                     file_info = await FileService.upload_file_to_storage(
                         file=file,
@@ -129,56 +117,34 @@ async def run_agent(
                         collection=collection_name
                     )
                     uploaded_file_names.append(file_info["filename"])
-                    logger.info(f"[AGENT_RUNTIME] Successfully uploaded file: {file_info['filename']}")
                 
-                logger.info(f"[AGENT_RUNTIME] All files uploaded successfully: {uploaded_file_names}")
-                
-                # Index uploaded files using VectorService
                 try:
-                    logger.info(f"[AGENT_RUNTIME] Starting vector indexing for collection: {collection_name}")
-                    
-                    # Get agent configuration to extract model_id
                     model_id = None
                     try:
                         agent_doc = await AgentService.get_agent_by_name(agent_name, user)
                         if agent_doc and "model" in agent_doc and isinstance(agent_doc["model"], dict):
                             model_id = agent_doc["model"].get("id")
-                            if model_id:
-                                logger.info(f"[AGENT_RUNTIME] Found model_id from agent config: {model_id}")
-                            else:
-                                logger.warning(f"[AGENT_RUNTIME] No model id found in agent model config for {agent_name}")
-                        else:
-                            logger.warning(f"[AGENT_RUNTIME] No model config found in agent config for {agent_name}")
                     except Exception as e:
-                        logger.error(f"[AGENT_RUNTIME] Failed to get agent config: {str(e)}")
+                        logger.error(f"Failed to get agent config: {str(e)}")
                     
-                    # Create payload for vector indexing
                     vector_payload = {
                         "collection": collection_name,
                     }
                     
-                    # Add model_id if available
                     if model_id:
                         vector_payload["model_id"] = model_id
                     
-                    indexing_success = await VectorService.index_knowledge_files(
+                    await VectorService.index_knowledge_files(
                         user=user,
                         collection=collection_name,
                         payload=vector_payload
                     )
-                    
-                    if indexing_success:
-                        logger.info(f"[AGENT_RUNTIME] Successfully indexed files in vector database for collection: {collection_name}")
-                    else:
-                        logger.warning(f"[AGENT_RUNTIME] Vector indexing completed with some issues for collection: {collection_name}")
                         
                 except Exception as e:
-                    logger.error(f"[AGENT_RUNTIME] Vector indexing failed: {str(e)}")
-                    # Don't fail the entire request if indexing fails - files are still uploaded
-                    logger.warning("[AGENT_RUNTIME] Continuing without vector indexing due to indexing failure")
+                    logger.error(f"Vector indexing failed: {str(e)}")
                 
             except Exception as e:
-                logger.error(f"[AGENT_RUNTIME] File upload failed: {str(e)}")
+                logger.error(f"File upload failed: {str(e)}")
                 raise HTTPException(
                     status_code=500, 
                     detail=f"File upload failed: {str(e)}"
@@ -207,12 +173,7 @@ async def debug_conversations(user: dict = Depends(verify_token_middleware)):
     tenant_id = user.get("tenantId")
     user_id = user.get("id") or user.get("userId")
     
-    logger.info(f"[DEBUG] User object: {user}")
-    logger.info(f"[DEBUG] Tenant ID: {tenant_id}")
-    logger.info(f"[DEBUG] User ID: {user_id}")
-    
     try:
-        # Check total conversations without tenant filtering
         from ..utils.mongo_storage import MongoStorageService
         collections = MongoStorageService._get_collections()
         conversations_collection = collections.get("conversations")
@@ -227,11 +188,6 @@ async def debug_conversations(user: dict = Depends(verify_token_middleware)):
             else:
                 total_tenant = 0
                 tenant_docs = []
-            
-            logger.info(f"[DEBUG] Total conversations: {total_all}")
-            logger.info(f"[DEBUG] Tenant conversations: {total_tenant}")
-            logger.info(f"[DEBUG] Sample all docs: {[{k: v for k, v in doc.items() if k != '_id'} for doc in all_docs[:2]]}")
-            logger.info(f"[DEBUG] Sample tenant docs: {[{k: v for k, v in doc.items() if k != '_id'} for doc in tenant_docs[:2]]}")
             
             return {
                 "user": user,

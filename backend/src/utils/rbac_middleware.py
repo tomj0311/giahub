@@ -24,7 +24,6 @@ def require_roles(required_roles: List[str]):
     def decorator(func: Callable):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            logger.debug(f"[RBAC] Checking role requirements: {required_roles}")
             # Get user from token middleware
             user = None
             for arg in args:
@@ -37,7 +36,7 @@ def require_roles(required_roles: List[str]):
                 user = kwargs.get("user")
             
             if not user:
-                logger.warning("[RBAC] Authentication required - no user found")
+                logger.warning("Authentication required - no user found")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Authentication required"
@@ -45,23 +44,21 @@ def require_roles(required_roles: List[str]):
             
             user_id = user.get("id")
             if not user_id:
-                logger.warning("[RBAC] Invalid user - no user ID found")
+                logger.warning("Invalid user - no user ID found")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid user"
                 )
             
-            logger.debug(f"[RBAC] Checking access for user: {user_id}")
             # Check if user has any of the required roles
             has_access = await RBACService.can_user_access_resource(user_id, required_roles)
             if not has_access:
-                logger.warning(f"[RBAC] Access denied for user {user_id}. Required roles: {required_roles}")
+                logger.warning(f"Access denied for user {user_id}. Required roles: {required_roles}")
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Access denied. Required roles: {', '.join(required_roles)}"
                 )
             
-            logger.debug(f"[RBAC] Access granted for user: {user_id}")
             return await func(*args, **kwargs)
         return wrapper
     return decorator
@@ -79,9 +76,7 @@ async def filter_records_by_roles(user_id: str, records: List[Dict], role_field:
     Returns:
         Filtered list of records user can access
     """
-    logger.debug(f"[RBAC] Filtering {len(records)} records for user: {user_id}")
     filtered_records = await RBACService.filter_accessible_records(user_id, records, role_field)
-    logger.debug(f"[RBAC] User {user_id} can access {len(filtered_records)} out of {len(records)} records")
     return filtered_records
 
 
@@ -97,12 +92,8 @@ async def can_user_access_record(user_id: str, record: Dict, role_field: str = "
     Returns:
         True if user can access the record
     """
-    logger.debug(f"[RBAC] Checking record access for user: {user_id}")
     required_roles = record.get(role_field, [])
-    logger.debug(f"[RBAC] Record requires roles: {required_roles}")
-    
     can_access = await RBACService.can_user_access_resource(user_id, required_roles)
-    logger.debug(f"[RBAC] User {user_id} {'can' if can_access else 'cannot'} access record")
     return can_access
 
 

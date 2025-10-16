@@ -12,9 +12,6 @@ from fastapi import HTTPException, status
 from ..utils.log import logger
 from ..utils.mongo_storage import MongoStorageService
 
-# Module loaded log
-logger.debug("[AGENTS] Service module loaded")
-
 
 class AgentService:
     """Service for managing agents"""
@@ -43,7 +40,6 @@ class AgentService:
     ) -> Dict[str, Any]:
         """List agents with pagination, filtering, and sorting"""
         tenant_id = await cls.validate_tenant_access(user)
-        logger.debug(f"[AGENTS] Listing agents for tenant: {tenant_id}, page: {page}, category: {category}")
         
         try:
             # Build filter query
@@ -312,7 +308,6 @@ class AgentService:
             
             # If not found, try with regex to handle whitespace variations
             if not doc:
-                logger.debug(f"[AGENTS] Exact match failed, trying with whitespace handling")
                 # Use regex to match with optional leading/trailing whitespace
                 import re
                 pattern = f"^\\s*{re.escape(trimmed_name)}\\s*$"
@@ -366,11 +361,9 @@ class AgentService:
                     tenant_id=tenant_id,
                 )
             if existing:
-                logger.debug(f"[AGENTS] Updating existing agent '{name}' for tenant: {tenant_id}")
                 await MongoStorageService.update_one("agents", {"_id": existing["_id"]}, {"$set": record}, tenant_id=tenant_id)
                 action = "updated"
             else:
-                logger.debug(f"[AGENTS] Creating new agent '{name}' for tenant: {tenant_id}")
                 record["created_at"] = datetime.utcnow()
                 await MongoStorageService.insert_one("agents", record, tenant_id=tenant_id)
                 action = "created"
