@@ -26,7 +26,6 @@ class TenantService:
         
         tenant_id = str(uuid.uuid4())
         tenant_name = f"Organization of {user_email.split('@')[0]}"
-        logger.debug(f"[TENANT] Generated tenant ID: {tenant_id}, name: {tenant_name}")
         
         tenant_data = {
             "tenantId": tenant_id,
@@ -87,11 +86,10 @@ class TenantService:
     @staticmethod
     async def get_tenant_by_id(tenant_id: str) -> Optional[Dict]:
         """Get tenant by ID"""
-        logger.debug(f"[TENANT] Fetching tenant by ID: {tenant_id}")
 
         tenant = await MongoStorageService.find_one("tenants", {"tenantId": tenant_id})
         if tenant:
-            logger.debug(f"[TENANT] Found tenant: {tenant['name']}")
+            pass
         else:
             logger.warning(f"[TENANT] Tenant not found: {tenant_id}")
         return tenant
@@ -99,14 +97,13 @@ class TenantService:
     @staticmethod
     async def get_user_tenant_id(user_id: str) -> Optional[str]:
         """Get tenant_id for a user"""
-        logger.debug(f"[TENANT] Getting tenant ID for user: {user_id}")
 
         # Use MongoStorageService properly - users collection is exempt from tenant enforcement during OAuth flows
         user = await MongoStorageService.find_one("users", {"_id": user_id})
             
         tenant_id = user.get("tenantId") if user else None
         if tenant_id:
-            logger.debug(f"[TENANT] User {user_id} belongs to tenant: {tenant_id}")
+            pass
         else:
             logger.warning(f"[TENANT] No tenant found for user: {user_id}")
         return tenant_id
@@ -114,7 +111,6 @@ class TenantService:
     @staticmethod
     async def get_user_tenant_info(user_id: str) -> Optional[Dict]:
         """Get tenant information for a user"""
-        logger.debug(f"[TENANT] Getting tenant info for user: {user_id}")
         
         # Get user's tenant_id
         tenant_id = await TenantService.get_user_tenant_id(user_id)

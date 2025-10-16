@@ -19,7 +19,6 @@ class TaskNotificationService:
         try:
             # Check if task has extensions with email addresses
             if not hasattr(task.task_spec, 'extensions') or not task.task_spec.extensions:
-                logger.debug(f"[TASK_NOTIFY] No extensions found for task {task.task_spec.bpmn_id}")
                 return
 
             extensions = task.task_spec.extensions
@@ -45,7 +44,6 @@ class TaskNotificationService:
             email_data = [item for item in email_data if item['email'] and '@' in item['email']]
 
             if not email_data:
-                logger.debug(f"[TASK_NOTIFY] No email addresses found in task {task.task_spec.bpmn_id} extensions")
                 return
 
             logger.info(f"[TASK_NOTIFY] Sending task assignment emails to: {[item['email'] for item in email_data]}")

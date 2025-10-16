@@ -34,8 +34,6 @@ from .workflow_bpmn_parser import EnhancedBpmnTaskParser
 from .agent_runtime_service import AgentRuntimeService
 from .workflow_notification_service import TaskNotificationService
 
-logger.debug("[WORKFLOW] Persistent service module loaded")
-
 
 def _clean_data_for_serialization(data):
     """Recursively clean data to make it JSON serializable - convert ObjectId to string"""
@@ -58,22 +56,18 @@ class WorkflowServicePersistent:
         """Execute workflow one step at a time with centralized status updates"""
         try:
             tenant_id = await cls.validate_tenant_access(user)
-            logger.debug(f"[WORKFLOW] Starting workflow execution - instance_id: {instance_id}")
             
             # Create instance if new
             if not instance_id:
                 instance_id = await cls.save_workflow_state(workflow, workflow_id, tenant_id, instance_id=instance_id)
-                logger.debug(f"[WORKFLOW] Created new instance: {instance_id}")
             else:
                 # Save initial state with provided instance_id
                 await cls.save_workflow_state(workflow, workflow_id, tenant_id, instance_id=instance_id)
-                logger.debug(f"[WORKFLOW] Saved instance: {instance_id}")
                 
             # Process until completion or user input needed
             step_count = 0
             while not workflow.is_completed():
                 step_count += 1
-                logger.debug(f"[WORKFLOW] Executing step {step_count}")
                 
                 # Get tasks that need processing - both READY and STARTED
                 ready_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY]
@@ -88,7 +82,6 @@ class WorkflowServicePersistent:
                     task_type = type(task.task_spec).__name__
                     if task_type == "NoneTask":
                         # NoneTask should not be executed - let SpiffWorkflow handle it according to standard
-                        logger.debug(f"[WORKFLOW] NoneTask detected: {task.task_spec.bpmn_id} - letting SpiffWorkflow handle according to standard")
                         # Don't try to execute or complete - let the engine handle it naturally
                         continue
                     elif task_type == "ServiceTask" and task.state == TaskState.STARTED:
@@ -128,7 +121,6 @@ class WorkflowServicePersistent:
                 
                 # Update status after each step
                 current_status = await cls._update_workflow_status(workflow, instance_id, tenant_id, step_count)
-                logger.debug(f"[WORKFLOW] Updated after step {step_count} with status: {current_status}")
                 
                 # Check if user input needed - check for manual tasks
                 ready_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY]
@@ -145,8 +137,6 @@ class WorkflowServicePersistent:
                             "current_task_type": task_type
                         })
                         
-                        logger.debug(f"[WORKFLOW] Waiting for user input for {task_type}: {task.task_spec.bpmn_id}")
-                            
                         try:
                             await TaskNotificationService.send_task_assignment_emails(task, workflow_id, instance_id)
                         except Exception as e:
@@ -183,9 +173,6 @@ class WorkflowServicePersistent:
         
         # Handle data outputs - this is the key part for BPMN 2.0
         if io_spec.data_outputs:
-            logger.debug(f"[WORKFLOW] Applying ioSpec output mapping for task {bpmn_id}")
-            logger.debug(f"[WORKFLOW] Available data keys: {list(data.keys())}")
-            logger.debug(f"[WORKFLOW] Expected outputs: {[out.bpmn_id for out in io_spec.data_outputs]}")
             
             filtered_data = {}
             
@@ -196,14 +183,12 @@ class WorkflowServicePersistent:
                 # Check if the output exists in the current task data
                 if output_id in data:
                     filtered_data[output_id] = data[output_id]
-                    logger.debug(f"[WORKFLOW] Mapped output {output_id} = {data[output_id]}")
                 else:
                     # Look for nested data (common pattern)
                     found = False
                     for key, value in data.items():
                         if isinstance(value, dict) and output_id in value:
                             filtered_data[output_id] = value[output_id]
-                            logger.debug(f"[WORKFLOW] Found nested output {output_id} in {key}")
                             found = True
                             break
                     
@@ -278,15 +263,12 @@ class WorkflowServicePersistent:
         if matches:
             # Join all code blocks with newlines
             code = '\n'.join(matches)
-            logger.debug(f"[WORKFLOW] Extracted code from markdown blocks: {len(code)} characters")
         else:
             # No markdown blocks found, use raw script as-is
-            logger.debug(f"[WORKFLOW] No markdown blocks found, using raw script")
             code = raw_script
         
         # Remove common leading whitespace to dedent the code
         code = textwrap.dedent(code).strip()
-        logger.debug(f"[WORKFLOW] Formatted code ready for execution: {len(code)} characters")
         return code
 
     @classmethod
@@ -313,8 +295,6 @@ class WorkflowServicePersistent:
             # Pass local variables from task.data
             local_vars = dict(task.data)
             initial_vars = set(local_vars.keys())
-            
-            logger.debug(f"[WORKFLOW] Executing code with variables: {list(local_vars.keys())}")
             
             # Execute the code locally (supports imports)
             exec(code, {}, local_vars)
@@ -354,7 +334,6 @@ class WorkflowServicePersistent:
             
             # Check if task has extension elements with service configuration
             if hasattr(task.task_spec, 'extensions') and task.task_spec.extensions:
-                logger.debug(f"[WORKFLOW] Found extensions in task {bpmn_id}: {task.task_spec.extensions}")
                 
                 service_config = task.task_spec.extensions.get('extensionElements').get('serviceConfiguration')
                 if service_config and 'function' in service_config:
@@ -364,23 +343,17 @@ class WorkflowServicePersistent:
                     parameters = function_config.get('parameters', {}).get('parameter', [])
                     
                     logger.info(f"[WORKFLOW] Executing function: {module_name}.{function_name}")
-                    logger.debug(f"[WORKFLOW] Task data available: {list(task.data.keys())}")
-                    logger.debug(f"[WORKFLOW] Parameters to map: {parameters}")
-                    logger.debug(f"[WORKFLOW] Parameters type: {type(parameters)}")
                     
                     # Normalize parameters to always be a list
                     if isinstance(parameters, dict):
                         parameters = [parameters]
-                        logger.debug(f"[WORKFLOW] Normalized single parameter dict to list: {parameters}")
                     
                     # Build function parameters from task data and config
                     function_params = {}
                     for param in parameters:
-                        logger.debug(f"[WORKFLOW] Current param in loop: {param}, type: {type(param)}")
                         if isinstance(param, dict):
                             param_name = param.get('name')
                             param_value = param.get('value')
-                            logger.debug(f"[WORKFLOW] Processing parameter - name: {param_name}, value: {param_value}")
                             
                             if param_name:
                                 # Check if value is in task data, otherwise use config value
@@ -509,7 +482,6 @@ class WorkflowServicePersistent:
     @staticmethod
     async def save_workflow_state(workflow, workflow_id, tenant_id=None, instance_id=None):
         """Serialize and save workflow state to MongoDB using upsert"""
-        logger.debug(f"[WORKFLOW] Saving workflow state for workflow_id='{workflow_id}' (tenant='{tenant_id}')")
         try:
             if not instance_id:
                 instance_id = uuid.uuid4().hex[:6]
@@ -519,7 +491,6 @@ class WorkflowServicePersistent:
 
             serializer = BpmnWorkflowSerializer()
             serialized_json = serializer.serialize_json(workflow)
-            logger.debug(f"[WORKFLOW] Workflow serialized (chars={len(serialized_json)}) for instance='{instance_id}'")
 
             data = {
                 "workflow_id": workflow_id,
@@ -600,7 +571,6 @@ class WorkflowServicePersistent:
     @staticmethod
     async def list_workflows_paginated(workflow_id: str, page: int = 1, size: int = 8, status: str = "all", user: dict = None):
         """List workflows with pagination and status filter"""
-        logger.debug(f"[WORKFLOW] Listing workflows for: {workflow_id}, page: {page}, size: {size}, status: {status}")
         try:
             # Build query based on status
             query = {"workflow_id": workflow_id}
@@ -636,7 +606,6 @@ class WorkflowServicePersistent:
                 }
                 workflows.append(workflow)
 
-            logger.debug(f"[WORKFLOW] Found {len(workflows)} workflows (total: {total})")
             return {
                 "data": workflows,
                 "total": total,
@@ -654,7 +623,6 @@ class WorkflowServicePersistent:
     @staticmethod
     async def get_workflow_instance(workflow_id: str, instance_id: str, tenant_id: Optional[str] = None, user: dict = None):
         """Get specific workflow instance by instance_id"""
-        logger.debug(f"[WORKFLOW] Getting instance {instance_id} for workflow {workflow_id}")
         try:
             query = {"workflow_id": workflow_id, "instance_id": instance_id}
             instance = await MongoStorageService.find_one("workflowInstances", query, tenant_id=tenant_id)
@@ -692,7 +660,6 @@ class WorkflowServicePersistent:
     @staticmethod
     async def delete_workflow_instance(workflow_id: str, instance_id: str, tenant_id: Optional[str] = None, user: dict = None):
         """Delete specific workflow instance by instance_id"""
-        logger.debug(f"[WORKFLOW] Deleting instance {instance_id} for workflow {workflow_id}")
         try:
             query = {"workflow_id": workflow_id, "instance_id": instance_id}
             success = await MongoStorageService.delete_one("workflowInstances", query, tenant_id=tenant_id)
@@ -888,7 +855,6 @@ class WorkflowServicePersistent:
             from backend.src.services.file_service import FileService
 
             # Get workflow config from MongoDB
-            logger.debug(f"[WORKFLOW] Fetching workflow config for ID: {workflow_id}, tenant: {tenant_id}")
             config = await MongoStorageService.find_one(
                 "workflowConfig", {"_id": ObjectId(workflow_id)}, tenant_id=tenant_id
             )
@@ -910,7 +876,6 @@ class WorkflowServicePersistent:
                 )
 
             # Get BPMN XML from file storage
-            logger.debug(f"[WORKFLOW] Loading BPMN file from path: {file_path}")
             bpmn_content = await FileService.get_file_content_from_path(file_path)
             return bpmn_content.decode("utf-8")
         

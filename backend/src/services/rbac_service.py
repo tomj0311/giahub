@@ -36,7 +36,6 @@ class RBACService:
         
         if permissions is None:
             permissions = []
-        logger.debug(f"[RBAC] Role permissions: {permissions}")
 
         # Uniqueness: per-owner and per-tenant scope. 
         # Check for existing role with same name in same tenant/owner context
@@ -54,7 +53,6 @@ class RBACService:
             return existing  # Return existing role instead of throwing error for OAuth flows
         
         role_id = str(uuid.uuid4())
-        logger.debug(f"[RBAC] Generated role ID: {role_id}")
         
         role_data = {
             "roleId": role_id,
@@ -83,7 +81,6 @@ class RBACService:
     @staticmethod
     async def get_role_by_name(role_name: str, tenant_id: Optional[str] = None) -> Optional[Dict]:
         """Get role by name"""
-        logger.debug(f"[RBAC] Fetching role by name: {role_name}")
         # Support legacy 'name' as well
         role = await MongoStorageService.find_one("roles", {
             "$or": [
@@ -92,7 +89,7 @@ class RBACService:
             ]
         }, tenant_id=tenant_id)
         if role:
-            logger.debug(f"[RBAC] Found role: {role['roleName']} (ID: {role.get('roleId', 'N/A')})")
+            pass
         else:
             logger.warning(f"[RBAC] Role not found: {role_name}")
         return role
@@ -100,7 +97,6 @@ class RBACService:
     @staticmethod
     async def get_role_by_id(role_id: str, tenant_id: Optional[str] = None) -> Optional[Dict]:
         """Get role by ID"""
-        logger.debug(f"[RBAC] Fetching role by ID: {role_id}")
         role = await MongoStorageService.find_one("roles", {
             "$or": [
                 {"roleId": role_id},
@@ -108,7 +104,7 @@ class RBACService:
             ]
         }, tenant_id=tenant_id)
         if role:
-            logger.debug(f"[RBAC] Found role: {role.get('roleName', 'N/A')}")
+            pass
         else:
             logger.warning(f"[RBAC] Role not found by ID: {role_id}")
         return role

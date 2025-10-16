@@ -87,9 +87,6 @@ class ActivityNotificationService:
             "tenantId": tenant_id,
         }
         
-        logger.info(f"[NOTIFICATION_CREATE] Storing notification with activity_id='{activity_id}' (type: {type(activity_id).__name__})")
-        logger.info(f"[NOTIFICATION_CREATE] Document to be inserted: {doc}")
-        
         # Save to MongoDB
         notification_id = await MongoStorageService.insert_one(
             "activityNotifications",
@@ -105,19 +102,6 @@ class ActivityNotificationService:
             )
         
         logger.info(f"[NOTIFICATION_CREATE] ✅ Successfully saved notification with ID: {notification_id}")
-        
-        # VERIFY: Read back the saved notification to confirm it's in the database
-        from bson import ObjectId
-        saved_notification = await MongoStorageService.find_one(
-            "activityNotifications",
-            {"_id": ObjectId(notification_id)},
-            tenant_id=tenant_id
-        )
-        
-        if saved_notification:
-            logger.info(f"[NOTIFICATION_CREATE] ✅ VERIFIED: Notification exists in database with activity_id={saved_notification.get('activity_id')}")
-        else:
-            logger.error(f"[NOTIFICATION_CREATE] ❌ VERIFICATION FAILED: Notification not found in database after insert!")
         
         # Send emails to mentioned users
         if mentioned_users:
@@ -142,8 +126,6 @@ class ActivityNotificationService:
             "created_at": doc["created_at"].isoformat(),
             "tenantId": tenant_id,
         }
-        
-        logger.info(f"[NOTIFICATION_CREATE] ✅ Returning response: {response_doc}")
         
         return {
             "message": "Notification created successfully",
@@ -217,8 +199,6 @@ You were mentioned in a notification for activity: <strong>{activity_subject}</s
         
         tenant_id = await cls.validate_tenant_access(user)
         
-        logger.info(f"[NOTIFICATION_GET] Requested activity_id='{activity_id}' (type: {type(activity_id).__name__}), tenant_id='{tenant_id}'")
-        
         try:
             # Validate activity exists
             try:
@@ -231,8 +211,6 @@ You were mentioned in a notification for activity: <strong>{activity_subject}</s
             
             # Fetch notifications with EXACT match on activity_id
             query_filter = {"activity_id": activity_id}
-            logger.info(f"[NOTIFICATION_QUERY] Query filter: {query_filter}")
-            logger.info(f"[NOTIFICATION_QUERY] Tenant ID: {tenant_id}")
             
             # ALSO query ALL notifications for this tenant to see what's in the database
             all_notifications = await MongoStorageService.find_many(

@@ -8,8 +8,6 @@ class MenuService:
     @staticmethod
     async def get_menu_items() -> List[Dict[str, Any]]:
         """Get all active menu items, organized hierarchically"""
-        logger.debug("[MENU] Retrieving menu items")
-        
         try:
             # Get all active menu items ordered by order field
             items = await MongoStorageService.find_many(
@@ -18,7 +16,6 @@ class MenuService:
                 sort_field="order",
                 sort_order=1
             )
-            logger.debug(f"[MENU] Retrieved {len(items)} active menu items")
             
             # Convert ObjectId to string for JSON serialization
             for item in items:
@@ -28,7 +25,6 @@ class MenuService:
             
             # Organize into hierarchy
             organized_items = MenuService._organize_hierarchy(items)
-            logger.debug(f"[MENU] Organized into {len(organized_items)} root menu items")
             return organized_items
         except Exception as e:
             logger.error(f"[MENU] Failed to retrieve menu items: {e}")
@@ -37,7 +33,6 @@ class MenuService:
     @staticmethod
     def _organize_hierarchy(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Organize flat list into hierarchical structure"""
-        logger.debug(f"[MENU] Organizing {len(items)} items into hierarchy")
         item_map = {item['_id']: item for item in items}
         root_items = []
         
@@ -53,7 +48,6 @@ class MenuService:
             else:
                 root_items.append(item)
         
-        logger.debug(f"[MENU] Hierarchy organized: {len(root_items)} root items")
         return root_items
     
     @staticmethod
@@ -117,7 +111,6 @@ class MenuService:
                 inserted_ids.append(item_id)
             
             item_ids = {item['label']: inserted_ids[i] for i, item in enumerate(default_menu)}
-            logger.debug(f"[MENU] Inserted {len(default_menu)} parent menu items")
             
             # Get parent IDs for submenu items
             agents_parent_id = item_ids['Agents']
@@ -243,7 +236,6 @@ class MenuService:
             # Insert child items
             for item in agents_children + configuration_children + workflows_children + settings_children:
                 await MongoStorageService.insert_one("menuItems", item)
-            logger.debug(f"[MENU] Inserted {len(agents_children + configuration_children + workflows_children + settings_children)} child menu items")
             
             total_items = len(default_menu) + len(agents_children) + len(configuration_children) + len(workflows_children) + len(settings_children)
             logger.info(f"[MENU] Successfully seeded {total_items} menu items")

@@ -20,10 +20,6 @@ from ..utils.auth import (
 from .tenant_service import TenantService
 
 
-# Module loaded log
-logger.debug("[AUTH] Service module loaded")
-
-
 class AuthService:
     """Service for handling authentication logic"""
 
@@ -44,13 +40,10 @@ class AuthService:
             )
 
         normalized_email = normalize_email(email)
-        logger.debug(f"[AUTH] Normalized email: {normalized_email}")
 
         # Check admin login first
-        logger.debug(f"[AUTH] Checking admin credentials for: {normalized_email}")
         if normalized_email == normalize_email(cls.ADMIN_USER) and password == cls.ADMIN_PASS:
             logger.info(f"[AUTH] Admin login successful for: {email}")
-            logger.debug(f"[AUTH] Generating admin token for: {email}")
             token = generate_token({
                 "role": "admin",
                 "username": email,
@@ -65,15 +58,12 @@ class AuthService:
             }
 
         # Regular user authentication
-        logger.debug(f"[AUTH] Proceeding to regular user authentication for: {normalized_email}")
         return await cls._authenticate_regular_user(normalized_email, password)
 
     @classmethod
     async def _authenticate_regular_user(cls, normalized_email: str, password: str) -> Dict[str, Any]:
         """Authenticate regular user"""
-        logger.debug(f"[AUTH] Authenticating regular user: {normalized_email}")
         try:
-            logger.debug(f"[AUTH] Looking up user in database: {normalized_email}")
             user = await MongoStorageService.find_one("users", {"email": normalized_email})
 
             if not user:
@@ -83,7 +73,6 @@ class AuthService:
                     detail="Invalid credentials"
                 )
 
-            logger.debug(f"[AUTH] Verifying password for user: {normalized_email}")
             if not verify_password(password, user.get("password_hash", "")):
                 logger.warning(f"[AUTH] Invalid password for user: {normalized_email}")
                 raise HTTPException(
@@ -92,7 +81,6 @@ class AuthService:
                 )
 
             # Check if user is verified
-            logger.debug(f"[AUTH] Checking verification status for user: {normalized_email}")
             if not user.get("verified", False):
                 logger.warning(f"[AUTH] Unverified user attempted login: {normalized_email}")
                 if user.get("isInvited", False):
@@ -107,7 +95,6 @@ class AuthService:
                     )
 
             # Check if user is active (for invited users)
-            logger.debug(f"[AUTH] Checking active status for user: {normalized_email}")
             if not user.get("active", True):
                 logger.warning(f"[AUTH] Inactive user attempted login: {normalized_email}")
                 raise HTTPException(
@@ -116,11 +103,9 @@ class AuthService:
                 )
 
             # Get user's tenant information
-            logger.debug(f"[AUTH] Getting tenant information for user: {normalized_email}")
             tenant_info = await TenantService.get_user_tenant_info(str(user["_id"]))
 
             # Generate token with user and tenant information
-            logger.debug(f"[AUTH] Generating token for user: {normalized_email}")
             token_payload = {
                 "role": "user",
                 "id": str(user["_id"]),
@@ -198,8 +183,6 @@ class AuthService:
                 )
                 await RBACService.assign_role_to_user(user_id, default_role["roleId"], tenant_id=tenant_id)
                 logger.info(f"[AUTH] Assigned DEFAULT role to user: {email}")
-            else:
-                logger.debug(f"[AUTH] User {email} already has {len(user_roles)} role(s), skipping DEFAULT role creation")
                 
         except Exception as e:
             logger.error(f"[AUTH] Failed to ensure DEFAULT role for user {email}: {e}")
@@ -294,7 +277,6 @@ class AuthService:
                     tenant_id=temp_tenant_id
                 )
                 logger.info(f"[OAUTH] ✅ Successfully updated Google tokens for user: {user_data['email']}")
-                logger.debug(f"[OAUTH] Token expiry: {google_tokens.get('expires_at')}, Type: {google_tokens.get('token_type')}")
             else:
                 logger.error(f"[OAUTH] ❌ Failed to update tokens - no tenant_id found for user: {user_data['email']}")
 
@@ -601,7 +583,6 @@ class AuthService:
                 "lastName": user_doc.get("lastName") if user_doc else None,
                 "tenantId": user.get("tenantId")
             }
-            logger.debug("[AUTH][EXIT] get_current_user_info user")
             return result
 
     @classmethod
@@ -622,7 +603,6 @@ class AuthService:
                 )
             
             # Fetch user from database - handle both ObjectId and UUID formats
-            logger.debug(f"[AUTH] Fetching user data for password change: {user_id}, tenant: {tenant_id}")
             
             # Try to determine if it's an ObjectId or a UUID/custom ID
             try:
@@ -633,7 +613,6 @@ class AuthService:
                     # Use string ID format (UUID or custom ID)
                     user = await MongoStorageService.find_one("users", {"id": user_id}, tenant_id=tenant_id)
             except Exception as e:
-                logger.debug(f"[AUTH] ObjectId conversion failed, trying string ID: {e}")
                 # Fallback to string ID
                 user = await MongoStorageService.find_one("users", {"id": user_id}, tenant_id=tenant_id)
             
@@ -645,7 +624,6 @@ class AuthService:
                 )
             
             # Verify current password
-            logger.debug(f"[AUTH] Verifying current password for user: {user_id}")
             password_hash = user.get("password_hash", "")
             
             if not password_hash:
@@ -656,7 +634,6 @@ class AuthService:
                 )
             
             is_valid = verify_password(current_password, password_hash)
-            logger.debug(f"[AUTH] Password verification result for user {user_id}: {is_valid}")
             
             if not is_valid:
                 logger.warning(f"[AUTH] Invalid current password provided for user: {user_id}")
@@ -674,11 +651,9 @@ class AuthService:
                 )
             
             # Hash new password
-            logger.debug(f"[AUTH] Hashing new password for user: {user_id}")
             new_password_hash = hash_password(new_password)
             
             # Update password in database - use the same query format as when we found the user
-            logger.debug(f"[AUTH] Updating password in database for user: {user_id}")
             current_time = datetime.utcnow()
             
             # Determine which ID field to use for the update

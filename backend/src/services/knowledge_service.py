@@ -18,9 +18,6 @@ from .file_service import FileService
 from .vector_service import VectorService
 from .model_config_service import ModelConfigService
 
-# Module loaded log
-logger.debug("[KNOWLEDGE] Service module loaded")
-
 
 class KnowledgeService:
     """Service for managing knowledge configurations and operations"""
@@ -483,7 +480,6 @@ class KnowledgeService:
         tenant_id = await cls.validate_tenant_access(user)
         
         try:
-            logger.debug(f"[KNOWLEDGE] Getting collections list for tenant: {tenant_id}")
             docs = await MongoStorageService.find_many("knowledgeConfig", {}, tenant_id=tenant_id, projection={"collection": 1}, sort_field="collection", sort_order=1)
             collections_list = sorted({d.get("collection") for d in docs if d.get("collection")})
             return {"collections": list(collections_list)}
@@ -506,8 +502,6 @@ class KnowledgeService:
     ) -> Dict[str, Any]:
         """List knowledge collections with pagination, filtering, and sorting"""
         tenant_id = await cls.validate_tenant_access(user)
-        logger.debug(f"[KNOWLEDGE] Listing knowledge for tenant: {tenant_id}, page: {page}, category: {category}")
-        
         try:
             # Build filter query
             filter_query = {}
@@ -575,7 +569,6 @@ class KnowledgeService:
                         logger.error(f"[KNOWLEDGE] Could not get model name for {model_id}: {str(e)}")
                         # Keep model_id as display name if lookup fails
                 else:
-                    logger.debug(f"[KNOWLEDGE] No model_id found in collection: {doc.get('collection', '')}")
                     model_name = ""
                 
                 collection_data = {
