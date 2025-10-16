@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import {
   Box,
   Card,
@@ -44,6 +44,25 @@ function ActivityNotifications({ user, activityId, projectId }) {
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
   const [imagePreviews, setImagePreviews] = useState({}) // Store blob URLs for image previews
+  const [selectedImagePreviews, setSelectedImagePreviews] = useState([]) // Local previews for selected files
+  const previewsRef = useRef({})
+
+  // Image helpers
+  const imageExtensions = useMemo(() => new Set([
+    'jpg','jpeg','png','gif','bmp','webp','svg','tif','tiff','ico','avif','heic','heif'
+  ]), [])
+
+  const isImageFilename = (filename = '') => {
+    const dot = filename.lastIndexOf('.')
+    if (dot === -1) return false
+    const ext = filename.slice(dot + 1).toLowerCase()
+    return imageExtensions.has(ext)
+  }
+
+  const encodePathSegments = (path) => String(path || '')
+    .split('/')
+    .map(seg => encodeURIComponent(seg))
+    .join('/')
   
   // User mention autocomplete
   const [allUsers, setAllUsers] = useState([])
@@ -59,7 +78,12 @@ function ActivityNotifications({ user, activityId, projectId }) {
   useEffect(() => {
     return () => {
       isMountedRef.current = false
-      Object.values(imagePreviews).forEach(url => URL.revokeObjectURL(url))
+      try {
+        Object.values(previewsRef.current || {}).forEach(url => URL.revokeObjectURL(url))
+      } catch {}
+      try {
+        (selectedImagePreviews || []).forEach(url => { if (url) URL.revokeObjectURL(url) })
+      } catch {}
     }
   }, [])
 
@@ -146,49 +170,49 @@ function ActivityNotifications({ user, activityId, projectId }) {
   // Load image previews for notifications with image files
   useEffect(() => {
     if (!notifications.length || !token) return
-    
+
     const loadImagePreviews = async () => {
       const newPreviews = {}
-      
+
       for (const notification of notifications) {
         if (!notification.files) continue
-        
+
         for (const file of notification.files) {
-          const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(file.filename)
-          if (!isImage) continue
-          
           const cacheKey = file.path
           if (imagePreviews[cacheKey]) continue // Already loaded
-          
+
           try {
-            const res = await apiCall(`/api/download/${file.path}`, {
+            const encoded = encodePathSegments(file.path)
+            const res = await apiCall(`/api/download/${encoded}`, {
               method: 'GET',
               headers: { Authorization: `Bearer ${token}` }
             })
-            
+
             if (res.ok) {
               const blob = await res.blob()
-              const url = URL.createObjectURL(blob)
-              newPreviews[cacheKey] = url
+              const contentType = blob.type || res.headers.get('content-type') || ''
+              if (contentType.startsWith('image/') || isImageFilename(file.filename)) {
+                const url = URL.createObjectURL(blob)
+                newPreviews[cacheKey] = url
+              }
             }
           } catch (error) {
             console.error('Failed to load image preview:', error)
           }
         }
       }
-      
+
       if (Object.keys(newPreviews).length > 0) {
-        setImagePreviews(prev => ({ ...prev, ...newPreviews }))
+        setImagePreviews(prev => {
+          const merged = { ...prev, ...newPreviews }
+          previewsRef.current = merged
+          return merged
+        })
       }
     }
-    
+
     loadImagePreviews()
-    
-    // Cleanup blob URLs on unmount
-    return () => {
-      Object.values(imagePreviews).forEach(url => URL.revokeObjectURL(url))
-    }
-  }, [notifications, token])
+  }, [notifications, token, imagePreviews])
 
   // Handle text input changes and detect @ mentions
   const handleMessageChange = (e) => {
@@ -266,8 +290,32 @@ function ActivityNotifications({ user, activityId, projectId }) {
 
   // Remove selected file (before sending)
   const removeFile = (index) => {
+    // Revoke preview if exists
+    const url = selectedImagePreviews[index]
+    if (url) {
+      try { URL.revokeObjectURL(url) } catch {}
+    }
     setSelectedFiles(prev => prev.filter((_, i) => i !== index))
   }
+
+  // Build previews for selected (not yet uploaded) image files
+  useEffect(() => {
+    // Revoke any existing previews for previous selected files
+    try {
+      (selectedImagePreviews || []).forEach(url => { if (url) URL.revokeObjectURL(url) })
+    } catch {}
+    const urls = selectedFiles.map(f => {
+      const byMime = (f?.type || '').startsWith('image/')
+      const byName = isImageFilename(f?.name)
+      if (byMime || byName) {
+        try { return URL.createObjectURL(f) } catch { return null }
+      }
+      return null
+    })
+    setSelectedImagePreviews(urls)
+    // Cleanup handled on unmount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFiles])
 
   // Send notification - Upload files first, then create notification
   const handleSend = async () => {
@@ -441,16 +489,66 @@ function ActivityNotifications({ user, activityId, projectId }) {
 
           {/* Selected Files (not uploaded yet) */}
           {selectedFiles.length > 0 && (
-            <Box sx={{ mb: 2 }}>
-              {selectedFiles.map((file, index) => (
-                <Chip
-                  key={index}
-                  label={file.name}
-                  size="small"
-                  onDelete={() => removeFile(index)}
-                  sx={{ mr: 1, mb: 1 }}
-                />
-              ))}
+            <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {selectedFiles.map((file, index) => {
+                const previewUrl = selectedImagePreviews[index]
+                if (previewUrl) {
+                  return (
+                    <Box
+                      key={`${file.name}-${file.lastModified}-${index}`}
+                      sx={{
+                        position: 'relative',
+                        borderRadius: 1,
+                        overflow: 'hidden',
+                        border: '1px solid',
+                        borderColor: 'divider'
+                      }}
+                    >
+                      <img
+                        src={previewUrl}
+                        alt={file.name}
+                        style={{ maxWidth: '160px', maxHeight: '120px', objectFit: 'cover', display: 'block' }}
+                      />
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          position: 'absolute',
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          backgroundColor: 'rgba(0,0,0,0.7)',
+                          color: 'white',
+                          p: '2px 6px',
+                          fontSize: '0.7rem',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}
+                        title={file.name}
+                      >
+                        {file.name}
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        onClick={() => removeFile(index)}
+                        sx={{ position: 'absolute', top: 2, right: 2, bgcolor: 'rgba(0,0,0,0.5)' }}
+                        aria-label={`Remove ${file.name}`}
+                      >
+                        <X size={14} color="#fff" />
+                      </IconButton>
+                    </Box>
+                  )
+                }
+                return (
+                  <Chip
+                    key={`${file.name}-${file.lastModified}-${index}`}
+                    label={file.name}
+                    size="small"
+                    onDelete={() => removeFile(index)}
+                    sx={{ mr: 1, mb: 1 }}
+                  />
+                )
+              })}
             </Box>
           )}
 
@@ -463,6 +561,7 @@ function ActivityNotifications({ user, activityId, projectId }) {
                 ref={fileInputRef}
                 onChange={handleFileSelect}
                 style={{ display: 'none' }}
+                accept="*/*"
               />
               <Button
                 startIcon={<Paperclip size={18} />}
@@ -566,12 +665,13 @@ function ActivityNotifications({ user, activityId, projectId }) {
                               justifyContent: isCurrentUser ? 'flex-end' : 'flex-start'
                             }}>
                               {notification.files.map((file, i) => {
-                                const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(file.filename)
+                                const isImage = isImageFilename(file.filename)
                                 const imageUrl = imagePreviews[file.path]
                                 
                                 const handleDownload = async () => {
                                   try {
-                                    const res = await apiCall(`/api/download/${file.path}`, {
+                                    const encoded = encodePathSegments(file.path)
+                                    const res = await apiCall(`/api/download/${encoded}`, {
                                       method: 'GET',
                                       headers: { Authorization: `Bearer ${token}` }
                                     })
@@ -596,7 +696,7 @@ function ActivityNotifications({ user, activityId, projectId }) {
                                   }
                                 }
                                 
-                                if (isImage && imageUrl) {
+                                if (imageUrl) {
                                   return (
                                     <Box
                                       key={i}

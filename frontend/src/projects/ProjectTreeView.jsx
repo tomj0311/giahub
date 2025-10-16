@@ -829,31 +829,33 @@ function ProjectTreeView({ user }) {
 
           <TableCell>{node.progress}%</TableCell>
 
-          <TableCell align="right">
-            <Tooltip title="View Gantt Chart">
-              <IconButton 
-                size="small" 
-                color="primary"
-                onClick={() => navigate('/dashboard/projects/gantt', { 
-                  state: { projectId: node.id, projectName: node.name } 
-                })}
-              >
-                <BarChart3 size={18} />
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap', minWidth: { xs: 120, sm: 160 } }}>
+            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+              <Tooltip title="View Gantt Chart">
+                <IconButton 
+                  size="small" 
+                  color="primary"
+                  onClick={() => navigate('/dashboard/projects/gantt', { 
+                    state: { projectId: node.id, projectName: node.name } 
+                  })}
+                >
+                  <BarChart3 size={18} />
+                </IconButton>
+              </Tooltip>
+              <IconButton size="small" onClick={() => openCreate(node.id)}>
+                <Plus size={18} />
               </IconButton>
-            </Tooltip>
-            <IconButton size="small" onClick={() => openCreate(node.id)}>
-              <Plus size={18} />
-            </IconButton>
-            <IconButton size="small" onClick={() => openEdit(node.id)}>
-              <Edit size={18} />
-            </IconButton>
-            <IconButton
-              size="small"
-              color="error"
-              onClick={() => deleteProject(node.id, node.name)}
-            >
-              <Trash2 size={18} />
-            </IconButton>
+              <IconButton size="small" onClick={() => openEdit(node.id)}>
+                <Edit size={18} />
+              </IconButton>
+              <IconButton
+                size="small"
+                color="error"
+                onClick={() => deleteProject(node.id, node.name)}
+              >
+                <Trash2 size={18} />
+              </IconButton>
+            </Box>
           </TableCell>
         </TableRow>
 
@@ -1024,7 +1026,7 @@ function ProjectTreeView({ user }) {
                           {sortField === 'progress' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
                         </Box>
                       </TableCell>
-                      <TableCell align="right">Actions</TableCell>
+                      <TableCell align="right" sx={{ whiteSpace: 'nowrap', minWidth: { xs: 120, sm: 160 } }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
