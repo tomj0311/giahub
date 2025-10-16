@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import {
   Box,
   Button,
   Card,
   CardContent,
+  CardActions,
   TextField,
   Select,
   MenuItem,
@@ -14,8 +15,7 @@ import {
   CircularProgress,
   Paper,
   Autocomplete,
-  Breadcrumbs,
-  Link
+  
 } from '@mui/material'
 import { ArrowLeft, Save } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
@@ -74,6 +74,25 @@ function ActivityForm({ user, projectId: propProjectId }) {
   })
 
   const isEditMode = !!activityId
+
+  // Strict date validation helpers
+  const isValidISODateString = useCallback((str, { minYear = 1900, maxYear = 2100 } = {}) => {
+    if (typeof str !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(str)) return false
+    const [y, m, d] = str.split('-').map(Number)
+    if (y < minYear || y > maxYear) return false
+    const dt = new Date(Date.UTC(y, m - 1, d))
+    return (
+      dt.getUTCFullYear() === y &&
+      dt.getUTCMonth() === m - 1 &&
+      dt.getUTCDate() === d
+    )
+  }, [])
+
+  // Compare two ISO date strings (YYYY-MM-DD)
+  const isISOAfter = useCallback((a, b) => {
+    if (!a || !b) return false
+    return a > b
+  }, [])
 
   // Update refs when these change
   useEffect(() => {
@@ -260,15 +279,18 @@ function ActivityForm({ user, projectId: propProjectId }) {
 
     if (!form.start_date) {
       errors.start_date = 'Start date is required'
-    }
-    if (!form.due_date) {
-      errors.due_date = 'Due date is required'
+    } else if (!isValidISODateString(form.start_date)) {
+      errors.start_date = 'Invalid date. Use YYYY-MM-DD (1900-01-01 to 2100-12-31)'
     }
 
-    if (form.start_date && form.due_date) {
-      const startDate = new Date(form.start_date)
-      const dueDate = new Date(form.due_date)
-      if (startDate >= dueDate) {
+    if (!form.due_date) {
+      errors.due_date = 'Due date is required'
+    } else if (!isValidISODateString(form.due_date)) {
+      errors.due_date = 'Invalid date. Use YYYY-MM-DD (1900-01-01 to 2100-12-31)'
+    }
+
+    if (!errors.start_date && !errors.due_date && form.start_date && form.due_date) {
+      if (!isISOAfter(form.due_date, form.start_date)) {
         errors.due_date = 'Due date must be after start date'
       }
     }
@@ -342,29 +364,6 @@ function ActivityForm({ user, projectId: propProjectId }) {
   return (
     <>
     <Box sx={{ p: 3 }}>
-      {/* Breadcrumbs */}
-      <Breadcrumbs sx={{ mb: 3 }}>
-        <Link
-          component="button"
-          variant="body1"
-          onClick={() => navigate('/dashboard/projects')}
-          sx={{ cursor: 'pointer', textDecoration: 'none' }}
-        >
-          Projects
-        </Link>
-        <Link
-          component="button"
-          variant="body1"
-          onClick={() => navigate('/dashboard/projects/planning')}
-          sx={{ cursor: 'pointer', textDecoration: 'none' }}
-        >
-          Planning
-        </Link>
-        <Typography color="text.primary">
-          {isEditMode ? 'Edit Activity' : `Create ${form.type}`}
-        </Typography>
-      </Breadcrumbs>
-
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -379,14 +378,6 @@ function ActivityForm({ user, projectId: propProjectId }) {
             {isEditMode ? 'Edit Activity' : `Create New ${form.type}`}
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<Save size={20} />}
-          onClick={handleSave}
-          disabled={loading}
-        >
-          {loading ? <CircularProgress size={20} /> : (isEditMode ? 'Update' : 'Create')}
-        </Button>
       </Box>
 
       {/* Form - Grid Layout */}
@@ -575,6 +566,7 @@ function ActivityForm({ user, projectId: propProjectId }) {
               }}
               fullWidth
               InputLabelProps={{ shrink: true }}
+              inputProps={{ min: '1900-01-01', max: '2100-12-31' }}
               required
               error={!!formErrors.start_date}
               helperText={formErrors.start_date || 'Required'}
@@ -591,6 +583,7 @@ function ActivityForm({ user, projectId: propProjectId }) {
               }}
               fullWidth
               InputLabelProps={{ shrink: true }}
+              inputProps={{ min: '1900-01-01', max: '2100-12-31' }}
               required
               error={!!formErrors.due_date}
               helperText={formErrors.due_date || 'Required'}
@@ -608,6 +601,16 @@ function ActivityForm({ user, projectId: propProjectId }) {
             />
           </Box>
         </CardContent>
+        <CardActions sx={{ display: 'flex', justifyContent: 'flex-end', p: 2, pt: 0 }}>
+          <Button
+            variant="contained"
+            startIcon={<Save size={20} />}
+            onClick={handleSave}
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={20} /> : (isEditMode ? 'Update' : 'Create')}
+          </Button>
+        </CardActions>
       </Card>
 
       {/* Notifications Section - Only show in edit mode when activity is saved */}

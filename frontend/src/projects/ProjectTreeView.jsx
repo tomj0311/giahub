@@ -65,6 +65,39 @@ function ProjectTreeView({ user }) {
   const token = user?.token
   const tokenRef = useRef(token)
   tokenRef.current = token
+
+  // Consistent date formatter: returns dd/mm/yyyy or '-'
+  const formatDate = useCallback((dateStr) => {
+    if (!dateStr) return '-'
+    try {
+      const d = new Date(dateStr)
+      if (Number.isNaN(d.getTime())) return '-'
+      // Use en-GB locale and UTC timezone to avoid TZ drift and ensure dd/mm/yyyy
+      return d.toLocaleDateString('en-GB', { timeZone: 'UTC' })
+    } catch {
+      return '-'
+    }
+  }, [])
+  
+  // Strict date validation helpers
+  const isValidISODateString = useCallback((str, { minYear = 1900, maxYear = 2100 } = {}) => {
+    if (typeof str !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(str)) return false
+    const [y, m, d] = str.split('-').map(Number)
+    if (y < minYear || y > maxYear) return false
+    // Check actual calendar validity using UTC to avoid TZ issues
+    const dt = new Date(Date.UTC(y, m - 1, d))
+    return (
+      dt.getUTCFullYear() === y &&
+      dt.getUTCMonth() === m - 1 &&
+      dt.getUTCDate() === d
+    )
+  }, [])
+
+  // Compare two ISO dates (YYYY-MM-DD) safely via string comparison
+  const isISOAfter = useCallback((a, b) => {
+    if (!a || !b) return false
+    return a > b
+  }, [])
   
   const { showSuccess, showError } = useSnackbar()
   const { showDeleteConfirmation } = useConfirmation()
@@ -426,16 +459,18 @@ function ProjectTreeView({ user }) {
 
     if (!form.start_date) {
       errors.start_date = 'Start date is required'
+    } else if (!isValidISODateString(form.start_date)) {
+      errors.start_date = 'Invalid date. Use YYYY-MM-DD (1900-01-01 to 2100-12-31)'
     }
 
     if (!form.due_date) {
       errors.due_date = 'Due date is required'
+    } else if (!isValidISODateString(form.due_date)) {
+      errors.due_date = 'Invalid date. Use YYYY-MM-DD (1900-01-01 to 2100-12-31)'
     }
 
-    if (form.start_date && form.due_date) {
-      const startDate = new Date(form.start_date)
-      const dueDate = new Date(form.due_date)
-      if (startDate >= dueDate) {
+    if (!errors.start_date && !errors.due_date && form.start_date && form.due_date) {
+      if (!isISOAfter(form.due_date, form.start_date)) {
         errors.due_date = 'Due date must be after start date'
       }
     }
@@ -733,11 +768,11 @@ function ProjectTreeView({ user }) {
           <TableCell>{node.approver || '-'}</TableCell>
 
           <TableCell>
-            {node.start_date ? new Date(node.start_date).toLocaleDateString() : '-'}
+            {formatDate(node.start_date)}
           </TableCell>
 
           <TableCell>
-            {node.due_date ? new Date(node.due_date).toLocaleDateString() : '-'}
+            {formatDate(node.due_date)}
           </TableCell>
 
           <TableCell>{node.progress}%</TableCell>
@@ -1221,6 +1256,7 @@ function ProjectTreeView({ user }) {
                 }}
                 fullWidth
                 InputLabelProps={{ shrink: true }}
+                inputProps={{ min: '1900-01-01', max: '2100-12-31' }}
                 required
                 error={!!formErrors.start_date}
                 helperText={formErrors.start_date || 'Required'}
@@ -1235,6 +1271,7 @@ function ProjectTreeView({ user }) {
                 }}
                 fullWidth
                 InputLabelProps={{ shrink: true }}
+                inputProps={{ min: '1900-01-01', max: '2100-12-31' }}
                 required
                 error={!!formErrors.due_date}
                 helperText={formErrors.due_date || 'Required'}

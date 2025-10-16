@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import {
   Box,
   Button,
@@ -15,8 +15,6 @@ import {
   IconButton,
   Chip,
   Typography,
-  Tabs,
-  Tab,
   CircularProgress,
   Dialog,
   DialogTitle,
@@ -43,12 +41,11 @@ import { useConfirmation } from '../contexts/ConfirmationContext'
 import { apiCall } from '../config/api'
 import sharedApiService from '../utils/apiService'
 
-const ACTIVITY_TYPES = ['MILESTONE', 'PHASE', 'TASK']
+// Showing all activity types together; tabs removed
 
 function ProjectPlanning({ user, projectId }) {
   const token = user?.token
   const navigate = useNavigate()
-  const location = useLocation()
   const { showSuccess, showError } = useSnackbar()
   const { showDeleteConfirmation } = useConfirmation()
 
@@ -89,23 +86,30 @@ function ProjectPlanning({ user, projectId }) {
   const [columnDialogOpen, setColumnDialogOpen] = useState(false)
   // Predefined initial columns (common ones shown by default)
   const [visibleColumns, setVisibleColumns] = useState({
+    project_id: true,
     type: true,
     subject: true,
-    project_id: true,
     status: true,
-    priority: true,
-    assignee: true,
-    approver: true,
     start_date: true,
     due_date: true,
-    progress: true
+    assignee: true,
+    approver: true,
+    progress: true,
+    // Others off by default
+    priority: false
   })
   
-  // Restore tab from location state, or default to tab 0 (Milestones)
-  const initialTab = location.state?.planningTab ?? 0
-  const [currentTab, setCurrentTab] = useState(initialTab)
+  // Tabs removed: show all activity types
+  // Preferred column order
+  const PREFERRED_ORDER = ['project_id', 'type', 'subject', 'status', 'start_date', 'due_date', 'assignee', 'approver', 'progress']
 
-  const activityTypeFilter = ACTIVITY_TYPES[currentTab] || null
+  const orderedFields = React.useMemo(() => {
+    const orderIndex = (name) => {
+      const idx = PREFERRED_ORDER.indexOf(name)
+      return idx === -1 ? Number.MAX_SAFE_INTEGER : idx
+    }
+    return [...fieldMetadata].sort((a, b) => orderIndex(a.name) - orderIndex(b.name))
+  }, [fieldMetadata])
 
   // Load field metadata from API - NO HARDCODING!
   const loadFieldMetadata = useCallback(async () => {
@@ -236,8 +240,7 @@ function ProjectPlanning({ user, projectId }) {
           page_size: pageSize.toString()
         })
 
-        if (projectId) params.append('project_id', projectId)
-        if (activityTypeFilter) params.append('activity_type', activityTypeFilter)
+  if (projectId) params.append('project_id', projectId)
         
         if (sortField) {
           params.append('sort_by', sortField)
@@ -258,7 +261,6 @@ function ProjectPlanning({ user, projectId }) {
             page, 
             pageSize, 
             projectId, 
-            activityTypeFilter, 
             sortField, 
             sortOrder,
             filters: JSON.stringify(filters),
@@ -291,7 +293,7 @@ function ProjectPlanning({ user, projectId }) {
     }
 
     loadActivities(1, pagination.rowsPerPage)
-  }, [currentTab, token, projectId, activityTypeFilter, filters, sortField, sortOrder, showError])
+  }, [token, projectId, filters, sortField, sortOrder, showError])
   
   const loadActivities = useCallback(async (page = 1, pageSize = 50) => {
     if (isLoadingRef.current || !isMountedRef.current) return
@@ -305,8 +307,7 @@ function ProjectPlanning({ user, projectId }) {
         page_size: pageSize.toString()
       })
 
-      if (projectId) params.append('project_id', projectId)
-      if (activityTypeFilter) params.append('activity_type', activityTypeFilter)
+  if (projectId) params.append('project_id', projectId)
       
       if (sortField) {
         params.append('sort_by', sortField)
@@ -326,7 +327,6 @@ function ProjectPlanning({ user, projectId }) {
           page, 
           pageSize, 
           projectId, 
-          activityTypeFilter, 
           sortField, 
           sortOrder,
           filtersCount: filters.length,
@@ -356,7 +356,7 @@ function ProjectPlanning({ user, projectId }) {
         isLoadingRef.current = false
       }
     }
-  }, [projectId, activityTypeFilter, filters, sortField, sortOrder])
+  }, [projectId, filters, sortField, sortOrder])
 
   // Filter handlers
   const handleOpenFilterDialog = () => {
@@ -553,9 +553,7 @@ function ProjectPlanning({ user, projectId }) {
     )
   }
 
-  const handleTabChange = (event, newValue) => {
-    setCurrentTab(newValue)
-  }
+  // Tabs removed
 
   const handlePageChange = (event, newPage) => {
     loadActivities(newPage + 1, pagination.rowsPerPage)
@@ -586,8 +584,7 @@ function ProjectPlanning({ user, projectId }) {
       state: {
         type,
         projectId: projectId || '',
-        returnTo: '/dashboard/projects',
-        planningTab: currentTab  // Preserve current tab
+        returnTo: '/dashboard/projects'
       }
     })
   }
@@ -595,8 +592,7 @@ function ProjectPlanning({ user, projectId }) {
   const openEdit = (activityId) => {
     navigate(`/dashboard/projects/activity/${activityId}`, {
       state: {
-        returnTo: '/dashboard/projects',
-        planningTab: currentTab  // Preserve current tab
+        returnTo: '/dashboard/projects'
       }
     })
   }
@@ -663,17 +659,9 @@ function ProjectPlanning({ user, projectId }) {
     
     if (fieldName === 'subject') {
       return (
-        <>
-          <Typography variant="body2" fontWeight="medium">
-            {value}
-          </Typography>
-          {activity.description && (
-            <Typography variant="caption" color="text.secondary">
-              {activity.description.substring(0, 50)}
-              {activity.description.length > 50 ? '...' : ''}
-            </Typography>
-          )}
-        </>
+        <Typography variant="body2" fontWeight="medium">
+          {value}
+        </Typography>
       )
     }
     
@@ -714,20 +702,14 @@ function ProjectPlanning({ user, projectId }) {
         <Button
           variant="contained"
           startIcon={<Plus size={20} />}
-          onClick={() => openCreate(ACTIVITY_TYPES[currentTab])}
+          onClick={() => openCreate()}
         >
-          Create {ACTIVITY_TYPES[currentTab]}
+          Create Activity
         </Button>
       </Box>
 
       <Card>
-        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={currentTab} onChange={handleTabChange}>
-            <Tab label="Milestones" />
-            <Tab label="Phases" />
-            <Tab label="Tasks" />
-          </Tabs>
-        </Box>
+        {/* Tabs removed: showing all activity types */}
 
         <CardContent>
           {/* Header Bar with Filters and Actions */}
@@ -735,7 +717,7 @@ function ProjectPlanning({ user, projectId }) {
             {/* LEFT SIDE: Table Info */}
             <Box>
               <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary', mb: 0.5 }}>
-                {ACTIVITY_TYPES[currentTab]} List
+                Activities List
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 {pagination.total} {pagination.total === 1 ? 'item' : 'items'} total
@@ -839,7 +821,7 @@ function ProjectPlanning({ user, projectId }) {
                 <Table>
                   <TableHead>
                     <TableRow>
-                      {fieldMetadata.map((field) => (
+                      {orderedFields.map((field) => (
                         visibleColumns[field.name] && (
                           <TableCell key={field.name}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort(field.name)}>
@@ -857,14 +839,14 @@ function ProjectPlanning({ user, projectId }) {
                       <TableRow>
                         <TableCell colSpan={Object.values(visibleColumns).filter(v => v).length + 1} align="center">
                           <Typography variant="body2" color="text.secondary">
-                            No {ACTIVITY_TYPES[currentTab].toLowerCase()}s found. Create one to get started.
+                            No activities found. Create one to get started.
                           </Typography>
                         </TableCell>
                       </TableRow>
                     ) : (
                       activities.map((activity) => (
                         <TableRow key={activity.id} hover>
-                          {fieldMetadata.map((field) => (
+                          {orderedFields.map((field) => (
                             visibleColumns[field.name] && (
                               <TableCell key={field.name}>
                                 {renderCellValue(activity, field.name)}
