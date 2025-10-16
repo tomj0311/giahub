@@ -61,7 +61,7 @@ function ProjectPlanning({ user, projectId }) {
   const [loading, setLoading] = useState(true)
   const [pagination, setPagination] = useState({
     page: 0,
-    rowsPerPage: 50,
+    rowsPerPage: 8,
     total: 0
   })
   
@@ -239,7 +239,7 @@ function ProjectPlanning({ user, projectId }) {
   }, []); // EMPTY DEPENDENCIES - NO BULLSHIT
 
   useEffect(() => {
-    const loadActivities = async (page = 1, pageSize = 50) => {
+    const loadActivities = async (page = 1, pageSize = 8) => {
       if (isLoadingRef.current || !isMountedRef.current) return
       isLoadingRef.current = true
       setLoading(true)
@@ -308,7 +308,7 @@ function ProjectPlanning({ user, projectId }) {
     loadActivities(1, pagination.rowsPerPage)
   }, [token, projectId, filters, sortField, sortOrder, showError])
   
-  const loadActivities = useCallback(async (page = 1, pageSize = 50) => {
+  const loadActivities = useCallback(async (page = 1, pageSize = 8) => {
     if (isLoadingRef.current || !isMountedRef.current) return
     
     try {
@@ -996,7 +996,7 @@ function ProjectPlanning({ user, projectId }) {
                 onPageChange={handlePageChange}
                 rowsPerPage={pagination.rowsPerPage}
                 onRowsPerPageChange={handleRowsPerPageChange}
-                rowsPerPageOptions={[25, 50, 100]}
+                rowsPerPageOptions={[8, 25, 50, 100]}
               />
             </>
           )}
