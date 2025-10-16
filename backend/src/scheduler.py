@@ -5,7 +5,7 @@ Uses existing MONGO_URL and MONGO_DB environment variables from db.py
 import os
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.mongodb import MongoDBJobStore
-from apscheduler.executors.pool import ThreadPoolExecutor
+from apscheduler.executors.asyncio import AsyncIOExecutor
 from datetime import datetime
 from src.utils.log import logger
 
@@ -25,7 +25,7 @@ jobstores = {
 }
 
 executors = {
-    'default': ThreadPoolExecutor(10)
+    'default': AsyncIOExecutor()
 }
 
 job_defaults = {
