@@ -291,7 +291,10 @@ class AgentRuntimeService:
             
             # Create custom retriever
             custom_retriever = None
-            session_collection = f"{conv_id}_{agent_config.get('userId')}"
+            # Use the current user's ID from the request, not the agent's stored userId
+            current_user_id = user.get('id') or user.get('userId')
+            session_collection = f"{conv_id}_{current_user_id}"
+            logger.debug(f"Session collection name: {session_collection}")
             if collection_names or conv_id:
                 logger.debug(f"Creating custom retriever with {len(collection_names)} collections")
                 custom_retriever = _create_multi_collection_retriever(collection_names, session_collection, embedder)
