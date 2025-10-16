@@ -10,42 +10,73 @@ import Stack from '@mui/material/Stack'
 import IconButton from '@mui/material/IconButton'
 import CloseIcon from '@mui/icons-material/Close'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
+import InputAdornment from '@mui/material/InputAdornment'
+import Visibility from '@mui/icons-material/Visibility'
+import VisibilityOff from '@mui/icons-material/VisibilityOff'
 import { useSnackbar } from '../contexts/SnackbarContext'
-import { apiCall, API_BASE_URL } from '../config/api'
+import { apiCall } from '../config/api'
 
 export default function PasswordResetDialog({ open, onClose }) {
-  const [email, setEmail] = useState('')
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [sent, setSent] = useState(false)
+  const [success, setSuccess] = useState(false)
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const { showError, showSuccess } = useSnackbar()
 
   const handleClose = () => {
-    setEmail('')
-    setSent(false)
+    setCurrentPassword('')
+    setNewPassword('')
+    setConfirmPassword('')
+    setSuccess(false)
+    setShowCurrentPassword(false)
+    setShowNewPassword(false)
+    setShowConfirmPassword(false)
     onClose()
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    
+    // Validation
+    if (newPassword !== confirmPassword) {
+      showError('New password and confirm password do not match')
+      return
+    }
+    
+    if (newPassword.length < 8) {
+      showError('New password must be at least 8 characters long')
+      return
+    }
+    
+    if (currentPassword === newPassword) {
+      showError('New password must be different from current password')
+      return
+    }
+    
     setLoading(true)
     
     try {
-      // Use direct fetch to avoid 401 redirect issues
-      const resp = await fetch(`${API_BASE_URL}/auth/password-reset/request`, {
+      await apiCall('/auth/change-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword
+        })
       })
       
-      if (resp.ok) {
-        setSent(true)
-        showSuccess('Password reset email sent. Please check your inbox.', 6000)
-      } else {
-        const errorData = await resp.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Failed to send reset email')
-      }
+      setSuccess(true)
+      showSuccess('Password changed successfully!', 4000)
+      
+      // Auto close after 2 seconds
+      setTimeout(() => {
+        handleClose()
+      }, 2000)
     } catch (err) {
-      showError(err.message || 'An error occurred. Please try again.')
+      showError(err.message || 'Failed to change password. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -66,7 +97,7 @@ export default function PasswordResetDialog({ open, onClose }) {
     >
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
         <Typography variant="h6">
-          {sent ? 'Check your email' : 'Reset password'}
+          {success ? 'Password Changed' : 'Change Password'}
         </Typography>
         <IconButton 
           onClick={handleClose} 
@@ -80,7 +111,7 @@ export default function PasswordResetDialog({ open, onClose }) {
         </IconButton>
       </DialogTitle>
 
-      {sent ? (
+      {success ? (
         <DialogContent>
           <Stack spacing={2} alignItems="center" sx={{ py: 3 }}>
             <CheckCircleOutlineIcon 
@@ -91,32 +122,93 @@ export default function PasswordResetDialog({ open, onClose }) {
               }} 
             />
             <Typography variant="body1" align="center" color="text.primary">
-              We've sent a password reset link to
+              Your password has been changed successfully!
             </Typography>
-            <Typography variant="subtitle1" align="center" fontWeight={600}>
-              {email}
-            </Typography>
-            <Typography variant="body2" align="center" color="text.secondary" sx={{ maxWidth: 400 }}>
-              If you don't see the email, check your spam folder or try again with a different email address.
+            <Typography variant="body2" align="center" color="text.secondary">
+              You can now use your new password to log in.
             </Typography>
           </Stack>
         </DialogContent>
       ) : (
         <form onSubmit={handleSubmit}>
           <DialogContent>
-            <Stack spacing={2}>
+            <Stack spacing={2.5}>
               <Typography variant="body2" color="text.secondary">
-                Enter the email address associated with your account and we'll send you a link to reset your password.
+                Enter your current password and choose a new password for your account.
               </Typography>
+              
               <TextField
-                label="Email address"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                label="Current Password"
+                type={showCurrentPassword ? 'text' : 'password'}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
                 required
                 autoFocus
                 fullWidth
-                placeholder="your@email.com"
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                        edge="end"
+                        size="small"
+                      >
+                        {showCurrentPassword ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              
+              <TextField
+                label="New Password"
+                type={showNewPassword ? 'text' : 'password'}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                fullWidth
+                helperText="Must be at least 8 characters long"
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        edge="end"
+                        size="small"
+                      >
+                        {showNewPassword ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              
+              <TextField
+                label="Confirm New Password"
+                type={showConfirmPassword ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                fullWidth
+                error={confirmPassword.length > 0 && newPassword !== confirmPassword}
+                helperText={
+                  confirmPassword.length > 0 && newPassword !== confirmPassword
+                    ? 'Passwords do not match'
+                    : ''
+                }
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        edge="end"
+                        size="small"
+                      >
+                        {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
               />
             </Stack>
           </DialogContent>
@@ -133,13 +225,13 @@ export default function PasswordResetDialog({ open, onClose }) {
               variant="contained"
               disabled={loading}
             >
-              {loading ? 'Sending...' : 'Send reset link'}
+              {loading ? 'Changing...' : 'Change Password'}
             </Button>
           </DialogActions>
         </form>
       )}
 
-      {sent && (
+      {success && (
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={handleClose} variant="contained" fullWidth>
             Done

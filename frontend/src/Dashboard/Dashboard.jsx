@@ -717,14 +717,14 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 								<AccountCircleIcon size={16} />
 							</ListItemIcon>
 							Profile
-						</MenuItem>
-						<MenuItem onClick={handlePasswordReset}>
-							<ListItemIcon>
-								<KeyIcon size={16} />
-							</ListItemIcon>
-							Reset Password
-						</MenuItem>
-						<MenuItem onClick={handleThemeToggle}>
+					</MenuItem>
+					<MenuItem onClick={handlePasswordReset}>
+						<ListItemIcon>
+							<KeyIcon size={16} />
+						</ListItemIcon>
+						Change Password
+					</MenuItem>
+					<MenuItem onClick={handleThemeToggle}>
 							<ListItemIcon>
 								{themeKey === 'aurora' ? <Brightness7Icon size={16} /> : <Brightness4Icon size={16} />}
 							</ListItemIcon>

@@ -603,3 +603,112 @@ class AuthService:
             }
             logger.debug("[AUTH][EXIT] get_current_user_info user")
             return result
+
+    @classmethod
+    async def change_password(cls, user_id: str, current_password: str, new_password: str, tenant_id: Optional[str] = None) -> None:
+        """Change user password after verifying current password"""
+        from ..utils.auth import hash_password
+        from bson import ObjectId
+        
+        logger.info(f"[AUTH] Password change requested for user: {user_id}, tenant: {tenant_id}")
+        
+        try:
+            # Don't allow password changes for admin users
+            if user_id == "admin":
+                logger.warning("[AUTH] Attempted password change for admin user")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Password changes are not allowed for admin accounts"
+                )
+            
+            # Fetch user from database - handle both ObjectId and UUID formats
+            logger.debug(f"[AUTH] Fetching user data for password change: {user_id}, tenant: {tenant_id}")
+            
+            # Try to determine if it's an ObjectId or a UUID/custom ID
+            try:
+                # Try ObjectId format first (24-character hex string)
+                if len(user_id) == 24:
+                    user = await MongoStorageService.find_one("users", {"_id": ObjectId(user_id)}, tenant_id=tenant_id)
+                else:
+                    # Use string ID format (UUID or custom ID)
+                    user = await MongoStorageService.find_one("users", {"id": user_id}, tenant_id=tenant_id)
+            except Exception as e:
+                logger.debug(f"[AUTH] ObjectId conversion failed, trying string ID: {e}")
+                # Fallback to string ID
+                user = await MongoStorageService.find_one("users", {"id": user_id}, tenant_id=tenant_id)
+            
+            if not user:
+                logger.error(f"[AUTH] User not found for password change: {user_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="User not found"
+                )
+            
+            # Verify current password
+            logger.debug(f"[AUTH] Verifying current password for user: {user_id}")
+            password_hash = user.get("password_hash", "")
+            
+            if not password_hash:
+                logger.error(f"[AUTH] No password hash found for user: {user_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="User account does not have a password set"
+                )
+            
+            is_valid = verify_password(current_password, password_hash)
+            logger.debug(f"[AUTH] Password verification result for user {user_id}: {is_valid}")
+            
+            if not is_valid:
+                logger.warning(f"[AUTH] Invalid current password provided for user: {user_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Current password is incorrect"
+                )
+            
+            # Validate new password
+            if len(new_password) < 8:
+                logger.warning(f"[AUTH] New password too short for user: {user_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="New password must be at least 8 characters long"
+                )
+            
+            # Hash new password
+            logger.debug(f"[AUTH] Hashing new password for user: {user_id}")
+            new_password_hash = hash_password(new_password)
+            
+            # Update password in database - use the same query format as when we found the user
+            logger.debug(f"[AUTH] Updating password in database for user: {user_id}")
+            current_time = datetime.utcnow()
+            
+            # Determine which ID field to use for the update
+            if len(user_id) == 24:
+                try:
+                    query = {"_id": ObjectId(user_id)}
+                except:
+                    query = {"id": user_id}
+            else:
+                query = {"id": user_id}
+            
+            await MongoStorageService.update_one(
+                "users",
+                query,
+                {
+                    "password_hash": new_password_hash,
+                    "updated_at": current_time,
+                    "updatedAt": current_time.timestamp() * 1000,
+                    "password_changed_at": current_time
+                },
+                tenant_id=tenant_id
+            )
+            
+            logger.info(f"[AUTH] Password changed successfully for user: {user_id}, tenant: {tenant_id}")
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[AUTH] Failed to change password for user {user_id}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to change password"
+            )
