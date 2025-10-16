@@ -117,7 +117,7 @@ function ProjectTreeView({ user }) {
   
   // Pagination state
   const [page, setPage] = useState(0) // MUI uses 0-based
-  const [rowsPerPage, setRowsPerPage] = useState(20)
+  const [rowsPerPage, setRowsPerPage] = useState(8)
   const [totalCount, setTotalCount] = useState(0)
   
   // Filter and sort state
