@@ -54,7 +54,13 @@ class TaskDataEnvironment(BasePythonScriptEngineEnvironment):
         my_globals = copy.copy(self.globals)
         self._prepare_context(context)
         my_globals.update(external_context or {})
+        
+        # Flatten nested dictionaries in context
+        flattened_context = self._flatten_dict(context)
+        context.clear()
+        context.update(flattened_context)
         context.update(my_globals)
+        
         try:
             # Clean up markdown code blocks and backticks
             cleaned_script = self._clean_markdown_code(script)
@@ -66,18 +72,10 @@ class TaskDataEnvironment(BasePythonScriptEngineEnvironment):
         return True
 
     def _clean_markdown_code(self, script):
-        """Remove markdown code block markers and backticks from the script.
-        
-        This handles cases where the script contains:
-        - ```python ... ``` blocks
-        - ``` ... ``` blocks
-        - Inline backticks
-        """
         if not script:
             return script
             
         # Remove markdown code block markers - handle all variations
-        # Remove ```python, ```javascript, etc. at start
         cleaned = re.sub(r'^```[a-zA-Z]*\s*', '', script.strip(), flags=re.MULTILINE)
         
         # Remove closing ``` at end
@@ -91,6 +89,17 @@ class TaskDataEnvironment(BasePythonScriptEngineEnvironment):
         lines = [line for line in lines if line.strip() != '```' and not line.strip().startswith('```')]
         
         return '\n'.join(lines).strip()
+
+    def _flatten_dict(self, d, parent_key='', sep='_'):
+        items = []
+        for k, v in d.items():
+            if isinstance(v, dict):
+                # Recursively flatten nested dictionaries
+                items.extend(self._flatten_dict(v, parent_key=k, sep=sep).items())
+            else:
+                # Keep non-dict values as-is
+                items.append((k, v))
+        return dict(items)
 
     def _prepare_context(self, context):
         pass

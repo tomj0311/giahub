@@ -1201,13 +1201,15 @@ export default function AgentPlayground({ user }) {
                   }
                 }}>
                   {(() => {
+                    // Only detect for preview purposes - don't remove from markdown
                     const bpmnData = detectBPMN(m.content)
-                    const jsxData = detectJSX(bpmnData.contentWithoutBPMN)
-                    const imageData = detectBase64Images(jsxData.contentWithoutJSX)
+                    const jsxData = detectJSX(m.content)
+                    // Only remove base64 images from markdown (not code!)
+                    const imageData = detectBase64Images(m.content)
                     
                     return (
                       <>
-                        {/* Show markdown content (without BPMN, JSX blocks, and images) */}
+                        {/* Show markdown content (with ALL code visible, only base64 images hidden) */}
                         <ReactMarkdown 
                           remarkPlugins={[remarkGfm]}
                           components={{
@@ -1304,7 +1306,7 @@ export default function AgentPlayground({ user }) {
                             }
                           }}
                         >
-                          {imageData.hasImages ? imageData.contentWithoutImages : (jsxData.contentWithoutJSX || bpmnData.contentWithoutBPMN || m.content || '...')}
+                          {imageData.hasImages ? imageData.contentWithoutImages : m.content}
                         </ReactMarkdown>
                         
                         {/* Show base64 images if detected */}

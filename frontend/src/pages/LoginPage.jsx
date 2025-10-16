@@ -9,6 +9,7 @@ import GoogleIcon from '@mui/icons-material/Google'
 import Grid from '@mui/material/Grid2'
 import Box from '@mui/material/Box'
 import PasswordField from '../components/PasswordField'
+import PasswordResetDialog from '../components/PasswordResetDialog'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { apiCall, API_BASE_URL } from '../config/api'
 import { useSearchParams, useNavigate } from 'react-router-dom'
@@ -32,6 +33,7 @@ export default function LoginPage({ onLogin }) {
   const [email, setEmail] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showPasswordReset, setShowPasswordReset] = useState(false)
   const { showError, showSuccess } = useSnackbar()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -201,12 +203,34 @@ export default function LoginPage({ onLogin }) {
               onChange={e => setUsername(e.target.value)} 
               required 
             />
-            <PasswordField 
-              label="Password" 
-              value={password} 
-              onChange={e => setPassword(e.target.value)} 
-              required 
-            />
+            <Box>
+              <PasswordField 
+                label="Password" 
+                value={password} 
+                onChange={e => setPassword(e.target.value)} 
+                required 
+              />
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 0.5 }}>
+                <Button 
+                  variant="text" 
+                  size="small"
+                  onClick={() => setShowPasswordReset(true)}
+                  sx={{ 
+                    textTransform: 'none', 
+                    p: 0.5,
+                    minWidth: 'auto',
+                    fontSize: '0.875rem',
+                    color: 'primary.main',
+                    '&:hover': {
+                      backgroundColor: 'transparent',
+                      textDecoration: 'underline'
+                    }
+                  }}
+                >
+                  Forgot password?
+                </Button>
+              </Box>
+            </Box>
             <Button 
               type="submit" 
               variant="contained" 
@@ -258,6 +282,11 @@ export default function LoginPage({ onLogin }) {
           </Stack>
         </form>
       )}
+
+      <PasswordResetDialog 
+        open={showPasswordReset} 
+        onClose={() => setShowPasswordReset(false)} 
+      />
     </Paper>
   )
 }

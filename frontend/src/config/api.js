@@ -1,12 +1,42 @@
-// API Configuration - ONE PATTERN FOR EVERYTHING
+// API Configuration
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL
 
 export { API_BASE_URL }
 
-// ONE FUNCTION FOR ALL API CALLS
+/**
+ * BACKWARD COMPATIBLE API FUNCTION
+ * Returns the raw Response object to support both old and new patterns:
+ * - Old pattern: response.ok, response.json(), response.status
+ * - New pattern: can also parse and use directly
+ */
 export const api = async (endpoint, options = {}) => {
   const url = `${API_BASE_URL}${endpoint}`
-  const response = await fetch(url, options)
+  
+  // Add default headers
+  const defaultHeaders = {}
+  
+  // Only add Content-Type for non-FormData requests
+  // For FormData, browser sets Content-Type with boundary automatically
+  if (!(options.body instanceof FormData)) {
+    defaultHeaders['Content-Type'] = 'application/json'
+  }
+  
+  // Add auth token if available
+  const token = localStorage.getItem('token')
+  if (token) {
+    defaultHeaders['Authorization'] = `Bearer ${token}`
+  }
+  
+  // Merge headers
+  const finalOptions = {
+    ...options,
+    headers: {
+      ...defaultHeaders,
+      ...(options.headers || {})
+    }
+  }
+  
+  const response = await fetch(url, finalOptions)
   
   // Check for token timeout/unauthorized access
   if (response.status === 401) {
@@ -15,11 +45,12 @@ export const api = async (endpoint, options = {}) => {
     localStorage.removeItem('name')
     // Redirect to login page
     window.location.href = '/login'
-    throw new Error('Token expired - redirecting to login')
   }
   
+  // RETURN RAW RESPONSE for backward compatibility
+  // This allows code to use response.ok, response.json(), response.status
   return response
 }
 
-// Backward compatibility
+// Backward compatibility alias
 export const apiCall = api

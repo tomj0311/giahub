@@ -29,6 +29,11 @@ class LoginResponse(BaseModel):
     name: Optional[str] = None
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
 @router.post("/login", response_model=LoginResponse)
 async def login(request: LoginRequest):
     """Login endpoint for admin and users"""
@@ -294,6 +299,28 @@ async def microsoft_callback(request: Request):
         from urllib.parse import quote
         error_msg = quote("Authentication failed. Please try again.")
         return RedirectResponse(url=f"{redirect_url}/login?error={error_msg}")
+
+
+@router.post("/change-password")
+async def change_password(
+    request: ChangePasswordRequest,
+    user: dict = Depends(verify_token_middleware)
+):
+    """Change user password (requires authentication)"""
+    logger.info(f"[PASSWORD] Password change request for user: {user.get('id', 'unknown')}")
+    try:
+        await AuthService.change_password(
+            user_id=user.get('id'),
+            current_password=request.current_password,
+            new_password=request.new_password,
+            tenant_id=user.get('tenantId')
+        )
+        logger.info(f"[PASSWORD] Password changed successfully for user: {user.get('id', 'unknown')}")
+        return {"message": "Password changed successfully"}
+    except Exception as e:
+        logger.error(f"[PASSWORD] Failed to change password for user {user.get('id', 'unknown')}: {str(e)}")
+        raise
+        raise
 
 
 @router.post("/logout")

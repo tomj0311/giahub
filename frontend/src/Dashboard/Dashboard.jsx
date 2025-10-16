@@ -39,8 +39,10 @@ import {
 	Bell as NotificationsIcon,
 	User as AccountCircleIcon,
 	Moon as Brightness4Icon,
-	Sun as Brightness7Icon
+	Sun as Brightness7Icon,
+	KeyRound as KeyIcon
 } from 'lucide-react'
+import PasswordResetDialog from '../components/PasswordResetDialog'
 const Home = lazy(() => import('./Home'))
 const Users = lazy(() => import('./Users'))
 const RoleManagement = lazy(() => import('./RoleManagement'))
@@ -79,6 +81,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 	const [mobileOpen, setMobileOpen] = useState(false)
 	const [anchorEl, setAnchorEl] = useState(null)
 	const [expandedSections, setExpandedSections] = useState({})
+	const [showPasswordReset, setShowPasswordReset] = useState(false)
 	const location = useLocation()
 
 	// removed DashboardLayout render debug log
@@ -243,6 +246,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 		handleProfileMenuClose()
 		const nextMode = theme.palette.mode === 'dark' ? 'light' : 'dark'
 		setThemeKey(getThemeKeyForMode(nextMode))
+	}
+
+	const handlePasswordReset = () => {
+		handleProfileMenuClose()
+		setShowPasswordReset(true)
 	}
 
 	const toggleSection = (sectionLabel) => {
@@ -709,8 +717,14 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 								<AccountCircleIcon size={16} />
 							</ListItemIcon>
 							Profile
-						</MenuItem>
-						<MenuItem onClick={handleThemeToggle}>
+					</MenuItem>
+					<MenuItem onClick={handlePasswordReset}>
+						<ListItemIcon>
+							<KeyIcon size={16} />
+						</ListItemIcon>
+						Change Password
+					</MenuItem>
+					<MenuItem onClick={handleThemeToggle}>
 							<ListItemIcon>
 								{themeKey === 'aurora' ? <Brightness7Icon size={16} /> : <Brightness4Icon size={16} />}
 							</ListItemIcon>
@@ -724,6 +738,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 							Sign Out
 						</MenuItem>
 					</Menu>
+
+					<PasswordResetDialog 
+						open={showPasswordReset} 
+						onClose={() => setShowPasswordReset(false)} 
+					/>
 				</Toolbar>
 			</AppBar>
 

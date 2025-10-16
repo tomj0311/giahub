@@ -315,11 +315,8 @@ export default function Home({ user }) {
 
       if (agentsResult.success) {
         const agentsData = agentsResult.data
-  // removed verbose agents data log
         const agentsList = agentsData.agents || []
         const paginationData = agentsData.pagination || {}
-
-  // removed lists/pagination debug logs
 
         setAgents(agentsList)
         setDisplayedAgents(agentsList)

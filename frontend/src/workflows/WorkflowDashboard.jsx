@@ -238,7 +238,7 @@ export default function WorkflowDashboard({ user }) {
       isMountedRef.current = false;
       isLoadingRef.current = false;
     };
-  }, []); // EMPTY DEPENDENCIES - NO BULLSHIT
+  }, [pagination.page, pagination.page_size]); // Re-fetch when page or page_size changes
 
   const handleShowMore = () => {
     if (pagination.has_next) {

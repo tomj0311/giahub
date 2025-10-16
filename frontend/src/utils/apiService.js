@@ -91,12 +91,19 @@ class SharedApiService {
      * @returns {Promise} API response with success wrapper
      */
     async _executeRequest(endpoint, options) {
-        const response = await apiCall(endpoint, options);
-        if (response.ok) {
-            const data = await response.json();
-            return { success: true, data };
-        } else {
-            return { success: false, error: `Request failed with status ${response.status}` };
+        try {
+            const response = await apiCall(endpoint, options);
+            
+            // apiCall now returns raw Response object (backward compatible)
+            if (response.ok) {
+                const data = await response.json();
+                return { success: true, data };
+            } else {
+                return { success: false, error: `Request failed with status ${response.status}` };
+            }
+        } catch (error) {
+            console.error('❌ API request error:', error);
+            return { success: false, error: error.message || 'Request failed' };
         }
     }
 

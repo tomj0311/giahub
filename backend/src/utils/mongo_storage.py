@@ -261,8 +261,9 @@ class MongoStorageService:
             else:
                 update_data["$set"] = {"updated_at": datetime.utcnow()}
             
-            # Ensure tenant data for upserts
-            if upsert and "$set" in update_data:
+            # For upserts, ensure tenant data is included, but ONLY for non-users collections
+            # CRITICAL FIX: Never auto-add tenantId to users collection updates to prevent overwriting existing tenantId
+            if upsert and "$set" in update_data and collection_name != 'users':
                 update_data["$set"] = cls._ensure_tenant_data(update_data["$set"], tenant_id, collection_name)
             
             result = await collection.update_one(filter_dict, update_data, upsert=upsert)
