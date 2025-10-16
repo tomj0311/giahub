@@ -7,7 +7,7 @@ cd /home/tom/giahub/backend
 pkill -f "python3.*main.py" 2>/dev/null
 
 # Start with nohup
-nohup python main.py > /home/tom/giahub/logs/giahub.log 2>&1 &
+nohup python3 main.py > /home/tom/giahub/logs/giahub.log 2>&1 &
 
 PID=$!
 echo "✅ GiaHub backend started with PID: $PID"
