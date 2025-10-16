@@ -64,6 +64,7 @@ const WorkflowUI = lazy(() => import('../workflows/WorkflowUI'))
 const TaskCompletion = lazy(() => import('../workflows/TaskCompletion'))
 const DynamicComponentLoader = lazy(() => import('../workflows/DynamicComponentLoader'))
 const DynamicFunctionTester = lazy(() => import('../workflows/DynamicFunctionTester'))
+const SchedulerJobs = lazy(() => import('../workflows/SchedulerJobs'))
 const Analytics = lazy(() => import('./Analytics'))
 const BPMN = lazy(() => import('../components/bpmn/BPMN'))
 import RouteTransition from '../components/RouteTransition'
@@ -168,6 +169,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 					label: 'Run Workflow',
 					to: '/dashboard/workflow-ui',
 					icon: 'Play'
+				},
+				{
+					label: 'Scheduler Jobs',
+					to: '/dashboard/scheduler-jobs',
+					icon: 'Clock'
 				},
 				{
 					label: 'Utilities',
@@ -900,11 +906,12 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="tools" element={<ToolConfig user={user} />} />
 				<Route path="knowledge" element={<KnowledgeConfig user={user} />} />
 				<Route path="agent-playground" element={<AgentPlayground user={user} />} />
-				<Route path="analytics" element={<Analytics />} />
-				<Route path="workflows" element={<WorkflowConfig user={user} />} />
-				<Route path="workflow-ui" element={<WorkflowUI user={user} />} />
-				<Route path="function-tester" element={<DynamicFunctionTester user={user} />} />
-				<Route path="dynamic" element={<DynamicComponentLoader user={user} />} />
+			<Route path="analytics" element={<Analytics />} />
+			<Route path="workflows" element={<WorkflowConfig user={user} />} />
+			<Route path="workflow-ui" element={<WorkflowUI user={user} />} />
+			<Route path="function-tester" element={<DynamicFunctionTester user={user} />} />
+			<Route path="scheduler-jobs" element={<SchedulerJobs user={user} />} />
+			<Route path="dynamic" element={<DynamicComponentLoader user={user} />} />
 				<Route path="bpmn" element={<BPMNEditorWrapper />} />
 				<Route path="monitor" element={<WorkflowDashboard user={user} />} />
 				<Route path="workflow-execution" element={<WorkflowExecution user={user} />} />
