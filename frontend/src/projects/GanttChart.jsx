@@ -53,8 +53,9 @@ function GanttChart({ user, projectId: propProjectId }) {
   const [timelineMonths, setTimelineMonths] = useState([])
   const [timelineDays, setTimelineDays] = useState([])
   const [timelineWeeks, setTimelineWeeks] = useState([])
+  const [timelineYears, setTimelineYears] = useState([])
   const [zoomLevel, setZoomLevel] = useState(1)
-  const [viewMode, setViewMode] = useState('monthly') // 'daily', 'weekly', 'monthly'
+  const [viewMode, setViewMode] = useState('monthly') // 'daily', 'weekly', 'monthly', 'yearly'
   const ganttRef = useRef(null)
 
   // Format date as dd/mm/yyyy
@@ -356,9 +357,18 @@ function GanttChart({ user, projectId: propProjectId }) {
     const months = []
     const days = []
     const weeks = []
+    const years = []
     let current = new Date(start)
 
+    // Generate years
+    const startYear = start.getFullYear()
+    const endYear = end.getFullYear()
+    for (let year = startYear; year <= endYear; year++) {
+      years.push(new Date(year, 0, 1))
+    }
+
     // Generate months
+    current = new Date(start)
     while (current <= end) {
       months.push(new Date(current))
       current = new Date(current.getFullYear(), current.getMonth() + 1, 1)
@@ -399,6 +409,7 @@ function GanttChart({ user, projectId: propProjectId }) {
     setTimelineMonths(months)
     setTimelineDays(days)
     setTimelineWeeks(weeks)
+    setTimelineYears(years)
   }
 
   const calculateBarPosition = (startDate, dueDate) => {
@@ -467,6 +478,43 @@ function GanttChart({ user, projectId: propProjectId }) {
       normalizedDue.setHours(23, 59, 59, 999)
       const totalDays = Math.max(1, Math.ceil((normalizedDue - normalizedStart) / msPerDay) + 1)
       widthPx = Math.max(unitWidth * 0.6, (totalDays / 7) * unitWidth)
+      
+    } else if (viewMode === 'yearly') {
+      // Calculate position based on years array
+      const unitWidth = 300 * zoomLevel
+      
+      // Find which year the start and due dates fall into
+      let startYearIndex = 0
+      let dueYearIndex = 0
+      
+      for (let i = 0; i < timelineYears.length; i++) {
+        const year = timelineYears[i].getFullYear()
+        const yearStart = new Date(year, 0, 1)
+        const yearEnd = new Date(year, 11, 31, 23, 59, 59, 999)
+        
+        if (start >= yearStart && start <= yearEnd) {
+          startYearIndex = i
+          // Calculate fractional position within the year
+          const daysInYear = (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)) ? 366 : 365
+          const dayOfYear = Math.floor((start - yearStart) / (1000 * 60 * 60 * 24))
+          leftPx = (i * unitWidth) + (dayOfYear / daysInYear * unitWidth)
+        }
+        
+        if (due >= yearStart && due <= yearEnd) {
+          dueYearIndex = i
+        }
+      }
+      
+      // If start is before first year, position at beginning
+      if (timelineYears.length > 0 && start < timelineYears[0]) {
+        leftPx = 0
+      }
+      
+      // Calculate width based on actual time span
+      const msPerDay = 1000 * 60 * 60 * 24
+      const totalDays = (due - start) / msPerDay
+      const avgDaysPerYear = 365.25
+      widthPx = Math.max(unitWidth * 0.2, (totalDays / avgDaysPerYear) * unitWidth)
       
     } else { // monthly
       // Calculate position based on months array
@@ -891,6 +939,10 @@ function GanttChart({ user, projectId: propProjectId }) {
                 <Calendar size={16} style={{ marginRight: '4px' }} />
                 Monthly
               </ToggleButton>
+              <ToggleButton value="yearly" aria-label="yearly view">
+                <Calendar size={16} style={{ marginRight: '4px' }} />
+                Yearly
+              </ToggleButton>
             </ToggleButtonGroup>
           </Box>
           <Box 
@@ -1147,6 +1199,47 @@ function GanttChart({ user, projectId: propProjectId }) {
                 </Box>
               </>
             )}
+
+            {viewMode === 'yearly' && (
+              <>
+                {/* Years Row */}
+                <Box sx={{ 
+                  display: 'flex', 
+                  backgroundColor: 'background.paper',
+                  minHeight: '32px',
+                  width: `${zoomLevel * 100}%`,
+                  mb: 1
+                }}>
+                  {timelineYears.map((year, index) => {
+                    return (
+                      <Box 
+                        key={index} 
+                        sx={{ 
+                          minWidth: 300 * zoomLevel,
+                          maxWidth: 300 * zoomLevel,
+                          py: 1,
+                          px: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          textAlign: 'center',
+                          borderLeft: 1,
+                          borderColor: 'divider'
+                        }}
+                      >
+                        <Typography 
+                          variant="caption" 
+                          fontWeight="bold"
+                          sx={{ fontSize: '0.75rem' }}
+                        >
+                          {year.getFullYear()}
+                        </Typography>
+                      </Box>
+                    )
+                  })}
+                </Box>
+              </>
+            )}
           </Box>
 
           {/* Timeline Bars */}
@@ -1206,6 +1299,22 @@ function GanttChart({ user, projectId: propProjectId }) {
                     sx={{
                       position: 'absolute',
                       left: `${index * 120 * zoomLevel}px`,
+                      top: 0,
+                      bottom: 0,
+                      width: '1px',
+                      backgroundColor: 'divider',
+                      opacity: 0.5
+                    }}
+                  />
+                )
+              })}
+              {viewMode === 'yearly' && timelineYears.map((year, index) => {
+                return (
+                  <Box 
+                    key={index}
+                    sx={{
+                      position: 'absolute',
+                      left: `${index * 300 * zoomLevel}px`,
                       top: 0,
                       bottom: 0,
                       width: '1px',
