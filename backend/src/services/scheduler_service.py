@@ -89,6 +89,11 @@ class SchedulerService:
         trigger_type = job_data.get("trigger_type", "interval")
         trigger_args = job_data.get("trigger", {})
         
+        # Ensure max_instances is a positive integer
+        max_instances = job_data.get("max_instances")
+        if max_instances is None or not isinstance(max_instances, int) or max_instances <= 0:
+            max_instances = 1  # Default to 1 if not provided or invalid
+        
         job = scheduler.add_job(
             func=func,
             trigger=trigger_type,
@@ -99,7 +104,7 @@ class SchedulerService:
             replace_existing=job_data.get("replace_existing", False),
             misfire_grace_time=job_data.get("misfire_grace_time"),
             coalesce=job_data.get("coalesce"),
-            max_instances=job_data.get("max_instances"),
+            max_instances=max_instances,
             **trigger_args
         )
         
@@ -123,6 +128,13 @@ class SchedulerService:
         if "trigger_type" in job_data and "trigger" in job_data:
             update_args['trigger'] = job_data["trigger_type"]
             update_args.update(job_data["trigger"])
+        
+        # Handle max_instances validation
+        if "max_instances" in job_data:
+            max_instances = job_data["max_instances"]
+            if max_instances is None or not isinstance(max_instances, int) or max_instances <= 0:
+                max_instances = 1  # Default to 1 if invalid
+            update_args['max_instances'] = max_instances
         
         job = scheduler.modify_job(job_id, **update_args)
         

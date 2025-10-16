@@ -72,7 +72,8 @@ function SchedulerJobs({ user }) {
         },
         args: [],
         kwargs: {},
-        replace_existing: false
+        replace_existing: false,
+        max_instances: 1
     });
 
     // Trigger type options
@@ -93,7 +94,8 @@ function SchedulerJobs({ user }) {
             },
             args: [],
             kwargs: {},
-            replace_existing: false
+            replace_existing: false,
+            max_instances: 1
         });
         setIsEditMode(false);
     };
@@ -242,7 +244,8 @@ function SchedulerJobs({ user }) {
                 trigger: form.trigger,
                 args: form.args,
                 kwargs: form.kwargs,
-                replace_existing: form.replace_existing
+                replace_existing: form.replace_existing,
+                max_instances: form.max_instances
             };
 
             const endpoint = isEditMode ? `/api/scheduler/jobs/${form.id}` : '/api/scheduler/jobs';
@@ -590,6 +593,20 @@ function SchedulerJobs({ user }) {
                                 ))}
                             </Select>
                         </FormControl>
+
+                        <TextField
+                            fullWidth
+                            type="number"
+                            label="Max Instances"
+                            value={form.max_instances}
+                            onChange={(e) => setForm({ 
+                                ...form, 
+                                max_instances: Math.max(1, parseInt(e.target.value) || 1)
+                            })}
+                            size="small"
+                            helperText="Maximum number of concurrent job instances (minimum 1)"
+                            inputProps={{ min: 1 }}
+                        />
 
                         {/* Interval Trigger Configuration */}
                         {form.trigger_type === 'interval' && (
