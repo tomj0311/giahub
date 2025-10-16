@@ -21,14 +21,19 @@ import {
 import { Send, Paperclip, X, Download } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { apiCall } from '../config/api'
-
-// GLOBAL user cache to prevent duplicate user loads
-let globalUserCache = null
-let globalUserCacheLoading = false
+import sharedApiService from '../utils/apiService'
 
 function ActivityNotifications({ user, activityId, projectId }) {
   const token = user?.token
+  const tokenRef = useRef(token)
+  tokenRef.current = token
+  
   const { showSuccess, showError } = useSnackbar()
+  
+  // Refs to prevent duplicate calls
+  const isMountedRef = useRef(true)
+  const isLoadingUsersRef = useRef(false)
+  const isLoadingNotificationsRef = useRef(false)
   
   console.log('[NOTIFICATION RENDER]', { activityId, hasToken: !!token, projectId })
   
@@ -50,102 +55,93 @@ function ActivityNotifications({ user, activityId, projectId }) {
   const textFieldRef = useRef(null)
   const fileInputRef = useRef(null)
 
-  // Load users for mentions
+  // Cleanup on unmount
   useEffect(() => {
-    if (!token) return
-    
-    // Check global cache first
-    if (globalUserCache) {
-      console.log('[ACTIVITYNOTIFICATIONS] Using globally cached users')
-      setAllUsers(globalUserCache)
-      return
+    return () => {
+      isMountedRef.current = false
+      Object.values(imagePreviews).forEach(url => URL.revokeObjectURL(url))
     }
+  }, [])
+
+  // Load users for mentions using sharedApiService
+  useEffect(() => {
+    if (!token || !isMountedRef.current) return
     
-    // Check if already loading globally
-    if (globalUserCacheLoading) {
-      console.log('[ACTIVITYNOTIFICATIONS] Users already loading globally, waiting...')
-      // Wait for the load to complete
-      const checkInterval = setInterval(() => {
-        if (!globalUserCacheLoading && globalUserCache) {
-          clearInterval(checkInterval)
-          console.log('[ACTIVITYNOTIFICATIONS] Global load complete, using cached users')
-          setAllUsers(globalUserCache)
-        }
-      }, 50)
-      
-      // Cleanup after 5 seconds max
-      setTimeout(() => clearInterval(checkInterval), 5000)
-      return
-    }
-    
-    console.log('[ACTIVITYNOTIFICATIONS] Loading users for mentions...')
-    globalUserCacheLoading = true
+    if (isLoadingUsersRef.current) return
     
     const loadUsers = async () => {
       try {
-        console.log('[ACTIVITYNOTIFICATIONS] Making API call to /api/users/')
-        const res = await apiCall('/api/users/', {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` }
-        })
-
-        console.log('[ACTIVITYNOTIFICATIONS] /api/users/ response status:', res.status)
-        if (!res.ok) return
-
-        const users = await res.json()
-        const mappedUsers = users.map(u => ({
-          id: u.id,
-          email: u.email,
-          name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email
-        }))
+        isLoadingUsersRef.current = true
         
-        // Cache globally
-        globalUserCache = mappedUsers
-        setAllUsers(mappedUsers)
+        const result = await sharedApiService.makeRequest(
+          '/api/users/',
+          {
+            headers: { Authorization: `Bearer ${tokenRef.current}` }
+          },
+          { token: tokenRef.current?.substring(0, 10) }
+        )
+
+        if (!isMountedRef.current) return
+
+        if (result.success) {
+          const mappedUsers = result.data.map(u => ({
+            id: u.id,
+            email: u.email,
+            name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email
+          }))
+          setAllUsers(mappedUsers)
+        }
       } catch (error) {
         console.error('Error loading users:', error)
       } finally {
-        globalUserCacheLoading = false
+        isLoadingUsersRef.current = false
       }
     }
 
     loadUsers()
-  }, [token]) // Only load once when token is available
+  }, [token])
 
-  // Load existing notifications
+  // Load existing notifications using sharedApiService
   useEffect(() => {
-    if (!activityId || !token) return
+    if (!activityId || !token || !isMountedRef.current) return
+    
+    if (isLoadingNotificationsRef.current) return
     
     const loadNotifications = async () => {
-      console.log('[NOTIFICATION] 📡 Fetching notifications from database for activity:', activityId)
-      setLoading(true)
-      
       try {
-        const res = await apiCall(`/api/projects/activities/${activityId}/notifications`, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` }
-        })
+        isLoadingNotificationsRef.current = true
+        setLoading(true)
+        
+        const result = await sharedApiService.makeRequest(
+          `/api/projects/activities/${activityId}/notifications`,
+          {
+            headers: { Authorization: `Bearer ${tokenRef.current}` }
+          },
+          { 
+            activityId,
+            token: tokenRef.current?.substring(0, 10)
+          }
+        )
 
-        console.log('[NOTIFICATION] Load response status:', res.status)
+        if (!isMountedRef.current) return
 
-        if (res.ok) {
-          const data = await res.json()
-          console.log('[NOTIFICATION] ✅ Loaded notifications:', data)
-          console.log('[NOTIFICATION] ✅ Notification count:', data.notifications?.length || 0)
-          setNotifications(data.notifications || [])
+        if (result.success) {
+          setNotifications(result.data.notifications || [])
         } else {
-          const error = await res.json()
-          console.error('[NOTIFICATION] ❌ Load error:', error)
+          console.error('[NOTIFICATION] ❌ Load error:', result.error)
         }
       } catch (error) {
         console.error('[NOTIFICATION] ❌ Error loading notifications:', error)
       } finally {
-        setLoading(false)
+        if (isMountedRef.current) {
+          isLoadingNotificationsRef.current = false
+          setLoading(false)
+        }
       }
     }
 
     loadNotifications()
-  }, [activityId, token]) // Reload whenever activityId or token changes
+  }, [activityId, token])
 
   // Load image previews for notifications with image files
   useEffect(() => {

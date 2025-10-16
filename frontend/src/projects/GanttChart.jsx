@@ -22,6 +22,7 @@ import {
 } from '@mui/material'
 import { ChevronRight, ChevronDown, ArrowLeft, ZoomIn, ZoomOut, Calendar, CalendarDays } from 'lucide-react'
 import { apiCall } from '../config/api'
+import sharedApiService from '../utils/apiService'
 import { useSnackbar } from '../contexts/SnackbarContext'
 
 function GanttChart({ user, projectId: propProjectId }) {
@@ -29,9 +30,14 @@ function GanttChart({ user, projectId: propProjectId }) {
   const navigate = useNavigate()
   const location = useLocation()
   const token = user?.token
+  const tokenRef = useRef(token)
+  tokenRef.current = token
+  
   const { showError } = useSnackbar()
   const isMountedRef = useRef(true)
-  const isLoadingRef = useRef(false)
+  const isLoadingProjectRef = useRef(false)
+  const isLoadingTreeRef = useRef(false)
+  const isLoadingActivitiesRef = useRef(false)
 
   // Get project ID from props or location state
   const projectId = propProjectId || location.state?.projectId
@@ -82,26 +88,31 @@ function GanttChart({ user, projectId: propProjectId }) {
   }, [projectId])
 
   const loadProjectData = async () => {
-    if (isLoadingRef.current || !projectId) return
-    isLoadingRef.current = true
-    setLoading(true)
-
+    if (isLoadingProjectRef.current || !projectId) return
+    
     try {
-      // First, load the single project details
-      const projectRes = await apiCall(`/api/projects/projects/${projectId}`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      isLoadingProjectRef.current = true
+      setLoading(true)
 
-      if (!projectRes.ok) {
-        const error = await projectRes.json()
-        throw new Error(error.detail || 'Failed to load project')
-      }
+      // First, load the single project details using sharedApiService
+      const projectResult = await sharedApiService.makeRequest(
+        `/api/projects/projects/${projectId}`,
+        {
+          headers: { Authorization: `Bearer ${tokenRef.current}` }
+        },
+        { 
+          projectId,
+          token: tokenRef.current?.substring(0, 10)
+        }
+      )
 
-      const projectData = await projectRes.json()
-      
       if (!isMountedRef.current) return
       
+      if (!projectResult.success) {
+        throw new Error(projectResult.error || 'Failed to load project')
+      }
+
+      const projectData = projectResult.data
       console.log('[GanttChart] Loaded project:', projectData)
       setProject(projectData)
 
@@ -114,20 +125,25 @@ function GanttChart({ user, projectId: propProjectId }) {
 
       let tree = []
       
-      const treeRes = await apiCall(`/api/projects/projects/tree?${params.toString()}`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const treeResult = await sharedApiService.makeRequest(
+        `/api/projects/projects/tree?${params.toString()}`,
+        {
+          headers: { Authorization: `Bearer ${tokenRef.current}` }
+        },
+        { 
+          root_id: projectId,
+          page: 1,
+          page_size: 1000,
+          token: tokenRef.current?.substring(0, 10)
+        }
+      )
 
-      if (!treeRes.ok) {
+      if (!treeResult.success) {
         console.warn('[GanttChart] Failed to load project tree, will show single project only')
-        // If tree fails, just use the single project
         tree = [projectData]
       } else {
-        const treeData = await treeRes.json()
-        console.log('[GanttChart] Loaded tree:', treeData)
-        
-        tree = treeData.tree || []
+        console.log('[GanttChart] Loaded tree:', treeResult.data)
+        tree = treeResult.data.tree || []
         if (tree.length === 0) {
           tree = [projectData]
         }
@@ -165,7 +181,7 @@ function GanttChart({ user, projectId: propProjectId }) {
         setProject(null) // Ensure project is null to show error state
       }
     } finally {
-      isLoadingRef.current = false
+      isLoadingProjectRef.current = false
       if (isMountedRef.current) {
         setLoading(false)
       }
@@ -173,20 +189,31 @@ function GanttChart({ user, projectId: propProjectId }) {
   }
 
   const loadActivitiesForProject = async (projId) => {
+    if (isLoadingActivitiesRef.current) return
+    
     try {
+      isLoadingActivitiesRef.current = true
+      
       const params = new URLSearchParams({
         page: '1',
         page_size: '200',
         project_id: projId
       })
       
-      const res = await apiCall(`/api/projects/activities?${params}`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const result = await sharedApiService.makeRequest(
+        `/api/projects/activities?${params}`,
+        {
+          headers: { Authorization: `Bearer ${tokenRef.current}` }
+        },
+        { 
+          project_id: projId,
+          page: 1,
+          token: tokenRef.current?.substring(0, 10)
+        }
+      )
 
-      if (res.ok) {
-        const data = await res.json()
+      if (result.success) {
+        const data = result.data
         console.log(`[GanttChart] Loaded ${data.activities?.length || 0} activities for project ${projId}`)
         if (data.activities && data.activities.length > 0) {
           console.log('[GanttChart] Sample activity:', data.activities[0])
@@ -206,6 +233,8 @@ function GanttChart({ user, projectId: propProjectId }) {
       }
     } catch (error) {
       console.error('[GanttChart] Error loading activities:', error)
+    } finally {
+      isLoadingActivitiesRef.current = false
     }
   }
 
@@ -225,7 +254,7 @@ function GanttChart({ user, projectId: propProjectId }) {
     }
     collectProjects(tree)
 
-    // Load activities for each project
+    // Load activities for each project using sharedApiService
     for (const proj of allProjects) {
       try {
         const params = new URLSearchParams({
@@ -234,13 +263,20 @@ function GanttChart({ user, projectId: propProjectId }) {
           project_id: proj.id
         })
         
-        const res = await apiCall(`/api/projects/activities?${params}`, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` }
-        })
+        const result = await sharedApiService.makeRequest(
+          `/api/projects/activities?${params}`,
+          {
+            headers: { Authorization: `Bearer ${tokenRef.current}` }
+          },
+          { 
+            project_id: proj.id,
+            page: 1,
+            token: tokenRef.current?.substring(0, 10)
+          }
+        )
 
-        if (res.ok) {
-          const data = await res.json()
+        if (result.success) {
+          const data = result.data
           allActivities[proj.id] = data.activities || []
           console.log(`[GanttChart] Loaded ${data.activities?.length || 0} activities for project ${proj.id}`)
         }

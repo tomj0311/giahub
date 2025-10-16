@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Box,
   Card,
@@ -34,6 +34,7 @@ import {
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { apiCall } from '../config/api'
+import sharedApiService from '../utils/apiService'
 import { useSnackbar } from '../contexts/SnackbarContext'
 
 // Summary Card Component
@@ -123,6 +124,8 @@ export default function ProjectStatusHome({ user }) {
   const { showError } = useSnackbar()
   const isMountedRef = useRef(true)
   const isLoadingRef = useRef(false)
+  const tokenRef = useRef(user?.token)
+  tokenRef.current = user?.token
 
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState({
@@ -134,72 +137,71 @@ export default function ProjectStatusHome({ user }) {
   const [districtData, setDistrictData] = useState([])
   const [projectTree, setProjectTree] = useState([])
 
-  useEffect(() => {
-    isMountedRef.current = true
-    loadProjectData()
-
-    return () => {
-      isMountedRef.current = false
+  const loadProjectData = useCallback(async () => {
+    if (!isMountedRef.current) return
+    
+    // Prevent duplicate calls
+    if (isLoadingRef.current) {
+      return
     }
-  }, [])
-
-  const loadProjectData = async () => {
-    if (isLoadingRef.current || !isMountedRef.current) return
-    isLoadingRef.current = true
-    setLoading(true)
 
     try {
-      // Load project tree to get first-level projects (districts)
-      const res = await apiCall('/api/projects/projects/tree?root_id=root', {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${user?.token}` }
-      })
+      isLoadingRef.current = true
+      setLoading(true)
 
-      if (!res.ok) {
-        throw new Error('Failed to load projects')
-      }
-
-      const response = await res.json()
-      const tree = response.tree || []
+      // Use sharedApiService like ModelConfig
+      const result = await sharedApiService.makeRequest(
+        '/api/projects/projects/tree?root_id=root',
+        {
+          method: 'GET',
+          headers: tokenRef.current ? { Authorization: `Bearer ${tokenRef.current}` } : {}
+        },
+        { root_id: 'root', token: tokenRef.current?.substring(0, 10) }
+      )
 
       if (!isMountedRef.current) return
 
-      setProjectTree(tree)
+      if (result.success) {
+        const tree = result.data.tree || []
+        setProjectTree(tree)
 
-      // Calculate summary from tree data
-      const allProjects = flattenTree(tree)
-      const summaryData = {
-        total: allProjects.length,
-        inProgress: allProjects.filter(p => p.status === 'ON_TRACK' || p.status === 'AT_RISK').length,
-        onHold: allProjects.filter(p => p.status === 'OFF_TRACK').length,
-        completed: allProjects.filter(p => p.status === 'COMPLETED').length
-      }
-
-      setSummary(summaryData)
-
-      // Process first-level projects as districts
-      const districts = tree.map(district => {
-        const allChildren = flattenTree([district])
-        const total = allChildren.length
-        const inProgress = allChildren.filter(p => p.status === 'ON_TRACK' || p.status === 'AT_RISK').length
-        const onHold = allChildren.filter(p => p.status === 'OFF_TRACK').length
-        const completed = allChildren.filter(p => p.status === 'COMPLETED').length
-
-        return {
-          id: district.id,
-          name: district.name,
-          total,
-          inProgress,
-          onHold,
-          completed,
-          // Calculate percentages for trend display
-          inProgressPercent: total > 0 ? ((inProgress / total) * 100).toFixed(1) : '0',
-          onHoldPercent: total > 0 ? ((onHold / total) * 100).toFixed(1) : '0',
-          completedPercent: total > 0 ? ((completed / total) * 100).toFixed(1) : '0'
+        // Calculate summary from tree data
+        const allProjects = flattenTree(tree)
+        const summaryData = {
+          total: allProjects.length,
+          inProgress: allProjects.filter(p => p.status === 'ON_TRACK' || p.status === 'AT_RISK').length,
+          onHold: allProjects.filter(p => p.status === 'OFF_TRACK').length,
+          completed: allProjects.filter(p => p.status === 'COMPLETED').length
         }
-      })
 
-      setDistrictData(districts)
+        setSummary(summaryData)
+
+        // Process first-level projects as districts
+        const districts = tree.map(district => {
+          const allChildren = flattenTree([district])
+          const total = allChildren.length
+          const inProgress = allChildren.filter(p => p.status === 'ON_TRACK' || p.status === 'AT_RISK').length
+          const onHold = allChildren.filter(p => p.status === 'OFF_TRACK').length
+          const completed = allChildren.filter(p => p.status === 'COMPLETED').length
+
+          return {
+            id: district.id,
+            name: district.name,
+            total,
+            inProgress,
+            onHold,
+            completed,
+            // Calculate percentages for trend display
+            inProgressPercent: total > 0 ? ((inProgress / total) * 100).toFixed(1) : '0',
+            onHoldPercent: total > 0 ? ((onHold / total) * 100).toFixed(1) : '0',
+            completedPercent: total > 0 ? ((completed / total) * 100).toFixed(1) : '0'
+          }
+        })
+
+        setDistrictData(districts)
+      } else {
+        showError(result.error || 'Failed to load project data')
+      }
     } catch (error) {
       console.error('Failed to load project data:', error)
       if (isMountedRef.current) {
@@ -207,11 +209,35 @@ export default function ProjectStatusHome({ user }) {
       }
     } finally {
       if (isMountedRef.current) {
-        setLoading(false)
         isLoadingRef.current = false
+        setLoading(false)
       }
     }
-  }
+  }, []); // Empty dependencies
+
+  // Use exact same pattern as ModelConfig
+  useEffect(() => {
+    const loadData = async () => {
+      if (!isMountedRef.current) return
+      
+      // Set mounted to true
+      isMountedRef.current = true
+      
+      try {
+        await loadProjectData()
+      } catch (err) {
+        console.error('❌ PROJECTSTATUSHOME Error during initialization:', err)
+      }
+    }
+    
+    loadData()
+    
+    return () => {
+      // Set mounted to false FIRST to prevent any state updates
+      isMountedRef.current = false
+      isLoadingRef.current = false
+    }
+  }, []); // EMPTY DEPENDENCIES - NO BULLSHIT
 
   // Helper to flatten tree structure
   const flattenTree = (tree) => {

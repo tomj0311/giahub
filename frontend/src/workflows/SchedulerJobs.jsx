@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, memo } from 'react';
+import React, { useCallback, useEffect, useRef, useState, memo } from 'react';
 import {
     Box,
     Button,
@@ -38,6 +38,7 @@ import {
     Clock as ClockIcon
 } from 'lucide-react';
 import { apiCall } from '../config/api';
+import sharedApiService from '../utils/apiService';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { useConfirmation } from '../contexts/ConfirmationContext';
 
@@ -46,8 +47,10 @@ function SchedulerJobs({ user }) {
     const { showSuccess, showError, showWarning, showInfo } = useSnackbar();
     const { showDeleteConfirmation } = useConfirmation();
 
-    // Refs
+    // Refs - EXACT PATTERN FROM ModelConfig
     const isMountedRef = useRef(true);
+    const isLoadingJobsRef = useRef(false);
+    const isLoadingStatusRef = useRef(false);
     const tokenRef = useRef(token);
     tokenRef.current = token;
 
@@ -95,24 +98,32 @@ function SchedulerJobs({ user }) {
         setIsEditMode(false);
     };
 
-    const loadJobs = async () => {
+    const loadJobs = useCallback(async () => {
         if (!isMountedRef.current) return;
-        if (loadingJobs) return;
+        
+        // Prevent duplicate calls
+        if (isLoadingJobsRef.current) {
+            return;
+        }
 
-        setLoadingJobs(true);
         try {
-            const response = await apiCall('/api/scheduler/jobs', {
-                headers: tokenRef.current ? { 'Authorization': `Bearer ${tokenRef.current}` } : {}
-            });
+            isLoadingJobsRef.current = true;
+            setLoadingJobs(true);
+            
+            const result = await sharedApiService.makeRequest(
+                '/api/scheduler/jobs',
+                {
+                    headers: tokenRef.current ? { 'Authorization': `Bearer ${tokenRef.current}` } : {}
+                },
+                { token: tokenRef.current?.substring(0, 10) }
+            );
 
             if (!isMountedRef.current) return;
 
-            if (response.ok) {
-                const data = await response.json();
-                setJobs(data.jobs || []);
+            if (result.success) {
+                setJobs(result.data.jobs || []);
             } else {
-                const error = await response.json().catch(() => ({ detail: 'Failed to load jobs' }));
-                showError(error.detail || 'Failed to load jobs');
+                showError(result.error || 'Failed to load jobs');
             }
         } catch (error) {
             if (isMountedRef.current) {
@@ -121,37 +132,76 @@ function SchedulerJobs({ user }) {
             }
         } finally {
             if (isMountedRef.current) {
+                isLoadingJobsRef.current = false;
                 setLoadingJobs(false);
             }
         }
-    };
+    }, []); // Empty dependencies
 
-    const loadSchedulerStatus = async () => {
+    const loadSchedulerStatus = useCallback(async () => {
         if (!isMountedRef.current) return;
+        
+        // Prevent duplicate calls
+        if (isLoadingStatusRef.current) {
+            return;
+        }
 
         try {
-            const response = await apiCall('/api/scheduler/status', {
-                headers: tokenRef.current ? { 'Authorization': `Bearer ${tokenRef.current}` } : {}
-            });
+            isLoadingStatusRef.current = true;
+            
+            const result = await sharedApiService.makeRequest(
+                '/api/scheduler/status',
+                {
+                    headers: tokenRef.current ? { 'Authorization': `Bearer ${tokenRef.current}` } : {}
+                },
+                { token: tokenRef.current?.substring(0, 10) }
+            );
 
-            if (response.ok) {
-                const data = await response.json();
-                setSchedulerStatus(data);
+            if (!isMountedRef.current) return;
+
+            if (result.success) {
+                setSchedulerStatus(result.data);
             }
         } catch (error) {
-            console.error('Failed to load scheduler status:', error);
+            if (isMountedRef.current) {
+                console.error('Failed to load scheduler status:', error);
+            }
+        } finally {
+            if (isMountedRef.current) {
+                isLoadingStatusRef.current = false;
+            }
         }
-    };
+    }, []); // Empty dependencies
 
+    // Use exact same pattern as ModelConfig
     useEffect(() => {
-        isMountedRef.current = true;
-        loadJobs();
-        loadSchedulerStatus();
-
-        return () => {
-            isMountedRef.current = false;
+        const loadData = async () => {
+            if (!isMountedRef.current) return;
+            
+            // Set mounted to true
+            isMountedRef.current = true;
+            
+            try {
+                // Load jobs and status
+                await Promise.all([
+                    loadJobs(),
+                    loadSchedulerStatus()
+                ]);
+                
+            } catch (err) {
+                console.error('❌ SCHEDULERJOBS Error during initialization:', err);
+            }
         };
-    }, []);
+        
+        loadData();
+        
+        return () => {
+            // Set mounted to false FIRST to prevent any state updates
+            isMountedRef.current = false;
+            isLoadingJobsRef.current = false;
+            isLoadingStatusRef.current = false;
+        };
+    }, []); // EMPTY DEPENDENCIES - NO BULLSHIT
 
     const openCreateDialog = () => {
         resetForm();

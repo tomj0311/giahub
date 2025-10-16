@@ -104,8 +104,6 @@ class MongoStorageService:
             filter_dict = filter_dict or {}
             filter_dict = cls._ensure_tenant_filter(filter_dict, tenant_id, collection_name)
             
-            logger.info(f"[MONGO_FIND] Collection: {collection_name}, Filter: {filter_dict}, Limit: {limit}")
-            
             cursor = collection.find(filter_dict, projection)
             
             if sort_field:
@@ -121,8 +119,6 @@ class MongoStorageService:
                 results = await cursor.to_list(length=limit)
             else:
                 results = await cursor.to_list(length=None)
-            
-            logger.info(f"[MONGO_FIND] ✅ Found {len(results)} documents in {collection_name}")
             
             return results
         except Exception as e:

@@ -54,6 +54,7 @@ import {
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { useConfirmation } from '../contexts/ConfirmationContext'
 import { apiCall } from '../config/api'
+import sharedApiService from '../utils/apiService'
 
 const STATUS_OPTIONS = ['ON_TRACK', 'AT_RISK', 'OFF_TRACK', 'ON_HOLD', 'COMPLETED']
 const PRIORITY_OPTIONS = ['Low', 'Normal', 'High', 'Urgent']
@@ -62,11 +63,16 @@ function ProjectTreeView({ user }) {
   const theme = useTheme()
   const navigate = useNavigate()
   const token = user?.token
+  const tokenRef = useRef(token)
+  tokenRef.current = token
+  
   const { showSuccess, showError } = useSnackbar()
   const { showDeleteConfirmation } = useConfirmation()
 
   const isMountedRef = useRef(true)
-  const isLoadingRef = useRef(false)
+  const isLoadingTreeRef = useRef(false)
+  const isLoadingMetadataRef = useRef(false)
+  const isLoadingUsersRef = useRef(false)
 
   // Data state
   const [projectTree, setProjectTree] = useState([])
@@ -118,36 +124,43 @@ function ProjectTreeView({ user }) {
 
   // Load field metadata from API - NO HARDCODING!
   const loadFieldMetadata = useCallback(async () => {
+    if (!isMountedRef.current || isLoadingMetadataRef.current) return
+    
     try {
-      const res = await apiCall('/api/projects/projects/fields-metadata', {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.detail || 'Failed to load field metadata')
-      }
-
-      const response = await res.json()
+      isLoadingMetadataRef.current = true
       
-      if (isMountedRef.current) {
-        setFieldMetadata(response.fields || [])
+      const result = await sharedApiService.makeRequest(
+        '/api/projects/projects/fields-metadata',
+        {
+          headers: { Authorization: `Bearer ${tokenRef.current}` }
+        },
+        { token: tokenRef.current?.substring(0, 10) }
+      )
+
+      if (!isMountedRef.current) return
+
+      if (result.success) {
+        setFieldMetadata(result.data.fields || [])
+      } else {
+        showError(result.error || 'Failed to load field metadata')
       }
     } catch (error) {
       console.error('Failed to load field metadata:', error)
       if (isMountedRef.current) {
         showError(error.message || 'Failed to load field metadata')
       }
+    } finally {
+      isLoadingMetadataRef.current = false
     }
-  }, [token, showError])
+  }, [])
 
   const loadProjectTree = useCallback(async () => {
-    if (isLoadingRef.current || !isMountedRef.current) return
-    isLoadingRef.current = true
-    setLoading(true)
-
+    if (isLoadingTreeRef.current || !isMountedRef.current) return
+    
     try {
+      isLoadingTreeRef.current = true
+      setLoading(true)
+
       const params = new URLSearchParams({
         root_id: 'root',
         page: (page + 1).toString(), // Backend uses 1-based
@@ -163,24 +176,31 @@ function ProjectTreeView({ user }) {
         params.append('filters', JSON.stringify(filters))
       }
 
-      const res = await apiCall(`/api/projects/projects/tree?${params.toString()}`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const result = await sharedApiService.makeRequest(
+        `/api/projects/projects/tree?${params.toString()}`,
+        {
+          headers: { Authorization: `Bearer ${tokenRef.current}` }
+        },
+        { 
+          root_id: 'root',
+          page: page + 1,
+          page_size: rowsPerPage,
+          filters: filters.length,
+          sort: sortField,
+          token: tokenRef.current?.substring(0, 10)
+        }
+      )
 
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.detail || 'Failed to load projects')
-      }
+      if (!isMountedRef.current) return
 
-      const response = await res.json()
-
-      if (isMountedRef.current) {
-        setProjectTree(response.tree || [])
-        setTotalCount(response.pagination?.total || 0)
+      if (result.success) {
+        setProjectTree(result.data.tree || [])
+        setTotalCount(result.data.pagination?.total || 0)
         
-        const flatList = flattenTree(response.tree || [])
+        const flatList = flattenTree(result.data.tree || [])
         setAllProjects(flatList)
+      } else {
+        showError(result.error || 'Failed to load projects')
       }
     } catch (error) {
       console.error('Failed to load projects:', error)
@@ -190,27 +210,29 @@ function ProjectTreeView({ user }) {
     } finally {
       if (isMountedRef.current) {
         setLoading(false)
-        isLoadingRef.current = false
+        isLoadingTreeRef.current = false
       }
     }
-  }, [token, showError, page, rowsPerPage, filters, sortField, sortOrder])
+  }, [page, rowsPerPage, filters, sortField, sortOrder])
 
   const loadTenantUsers = useCallback(async () => {
+    if (!isMountedRef.current || isLoadingUsersRef.current) return
+    
     try {
-      const res = await apiCall('/api/users/', {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.detail || 'Failed to load users')
-      }
-
-      const users = await res.json()
+      isLoadingUsersRef.current = true
       
-      if (isMountedRef.current) {
-        const mappedUsers = users.map(u => ({
+      const result = await sharedApiService.makeRequest(
+        '/api/users/',
+        {
+          headers: { Authorization: `Bearer ${tokenRef.current}` }
+        },
+        { token: tokenRef.current?.substring(0, 10) }
+      )
+
+      if (!isMountedRef.current) return
+
+      if (result.success) {
+        const mappedUsers = result.data.map(u => ({
           id: u.id,
           email: u.email,
           firstName: u.firstName || '',
@@ -218,14 +240,18 @@ function ProjectTreeView({ user }) {
           displayName: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email
         }))
         setTenantUsers(mappedUsers)
+      } else {
+        showError(result.error || 'Failed to load users')
       }
     } catch (error) {
       console.error('Failed to load tenant users:', error)
       if (isMountedRef.current) {
         showError(error.message || 'Failed to load users')
       }
+    } finally {
+      isLoadingUsersRef.current = false
     }
-  }, [token, showError])
+  }, [])
 
   const flattenTree = (tree, level = 0) => {
     let result = []
@@ -242,6 +268,13 @@ function ProjectTreeView({ user }) {
     })
     return result
   }
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     isMountedRef.current = true

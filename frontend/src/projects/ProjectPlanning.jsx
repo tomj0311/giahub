@@ -41,6 +41,7 @@ import { Plus, Edit, Trash2, CheckCircle, Circle, Flag, Filter, SortAsc, SortDes
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { useConfirmation } from '../contexts/ConfirmationContext'
 import { apiCall } from '../config/api'
+import sharedApiService from '../utils/apiService'
 
 const ACTIVITY_TYPES = ['MILESTONE', 'PHASE', 'TASK']
 
@@ -53,6 +54,10 @@ function ProjectPlanning({ user, projectId }) {
 
   const isMountedRef = useRef(true)
   const isLoadingRef = useRef(false)
+  const isLoadingProjectsRef = useRef(false)
+  const isLoadingMetadataRef = useRef(false)
+  const tokenRef = useRef(token)
+  tokenRef.current = token
 
   const [activities, setActivities] = useState([])
   const [projects, setProjects] = useState([])
@@ -104,27 +109,35 @@ function ProjectPlanning({ user, projectId }) {
 
   // Load field metadata from API - NO HARDCODING!
   const loadFieldMetadata = useCallback(async () => {
+    if (!isMountedRef.current) return
+    
+    // Prevent duplicate calls
+    if (isLoadingMetadataRef.current) {
+      return
+    }
+    
     try {
-      const res = await apiCall('/api/projects/activities/fields-metadata', {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.detail || 'Failed to load field metadata')
-      }
-
-      const response = await res.json()
+      isLoadingMetadataRef.current = true
       
-      if (isMountedRef.current) {
-        setFieldMetadata(response.fields || [])
+      const result = await sharedApiService.makeRequest(
+        '/api/projects/activities/fields-metadata',
+        {
+          method: 'GET',
+          headers: tokenRef.current ? { Authorization: `Bearer ${tokenRef.current}` } : {}
+        },
+        { token: tokenRef.current?.substring(0, 10) }
+      )
+
+      if (!isMountedRef.current) return
+
+      if (result.success) {
+        setFieldMetadata(result.data.fields || [])
         
         // Update visible columns to include any new fields from backend that aren't in the predefined list
         // This ensures all backend fields are available, but keeps the predefined initial visibility
         setVisibleColumns(prev => {
           const updated = { ...prev }
-          response.fields?.forEach(field => {
+          result.data.fields?.forEach(field => {
             // If field is not in predefined list, set it to false (hidden by default)
             if (!(field.name in updated)) {
               updated[field.name] = false
@@ -132,49 +145,84 @@ function ProjectPlanning({ user, projectId }) {
           })
           return updated
         })
+      } else {
+        showError(result.error || 'Failed to load field metadata')
       }
     } catch (error) {
       console.error('[ProjectPlanning] Failed to load field metadata:', error)
       if (isMountedRef.current) {
         showError(error.message || 'Failed to load field metadata')
       }
-    }
-  }, [token, showError])
-
-  useEffect(() => {
-    isMountedRef.current = true
-    
-    loadFieldMetadata() // Load metadata from API
-    
-    const loadProjects = async () => {
-      try {
-        const res = await apiCall('/api/projects/projects?page=1&page_size=1000', {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` }
-        })
-
-        if (!res.ok) {
-          const error = await res.json()
-          console.error('[ProjectPlanning] Load failed:', error)
-          return
-        }
-
-        const response = await res.json()
-        console.log('[ProjectPlanning] Projects loaded:', response.projects?.length || 0, response.projects)
-        if (isMountedRef.current) {
-          setProjects(response.projects || [])
-        }
-      } catch (error) {
-        console.error('[ProjectPlanning] Error:', error)
+    } finally {
+      if (isMountedRef.current) {
+        isLoadingMetadataRef.current = false
       }
     }
+  }, []); // Empty dependencies
 
-    loadProjects()
-
-    return () => {
-      isMountedRef.current = false
+  const loadProjects = useCallback(async () => {
+    if (!isMountedRef.current) return
+    
+    // Prevent duplicate calls
+    if (isLoadingProjectsRef.current) {
+      return
     }
-  }, [token])
+    
+    try {
+      isLoadingProjectsRef.current = true
+      
+      const result = await sharedApiService.makeRequest(
+        '/api/projects/projects?page=1&page_size=1000',
+        {
+          method: 'GET',
+          headers: tokenRef.current ? { Authorization: `Bearer ${tokenRef.current}` } : {}
+        },
+        { page: 1, page_size: 1000, token: tokenRef.current?.substring(0, 10) }
+      )
+
+      if (!isMountedRef.current) return
+
+      if (result.success) {
+        console.log('[ProjectPlanning] Projects loaded:', result.data.projects?.length || 0)
+        setProjects(result.data.projects || [])
+      }
+    } catch (error) {
+      console.error('[ProjectPlanning] Error:', error)
+    } finally {
+      if (isMountedRef.current) {
+        isLoadingProjectsRef.current = false
+      }
+    }
+  }, []); // Empty dependencies
+
+  // Use exact same pattern as ModelConfig
+  useEffect(() => {
+    const loadData = async () => {
+      if (!isMountedRef.current) return
+      
+      // Set mounted to true
+      isMountedRef.current = true
+      
+      try {
+        await Promise.all([
+          loadFieldMetadata(),
+          loadProjects()
+        ])
+      } catch (err) {
+        console.error('❌ PROJECTPLANNING Error during initialization:', err)
+      }
+    }
+    
+    loadData()
+    
+    return () => {
+      // Set mounted to false FIRST to prevent any state updates
+      isMountedRef.current = false
+      isLoadingRef.current = false
+      isLoadingProjectsRef.current = false
+      isLoadingMetadataRef.current = false
+    }
+  }, []); // EMPTY DEPENDENCIES - NO BULLSHIT
 
   useEffect(() => {
     const loadActivities = async (page = 1, pageSize = 50) => {
@@ -200,25 +248,35 @@ function ProjectPlanning({ user, projectId }) {
           params.append('filters', JSON.stringify(filters))
         }
 
-        const res = await apiCall(`/api/projects/activities?${params}`, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` }
-        })
+        const result = await sharedApiService.makeRequest(
+          `/api/projects/activities?${params}`,
+          {
+            method: 'GET',
+            headers: tokenRef.current ? { Authorization: `Bearer ${tokenRef.current}` } : {}
+          },
+          { 
+            page, 
+            pageSize, 
+            projectId, 
+            activityTypeFilter, 
+            sortField, 
+            sortOrder,
+            filters: JSON.stringify(filters),
+            token: tokenRef.current?.substring(0, 10) 
+          }
+        )
 
-        if (!res.ok) {
-          const error = await res.json()
-          throw new Error(error.detail || 'Failed to load activities')
-        }
+        if (!isMountedRef.current) return
 
-        const response = await res.json()
-
-        if (isMountedRef.current) {
-          setActivities(response.activities || [])
+        if (result.success) {
+          setActivities(result.data.activities || [])
           setPagination({
-            page: response.pagination.page - 1,
+            page: result.data.pagination.page - 1,
             rowsPerPage: pageSize,
-            total: response.pagination.total
+            total: result.data.pagination.total
           })
+        } else {
+          showError(result.error || 'Failed to load activities')
         }
       } catch (error) {
         if (isMountedRef.current) {
@@ -237,10 +295,11 @@ function ProjectPlanning({ user, projectId }) {
   
   const loadActivities = useCallback(async (page = 1, pageSize = 50) => {
     if (isLoadingRef.current || !isMountedRef.current) return
-    isLoadingRef.current = true
-    setLoading(true)
-
+    
     try {
+      isLoadingRef.current = true
+      setLoading(true)
+
       const params = new URLSearchParams({
         page: page.toString(),
         page_size: pageSize.toString()
@@ -258,25 +317,34 @@ function ProjectPlanning({ user, projectId }) {
         params.append('filters', JSON.stringify(filters))
       }
 
-      const res = await apiCall(`/api/projects/activities?${params}`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const result = await sharedApiService.makeRequest(
+        `/api/projects/activities?${params}`,
+        {
+          headers: { Authorization: `Bearer ${tokenRef.current}` }
+        },
+        { 
+          page, 
+          pageSize, 
+          projectId, 
+          activityTypeFilter, 
+          sortField, 
+          sortOrder,
+          filtersCount: filters.length,
+          token: tokenRef.current?.substring(0, 10) 
+        }
+      )
 
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.detail || 'Failed to load activities')
-      }
+      if (!isMountedRef.current) return
 
-      const response = await res.json()
-
-      if (isMountedRef.current) {
-        setActivities(response.activities || [])
+      if (result.success) {
+        setActivities(result.data.activities || [])
         setPagination({
-          page: response.pagination.page - 1,
+          page: result.data.pagination.page - 1,
           rowsPerPage: pageSize,
-          total: response.pagination.total
+          total: result.data.pagination.total
         })
+      } else {
+        showError(result.error || 'Failed to load activities')
       }
     } catch (error) {
       if (isMountedRef.current) {
@@ -288,7 +356,7 @@ function ProjectPlanning({ user, projectId }) {
         isLoadingRef.current = false
       }
     }
-  }, [token, projectId, activityTypeFilter, filters, sortField, sortOrder, showError])
+  }, [projectId, activityTypeFilter, filters, sortField, sortOrder])
 
   // Filter handlers
   const handleOpenFilterDialog = () => {
