@@ -535,225 +535,218 @@ function ActivityForm({ user, projectId: propProjectId }) {
         </Box>
       </Box>
 
-      {/* Form - Grid Layout */}
+      {/* Form - Two Column Layout: Left = Subject + Description, Right = all other fields */}
       <Card>
         <CardContent>
-          {/* Type, Project, and Status in one row - 3 columns */}
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' }, gap: 3, mb: 3 }}>
-            {/* Type Selection */}
-            <FormControl fullWidth>
-              <InputLabel>Type</InputLabel>
-              <Select
-                value={form.type}
-                label="Type"
-                onChange={(e) => setForm({ ...form, type: e.target.value })}
-                disabled={isEditMode}
-              >
-                {ACTIVITY_TYPES.map((type) => (
-                  <MenuItem key={type} value={type}>
-                    {type}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1.2fr 1fr' }, gap: 3, alignItems: 'start' }}>
+            {/* Left column: Subject and Description */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr', gap: 2, alignSelf: 'start', alignContent: 'start', alignItems: 'start', gridAutoRows: 'min-content' }}>
+              <TextField
+                label="Subject"
+                value={form.subject}
+                onChange={(e) => {
+                  setForm({ ...form, subject: e.target.value })
+                  setFormErrors({ ...formErrors, subject: undefined })
+                }}
+                fullWidth
+                required
+                error={!!formErrors.subject}
+                helperText={formErrors.subject}
+              />
 
-            {/* Project Selection */}
-            <Autocomplete
-              options={projects}
-              getOptionLabel={(option) => option.name || ''}
-              value={projects.find(p => p.id === form.project_id) || null}
-              onChange={(event, newValue) => {
-                setForm({ ...form, project_id: newValue ? newValue.id : '' })
-                setFormErrors({ ...formErrors, project_id: undefined })
-              }}
-              renderInput={(params) => (
-                <TextField 
-                  {...params} 
-                  label="Project" 
-                  required
-                  error={!!formErrors.project_id}
-                  helperText={formErrors.project_id || (projects.length === 0 ? "No projects found. Create a project first." : `${projects.length} projects available`)}
-                />
-              )}
-              fullWidth
-              noOptionsText={projects.length === 0 ? "No projects found. Create a project first." : "No matching projects"}
-            />
+              <TextField
+                label="Description"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                fullWidth
+                multiline
+                rows={8}
+                placeholder="Enter detailed description of the activity..."
+              />
+            </Box>
 
-            {/* Status */}
-            <FormControl fullWidth>
-              <InputLabel>Status</InputLabel>
-              <Select
-                value={form.status}
-                label="Status"
-                onChange={(e) => setForm({ ...form, status: e.target.value })}
-              >
-                {STATUS_OPTIONS.map((status) => (
-                  <MenuItem key={status} value={status}>
-                    {status}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
+            {/* Right column: All other fields (2-column grid on md+) */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+              {/* Type */}
+              <FormControl fullWidth>
+                <InputLabel>Type</InputLabel>
+                <Select
+                  value={form.type}
+                  label="Type"
+                  onChange={(e) => setForm({ ...form, type: e.target.value })}
+                  disabled={isEditMode}
+                >
+                  {ACTIVITY_TYPES.map((type) => (
+                    <MenuItem key={type} value={type}>
+                      {type}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
-            {/* Subject */}
-            <TextField
-              label="Subject"
-              value={form.subject}
-              onChange={(e) => {
-                setForm({ ...form, subject: e.target.value })
-                setFormErrors({ ...formErrors, subject: undefined })
-              }}
-              fullWidth
-              required
-              error={!!formErrors.subject}
-              helperText={formErrors.subject}
-            />
-          </Box>
+              {/* Project (span both columns for readability) */}
+              <Autocomplete
+                options={projects}
+                getOptionLabel={(option) => option.name || ''}
+                value={projects.find(p => p.id === form.project_id) || null}
+                onChange={(event, newValue) => {
+                  setForm({ ...form, project_id: newValue ? newValue.id : '' })
+                  setFormErrors({ ...formErrors, project_id: undefined })
+                }}
+                renderInput={(params) => (
+                  <TextField 
+                    {...params} 
+                    label="Project" 
+                    required
+                    error={!!formErrors.project_id}
+                    helperText={formErrors.project_id || (projects.length === 0 ? "No projects found. Create a project first." : undefined)}
+                  />
+                )}
+                fullWidth
+                noOptionsText={projects.length === 0 ? "No projects found. Create a project first." : "No matching projects"}
+              />
 
-          {/* Description - Full Width */}
-          <Box sx={{ mt: 3 }}>
-            <TextField
-              label="Description"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              fullWidth
-              multiline
-              rows={3}
-              placeholder="Enter detailed description of the activity..."
-            />
-          </Box>
+              {/* Status */}
+              <FormControl fullWidth>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={form.status}
+                  label="Status"
+                  onChange={(e) => setForm({ ...form, status: e.target.value })}
+                >
+                  {STATUS_OPTIONS.map((status) => (
+                    <MenuItem key={status} value={status}>
+                      {status}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
-          {/* Priority, Assignee, and Approver in one row - 3 columns */}
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' }, gap: 3 }}>
-            {/* Priority */}
-            <FormControl fullWidth>
-              <InputLabel>Priority</InputLabel>
-              <Select
-                value={form.priority}
-                label="Priority"
-                onChange={(e) => setForm({ ...form, priority: e.target.value })}
-              >
-                {PRIORITY_OPTIONS.map((priority) => (
-                  <MenuItem key={priority} value={priority}>
-                    {priority}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+              {/* Priority */}
+              <FormControl fullWidth>
+                <InputLabel>Priority</InputLabel>
+                <Select
+                  value={form.priority}
+                  label="Priority"
+                  onChange={(e) => setForm({ ...form, priority: e.target.value })}
+                >
+                  {PRIORITY_OPTIONS.map((priority) => (
+                    <MenuItem key={priority} value={priority}>
+                      {priority}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
-            {/* Assignee */}
-            <Autocomplete
-              options={tenantUsers}
-              getOptionLabel={(option) => option.displayName}
-              value={tenantUsers.find(u => u.email === form.assignee) || null}
-              onChange={(event, newValue) => {
-                setForm({ ...form, assignee: newValue ? newValue.email : '' })
-                setFormErrors({ ...formErrors, assignee: undefined, approver: undefined })
-              }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Assignee"
-                  required
-                  error={!!formErrors.assignee}
-                  helperText={formErrors.assignee || 'Required'}
-                />
-              )}
-              renderOption={(props, option) => (
-                <li {...props} key={option.id}>
-                  <Box>
-                    <Typography variant="body1">{option.displayName}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {option.email}
-                    </Typography>
-                  </Box>
-                </li>
-              )}
-              fullWidth
-              isOptionEqualToValue={(option, value) => option.email === value.email}
-            />
+              {/* Assignee */}
+              <Autocomplete
+                options={tenantUsers}
+                getOptionLabel={(option) => option.displayName}
+                value={tenantUsers.find(u => u.email === form.assignee) || null}
+                onChange={(event, newValue) => {
+                  setForm({ ...form, assignee: newValue ? newValue.email : '' })
+                  setFormErrors({ ...formErrors, assignee: undefined, approver: undefined })
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Assignee"
+                    required
+                    error={!!formErrors.assignee}
+                    helperText={formErrors.assignee || 'Required'}
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <li {...props} key={option.id}>
+                    <Box>
+                      <Typography variant="body1">{option.displayName}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {option.email}
+                      </Typography>
+                    </Box>
+                  </li>
+                )}
+                fullWidth
+                isOptionEqualToValue={(option, value) => option.email === value.email}
+              />
 
-            {/* Approver */}
-            <Autocomplete
-              options={tenantUsers.filter(u => u.email !== form.assignee)}
-              getOptionLabel={(option) => option.displayName}
-              value={tenantUsers.find(u => u.email === form.approver) || null}
-              onChange={(event, newValue) => {
-                setForm({ ...form, approver: newValue ? newValue.email : '' })
-                setFormErrors({ ...formErrors, approver: undefined })
-              }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Approver"
-                  required
-                  error={!!formErrors.approver}
-                  helperText={formErrors.approver || 'Must differ from Assignee'}
-                />
-              )}
-              renderOption={(props, option) => (
-                <li {...props} key={option.id}>
-                  <Box>
-                    <Typography variant="body1">{option.displayName}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {option.email}
-                    </Typography>
-                  </Box>
-                </li>
-              )}
-              fullWidth
-              isOptionEqualToValue={(option, value) => option.email === value.email}
-            />
-          </Box>
+              {/* Approver */}
+              <Autocomplete
+                options={tenantUsers.filter(u => u.email !== form.assignee)}
+                getOptionLabel={(option) => option.displayName}
+                value={tenantUsers.find(u => u.email === form.approver) || null}
+                onChange={(event, newValue) => {
+                  setForm({ ...form, approver: newValue ? newValue.email : '' })
+                  setFormErrors({ ...formErrors, approver: undefined })
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Approver"
+                    required
+                    error={!!formErrors.approver}
+                    helperText={formErrors.approver || 'Must differ from Assignee'}
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <li {...props} key={option.id}>
+                    <Box>
+                      <Typography variant="body1">{option.displayName}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {option.email}
+                      </Typography>
+                    </Box>
+                  </li>
+                )}
+                fullWidth
+                isOptionEqualToValue={(option, value) => option.email === value.email}
+              />
 
-          {/* Dates and Progress in one row - 3 columns */}
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' }, gap: 3 }}>
-            {/* Start Date */}
-            <TextField
-              label="Start Date"
-              type="date"
-              value={form.start_date}
-              onChange={(e) => {
-                setForm({ ...form, start_date: e.target.value })
-                setFormErrors({ ...formErrors, start_date: undefined, due_date: undefined })
-              }}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              inputProps={{ min: '1900-01-01', max: '2100-12-31' }}
-              required
-              error={!!formErrors.start_date}
-              helperText={formErrors.start_date || 'Required'}
-            />
+              {/* Start Date */}
+              <TextField
+                label="Start Date"
+                type="date"
+                value={form.start_date}
+                onChange={(e) => {
+                  setForm({ ...form, start_date: e.target.value })
+                  setFormErrors({ ...formErrors, start_date: undefined, due_date: undefined })
+                }}
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+                inputProps={{ min: '1900-01-01', max: '2100-12-31' }}
+                required
+                error={!!formErrors.start_date}
+                helperText={formErrors.start_date || 'Required'}
+              />
 
-            {/* Due Date */}
-            <TextField
-              label="Due Date"
-              type="date"
-              value={form.due_date}
-              onChange={(e) => {
-                setForm({ ...form, due_date: e.target.value })
-                setFormErrors({ ...formErrors, due_date: undefined })
-              }}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              inputProps={{ min: '1900-01-01', max: '2100-12-31' }}
-              required
-              error={!!formErrors.due_date}
-              helperText={formErrors.due_date || 'Required'}
-            />
+              {/* Due Date */}
+              <TextField
+                label="Due Date"
+                type="date"
+                value={form.due_date}
+                onChange={(e) => {
+                  setForm({ ...form, due_date: e.target.value })
+                  setFormErrors({ ...formErrors, due_date: undefined })
+                }}
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+                inputProps={{ min: '1900-01-01', max: '2100-12-31' }}
+                required
+                error={!!formErrors.due_date}
+                helperText={formErrors.due_date || 'Required'}
+              />
 
-            {/* Progress */}
-            <TextField
-              label="Progress (%)"
-              type="number"
-              value={form.progress}
-              onChange={(e) => setForm({ ...form, progress: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) })}
-              fullWidth
-              inputProps={{ min: 0, max: 100 }}
-              helperText="Completion (0-100)"
-            />
+              {/* Progress */}
+              <TextField
+                label="Progress (%)"
+                type="number"
+                value={form.progress}
+                onChange={(e) => setForm({ ...form, progress: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) })}
+                fullWidth
+                inputProps={{ min: 0, max: 100 }}
+                helperText="Completion (0-100)"
+              />
+            </Box>
           </Box>
         </CardContent>
         <CardActions sx={{ display: 'flex', justifyContent: 'flex-end', p: 2, pt: 0 }}>
