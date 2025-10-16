@@ -13,8 +13,6 @@ from src.utils.log import logger
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://127.0.0.1:8801")
 MONGO_DB = os.getenv("MONGO_DB", "giap")
 
-logger.info(f"[SCHEDULER] Using MongoDB: {MONGO_URL}/{MONGO_DB}")
-
 # Configure jobstores and executors
 jobstores = {
     'default': MongoDBJobStore(
@@ -46,12 +44,12 @@ scheduler = AsyncIOScheduler(
 
 async def example_job():
     """Example scheduled job that runs periodically."""
-    logger.info(f"[SCHEDULER] Example job executed at {datetime.utcnow()}")
+    logger.info(f"Example job executed at {datetime.utcnow()}")
 
 
 async def cleanup_job():
     """Example cleanup job."""
-    logger.info("[SCHEDULER] Running cleanup job")
+    logger.info("Running cleanup job")
 
 
 # ========== Job Registration ==========
@@ -79,19 +77,15 @@ def register_jobs():
         name='Daily cleanup job',
         replace_existing=True
     )
-    
-    logger.info("[SCHEDULER] All jobs registered successfully")
 
 
 def start_scheduler():
     """Start the APScheduler."""
     register_jobs()
     scheduler.start()
-    logger.info("[SCHEDULER] Scheduler started successfully")
 
 
 def shutdown_scheduler():
     """Shutdown the APScheduler."""
     if scheduler.running:
         scheduler.shutdown(wait=True)
-        logger.info("[SCHEDULER] Scheduler shutdown successfully")

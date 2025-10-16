@@ -28,7 +28,6 @@ async def _run_workflow_background(workflow_id: str, instance_id: str, initial_d
     """Run workflow in background"""
     try:
         await WorkflowServicePersistent.run_workflow(workflow_id, initial_data, user, instance_id=instance_id)
-        logger.info(f"Workflow {workflow_id} instance {instance_id} completed in background")
     except Exception as e:
         logger.error(f"Background workflow {workflow_id} instance {instance_id} failed: {str(e)}")
 
@@ -75,15 +74,11 @@ async def start_workflow_by_name(
 ):
     """Start a new workflow instance using workflow name"""
     try:
-        # Validate tenant access
         tenant_id = await WorkflowServicePersistent.validate_tenant_access(user)
         
-        # Find workflow configuration by name
-        logger.info(f"[WORKFLOW] Looking up workflow by name: {workflow_name}")
         workflow_config = await WorkflowConfigService.get_workflow_config_by_name(workflow_name, user)
         
         if not workflow_config:
-            logger.warning(f"[WORKFLOW] Workflow not found: {workflow_name}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Workflow '{workflow_name}' not found"
@@ -91,10 +86,8 @@ async def start_workflow_by_name(
         
         workflow_id = workflow_config.get("id")
         
-        # Add tenant info to initial data
         initial_data = request.get('initial_data', {})
         
-        # Generate instance_id first
         instance_id = uuid.uuid4().hex[:6]
 
         initial_data.update({
@@ -106,10 +99,7 @@ async def start_workflow_by_name(
             "started_at": str(datetime.now())
         })
         
-        # Start workflow in background with instance_id
         background_tasks.add_task(_run_workflow_background, workflow_id, instance_id, initial_data, user)
-        
-        logger.info(f"[WORKFLOW] Started workflow '{workflow_name}' (ID: {workflow_id}) with instance: {instance_id}")
         
         return {
             "success": True,
@@ -121,7 +111,7 @@ async def start_workflow_by_name(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[WORKFLOW] Failed to start workflow by name '{workflow_name}': {str(e)}")
+        logger.error(f"Failed to start workflow by name '{workflow_name}': {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to start workflow: {str(e)}"
@@ -147,7 +137,6 @@ async def get_incomplete_workflows(
         now = time.time()
         cached = _INCOMPLETE_CACHE.get(cache_key)
         if cached and (now - cached["ts"]) < _INCOMPLETE_CACHE_TTL:
-            logger.debug(f"[WORKFLOW] Returning cached response for incomplete list: workflow_id={workflow_id}")
             return cached["data"]
 
         incomplete_workflows = await WorkflowServicePersistent.list_workflows_paginated(
@@ -163,11 +152,10 @@ async def get_incomplete_workflows(
             "total_pages": (incomplete_workflows.get("total", 0) + size - 1) // size
         }
         _INCOMPLETE_CACHE[cache_key] = {"ts": now, "data": response_data}
-        logger.debug(f"[WORKFLOW] Returning response: {response_data}")
         return response_data
     except Exception as e:
         error_msg = f"Failed to get incomplete workflows: {str(e)}"
-        logger.error(f"[HTTP 500] {error_msg}")
+        logger.error(error_msg)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_msg)
 
 
@@ -201,11 +189,10 @@ async def get_all_workflows(
             "total_pages": (workflows.get("total", 0) + size - 1) // size
         }
         _INCOMPLETE_CACHE[cache_key] = {"ts": now, "data": response_data}
-        logger.debug(f"[WORKFLOW] Returning response: {response_data}")
         return response_data
     except Exception as e:
         error_msg = f"Failed to get workflows: {str(e)}"
-        logger.error(f"[HTTP 500] {error_msg}")
+        logger.error(error_msg)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_msg)
 
 
@@ -224,7 +211,7 @@ async def get_workflow_instance(
         return {"success": True, "data": instance}
     except Exception as e:
         error_msg = f"Failed to get workflow instance: {str(e)}"
-        logger.error(f"[HTTP 500] {error_msg}")
+        logger.error(error_msg)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_msg)
 
 
@@ -234,7 +221,6 @@ async def _submit_task_background(workflow_id: str, instance_id: str, task_id: s
         result = await WorkflowServicePersistent.handle_user_task(
             workflow_id, instance_id, task_id, task_data, user
         )
-        logger.info(f"Task {task_id} completed in background")
     except Exception as e:
         logger.error(f"Background task {task_id} failed: {str(e)}")
 
@@ -275,7 +261,6 @@ async def submit_user_task(
                         "file_size": file_info["file_size"],
                         "content_type": file_info.get("content_type")
                     })
-                    logger.info(f"Uploaded file: {file_info['filename']} to {file_info['file_path']}")
                 except Exception as e:
                     logger.error(f"Failed to upload file {file.filename}: {str(e)}")
             

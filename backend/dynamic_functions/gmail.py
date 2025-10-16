@@ -8,6 +8,9 @@ The user parameter should contain:
 """
 
 import base64
+import logging
+
+logger = logging.getLogger(__name__)
 import json
 from typing import Dict, List, Any, Optional
 from email.mime.text import MIMEText
@@ -160,12 +163,6 @@ async def read_message(
         - body: Email body (plain text or HTML)
         - snippet: Preview text
         - labels: List of labels
-        
-    Example:
-        message = await read_message(user, 'msg_12345')
-        print(f"From: {message['from']}")
-        print(f"Subject: {message['subject']}")
-        print(f"Body: {message['body']}")
     """
     message = await get_message(user, message_id, format='full')
     
@@ -257,7 +254,6 @@ async def send_email(
             subject='Hello',
             body='This is a test email'
         )
-        print(f"Email sent! Message ID: {result['id']}")
     """
     headers = _get_auth_headers(user)
     
@@ -405,7 +401,7 @@ async def search_emails(
             parsed_messages.append(parsed_msg)
         except Exception as e:
             # Skip messages that fail to parse
-            print(f"Error parsing message {msg['id']}: {e}")
+            logger.error(f"Error parsing message {msg['id']}: {e}")
             continue
     
     return parsed_messages
@@ -511,11 +507,6 @@ async def get_labels(user: Dict[str, Any]) -> List[Dict[str, Any]]:
         - type: Label type (system or user)
         - messageListVisibility: Visibility in message list
         - labelListVisibility: Visibility in label list
-        
-    Example:
-        labels = await get_labels(user)
-        for label in labels:
-            print(f"{label['name']}: {label['id']}")
     """
     headers = _get_auth_headers(user)
     
@@ -541,11 +532,6 @@ async def get_profile(user: Dict[str, Any]) -> Dict[str, Any]:
         - messagesTotal: Total number of messages
         - threadsTotal: Total number of threads
         - historyId: Current history ID
-        
-    Example:
-        profile = await get_profile(user)
-        print(f"Email: {profile['emailAddress']}")
-        print(f"Total messages: {profile['messagesTotal']}")
     """
     headers = _get_auth_headers(user)
     

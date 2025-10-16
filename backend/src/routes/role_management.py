@@ -215,23 +215,17 @@ async def get_all_users(user: dict = Depends(verify_token_middleware)):
     
     # Additional tenant filtering for safety
     tenant_users = await tenant_filter_records(current_user_id, all_users)
-
-    logger.debug(f"[RBAC] Found {len(tenant_users)} tenant users")
     
     # Build user list with their roles (tenant-filtered)
     users = []
     tenant_id = await TenantService.get_user_tenant_id(current_user_id)
     for u in tenant_users:
-        logger.debug(f"[RBAC] Processing user: {u.keys()}")
         user_id_field = u.get('id') or u.get('user_id') or u.get('_id')
-        logger.debug(f"[RBAC] User ID field: {user_id_field}")
         if not user_id_field:
-            logger.warning(f"[RBAC] Skipping user with no ID: {u}")
             continue
 
         # Get user's roles (already tenant-filtered via RBAC service)
         user_roles = await RBACService.get_user_roles(str(user_id_field), tenant_id=tenant_id)
-        logger.debug(f"[RBAC] User {user_id_field} has roles: {len(user_roles)}")
         
         # Build user data without password and _id (ObjectId serialization issue)
         user_data = {k: v for k, v in u.items() if k not in ["password", "_id", "password_hash"]}
@@ -251,7 +245,6 @@ async def get_all_users(user: dict = Depends(verify_token_middleware)):
         
         users.append(user_data)
 
-    logger.info(f"[RBAC] Returning {len(users)} users")
     return users
 
 
@@ -501,8 +494,6 @@ async def delete_user(
             "user_roles",
             await tenant_filter_query(current_user_id, {"userId": user_id})
         )
-        
-        logger.info(f"User {user_id} deleted by {current_user_id}")
         
         return {
             "message": "User deleted successfully",

@@ -12,9 +12,6 @@ from fastapi import HTTPException, status
 from ..utils.log import logger
 from ..utils.mongo_storage import MongoStorageService
 
-# Module loaded log
-logger.debug("[AGENTS] Service module loaded")
-
 
 class AgentService:
     """Service for managing agents"""

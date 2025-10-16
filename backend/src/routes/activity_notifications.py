@@ -31,7 +31,7 @@ async def create_notification(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[NOTIFICATION] Failed to create notification: {e}")
+        logger.error(f"Failed to create notification: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create notification"
@@ -53,7 +53,7 @@ async def get_notifications(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[NOTIFICATION] Failed to fetch notifications: {e}")
+        logger.error(f"Failed to fetch notifications: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch notifications"

@@ -50,8 +50,6 @@ class SchedulerService:
     @classmethod
     async def list_jobs(cls, pending_only: bool = False) -> Dict[str, Any]:
         """List all scheduled jobs."""
-        logger.info(f"[SCHEDULER] Listing jobs (pending_only={pending_only})")
-        
         jobs = scheduler.get_jobs()
         
         if pending_only:
@@ -59,7 +57,6 @@ class SchedulerService:
         
         job_list = [cls.job_to_dict(job) for job in jobs]
         
-        logger.info(f"[SCHEDULER] Found {len(job_list)} job(s)")
         return {
             "jobs": job_list,
             "total": len(job_list)
@@ -68,15 +65,12 @@ class SchedulerService:
     @classmethod
     async def get_job(cls, job_id: str) -> Dict[str, Any]:
         """Get specific job details by ID."""
-        logger.info(f"[SCHEDULER] Getting job: {job_id}")
-        
         job = scheduler.get_job(job_id)
         
         if not job:
             logger.warning(f"[SCHEDULER] Job not found: {job_id}")
             raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
         
-        logger.info(f"[SCHEDULER] Successfully retrieved job: {job_id}")
         return cls.job_to_dict(job)
     
     @classmethod
@@ -86,21 +80,15 @@ class SchedulerService:
         if not job_id:
             raise HTTPException(status_code=400, detail="Job ID is required")
         
-        logger.info(f"[SCHEDULER] Adding new job: {job_id}")
-        logger.debug(f"[SCHEDULER] Job data: {job_data}")
-        
-        # Import the function
         func_path = job_data.get("func")
         if not func_path:
             raise HTTPException(status_code=400, detail="Function path is required")
         
         func = cls.import_function(func_path)
         
-        # Prepare trigger arguments
         trigger_type = job_data.get("trigger_type", "interval")
         trigger_args = job_data.get("trigger", {})
         
-        # Add the job
         job = scheduler.add_job(
             func=func,
             trigger=trigger_type,
@@ -115,7 +103,6 @@ class SchedulerService:
             **trigger_args
         )
         
-        logger.info(f"[SCHEDULER] Successfully added job: {job_id}")
         return {
             "message": f"Job '{job_id}' added successfully",
             "job": cls.job_to_dict(job)
@@ -124,15 +111,10 @@ class SchedulerService:
     @classmethod
     async def update_job(cls, job_id: str, job_data: dict) -> Dict[str, Any]:
         """Update an existing scheduled job."""
-        logger.info(f"[SCHEDULER] Updating job: {job_id}")
-        logger.debug(f"[SCHEDULER] Update data: {job_data}")
-        
-        # Check if job exists
         existing_job = scheduler.get_job(job_id)
         if not existing_job:
             raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
         
-        # Prepare update arguments
         update_args = {}
         
         if "name" in job_data:
@@ -142,10 +124,8 @@ class SchedulerService:
             update_args['trigger'] = job_data["trigger_type"]
             update_args.update(job_data["trigger"])
         
-        # Modify the job
         job = scheduler.modify_job(job_id, **update_args)
         
-        logger.info(f"[SCHEDULER] Successfully updated job: {job_id}")
         return {
             "message": f"Job '{job_id}' updated successfully",
             "job": cls.job_to_dict(job)
@@ -154,17 +134,12 @@ class SchedulerService:
     @classmethod
     async def delete_job(cls, job_id: str) -> Dict[str, Any]:
         """Delete a scheduled job."""
-        logger.info(f"[SCHEDULER] Deleting job: {job_id}")
-        
-        # Check if job exists
         job = scheduler.get_job(job_id)
         if not job:
             raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
         
-        # Remove the job
         scheduler.remove_job(job_id)
         
-        logger.info(f"[SCHEDULER] Successfully deleted job: {job_id}")
         return {
             "message": f"Job '{job_id}' deleted successfully"
         }
@@ -172,17 +147,12 @@ class SchedulerService:
     @classmethod
     async def pause_job(cls, job_id: str) -> Dict[str, Any]:
         """Pause a scheduled job."""
-        logger.info(f"[SCHEDULER] Pausing job: {job_id}")
-        
-        # Check if job exists
         job = scheduler.get_job(job_id)
         if not job:
             raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
         
-        # Pause the job
         scheduler.pause_job(job_id)
         
-        logger.info(f"[SCHEDULER] Successfully paused job: {job_id}")
         return {
             "message": f"Job '{job_id}' paused successfully"
         }
@@ -190,17 +160,12 @@ class SchedulerService:
     @classmethod
     async def resume_job(cls, job_id: str) -> Dict[str, Any]:
         """Resume a paused job."""
-        logger.info(f"[SCHEDULER] Resuming job: {job_id}")
-        
-        # Check if job exists
         job = scheduler.get_job(job_id)
         if not job:
             raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
         
-        # Resume the job
         scheduler.resume_job(job_id)
         
-        logger.info(f"[SCHEDULER] Successfully resumed job: {job_id}")
         return {
             "message": f"Job '{job_id}' resumed successfully"
         }
@@ -208,17 +173,12 @@ class SchedulerService:
     @classmethod
     async def run_job_now(cls, job_id: str) -> Dict[str, Any]:
         """Trigger a job to run immediately (outside its normal schedule)."""
-        logger.info(f"[SCHEDULER] Running job immediately: {job_id}")
-        
-        # Check if job exists
         job = scheduler.get_job(job_id)
         if not job:
             raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
         
-        # Run the job now
         job.modify(next_run_time=datetime.utcnow())
         
-        logger.info(f"[SCHEDULER] Successfully triggered job: {job_id}")
         return {
             "message": f"Job '{job_id}' scheduled to run immediately"
         }
@@ -226,8 +186,6 @@ class SchedulerService:
     @classmethod
     async def get_status(cls) -> Dict[str, Any]:
         """Get scheduler status and statistics."""
-        logger.info("[SCHEDULER] Getting scheduler status")
-        
         jobs = scheduler.get_jobs()
         running = scheduler.running
         
@@ -238,5 +196,4 @@ class SchedulerService:
             "state": scheduler.state
         }
         
-        logger.info(f"[SCHEDULER] Status: {stats}")
         return stats

@@ -73,11 +73,10 @@ class SetPasswordForInvitedUser(BaseModel):
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def register_user(registration: UserRegistration):
     """Register a new user"""
-    logger.info(f"[USERS] Registration attempt for email: {registration.email}")
     
     # Check for duplicate email
     if await UserService.check_email_exists(registration.email):
-        logger.warning(f"[USERS] Registration failed - email already exists: {registration.email}")
+        logger.warning(f"Registration failed - email already exists: {registration.email}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered. Please log in or use a different email."
@@ -93,7 +92,7 @@ async def register_user(registration: UserRegistration):
         result = await UserService.register_user(user_data)
         return result
     except Exception as e:
-        logger.error(f"[USERS] Registration failed for {registration.email}: {e}")
+        logger.error(f"Registration failed for {registration.email}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Registration failed"
@@ -107,7 +106,7 @@ async def verify_user(verification: VerifyToken):
         result = await UserService.verify_user_email(verification.token)
         return result
     except Exception as e:
-        logger.error(f"[USERS] Verification failed: {e}")
+        logger.error(f"Verification failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Verification failed"
@@ -124,7 +123,7 @@ async def set_password_for_invited_user(password_data: SetPasswordForInvitedUser
         )
         return result
     except Exception as e:
-        logger.error(f"[USERS] Set password failed: {e}")
+        logger.error(f"Set password failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Failed to set password"
@@ -138,7 +137,7 @@ async def login_user(login_data: UserLogin):
         result = await AuthService.authenticate_user(login_data.email, login_data.password)
         return result
     except Exception as e:
-        logger.error(f"[USERS] Login failed for {login_data.email}: {e}")
+        logger.error(f"Login failed for {login_data.email}: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication failed"
@@ -152,7 +151,7 @@ async def get_users(user: dict = Depends(verify_token_middleware)):
         users = await UserService.get_users_by_tenant(user)
         return users
     except Exception as e:
-        logger.error(f"[USERS] Failed to get users: {e}")
+        logger.error(f"Failed to get users: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch users"

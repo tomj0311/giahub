@@ -28,53 +28,31 @@ from src.utils.log import logger
 # Load environment variables FIRST
 load_dotenv()
 
-# Debug: Check if Google OAuth variables are loaded
-logger.info("🔍 Environment Variables Check:")
-logger.info(f"- GOOGLE_CLIENT_ID: {'Loaded ✅' if os.getenv('GOOGLE_CLIENT_ID') else 'Missing ❌'}")
-logger.info(f"- GOOGLE_CLIENT_SECRET: {'Loaded ✅' if os.getenv('GOOGLE_CLIENT_SECRET') else 'Missing ❌'}")
+# Environment check removed - use DEBUG mode if needed
 
-# Basic startup diagnostics (non-sensitive)
 if not os.getenv('JWT_SECRET'):
     os.environ['JWT_SECRET'] = 'dev_jwt_secret'
-    logger.warning('[WARN] JWT_SECRET not set; using insecure development fallback.')
+    logger.warning('JWT_SECRET not set; using insecure development fallback')
 
-logger.info('[BOOT] Starting API with config: {}'.format({
-    'PORT': os.getenv('PORT', 4000),
-    'CLIENT_URL': os.getenv('CLIENT_URL'),
-    'TLS': bool(os.getenv('TLS_KEY') and os.getenv('TLS_CERT')),
-    'ENVIRONMENT': os.getenv('ENVIRONMENT', 'development')
-}))
+logger.info(f"Starting API - Port: {os.getenv('PORT', 4000)}, Env: {os.getenv('ENVIRONMENT', 'development')}")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.debug("[STARTUP] Starting application lifespan")
     # Initialize database on startup
-    logger.debug("[STARTUP] Initializing database connection")
     await init_database()
     logger.info("Database initialized")
     
-    # Initialize default roles - DISABLED due to tenant enforcement
-    # await init_default_roles()
-    # logger.info("Default roles initialized")
-    
     # Start APScheduler
-    logger.debug("[STARTUP] Starting APScheduler")
     start_scheduler()
     logger.info("APScheduler started")
     
-    logger.debug("[STARTUP] Application startup completed")
     yield
     
-    # Shutdown scheduler
-    logger.debug("[SHUTDOWN] Shutting down APScheduler")
+    # Shutdown scheduler and database
     shutdown_scheduler()
-    logger.info("APScheduler shutdown")
-    
-    # Close database on shutdown
-    logger.debug("[SHUTDOWN] Closing database connection")
     await close_database()
-    logger.info("Database closed")
+    logger.info("Application shutdown complete")
 
 
 def custom_openapi():
@@ -153,7 +131,6 @@ async def root():
 
 @app.get("/health")
 def health_check():
-    logger.debug("[HEALTH] Health check endpoint called")
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 

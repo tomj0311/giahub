@@ -39,7 +39,7 @@ async def create_checkout_session(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[PAYMENTS] Checkout session creation failed: {e}")
+        logger.error(f"Checkout session creation failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create checkout session"
@@ -58,7 +58,7 @@ async def verify_payment(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[PAYMENTS] Payment verification failed: {e}")
+        logger.error(f"Payment verification failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to verify payment"
@@ -74,7 +74,7 @@ async def get_subscription_status(user: dict = Depends(verify_token_middleware))
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[PAYMENTS] Failed to get subscription status: {e}")
+        logger.error(f"Failed to get subscription status: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get subscription status"

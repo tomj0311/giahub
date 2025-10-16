@@ -16,7 +16,7 @@ class MongoStorageService:
             from ..db import get_collections
             return get_collections()
         except Exception as e:
-            logger.error(f"[DB] Database not connected - call connect_db() first")
+            logger.error(f"Database not connected - call connect_db() first")
             logger.error(f"Failed to get database collections: {e}")
             raise RuntimeError("DB not connected. Call connect_db() first.")
     
@@ -158,38 +158,25 @@ class MongoStorageService:
             collections = cls._get_collections()
             collection = collections.get(collection_name)
             if collection is None:
-                logger.error(f"[MONGO_INSERT] ❌ Collection '{collection_name}' not available!")
-                logger.error(f"[MONGO_INSERT] Available collections: {list(collections.keys())}")
+                logger.error(f"Collection '{collection_name}' not available!")
+                logger.error(f"Available collections: {list(collections.keys())}")
                 return None
             
-            logger.debug(f"[MONGO] Ensuring tenant data for {collection_name}")
             document = cls._ensure_tenant_data(document, tenant_id, collection_name)
             
-            logger.debug(f"[MONGO] Document after tenant data: {document.get('tenantId', 'NO_TENANT')}")
-            
             # Add timestamps if not present
-            logger.debug(f"[MONGO] Adding timestamps to document in {collection_name}")
             now = datetime.utcnow()
             if 'created_at' not in document:
                 document['created_at'] = now
             if 'updated_at' not in document:
                 document['updated_at'] = now
             
-            logger.debug(f"[MONGO] Executing insert_one on {collection_name}")
-            logger.info(f"[MONGO_INSERT] Collection: {collection_name}, TenantId: {document.get('tenantId', 'N/A')}, Keys: {list(document.keys())}")
-            
             result = await collection.insert_one(document)
             
             if result.acknowledged:
-                logger.info(f"[MONGO_INSERT] ✅ Inserted document in {collection_name} with ID: {result.inserted_id}")
-                
-                # VERIFY: Count documents in collection
-                count = await collection.count_documents({"_id": result.inserted_id})
-                logger.info(f"[MONGO_INSERT] ✅ VERIFICATION: Document exists in collection (count={count})")
-                
                 return str(result.inserted_id)
             else:
-                logger.error(f"[MONGO_INSERT] ❌ Insert NOT acknowledged for {collection_name}")
+                logger.error(f"Insert NOT acknowledged for {collection_name}")
             
             return None
         except Exception as e:
@@ -220,7 +207,6 @@ class MongoStorageService:
             
             if result.acknowledged:
                 inserted_ids = [str(id_) for id_ in result.inserted_ids]
-                logger.info(f"Inserted {len(inserted_ids)} documents in {collection_name}")
                 return inserted_ids
             
             return []
@@ -265,7 +251,6 @@ class MongoStorageService:
             result = await collection.update_one(filter_dict, update_data, upsert=upsert)
             
             if result.acknowledged:
-                logger.info(f"Updated document in {collection_name}: matched={result.matched_count}, modified={result.modified_count}")
                 return result.modified_count > 0 or (upsert and result.upserted_id is not None)
             
             return False
@@ -299,7 +284,6 @@ class MongoStorageService:
             result = await collection.update_many(filter_dict, update_data)
             
             if result.acknowledged:
-                logger.info(f"Updated {result.modified_count} documents in {collection_name}")
                 return result.modified_count
             
             return 0
@@ -330,7 +314,6 @@ class MongoStorageService:
             result = await collection.replace_one(filter_dict, replacement, upsert=upsert)
             
             if result.acknowledged:
-                logger.info(f"Replaced document in {collection_name}: matched={result.matched_count}, modified={result.modified_count}")
                 return result.modified_count > 0 or (upsert and result.upserted_id is not None)
             
             return False
@@ -358,7 +341,6 @@ class MongoStorageService:
             result = await collection.delete_one(filter_dict)
             
             if result.acknowledged:
-                logger.info(f"Deleted {result.deleted_count} document from {collection_name}")
                 return result.deleted_count > 0
             
             return False
@@ -382,7 +364,6 @@ class MongoStorageService:
             result = await collection.delete_many(filter_dict)
             
             if result.acknowledged:
-                logger.info(f"Deleted {result.deleted_count} documents from {collection_name}")
                 return result.deleted_count
             
             return 0

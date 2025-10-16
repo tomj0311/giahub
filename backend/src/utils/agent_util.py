@@ -29,8 +29,6 @@ def load_model_from_config(config: Dict[str, Any] = None) -> Any:
     # Get the module path (e.g., "ai.models.openai")
     module_path = config["model"]
     
-    logger.debug(f"[AGENT_UTIL] Loading model from module: {module_path}")
-    
     # Import the module
     module = importlib.import_module(module_path)
     
@@ -40,8 +38,6 @@ def load_model_from_config(config: Dict[str, Any] = None) -> Any:
     
     # Get params and instantiate
     params = config["model_params"]
-    
-    logger.info(f"[AGENT_UTIL] Instantiating model {category} with params")
     
     # Return the instantiated model
     return model_class(**params)
