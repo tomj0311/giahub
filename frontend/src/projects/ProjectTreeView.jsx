@@ -194,6 +194,8 @@ function ProjectTreeView({ user }) {
       isLoadingTreeRef.current = true
       setLoading(true)
 
+      // Invalidate cached tree results to avoid stale data and bypass cache for fresh fetch
+      sharedApiService.invalidateCache('/api/projects/projects/tree')
       const params = new URLSearchParams({
         root_id: 'root',
         page: (page + 1).toString(), // Backend uses 1-based
@@ -220,6 +222,7 @@ function ProjectTreeView({ user }) {
           page_size: rowsPerPage,
           filters: filters.length,
           sort: sortField,
+          bypassCache: true,
           token: tokenRef.current?.substring(0, 10)
         }
       )
@@ -344,12 +347,61 @@ function ProjectTreeView({ user }) {
   }
 
   const handleAddFilter = () => {
-    if (!currentFilter.field || !currentFilter.operator || !currentFilter.value) {
+    // Robust empty check: allow boolean false and number 0, but disallow empty string/null/undefined and empty arrays
+    const isEmptyValue = (val) => (
+      val === '' || val === null || val === undefined || (Array.isArray(val) && val.length === 0)
+    )
+
+    if (!currentFilter.field || !currentFilter.operator || isEmptyValue(currentFilter.value)) {
       showError('Please fill all filter fields')
       return
     }
 
-    setFilters(prev => [...prev, { ...currentFilter }])
+    // Coerce value types based on field metadata so backend comparisons (especially equals) work
+    const fieldDef = getFieldDef(currentFilter.field)
+    let coercedValue = currentFilter.value
+
+    if (fieldDef) {
+      const op = currentFilter.operator
+
+      // Normalize 'between' to an array [start, end]
+      if (op === 'between') {
+        const parts = Array.isArray(coercedValue)
+          ? coercedValue
+          : String(coercedValue).split(',')
+
+        if (fieldDef.type === 'number') {
+          coercedValue = parts.map(p => (p === '' || p === null || p === undefined) ? undefined : Number(p))
+        } else if (fieldDef.type === 'boolean') {
+          coercedValue = parts.map(p => (p === true || p === 'true'))
+        } else {
+          // date/text/select -> keep as strings
+          coercedValue = parts
+        }
+      }
+      // Normalize 'in' to an array of values
+      else if (op === 'in') {
+        const parts = Array.isArray(coercedValue) ? coercedValue : String(coercedValue).split(',')
+        if (fieldDef.type === 'number') {
+          coercedValue = parts.map(p => Number(p))
+        } else if (fieldDef.type === 'boolean') {
+          coercedValue = parts.map(p => (p === true || p === 'true'))
+        } else {
+          coercedValue = parts
+        }
+      }
+      // For direct comparisons, coerce primitives
+      else {
+        if (fieldDef.type === 'number') {
+          coercedValue = Number(coercedValue)
+        } else if (fieldDef.type === 'boolean') {
+          coercedValue = (coercedValue === true || coercedValue === 'true')
+        }
+        // date/text/select remain as strings
+      }
+    }
+
+    setFilters(prev => [...prev, { ...currentFilter, value: coercedValue }])
     handleCloseFilterDialog()
     setPage(0)
   }
@@ -653,7 +705,7 @@ function ProjectTreeView({ user }) {
         <FormControl fullWidth>
           <InputLabel>Value</InputLabel>
           <Select
-            value={currentFilter.value}
+            value={currentFilter.value ?? ''}
             label="Value"
             onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
           >
@@ -671,9 +723,9 @@ function ProjectTreeView({ user }) {
         <FormControl fullWidth>
           <InputLabel>Value</InputLabel>
           <Select
-            value={currentFilter.value}
+            value={currentFilter.value === true || currentFilter.value === false ? currentFilter.value : ''}
             label="Value"
-            onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
+            onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value === 'true' ? true : e.target.value === 'false' ? false : e.target.value })}
           >
             <MenuItem value={true}>True</MenuItem>
             <MenuItem value={false}>False</MenuItem>
