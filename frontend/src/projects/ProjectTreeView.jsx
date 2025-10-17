@@ -156,7 +156,7 @@ function ProjectTreeView({ user }) {
   
   // Pagination state - load from localStorage with fallbacks
   const [page, setPage] = useState(() => loadStateFromStorage(STORAGE_KEYS.PAGE, 0))
-  const [rowsPerPage, setRowsPerPage] = useState(() => loadStateFromStorage(STORAGE_KEYS.ROWS_PER_PAGE, 8))
+  const [rowsPerPage, setRowsPerPage] = useState(() => loadStateFromStorage(STORAGE_KEYS.ROWS_PER_PAGE, 10))
   const [totalCount, setTotalCount] = useState(0)
   
   // Filter and sort state - load from localStorage with fallbacks
@@ -1249,7 +1249,7 @@ function ProjectTreeView({ user }) {
                 onPageChange={handleChangePage}
                 rowsPerPage={rowsPerPage}
                 onRowsPerPageChange={handleChangeRowsPerPage}
-                rowsPerPageOptions={[8, 10, 20, 50, 100]}
+                rowsPerPageOptions={[10, 20, 50, 100, 200]}
               />
             </>
           )}
