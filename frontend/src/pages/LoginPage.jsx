@@ -8,11 +8,16 @@ import Divider from '@mui/material/Divider'
 import GoogleIcon from '@mui/icons-material/Google'
 import Grid from '@mui/material/Grid2'
 import Box from '@mui/material/Box'
+import Container from '@mui/material/Container'
+import IconButton from '@mui/material/IconButton'
+import { Moon as Brightness4Icon, Sun as Brightness7Icon } from 'lucide-react'
+import { useTheme } from '@mui/material/styles'
 import PasswordField from '../components/PasswordField'
 import PasswordResetDialog from '../components/PasswordResetDialog'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { apiCall, API_BASE_URL } from '../config/api'
 import { useSearchParams, useNavigate } from 'react-router-dom'
+import { getThemeKeyForMode } from '../theme'
 
 // Microsoft icon as SVG component
 const MicrosoftIcon = (props) => (
@@ -24,7 +29,8 @@ const MicrosoftIcon = (props) => (
   </svg>
 )
 
-export default function LoginPage({ onLogin }) {
+export default function LoginPage({ onLogin, themeKey, setThemeKey }) {
+  const theme = useTheme()
   const [isSignup, setIsSignup] = useState(false)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -130,163 +136,225 @@ export default function LoginPage({ onLogin }) {
   }
 
   return (
-    <Paper variant="card" sx={{ p: 3 }}>
-      <Box sx={{ textAlign: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ mb: 2 }}>
-          {isSignup ? 'Create your account' : 'Welcome back'}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {isSignup ? 'Already have an account?' : "Don't have an account?"}{' '}
-          <Button variant="text" onClick={toggleMode} sx={{ textTransform: 'none', p: 0, minWidth: 'auto' }}>
-            {isSignup ? 'Sign in' : 'Sign up'}
-          </Button>
-        </Typography>
+    <Box sx={{ 
+      display: 'flex', 
+      minHeight: '100vh',
+      width: '100%'
+    }}>
+      {/* Theme Toggle Button - Fixed Position */}
+      <IconButton
+        onClick={() => setThemeKey(getThemeKeyForMode(theme.palette.mode === 'dark' ? 'light' : 'dark'))}
+        sx={{
+          position: 'fixed',
+          top: 16,
+          right: 16,
+          zIndex: 1000,
+          bgcolor: 'background.paper',
+          boxShadow: 2,
+          '&:hover': {
+            bgcolor: 'action.hover',
+          }
+        }}
+      >
+        {theme.palette.mode === 'dark' ? <Brightness7Icon size={20} /> : <Brightness4Icon size={20} />}
+      </IconButton>
+
+      {/* Left Section - Image/Animation Area */}
+      <Box sx={{ 
+        flex: 1,
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        display: { xs: 'none', md: 'flex' },
+        alignItems: 'center',
+        justifyContent: 'center',
+        p: 4
+      }}>
+        <Box sx={{ textAlign: 'center', color: 'white' }}>
+          <Typography variant="h2" sx={{ fontWeight: 700, mb: 2 }}>
+            Welcome to GIA
+          </Typography>
+          <Typography variant="h5" sx={{ opacity: 0.9 }}>
+            Your intelligent assistant platform
+          </Typography>
+          {/* Placeholder for future image/animation */}
+        </Box>
       </Box>
 
-      {isSignup ? (
-        <form onSubmit={submitSignup}>
-          <Stack spacing={2}>
-            <Grid container spacing={2}>
-              <Grid xs={12} sm={6}>
-                <TextField 
-                  label="First name" 
-                  value={firstName} 
-                  onChange={e => setFirstName(e.target.value)} 
-                  required 
-                />
-              </Grid>
-              <Grid xs={12} sm={6}>
-                <TextField 
-                  label="Last name" 
-                  value={lastName} 
-                  onChange={e => setLastName(e.target.value)} 
-                />
-              </Grid>
-            </Grid>
-            <TextField 
-              label="Email" 
-              type="email" 
-              value={email} 
-              onChange={e => setEmail(e.target.value)} 
-              required 
-            />
-            <PasswordField 
-              label="Password" 
-              value={password} 
-              onChange={e => setPassword(e.target.value)} 
-              required 
-              helperText="At least 8 characters" 
-            />
-            <PasswordField 
-              label="Confirm password" 
-              value={confirmPassword} 
-              onChange={e => setConfirmPassword(e.target.value)} 
-              required 
-            />
-            <Button 
-              type="submit" 
-              variant="contained" 
-              size="medium" 
-              disabled={loading} 
-              sx={{ alignSelf: 'center' }}
-            >
-              {loading ? 'Creating…' : 'Create account'}
-            </Button>
-          </Stack>
-        </form>
-      ) : (
-        <form onSubmit={submitLogin}>
-          <Stack spacing={2}>
-            <TextField 
-              label="Email or username" 
-              value={username} 
-              onChange={e => setUsername(e.target.value)} 
-              required 
-            />
-            <Box>
-              <PasswordField 
-                label="Password" 
-                value={password} 
-                onChange={e => setPassword(e.target.value)} 
-                required 
-              />
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 0.5 }}>
-                <Button 
-                  variant="text" 
-                  size="small"
-                  onClick={() => setShowPasswordReset(true)}
-                  sx={{ 
-                    textTransform: 'none', 
-                    p: 0.5,
-                    minWidth: 'auto',
-                    fontSize: '0.875rem',
-                    color: 'primary.main',
-                    '&:hover': {
-                      backgroundColor: 'transparent',
-                      textDecoration: 'underline'
-                    }
-                  }}
-                >
-                  Forgot password?
+      {/* Right Section - Form Area */}
+      <Box sx={{ 
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        p: 3,
+        backgroundColor: 'background.default'
+      }}>
+        <Container maxWidth="sm">
+          <Paper variant="card" sx={{ p: 4 }}>
+            <Box sx={{ textAlign: 'center', mb: 3 }}>
+              <Typography variant="h4" sx={{ mb: 2 }}>
+                {isSignup ? 'Create your account' : 'Welcome back'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {isSignup ? 'Already have an account?' : "Don't have an account?"}{' '}
+                <Button variant="text" onClick={toggleMode} sx={{ textTransform: 'none', p: 0, minWidth: 'auto' }}>
+                  {isSignup ? 'Sign in' : 'Sign up'}
                 </Button>
-              </Box>
+              </Typography>
             </Box>
-            <Button 
-              type="submit" 
-              variant="contained" 
-              size="medium" 
-              disabled={loading} 
-              sx={{ alignSelf: 'center' }}
-            >
-              {loading ? 'Signing in…' : 'Sign in'}
-            </Button>
-            <Divider>or</Divider>
-            <Stack direction="row" spacing={2} sx={{ alignSelf: 'center' }}>
-              <Button 
-                type="button" 
-                variant="outlined" 
-                size="medium" 
-                onClick={loginWithGoogle} 
-                sx={{ 
-                  color: '#4285f4',
-                  borderColor: '#4285f4',
-                  '&:hover': {
-                    borderColor: '#3367d6',
-                    backgroundColor: 'rgba(66, 133, 244, 0.08)',
-                    color: '#3367d6'
-                  }
-                }}
-                startIcon={<GoogleIcon sx={{ color: '#4285f4' }} />}
-              >
-                Google
-              </Button>
-              <Button 
-                type="button" 
-                variant="outlined" 
-                size="medium" 
-                onClick={loginWithMicrosoft} 
-                sx={{ 
-                  color: '#00a4ef',
-                  borderColor: '#00a4ef',
-                  '&:hover': {
-                    borderColor: '#0078d4',
-                    backgroundColor: 'rgba(0, 164, 239, 0.08)',
-                    color: '#0078d4'
-                  }
-                }}
-                startIcon={<MicrosoftIcon />}
-              >
-                Microsoft
-              </Button>
-            </Stack>
-          </Stack>
-        </form>
-      )}
 
-      <PasswordResetDialog 
-        open={showPasswordReset} 
-        onClose={() => setShowPasswordReset(false)} 
-      />
-    </Paper>
+            {isSignup ? (
+              <form onSubmit={submitSignup}>
+                <Stack spacing={2}>
+                  <Grid container spacing={2}>
+                    <Grid xs={12} sm={6}>
+                      <TextField 
+                        label="First name" 
+                        value={firstName} 
+                        onChange={e => setFirstName(e.target.value)} 
+                        required 
+                      />
+                    </Grid>
+                    <Grid xs={12} sm={6}>
+                      <TextField 
+                        label="Last name" 
+                        value={lastName} 
+                        onChange={e => setLastName(e.target.value)} 
+                      />
+                    </Grid>
+                  </Grid>
+                  <TextField 
+                    label="Email" 
+                    type="email" 
+                    value={email} 
+                    onChange={e => setEmail(e.target.value)} 
+                    required 
+                  />
+                  <PasswordField 
+                    label="Password" 
+                    value={password} 
+                    onChange={e => setPassword(e.target.value)} 
+                    required 
+                    helperText="At least 8 characters" 
+                  />
+                  <PasswordField 
+                    label="Confirm password" 
+                    value={confirmPassword} 
+                    onChange={e => setConfirmPassword(e.target.value)} 
+                    required 
+                  />
+                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                    <Button 
+                      type="submit" 
+                      variant="contained" 
+                      size="large"
+                      disabled={loading}
+                      sx={{ minWidth: 200 }}
+                    >
+                      {loading ? 'Creating…' : 'Create account'}
+                    </Button>
+                  </Box>
+                </Stack>
+              </form>
+            ) : (
+              <form onSubmit={submitLogin}>
+                <Stack spacing={2}>
+                  <TextField 
+                    label="Email or username" 
+                    value={username} 
+                    onChange={e => setUsername(e.target.value)} 
+                    required 
+                  />
+                  <Box>
+                    <PasswordField 
+                      label="Password" 
+                      value={password} 
+                      onChange={e => setPassword(e.target.value)} 
+                      required 
+                    />
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 0.5 }}>
+                      <Button 
+                        variant="text" 
+                        size="small"
+                        onClick={() => setShowPasswordReset(true)}
+                        sx={{ 
+                          textTransform: 'none', 
+                          p: 0.5,
+                          minWidth: 'auto',
+                          fontSize: '0.875rem',
+                          color: 'primary.main',
+                          '&:hover': {
+                            backgroundColor: 'transparent',
+                            textDecoration: 'underline'
+                          }
+                        }}
+                      >
+                        Forgot password?
+                      </Button>
+                    </Box>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                    <Button 
+                      type="submit" 
+                      variant="contained" 
+                      size="large"
+                      disabled={loading}
+                      sx={{ minWidth: 200 }}
+                    >
+                      {loading ? 'Signing in…' : 'Sign in'}
+                    </Button>
+                  </Box>
+                  <Divider>or</Divider>
+                  <Stack spacing={2} alignItems="center">
+                    <Button 
+                      type="button" 
+                      variant="outlined" 
+                      size="large"
+                      onClick={loginWithGoogle}
+                      sx={{ 
+                        minWidth: 250,
+                        color: '#4285f4',
+                        borderColor: '#4285f4',
+                        '&:hover': {
+                          borderColor: '#3367d6',
+                          backgroundColor: 'rgba(66, 133, 244, 0.08)',
+                          color: '#3367d6'
+                        }
+                      }}
+                      startIcon={<GoogleIcon sx={{ color: '#4285f4' }} />}
+                    >
+                      Continue with Google
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="outlined" 
+                      size="large"
+                      onClick={loginWithMicrosoft}
+                      sx={{ 
+                        minWidth: 250,
+                        color: '#00a4ef',
+                        borderColor: '#00a4ef',
+                        '&:hover': {
+                          borderColor: '#0078d4',
+                          backgroundColor: 'rgba(0, 164, 239, 0.08)',
+                          color: '#0078d4'
+                        }
+                      }}
+                      startIcon={<MicrosoftIcon />}
+                    >
+                      Continue with Microsoft
+                    </Button>
+                  </Stack>
+                </Stack>
+              </form>
+            )}
+
+            <PasswordResetDialog 
+              open={showPasswordReset} 
+              onClose={() => setShowPasswordReset(false)} 
+            />
+          </Paper>
+        </Container>
+      </Box>
+    </Box>
   )
 }

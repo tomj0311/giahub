@@ -49,11 +49,12 @@ function AppShell({ children, themeKey, setThemeKey, isAuthenticated }) {
   const theme = useMemo(() => buildTheme(themeKey), [themeKey])
   const location = useLocation()
 
-  // Don't show app bar for dashboard and agents routes - they have their own navigation
+  // Don't show app bar for dashboard, agents, login, and signup routes
   const isDashboard = location.pathname.startsWith('/dashboard')
   const isAgents = location.pathname.startsWith('/agents')
+  const isAuth = location.pathname === '/login' || location.pathname === '/signup'
 
-  if (isDashboard || isAgents) {
+  if (isDashboard || isAgents || isAuth) {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
@@ -150,8 +151,8 @@ export default function App() {
     <AppShell themeKey={themeKey} setThemeKey={setThemeKey} isAuthenticated={!!auth.token}>
       <Routes>
         {/* Public routes */}
-        <Route path="/login" element={!auth.token ? <LoginPage onLogin={auth.login} /> : <Navigate to="/dashboard" replace />} />
-        <Route path="/signup" element={!auth.token ? <SignupPage /> : <Navigate to="/dashboard" replace />} />
+        <Route path="/login" element={!auth.token ? <LoginPage onLogin={auth.login} themeKey={themeKey} setThemeKey={setThemeKey} /> : <Navigate to="/dashboard" replace />} />
+        <Route path="/signup" element={!auth.token ? <SignupPage themeKey={themeKey} setThemeKey={setThemeKey} /> : <Navigate to="/dashboard" replace />} />
         <Route path="/verify" element={<VerifyPage />} />
         <Route path="/set-password" element={<SetPasswordPage />} />
         <Route path="/auth/callback" element={<AuthCallback onLogin={auth.login} />} />
