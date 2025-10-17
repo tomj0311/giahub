@@ -350,7 +350,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 							const isChildSectionSelected = child.children?.some((nestedChild) =>
 								location.pathname === nestedChild.to || location.pathname.startsWith(nestedChild.to)
 							)
-							
+
 							return (
 								<React.Fragment key={child.label}>
 									<ListItemButton
@@ -389,7 +389,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 										/>
 										<ChildExpandIcon size={14} color={theme.palette.text.secondary} />
 									</ListItemButton>
-									
+
 									{/* Nested submenu items */}
 									{isChildExpanded && child.children?.map((nestedChild) => {
 										const nestedSelected = location.pathname === nestedChild.to
@@ -643,8 +643,8 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 	)
 
 	return (
-		<Box sx={{ 
-			display: 'flex', 
+		<Box sx={{
+			display: 'flex',
 			minHeight: '100vh',
 			width: '100vw',
 			maxWidth: '100vw',
@@ -680,8 +680,8 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 							{drawerOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
 						</IconButton>
 					)}
-					<Typography 
-						variant="h6" 
+					<Typography
+						variant="h6"
 						component={RouterLink}
 						to="/dashboard/home"
 						sx={{
@@ -742,14 +742,14 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 								<AccountCircleIcon size={16} />
 							</ListItemIcon>
 							Profile
-					</MenuItem>
-					<MenuItem onClick={handlePasswordReset}>
-						<ListItemIcon>
-							<KeyIcon size={16} />
-						</ListItemIcon>
-						Change Password
-					</MenuItem>
-					<MenuItem onClick={handleThemeToggle}>
+						</MenuItem>
+						<MenuItem onClick={handlePasswordReset}>
+							<ListItemIcon>
+								<KeyIcon size={16} />
+							</ListItemIcon>
+							Change Password
+						</MenuItem>
+						<MenuItem onClick={handleThemeToggle}>
 							<ListItemIcon>
 								{themeKey === 'aurora' ? <Brightness7Icon size={16} /> : <Brightness4Icon size={16} />}
 							</ListItemIcon>
@@ -764,9 +764,9 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 						</MenuItem>
 					</Menu>
 
-					<PasswordResetDialog 
-						open={showPasswordReset} 
-						onClose={() => setShowPasswordReset(false)} 
+					<PasswordResetDialog
+						open={showPasswordReset}
+						onClose={() => setShowPasswordReset(false)}
 					/>
 				</Toolbar>
 			</AppBar>
@@ -815,8 +815,8 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			)}
 
 			{/* Main content */}
-			<Box component="main" sx={{ 
-				flexGrow: 1, 
+			<Box component="main" sx={{
+				flexGrow: 1,
 				width: `calc(100% - ${leftWidth}px)`,
 				minWidth: 0, // Allow shrinking below content width
 				overflowX: 'hidden' // Prevent horizontal scroll
@@ -832,24 +832,24 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 						// Full width with minimal padding
 						maxWidth: 'none',
 						mx: 0,
-						p: 2
+						p: 3
 					} : {
 						// Standard layout for other routes
 						maxWidth: '1200px', // Consistent max width for all components
 						mx: 'auto',         // Center the content
 						px: {
-							xs: 2,    // 16px on mobile
-							sm: 3,    // 24px on small tablets
-							md: 3,    // 32px on medium screens
-							lg: 4,    // 32px on large screens
+							xs: 0.5,    // 0px on mobile - no horizontal padding
+							sm: 0.5,  // 4px on small tablets - minimal padding
+							md: 1,    // 8px on medium screens
+							lg: 2,    // 16px on large screens
 						},
 						py: 4
 					})
 				}}>
 					<Suspense fallback={<RouteLoader />}>
 						<RouteTransition>
-							<Box sx={{ 
-								width: '100%', 
+							<Box sx={{
+								width: '100%',
 								minWidth: 0, // Allow shrinking
 								overflowX: 'hidden' // Prevent content overflow
 							}}>
@@ -865,7 +865,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 
 export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 	// removed Dashboard render debug log
-	
+
 	// BPMN Editor wrapper component to handle navigation state
 	const BPMNEditorWrapper = () => {
 		const location = useLocation()
@@ -919,16 +919,16 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 		<Routes>
 			{/* TaskCompletion route without dashboard layout */}
 			<Route path="task/:workflowId/:instanceId" element={<TaskCompletion user={user} />} />
-			
+
 			{/* All other routes with dashboard layout */}
-		<Route path="/" element={<DashboardLayout user={user} onLogout={onLogout} themeKey={themeKey} setThemeKey={setThemeKey} />}>
-			<Route index element={<Navigate to="home" replace />} />
-			<Route path="home" element={<Home user={user} />} />
-			<Route path="agents/home" element={<AgentHome user={user} />} />
-			<Route path="users" element={<Users user={user} />} />
-			<Route path="role-management" element={<RoleManagement user={user} />} />
-			<Route path="user-invitation" element={<UserInvitation user={user} />} />
-			<Route path="projects" element={<ProjectStatusHome user={user} />} />
+			<Route path="/" element={<DashboardLayout user={user} onLogout={onLogout} themeKey={themeKey} setThemeKey={setThemeKey} />}>
+				<Route index element={<Navigate to="home" replace />} />
+				<Route path="home" element={<Home user={user} />} />
+				<Route path="agents/home" element={<AgentHome user={user} />} />
+				<Route path="users" element={<Users user={user} />} />
+				<Route path="role-management" element={<RoleManagement user={user} />} />
+				<Route path="user-invitation" element={<UserInvitation user={user} />} />
+				<Route path="projects" element={<ProjectStatusHome user={user} />} />
 				<Route path="projects/portfolio" element={<ProjectTreeView user={user} />} />
 				<Route path="projects/planning" element={<ProjectPlanning user={user} />} />
 				<Route path="projects/activity/new" element={<ActivityForm user={user} />} />
@@ -939,12 +939,12 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="tools" element={<ToolConfig user={user} />} />
 				<Route path="knowledge" element={<KnowledgeConfig user={user} />} />
 				<Route path="agent-playground" element={<AgentPlayground user={user} />} />
-			<Route path="analytics" element={<Analytics />} />
-			<Route path="workflows" element={<WorkflowConfig user={user} />} />
-			<Route path="workflow-ui" element={<WorkflowUI user={user} />} />
-			<Route path="function-tester" element={<DynamicFunctionTester user={user} />} />
-			<Route path="scheduler-jobs" element={<SchedulerJobs user={user} />} />
-			<Route path="dynamic" element={<DynamicComponentLoader user={user} />} />
+				<Route path="analytics" element={<Analytics />} />
+				<Route path="workflows" element={<WorkflowConfig user={user} />} />
+				<Route path="workflow-ui" element={<WorkflowUI user={user} />} />
+				<Route path="function-tester" element={<DynamicFunctionTester user={user} />} />
+				<Route path="scheduler-jobs" element={<SchedulerJobs user={user} />} />
+				<Route path="dynamic" element={<DynamicComponentLoader user={user} />} />
 				<Route path="bpmn" element={<BPMNEditorWrapper />} />
 				<Route path="monitor" element={<WorkflowDashboard user={user} />} />
 				<Route path="workflow-execution" element={<WorkflowExecution user={user} />} />
