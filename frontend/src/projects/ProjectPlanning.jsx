@@ -786,7 +786,7 @@ function ProjectPlanning({ user, projectId }) {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4">Project Planning</Typography>
         <Button
