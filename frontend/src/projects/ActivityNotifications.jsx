@@ -63,6 +63,52 @@ function ActivityNotifications({ user, activityId, projectId }) {
     .split('/')
     .map(seg => encodeURIComponent(seg))
     .join('/')
+
+  // Helper function to format date in user's local timezone
+  const formatLocalDate = (dateString) => {
+    if (!dateString) return 'Just now'
+    
+    try {
+      console.log('[DATE DEBUG] Raw backend string:', dateString)
+      
+      // Force treat as UTC regardless of format
+      let utcDate
+      
+      if (dateString.includes('T')) {
+        // ISO-like format
+        const cleanString = dateString.replace('Z', '').replace(/\+.*$/, '')
+        utcDate = new Date(cleanString + 'Z')
+      } else {
+        // Try adding UTC designation
+        utcDate = new Date(dateString + ' UTC')
+      }
+      
+      console.log('[DATE DEBUG] UTC Date object:', utcDate.toISOString())
+      console.log('[DATE DEBUG] Local Date string:', utcDate.toString())
+      console.log('[DATE DEBUG] Your timezone offset (minutes):', utcDate.getTimezoneOffset())
+      
+      // Get current time for comparison
+      const now = new Date()
+      console.log('[DATE DEBUG] Current local time:', now.toString())
+      
+      const formatted = utcDate.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short', 
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      })
+      
+      console.log('[DATE DEBUG] Formatted result:', formatted)
+      return formatted
+      
+    } catch (error) {
+      console.error('Error formatting date:', error, dateString)
+      return dateString // Fallback to original string
+    }
+  }
   
   // User mention autocomplete
   const [allUsers, setAllUsers] = useState([])
@@ -719,7 +765,7 @@ function ActivityNotifications({ user, activityId, projectId }) {
                             {notification.sender_name || notification.sender_email}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {notification.created_at ? new Date(notification.created_at).toLocaleString() : 'Just now'}
+                            {formatLocalDate(notification.created_at)}
                           </Typography>
                         </Box>
                       }
