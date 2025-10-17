@@ -70,6 +70,8 @@ function ActivityNotifications({ user, activityId, projectId }) {
   const [mentionSearch, setMentionSearch] = useState('')
   const [anchorEl, setAnchorEl] = useState(null)
   const [cursorPosition, setCursorPosition] = useState(0)
+  const [mentionLimit, setMentionLimit] = useState(12)
+  const [showLoadMore, setShowLoadMore] = useState(false)
   
   const textFieldRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -231,7 +233,14 @@ function ActivityNotifications({ user, activityId, projectId }) {
       
       // Check if there's a space after @
       if (!searchText.includes(' ')) {
-        setMentionSearch(searchText.toLowerCase())
+        const newSearch = searchText.toLowerCase()
+        
+        // Reset limit if search term changes
+        if (newSearch !== mentionSearch) {
+          setMentionLimit(12)
+        }
+        
+        setMentionSearch(newSearch)
         setShowMentions(true)
         setAnchorEl(textFieldRef.current)
         return
@@ -239,6 +248,7 @@ function ActivityNotifications({ user, activityId, projectId }) {
     }
     
     setShowMentions(false)
+    setMentionLimit(12) // Reset limit when closing mentions
   }
 
   // Select a user from mention dropdown
@@ -261,12 +271,18 @@ function ActivityNotifications({ user, activityId, projectId }) {
     })
     
     setShowMentions(false)
+    setMentionLimit(12) // Reset limit after selection
     textFieldRef.current?.focus()
   }
 
   // Remove mentioned user
   const removeMention = (userId) => {
     setMentionedUsers(prev => prev.filter(u => u.id !== userId))
+  }
+
+  // Load more users in mention dropdown
+  const handleLoadMoreUsers = () => {
+    setMentionLimit(prev => prev + 12)
   }
 
   // Handle file selection (not upload yet)
@@ -457,7 +473,15 @@ function ActivityNotifications({ user, activityId, projectId }) {
   const filteredUsers = allUsers.filter(u => 
     u.name.toLowerCase().includes(mentionSearch) ||
     u.email.toLowerCase().includes(mentionSearch)
-  ).slice(0, 5)
+  )
+  
+  const displayedUsers = filteredUsers.slice(0, mentionLimit)
+  const hasMoreUsers = filteredUsers.length > mentionLimit
+  
+  // Update showLoadMore state based on whether there are more users
+  useEffect(() => {
+    setShowLoadMore(hasMoreUsers)
+  }, [hasMoreUsers])
 
   // Don't render anything if no activityId
   if (!activityId) {
@@ -503,12 +527,12 @@ function ActivityNotifications({ user, activityId, projectId }) {
           />
 
           {/* Mention Dropdown */}
-          {showMentions && filteredUsers.length > 0 && (
+          {showMentions && displayedUsers.length > 0 && (
             <Popper open={showMentions} anchorEl={anchorEl} placement="bottom-start" style={{ zIndex: 1300 }}>
               <ClickAwayListener onClickAway={() => setShowMentions(false)}>
-                <Paper elevation={3} sx={{ maxHeight: 200, overflow: 'auto', minWidth: 250 }}>
+                <Paper elevation={3} sx={{ maxHeight: 300, overflow: 'auto', minWidth: 300 }}>
                   <List dense>
-                    {filteredUsers.map(user => (
+                    {displayedUsers.map(user => (
                       <ListItem
                         key={user.id}
                         button
@@ -520,6 +544,29 @@ function ActivityNotifications({ user, activityId, projectId }) {
                         />
                       </ListItem>
                     ))}
+                    {showLoadMore && (
+                      <ListItem 
+                        button 
+                        onClick={handleLoadMoreUsers}
+                        sx={{ 
+                          borderTop: '1px solid',
+                          borderColor: 'divider',
+                          backgroundColor: 'action.hover'
+                        }}
+                      >
+                        <ListItemText
+                          primary={
+                            <Typography 
+                              variant="body2" 
+                              color="primary" 
+                              sx={{ textAlign: 'center', fontWeight: 'medium' }}
+                            >
+                              Load More ({filteredUsers.length - mentionLimit} remaining)
+                            </Typography>
+                          }
+                        />
+                      </ListItem>
+                    )}
                   </List>
                 </Paper>
               </ClickAwayListener>
