@@ -156,7 +156,7 @@ function ProjectTreeView({ user }) {
   
   // Pagination state - load from localStorage with fallbacks
   const [page, setPage] = useState(() => loadStateFromStorage(STORAGE_KEYS.PAGE, 0))
-  const [rowsPerPage, setRowsPerPage] = useState(() => loadStateFromStorage(STORAGE_KEYS.ROWS_PER_PAGE, 8))
+  const [rowsPerPage, setRowsPerPage] = useState(() => loadStateFromStorage(STORAGE_KEYS.ROWS_PER_PAGE, 10))
   const [totalCount, setTotalCount] = useState(0)
   
   // Filter and sort state - load from localStorage with fallbacks
@@ -547,59 +547,20 @@ function ProjectTreeView({ user }) {
   }
 
   const openCreate = (parentId = 'root') => {
-    setForm({
-      id: null,
-      name: '',
-      description: '',
-      parent_id: parentId,
-      status: 'ON_TRACK',
-      priority: 'Normal',
-      assignee: '',
-      approver: '',
-      due_date: '',
-      start_date: '',
-      progress: 0,
-      is_public: false
+    navigate('/dashboard/projects/project/new', {
+      state: {
+        parentId: parentId || 'root',
+        returnTo: '/dashboard/projects'
+      }
     })
-    setIsEditMode(false)
-    setFormErrors({})
-    setDialogOpen(true)
   }
 
-  const openEdit = async (projectId) => {
-    try {
-      const res = await apiCall(`/api/projects/projects/${projectId}`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.detail || 'Failed to load project')
+  const openEdit = (projectId) => {
+    navigate(`/dashboard/projects/project/${projectId}`, {
+      state: {
+        returnTo: '/dashboard/projects'
       }
-
-      const response = await res.json()
-
-      setForm({
-        id: response.id,
-        name: response.name || '',
-        description: response.description || '',
-        parent_id: response.parent_id || 'root',
-        status: response.status || 'ON_TRACK',
-        priority: response.priority || 'Normal',
-        assignee: response.assignee || '',
-        approver: response.approver || '',
-        due_date: response.due_date || '',
-        start_date: response.start_date || '',
-        progress: response.progress || 0,
-        is_public: response.is_public || false
-      })
-      setIsEditMode(true)
-      setFormErrors({})
-      setDialogOpen(true)
-    } catch (error) {
-      showError('Failed to load project details')
-    }
+    })
   }
 
   const saveProject = async () => {
@@ -1249,7 +1210,7 @@ function ProjectTreeView({ user }) {
                 onPageChange={handleChangePage}
                 rowsPerPage={rowsPerPage}
                 onRowsPerPageChange={handleChangeRowsPerPage}
-                rowsPerPageOptions={[10, 20, 50, 100]}
+                rowsPerPageOptions={[10, 20, 50, 100, 200]}
               />
             </>
           )}
@@ -1368,179 +1329,50 @@ function ProjectTreeView({ user }) {
         </DialogActions>
       </Dialog>
 
-      {/* Create/Edit Project Dialog */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{isEditMode ? 'Edit Project' : 'Create New Project'}</DialogTitle>
+
+
+      {/* Column Customization Dialog */}
+      <Dialog open={columnDialogOpen} onClose={handleCloseColumnDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Customize Columns</DialogTitle>
         <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-            <TextField
-              label="Project Name"
-              value={form.name}
-              onChange={(e) => {
-                setForm({ ...form, name: e.target.value })
-                setFormErrors({ ...formErrors, name: undefined })
-              }}
-              fullWidth
-              required
-              error={!!formErrors.name}
-              helperText={formErrors.name}
-            />
-            <TextField
-              label="Description"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              fullWidth
-              multiline
-              rows={3}
-            />
-            <Autocomplete
-              options={[{ id: 'root', displayName: 'Root (No Parent)' }, ...allProjects]}
-              getOptionLabel={(option) => option.displayName}
-              value={
-                form.parent_id === 'root'
-                  ? { id: 'root', displayName: 'Root (No Parent)' }
-                  : allProjects.find(p => p.id === form.parent_id) || null
-              }
-              onChange={(event, newValue) => {
-                setForm({ ...form, parent_id: newValue ? newValue.id : 'root' })
-              }}
-              renderInput={(params) => <TextField {...params} label="Parent Project" />}
-              fullWidth
-            />
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-              <FormControl fullWidth>
-                <InputLabel>Status</InputLabel>
-                <Select
-                  value={form.status}
-                  label="Status"
-                  onChange={(e) => setForm({ ...form, status: e.target.value })}
-                >
-                  {STATUS_OPTIONS.map((status) => (
-                    <MenuItem key={status} value={status}>
-                      {status}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl fullWidth>
-                <InputLabel>Priority</InputLabel>
-                <Select
-                  value={form.priority}
-                  label="Priority"
-                  onChange={(e) => setForm({ ...form, priority: e.target.value })}
-                >
-                  {PRIORITY_OPTIONS.map((priority) => (
-                    <MenuItem key={priority} value={priority}>
-                      {priority}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <Autocomplete
-                options={tenantUsers}
-                getOptionLabel={(option) => option.displayName}
-                value={tenantUsers.find(u => u.email === form.assignee) || null}
-                onChange={(event, newValue) => {
-                  setForm({ ...form, assignee: newValue ? newValue.email : '' })
-                  setFormErrors({ ...formErrors, assignee: undefined, approver: undefined })
-                }}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Assignee"
-                    required
-                    error={!!formErrors.assignee}
-                    helperText={formErrors.assignee || 'Required'}
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Select which columns to display in the table
+          </Typography>
+          <FormGroup>
+            {orderedFields.map((field) => (
+              <FormControlLabel
+                key={field.name}
+                control={
+                  <Checkbox
+                    checked={visibleColumns[field.name] || false}
+                    onChange={() => handleColumnToggle(field.name)}
                   />
-                )}
-                renderOption={(props, option) => (
-                  <li {...props} key={option.id}>
-                    <Box>
-                      <Typography variant="body1">{option.displayName}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {option.email}
-                      </Typography>
-                    </Box>
-                  </li>
-                )}
-                fullWidth
-                isOptionEqualToValue={(option, value) => option.email === value.email}
+                }
+                label={getColumnLabel(field.name)}
               />
-              <Autocomplete
-                options={tenantUsers.filter(u => u.email !== form.assignee)}
-                getOptionLabel={(option) => option.displayName}
-                value={tenantUsers.find(u => u.email === form.approver) || null}
-                onChange={(event, newValue) => {
-                  setForm({ ...form, approver: newValue ? newValue.email : '' })
-                  setFormErrors({ ...formErrors, approver: undefined })
-                }}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Approver"
-                    required
-                    error={!!formErrors.approver}
-                    helperText={formErrors.approver || 'Required - Must be different from Assignee'}
-                  />
-                )}
-                renderOption={(props, option) => (
-                  <li {...props} key={option.id}>
-                    <Box>
-                      <Typography variant="body1">{option.displayName}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {option.email}
-                      </Typography>
-                    </Box>
-                  </li>
-                )}
-                fullWidth
-                isOptionEqualToValue={(option, value) => option.email === value.email}
-              />
-              <TextField
-                label="Start Date"
-                type="date"
-                value={form.start_date}
-                onChange={(e) => {
-                  setForm({ ...form, start_date: e.target.value })
-                  setFormErrors({ ...formErrors, start_date: undefined, due_date: undefined })
-                }}
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-                inputProps={{ min: '1900-01-01', max: '2100-12-31' }}
-                required
-                error={!!formErrors.start_date}
-                helperText={formErrors.start_date || 'Required'}
-              />
-              <TextField
-                label="Due Date"
-                type="date"
-                value={form.due_date}
-                onChange={(e) => {
-                  setForm({ ...form, due_date: e.target.value })
-                  setFormErrors({ ...formErrors, due_date: undefined })
-                }}
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-                inputProps={{ min: '1900-01-01', max: '2100-12-31' }}
-                required
-                error={!!formErrors.due_date}
-                helperText={formErrors.due_date || 'Required'}
-              />
-              <TextField
-                label="Progress (%)"
-                type="number"
-                value={form.progress}
-                onChange={(e) => setForm({ ...form, progress: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) })}
-                fullWidth
-                inputProps={{ min: 0, max: 100 }}
-              />
-            </Box>
-          </Box>
+            ))}
+          </FormGroup>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-          <Button onClick={saveProject} variant="contained">
-            {isEditMode ? 'Update' : 'Create'}
+          <Button onClick={handleCloseColumnDialog}>Close</Button>
+          <Button
+            onClick={() => {
+              // Reset to default visible columns
+              const defaultVisible = {
+                name: true,
+                priority: true,
+                status: true,
+                assignee: true,
+                approver: true,
+                start_date: true,
+                due_date: true,
+                progress: true
+              }
+              setVisibleColumns(defaultVisible)
+            }}
+            variant="outlined"
+          >
+            Reset to Default
           </Button>
         </DialogActions>
       </Dialog>

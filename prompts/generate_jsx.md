@@ -21,6 +21,7 @@ Forms, Tables, Dashboards, Modals, Navigation, Cards, Charts, Authentication, Fi
 **Navigation:** AppBar, Drawer, Tabs, Menu, Breadcrumbs
 **Display:** Typography, List, Table, Chip, Avatar
 **Feedback:** Alert, Dialog, CircularProgress, Snackbar
+**Charts:** LineChart, BarChart, PieChart, DoughnutChart (Chart.js components)
 
 ## Implementation Standards
 
@@ -207,6 +208,27 @@ const ExampleComponent = () => {
         </Box>
       </CardContent>
     </Card>
+  );
+};
+```
+
+**Chart Component Example:**
+```jsx
+const MyChart = () => {
+  const data = {
+    labels: ['Jan', 'Feb', 'Mar'],
+    datasets: [{
+      label: 'Sales',
+      data: [10, 20, 30],
+      borderColor: 'rgb(75, 192, 192)',
+      backgroundColor: 'rgba(75, 192, 192, 0.2)',
+    }]
+  };
+
+  return (
+    <Box sx={{ height: 400 }}>
+      <LineChart data={data} options={{ responsive: true, maintainAspectRatio: false }} />
+    </Box>
   );
 };
 ```

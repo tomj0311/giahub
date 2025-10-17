@@ -265,3 +265,73 @@ This is an automated message. Please do not reply to this email.
         logger.error(f"Failed to send invitation email to {to}: {e}")
         # Don't raise - invitation should succeed even if email fails
 
+
+async def send_password_reset_email(to: str, reset_token: str):
+    """Send a password reset email with reset token"""
+    logger.info(f"[EMAIL] Sending password reset email to: {to}")
+
+    if not SMTP_HOST:
+        logger.warning("[EMAIL] SMTP not configured, skipping password reset email")
+        return  # Skip if not configured
+
+    try:
+        reset_link = f"{CLIENT_URL}/reset-password?token={quote_plus(reset_token)}"
+
+        # Create HTML content
+        html_content = f"""
+        <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.5;font-size:15px;color:#222;">
+            <h2 style="margin:0 0 16px;">Reset Your Password</h2>
+            <p>Hello!</p>
+            <p>We received a request to reset your password for your GIA Platform account.</p>
+            <p>To reset your password, please click the button below:</p>
+            <p>
+                <a href="{reset_link}" 
+                   style="background:#1976d2;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:bold;">
+                   Reset Password
+                </a>
+            </p>
+            <p style="background:#f5f5f5;padding:12px 16px;border-radius:6px;font-size:14px;letter-spacing:1px;text-align:center;">
+                <strong>Or use this reset code:</strong><br>
+                <span style="font-size:18px;font-family:monospace;">{reset_token}</span>
+            </p>
+            <p style="font-size:12px;color:#666;">
+                If the button doesn't work, you can copy and paste this URL into your browser:<br>
+                <span style="word-break:break-all;">{reset_link}</span>
+            </p>
+            <p style="background:#fff3cd;border-left:4px solid #ffc107;padding:12px;margin:16px 0;">
+                <strong>Security Notice:</strong> This reset link will expire in 1 hour for your security. 
+                If you didn't request this password reset, please ignore this email.
+            </p>
+            <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;">
+            <p style="font-size:12px;color:#666;">
+                This is an automated message. Please do not reply to this email.
+            </p>
+        </div>
+        """
+
+        # Create text content
+        text_content = f"""
+Reset Your Password
+
+Hello!
+
+We received a request to reset your password for your GIA Platform account.
+
+Reset Code: {reset_token}
+
+Reset Link: {reset_link}
+
+Security Notice: This reset link will expire in 1 hour for your security. 
+If you didn't request this password reset, please ignore this email.
+
+This is an automated message. Please do not reply to this email.
+        """
+
+        subject = "Reset Your GIA Password"
+
+        await send_email(to, subject, html_content, text_content)
+
+    except Exception as e:
+        logger.error(f"Failed to send password reset email to {to}: {e}")
+        # Don't raise - password reset should succeed even if email fails
+

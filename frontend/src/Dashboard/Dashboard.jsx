@@ -20,7 +20,12 @@ import {
 	Chip,
 	Tooltip,
 	Card,
-	CardContent
+	CardContent,
+	Dialog,
+	DialogTitle,
+	DialogContent,
+	DialogActions,
+	Button
 } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
 import { getThemeKeyForMode } from '../theme'
@@ -43,6 +48,8 @@ import {
 	KeyRound as KeyIcon
 } from 'lucide-react'
 import PasswordResetDialog from '../components/PasswordResetDialog'
+import sharedApiService from '../utils/apiService'
+import { api } from '../config/api'
 const Home = lazy(() => import('./Home'))
 const AgentHome = lazy(() => import('../agents/AgentHome'))
 const Users = lazy(() => import('./Users'))
@@ -57,6 +64,7 @@ const ProjectStatusHome = lazy(() => import('../projects/ProjectStatusHome'))
 const ProjectTreeView = lazy(() => import('../projects/ProjectTreeView'))
 const ProjectPlanning = lazy(() => import('../projects/ProjectPlanning'))
 const ActivityForm = lazy(() => import('../projects/ActivityForm'))
+const ProjectForm = lazy(() => import('../projects/ProjectForm'))
 const GanttChart = lazy(() => import('../projects/GanttChart'))
 const WorkflowConfig = lazy(() => import('../workflows/WorkflowConfig'))
 const WorkflowDashboard = lazy(() => import('../workflows/WorkflowDashboard'))
@@ -82,9 +90,73 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 	const [drawerOpen, setDrawerOpen] = useState(true) // desktop mini variant
 	const [mobileOpen, setMobileOpen] = useState(false)
 	const [anchorEl, setAnchorEl] = useState(null)
+	
+	// Debug: Log the user data
+	useEffect(() => {
+		console.log('👤 USER DATA IN DASHBOARD:', user)
+		console.log('📧 User email:', user?.email)
+		console.log('🏷️ User name:', user?.name)
+		console.log('🎭 User role:', user?.role)
+	}, [user])
 	const [expandedSections, setExpandedSections] = useState({})
 	const [showPasswordReset, setShowPasswordReset] = useState(false)
+	const [showProfile, setShowProfile] = useState(false)
+	const [apiUserData, setApiUserData] = useState(null)
+	const [loadingUserData, setLoadingUserData] = useState(false)
 	const location = useLocation()
+
+	// Decode JWT token to get user data
+	const decodeJWT = (token) => {
+		try {
+			const base64Url = token.split('.')[1]
+			const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+			const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+				return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+			}).join(''))
+			return JSON.parse(jsonPayload)
+		} catch (error) {
+			console.error('❌ JWT decode error:', error)
+			return null
+		}
+	}
+
+	// Extract user data from JWT token instead of API call
+	const fetchUserData = async () => {
+		setLoadingUserData(true)
+		try {
+			console.log('� Extracting user data from JWT token...')
+			
+			if (user?.token) {
+				const decodedToken = decodeJWT(user.token)
+				console.log('✅ Decoded JWT token:', decodedToken)
+				
+				if (decodedToken) {
+					// Map JWT fields to user data structure
+					const userData = {
+						id: decodedToken.id,
+						name: user.name || decodedToken.name,
+						email: decodedToken.email,
+						role: decodedToken.role,
+						tenantId: decodedToken.tenantId,
+						expiry: decodedToken.exp,
+						expiryDate: new Date(decodedToken.exp * 1000).toLocaleString()
+					}
+					console.log('� Formatted user data:', userData)
+					setApiUserData(userData)
+				} else {
+					setApiUserData({ error: 'Failed to decode JWT token' })
+				}
+			} else {
+				setApiUserData({ error: 'No JWT token available' })
+			}
+			
+		} catch (error) {
+			console.error('❌ Error processing user data:', error)
+			setApiUserData({ error: `Processing Error: ${error.message}` })
+		} finally {
+			setLoadingUserData(false)
+		}
+	}
 
 	// removed DashboardLayout render debug log
 
@@ -258,6 +330,13 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 	const handlePasswordReset = () => {
 		handleProfileMenuClose()
 		setShowPasswordReset(true)
+	}
+
+	const handleProfile = () => {
+		handleProfileMenuClose()
+		setShowProfile(true)
+		// Fetch fresh user data from API
+		fetchUserData()
 	}
 
 	const toggleSection = (sectionLabel) => {
@@ -646,9 +725,9 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 		<Box sx={{
 			display: 'flex',
 			minHeight: '100vh',
-			width: '100vw',
-			maxWidth: '100vw',
-			overflowX: 'hidden' // Prevent horizontal scroll at root level
+			width: '100%',
+			maxWidth: '100%',
+			overflow: 'hidden' // Prevent any overflow at root level
 		}}>
 			{/* AppBar */}
 			<AppBar
@@ -708,8 +787,14 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 							avatar={
 								<Avatar
 									sx={{
-										bgcolor: theme.palette.mode === 'dark' ? theme.palette.primary.main : theme.palette.secondary.main,
-										color: theme.palette.getContrastText(theme.palette.mode === 'dark' ? theme.palette.primary.main : theme.palette.secondary.main),
+										bgcolor: (() => {
+											const bgColor = theme.palette.mode === 'dark' ? theme.palette.primary.main : theme.palette.secondary.main;
+											return bgColor;
+										})(),
+										color: (() => {
+											const bgColor = theme.palette.mode === 'dark' ? theme.palette.primary.main : theme.palette.secondary.main;
+											return theme.palette.getContrastText(bgColor);
+										})(),
 										width: 24,
 										height: 24,
 										fontSize: 12
@@ -721,53 +806,119 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 							label={user?.name || 'User'}
 							onClick={handleProfileMenuOpen}
 							sx={{
-								color: theme.palette.text.primary,
-								bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
-								borderColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.24)' : 'rgba(0,0,0,0.23)',
-								'& .MuiChip-label': { color: 'inherit' }
+								color: theme.palette.mode === 'dark' ? '#ffffff' : '#000000',
+								bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+								borderColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)',
+								'& .MuiChip-label': { 
+									color: theme.palette.mode === 'dark' ? '#ffffff !important' : '#000000 !important',
+									fontWeight: 500
+								},
+								cursor: 'pointer',
+								'&:hover': {
+									bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.12)',
+								}
 							}}
 							variant="outlined"
+							clickable
 						/>
+
+						<Menu
+							anchorEl={anchorEl}
+							open={Boolean(anchorEl)}
+							onClose={handleProfileMenuClose}
+							anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+							transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+							sx={{ zIndex: 1300 }}
+							slotProps={{
+								paper: {
+									sx: {
+										minWidth: 200,
+										mt: 1,
+										'& .MuiMenuItem-root': {
+											fontSize: '0.875rem'
+										}
+									}
+								}
+							}}
+						>
+							<MenuItem onClick={handleProfile}>
+								<ListItemIcon>
+									<AccountCircleIcon size={16} />
+								</ListItemIcon>
+								Profile
+							</MenuItem>
+							<MenuItem onClick={handlePasswordReset}>
+								<ListItemIcon>
+									<KeyIcon size={16} />
+								</ListItemIcon>
+								Change Password
+							</MenuItem>
+							<MenuItem onClick={handleThemeToggle}>
+								<ListItemIcon>
+									{themeKey === 'aurora' ? <Brightness7Icon size={16} /> : <Brightness4Icon size={16} />}
+								</ListItemIcon>
+								Switch to {themeKey === 'aurora' ? 'Ocean' : 'Aurora'} Theme
+							</MenuItem>
+							<Divider />
+							<MenuItem onClick={handleLogout}>
+								<ListItemIcon>
+									<LogoutIcon size={16} />
+								</ListItemIcon>
+								Sign Out
+							</MenuItem>
+						</Menu>
 					</Box>
 
-					<Menu
-						anchorEl={anchorEl}
-						open={Boolean(anchorEl)}
-						onClose={handleProfileMenuClose}
-						anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-						transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-					>
-						<MenuItem onClick={handleProfileMenuClose}>
-							<ListItemIcon>
-								<AccountCircleIcon size={16} />
-							</ListItemIcon>
-							Profile
-						</MenuItem>
-						<MenuItem onClick={handlePasswordReset}>
-							<ListItemIcon>
-								<KeyIcon size={16} />
-							</ListItemIcon>
-							Change Password
-						</MenuItem>
-						<MenuItem onClick={handleThemeToggle}>
-							<ListItemIcon>
-								{themeKey === 'aurora' ? <Brightness7Icon size={16} /> : <Brightness4Icon size={16} />}
-							</ListItemIcon>
-							Switch to {themeKey === 'aurora' ? 'Ocean' : 'Aurora'} Theme
-						</MenuItem>
-						<Divider />
-						<MenuItem onClick={handleLogout}>
-							<ListItemIcon>
-								<LogoutIcon size={16} />
-							</ListItemIcon>
-							Sign Out
-						</MenuItem>
-					</Menu>
+			<PasswordResetDialog
+				open={showPasswordReset}
+				onClose={() => setShowPasswordReset(false)}
+			/>
 
-					<PasswordResetDialog
-						open={showPasswordReset}
-						onClose={() => setShowPasswordReset(false)}
-					/>
+			{/* Profile Dialog */}
+			<Dialog
+				open={showProfile}
+				onClose={() => setShowProfile(false)}
+				maxWidth="sm"
+				fullWidth
+			>
+				<DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+					User Profile
+					<IconButton onClick={() => setShowProfile(false)} size="small">
+						<ChevronLeft size={20} />
+					</IconButton>
+				</DialogTitle>
+				<DialogContent>
+					{loadingUserData ? (
+						<Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
+							<Typography>Loading user data...</Typography>
+						</Box>
+					) : (
+						<Box sx={{ display: 'flex', alignItems: 'center', gap: 2, pt: 2 }}>
+							<Avatar
+								sx={{
+									bgcolor: theme.palette.primary.main,
+									width: 60,
+									height: 60,
+									fontSize: 24
+								}}
+							>
+								{apiUserData?.name?.[0] || user?.name?.[0] || 'U'}
+							</Avatar>
+							<Box>
+								<Typography variant="h6">
+									{apiUserData?.name || user?.name || 'User'}
+								</Typography>
+								<Typography variant="body2" color="text.secondary">
+									Role: {apiUserData?.role || 'User'}
+								</Typography>
+							</Box>
+						</Box>
+					)}
+				</DialogContent>
+				<DialogActions>
+					<Button onClick={() => setShowProfile(false)}>Close</Button>
+				</DialogActions>
+			</Dialog>
 				</Toolbar>
 			</AppBar>
 
@@ -817,18 +968,20 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			{/* Main content */}
 			<Box component="main" sx={{
 				flexGrow: 1,
-				width: `calc(100% - ${leftWidth}px)`,
 				minWidth: 0, // Allow shrinking below content width
-				overflowX: 'hidden' // Prevent horizontal scroll
+				overflow: 'hidden', // Prevent any overflow
+				display: 'flex',
+				flexDirection: 'column'
 			}}>
 				{/* Offset for fixed AppBar */}
 				<Toolbar />
 				<Box sx={{
+					flex: 1,
 					width: '100%',
 					minWidth: 0, // Allow shrinking
-					overflowX: 'hidden', // Prevent horizontal scroll
-					// Conditional styling for BPMN, workflow-execution, workflow-ui, projects, portfolio, planning, and gantt routes
-					...(location.pathname === '/dashboard/bpmn' || location.pathname === '/dashboard/workflow-execution' || location.pathname === '/dashboard/workflow-ui' || location.pathname === '/dashboard/projects' || location.pathname === '/dashboard/projects/portfolio' || location.pathname === '/dashboard/projects/planning' || location.pathname === '/dashboard/projects/gantt' ? {
+					overflow: 'auto', // Allow scrolling within content area only
+					// Conditional styling for BPMN, workflow-execution, workflow-ui, projects, portfolio, planning, gantt, and project form routes
+					...(location.pathname === '/dashboard/bpmn' || location.pathname === '/dashboard/workflow-execution' || location.pathname === '/dashboard/workflow-ui' || location.pathname === '/dashboard/projects' || location.pathname === '/dashboard/projects/portfolio' || location.pathname === '/dashboard/projects/planning' || location.pathname === '/dashboard/projects/gantt' || location.pathname.startsWith('/dashboard/projects/project/') ? {
 						// Full width with minimal padding
 						maxWidth: 'none',
 						mx: 0,
@@ -851,7 +1004,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 							<Box sx={{
 								width: '100%',
 								minWidth: 0, // Allow shrinking
-								overflowX: 'hidden' // Prevent content overflow
+								overflow: 'visible' // Allow content to flow naturally
 							}}>
 								<Outlet />
 							</Box>
@@ -933,6 +1086,8 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="projects/planning" element={<ProjectPlanning user={user} />} />
 				<Route path="projects/activity/new" element={<ActivityForm user={user} />} />
 				<Route path="projects/activity/:activityId" element={<ActivityForm user={user} />} />
+				<Route path="projects/project/new" element={<ProjectForm user={user} />} />
+				<Route path="projects/project/:id" element={<ProjectForm user={user} />} />
 				<Route path="projects/gantt" element={<GanttChart user={user} />} />
 				<Route path="agents" element={<Agent user={user} />} />
 				<Route path="models" element={<ModelConfig user={user} />} />

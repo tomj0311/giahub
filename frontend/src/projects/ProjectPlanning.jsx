@@ -94,13 +94,15 @@ function ProjectPlanning({ user, projectId }) {
   const [loading, setLoading] = useState(true)
   
   // Pagination state - load from localStorage with fallbacks
-  const [pagination, setPagination] = useState(() => 
-    loadStateFromStorage(STORAGE_KEYS.PAGINATION, {
+  const [pagination, setPagination] = useState(() => {
+    const storedPagination = loadStateFromStorage(STORAGE_KEYS.PAGINATION, {
       page: 0,
-      rowsPerPage: 8,
+      rowsPerPage: 10,
       total: 0
     })
-  )
+    console.log('[ProjectPlanning] Initial pagination from localStorage:', storedPagination)
+    return storedPagination
+  })
   
   // Filter and sort state - load from localStorage with fallbacks
   const [filters, setFilters] = useState(() => loadStateFromStorage(STORAGE_KEYS.FILTERS, []))
@@ -278,7 +280,7 @@ function ProjectPlanning({ user, projectId }) {
   }, []); // EMPTY DEPENDENCIES - NO BULLSHIT
 
   useEffect(() => {
-    const loadActivities = async (page = 1, pageSize = 8) => {
+    const loadActivities = async (page = 1, pageSize = 10) => {
       if (isLoadingRef.current || !isMountedRef.current) return
       isLoadingRef.current = true
       setLoading(true)
@@ -344,8 +346,9 @@ function ProjectPlanning({ user, projectId }) {
       }
     }
 
-    loadActivities(1, pagination.rowsPerPage)
-  }, [token, projectId, filters, sortField, sortOrder, showError])
+    // Use stored page position (pagination.page is 0-based, backend expects 1-based)
+    loadActivities(pagination.page + 1, pagination.rowsPerPage)
+  }, [token, projectId, filters, sortField, sortOrder, showError, pagination.page, pagination.rowsPerPage])
 
   // Save state to localStorage when pagination changes
   useEffect(() => {
@@ -371,7 +374,7 @@ function ProjectPlanning({ user, projectId }) {
     saveStateToStorage(STORAGE_KEYS.VISIBLE_COLUMNS, visibleColumns)
   }, [visibleColumns, saveStateToStorage])
   
-  const loadActivities = useCallback(async (page = 1, pageSize = 8) => {
+  const loadActivities = useCallback(async (page = 1, pageSize = 10) => {
     if (isLoadingRef.current || !isMountedRef.current) return
     
     try {
@@ -699,12 +702,12 @@ function ProjectPlanning({ user, projectId }) {
   // Tabs removed
 
   const handlePageChange = (event, newPage) => {
-    loadActivities(newPage + 1, pagination.rowsPerPage)
+    setPagination(prev => ({ ...prev, page: newPage }))
   }
 
   const handleRowsPerPageChange = (event) => {
     const newSize = parseInt(event.target.value, 10)
-    loadActivities(1, newSize)
+    setPagination(prev => ({ ...prev, rowsPerPage: newSize, page: 0 }))
   }
 
   const handleColumnToggle = (columnName) => {
@@ -796,19 +799,30 @@ function ProjectPlanning({ user, projectId }) {
     
     if (value === null || value === undefined) return '-'
     
+    // Common styling for text truncation (max 3 lines)
+    const textTruncationStyle = {
+      display: '-webkit-box',
+      WebkitBoxOrient: 'vertical',
+      WebkitLineClamp: 3,
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      lineHeight: 1.4,
+      maxHeight: '4.2em' // 3 lines * 1.4 line-height
+    }
+    
     // Special handling for specific fields
     if (fieldName === 'type') {
       return (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {getTypeIcon(value)}
-          <Typography variant="body2">{value}</Typography>
+          <Typography variant="body2" sx={textTruncationStyle}>{value}</Typography>
         </Box>
       )
     }
     
     if (fieldName === 'subject') {
       return (
-        <Typography variant="body2" fontWeight="medium">
+        <Typography variant="body2" fontWeight="medium" sx={textTruncationStyle}>
           {value}
         </Typography>
       )
@@ -816,7 +830,7 @@ function ProjectPlanning({ user, projectId }) {
     
     if (fieldName === 'project_id') {
       return (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" color="text.secondary" sx={textTruncationStyle}>
           {projects.find(p => p.id === value)?.name || value || '-'}
         </Typography>
       )
@@ -839,7 +853,7 @@ function ProjectPlanning({ user, projectId }) {
     if (fieldName === 'due_date') {
       const dateStyle = getDueDateStyle(value, activity.status)
       return (
-        <Typography variant="body2" sx={{ color: dateStyle.color, fontWeight: dateStyle.fontWeight }}>
+        <Typography variant="body2" sx={{ ...textTruncationStyle, color: dateStyle.color, fontWeight: dateStyle.fontWeight }}>
           {formatDate(value)}
         </Typography>
       )
@@ -849,8 +863,12 @@ function ProjectPlanning({ user, projectId }) {
       return `${value}%`
     }
     
-    // Default: just return the value
-    return value
+    // Default: just return the value with text truncation
+    return (
+      <Typography variant="body2" sx={textTruncationStyle}>
+        {value}
+      </Typography>
+    )
   }
 
   return (
@@ -1052,7 +1070,7 @@ function ProjectPlanning({ user, projectId }) {
                 onPageChange={handlePageChange}
                 rowsPerPage={pagination.rowsPerPage}
                 onRowsPerPageChange={handleRowsPerPageChange}
-                rowsPerPageOptions={[8, 25, 50, 100]}
+                rowsPerPageOptions={[10, 20, 50, 100]}
               />
             </>
           )}

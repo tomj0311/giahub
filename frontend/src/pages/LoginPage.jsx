@@ -13,7 +13,7 @@ import IconButton from '@mui/material/IconButton'
 import { Moon as Brightness4Icon, Sun as Brightness7Icon } from 'lucide-react'
 import { useTheme } from '@mui/material/styles'
 import PasswordField from '../components/PasswordField'
-import PasswordResetDialog from '../components/PasswordResetDialog'
+import ForgotPasswordDialog from '../components/ForgotPasswordDialog'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { apiCall, API_BASE_URL } from '../config/api'
 import { useSearchParams, useNavigate } from 'react-router-dom'
@@ -39,7 +39,7 @@ export default function LoginPage({ onLogin, themeKey, setThemeKey }) {
   const [email, setEmail] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [showPasswordReset, setShowPasswordReset] = useState(false)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
   const { showError, showSuccess } = useSnackbar()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -275,7 +275,7 @@ export default function LoginPage({ onLogin, themeKey, setThemeKey }) {
                       <Button 
                         variant="text" 
                         size="small"
-                        onClick={() => setShowPasswordReset(true)}
+                        onClick={() => setShowForgotPassword(true)}
                         sx={{ 
                           textTransform: 'none', 
                           p: 0.5,
@@ -348,9 +348,9 @@ export default function LoginPage({ onLogin, themeKey, setThemeKey }) {
               </form>
             )}
 
-            <PasswordResetDialog 
-              open={showPasswordReset} 
-              onClose={() => setShowPasswordReset(false)} 
+            <ForgotPasswordDialog 
+              open={showForgotPassword} 
+              onClose={() => setShowForgotPassword(false)} 
             />
           </Paper>
         </Container>
