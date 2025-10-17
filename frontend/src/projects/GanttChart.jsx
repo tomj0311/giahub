@@ -855,7 +855,7 @@ function GanttChart({ user, projectId: propProjectId }) {
   }
 
   return (
-    <Box sx={{ height: 'calc(100vh - 185px)', overflow: 'auto' }}>
+    <>
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
@@ -873,17 +873,6 @@ function GanttChart({ user, projectId: propProjectId }) {
           <Typography variant="body2" color="text.secondary">
             Visual timeline of project and activities
           </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-          <IconButton onClick={() => setZoomLevel(prev => Math.max(0.5, prev - 0.1))} size="small">
-            <ZoomOut size={20} />
-          </IconButton>
-          <Typography variant="caption">
-            {Math.round(zoomLevel * 100)}%
-          </Typography>
-          <IconButton onClick={() => setZoomLevel(prev => Math.min(3, prev + 0.1))} size="small">
-            <ZoomIn size={20} />
-          </IconButton>
         </Box>
       </Box>
 
@@ -944,6 +933,17 @@ function GanttChart({ user, projectId: propProjectId }) {
                 Yearly
               </ToggleButton>
             </ToggleButtonGroup>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', position: 'absolute', right: 0 }}>
+              <IconButton onClick={() => setZoomLevel(prev => Math.max(0.5, prev - 0.1))} size="small">
+                <ZoomOut size={20} />
+              </IconButton>
+              <Typography variant="caption">
+                {Math.round(zoomLevel * 100)}%
+              </Typography>
+              <IconButton onClick={() => setZoomLevel(prev => Math.min(3, prev + 0.1))} size="small">
+                <ZoomIn size={20} />
+              </IconButton>
+            </Box>
           </Box>
           <Box 
             ref={ganttRef}
@@ -1331,7 +1331,7 @@ function GanttChart({ user, projectId: propProjectId }) {
         </Box>
         </CardContent>
       </Card>
-    </Box>
+    </>
   )
 }
 

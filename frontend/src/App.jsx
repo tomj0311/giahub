@@ -49,12 +49,16 @@ function AppShell({ children, themeKey, setThemeKey, isAuthenticated }) {
   const theme = useMemo(() => buildTheme(themeKey), [themeKey])
   const location = useLocation()
 
-  // Don't show app bar for dashboard, agents, login, and signup routes
-  const isDashboard = location.pathname.startsWith('/dashboard')
-  const isAgents = location.pathname.startsWith('/agents')
-  const isAuth = location.pathname === '/login' || location.pathname === '/signup'
+  // Don't show app bar for dashboard, agents, login, signup, and root routes
+  const shouldHideAppBar = 
+    location.pathname.startsWith('/dashboard') ||
+    location.pathname.startsWith('/agents') ||
+    location.pathname === '/login' ||
+    location.pathname === '/signup' ||
+    location.pathname === '/' ||
+    location.pathname === '/auth/callback'
 
-  if (isDashboard || isAgents || isAuth) {
+  if (shouldHideAppBar) {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
@@ -66,9 +70,9 @@ function AppShell({ children, themeKey, setThemeKey, isAuthenticated }) {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <AppBar position="sticky" sx={{ background: theme.custom.appBarGradient, backgroundSize: '200% 200%', animation: 'appBarShift 12s ease infinite' }}>
+      <AppBar position="sticky" sx={{ bgcolor: 'primary.main' }}>
         <Toolbar>
-          <Typography variant="h6" sx={{ flexGrow: 1, color: '#ffffff', fontWeight: 600 }}>GIA</Typography>
+          <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600 }}>GIA</Typography>
           <IconButton
             color="inherit"
             onClick={() => setThemeKey(getThemeKeyForMode(theme.palette.mode === 'dark' ? 'light' : 'dark'))}
