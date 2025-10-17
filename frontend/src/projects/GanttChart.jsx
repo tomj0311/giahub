@@ -18,7 +18,8 @@ import {
   useTheme,
   Button,
   ToggleButtonGroup,
-  ToggleButton
+  ToggleButton,
+  Tooltip
 } from '@mui/material'
 import { ChevronRight, ChevronDown, ArrowLeft, ZoomIn, ZoomOut, Calendar, CalendarDays } from 'lucide-react'
 import { apiCall } from '../config/api'
@@ -66,6 +67,242 @@ function GanttChart({ user, projectId: propProjectId }) {
     const month = String(date.getMonth() + 1).padStart(2, '0')
     const year = date.getFullYear()
     return `${day}/${month}/${year}`
+  }
+
+  // Create tooltip content for projects and activities
+  const createTooltipContent = (item, type = 'project') => {
+    const isProject = type === 'project'
+    const title = isProject ? item.name : item.subject
+    const statusColor = getStatusColor(item.status)
+    const dueDateStyle = getDueDateStyle(item.due_date, item.status)
+    
+    // Calculate duration
+    const startDate = item.start_date ? new Date(item.start_date) : null
+    const dueDate = item.due_date ? new Date(item.due_date) : null
+    const duration = startDate && dueDate ? Math.ceil((dueDate - startDate) / (1000 * 60 * 60 * 24)) : null
+    
+    // Calculate days remaining
+    const today = new Date()
+    const daysRemaining = dueDate ? Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24)) : null
+    
+    return (
+      <Box sx={{ 
+        p: 1.2, 
+        maxWidth: 300,
+        minWidth: 230,
+        bgcolor: theme.palette.mode === 'light' ? '#ffffff' : 'background.paper',
+        border: `2px solid ${theme.palette[statusColor].main}`,
+        borderRadius: 2,
+        boxShadow: 3,
+        color: theme.palette.mode === 'light' ? '#000000' : 'text.primary'
+      }}>
+        {/* Header */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, mb: 1.2 }}>
+          <Box 
+            sx={{ 
+              width: 6, 
+              height: 6, 
+              bgcolor: `${statusColor}.main`, 
+              borderRadius: '50%' 
+            }} 
+          />
+          <Typography variant="body2" sx={{ 
+            fontWeight: 'bold', 
+            flex: 1,
+            fontSize: '0.85rem',
+            color: theme.palette.mode === 'light' ? '#000000' : 'text.primary'
+          }}>
+            {title}
+          </Typography>
+          <Chip 
+            label={getStatusLabel(item.status)} 
+            color={statusColor} 
+            size="small" 
+            sx={{ fontSize: '0.7rem' }}
+          />
+        </Box>
+        
+        {/* Content Grid */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.2, mb: 0.8 }}>
+          {/* Left Column */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.6 }}>
+            <Box>
+              <Typography variant="caption" sx={{ 
+                fontWeight: 500, 
+                fontSize: '0.7rem',
+                color: theme.palette.mode === 'light' ? '#666666' : 'text.secondary', 
+                display: 'block' 
+              }}>
+                Start Date
+              </Typography>
+              <Typography variant="caption" sx={{ 
+                fontWeight: 500,
+                fontSize: '0.75rem',
+                color: theme.palette.mode === 'light' ? '#000000' : 'text.primary'
+              }}>
+                {formatDate(item.start_date)}
+              </Typography>
+            </Box>
+            
+            <Box>
+              <Typography variant="caption" sx={{ 
+                fontWeight: 500, 
+                fontSize: '0.7rem',
+                color: theme.palette.mode === 'light' ? '#666666' : 'text.secondary', 
+                display: 'block' 
+              }}>
+                Progress
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Typography variant="caption" sx={{ 
+                  fontWeight: 500,
+                  fontSize: '0.75rem',
+                  color: theme.palette.mode === 'light' ? '#000000' : 'text.primary'
+                }}>
+                  {item.progress || 0}%
+                </Typography>
+                <Box sx={{ 
+                  flex: 1, 
+                  height: 4, 
+                  bgcolor: theme.palette.mode === 'light' ? '#e0e0e0' : 'grey.200', 
+                  borderRadius: 2,
+                  overflow: 'hidden'
+                }}>
+                  <Box sx={{ 
+                    height: '100%', 
+                    bgcolor: theme.palette[statusColor].main, 
+                    width: `${item.progress || 0}%`,
+                    transition: 'width 0.3s ease'
+                  }} />
+                </Box>
+              </Box>
+            </Box>
+          </Box>
+          
+          {/* Right Column */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.6 }}>
+            <Box>
+              <Typography variant="caption" sx={{ 
+                fontWeight: 500, 
+                fontSize: '0.7rem',
+                color: theme.palette.mode === 'light' ? '#666666' : 'text.secondary', 
+                display: 'block' 
+              }}>
+                Due Date
+              </Typography>
+              <Typography variant="caption" sx={{ 
+                fontWeight: 500, 
+                fontSize: '0.75rem',
+                ...dueDateStyle,
+                color: dueDateStyle.color || (theme.palette.mode === 'light' ? '#000000' : 'text.primary')
+              }}>
+                {formatDate(item.due_date)}
+                {daysRemaining !== null && (
+                  <Typography component="span" variant="caption" sx={{ 
+                    ml: 0.5, 
+                    opacity: 0.8,
+                    fontSize: '0.65rem',
+                    color: theme.palette.mode === 'light' ? '#666666' : 'text.secondary'
+                  }}>
+                    ({daysRemaining > 0 ? `${daysRemaining} days left` : 
+                      daysRemaining === 0 ? 'Due today' : 
+                      `${Math.abs(daysRemaining)} days overdue`})
+                  </Typography>
+                )}
+              </Typography>
+            </Box>
+            
+            {duration && (
+              <Box>
+                <Typography variant="caption" sx={{ 
+                  fontWeight: 500, 
+                  fontSize: '0.7rem',
+                  color: theme.palette.mode === 'light' ? '#666666' : 'text.secondary', 
+                  display: 'block' 
+                }}>
+                  Duration
+                </Typography>
+                <Typography variant="caption" sx={{ 
+                  fontWeight: 500,
+                  fontSize: '0.75rem',
+                  color: theme.palette.mode === 'light' ? '#000000' : 'text.primary'
+                }}>
+                  {duration} days
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        </Box>
+        
+        {/* People Section */}
+        {(item.assignee || item.approver) && (
+          <Box sx={{ 
+            borderTop: 1, 
+            borderColor: 'divider', 
+            pt: 1, 
+            mt: 1,
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: 0.5 
+          }}>
+            {item.assignee && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="caption" sx={{ 
+                  fontWeight: 500, 
+                  fontSize: '0.7rem',
+                  color: theme.palette.mode === 'light' ? '#666666' : 'text.secondary'
+                }}>
+                  👤 Assignee:
+                </Typography>
+                <Typography variant="caption" sx={{ 
+                  fontWeight: 500,
+                  fontSize: '0.75rem',
+                  color: theme.palette.mode === 'light' ? '#000000' : 'text.primary'
+                }}>
+                  {item.assignee}
+                </Typography>
+              </Box>
+            )}
+            
+            {item.approver && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="caption" sx={{ 
+                  fontWeight: 500, 
+                  fontSize: '0.7rem',
+                  color: theme.palette.mode === 'light' ? '#666666' : 'text.secondary'
+                }}>
+                  ✅ Approver:
+                </Typography>
+                <Typography variant="caption" sx={{ 
+                  fontWeight: 500,
+                  fontSize: '0.75rem',
+                  color: theme.palette.mode === 'light' ? '#000000' : 'text.primary'
+                }}>
+                  {item.approver}
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        )}
+        
+        {/* Footer hint */}
+        <Box sx={{ 
+          borderTop: 1, 
+          borderColor: 'divider', 
+          pt: 0.5, 
+          mt: 1,
+          textAlign: 'center' 
+        }}>
+          <Typography variant="caption" sx={{ 
+            fontSize: '0.65rem',
+            color: theme.palette.mode === 'light' ? '#666666' : 'text.secondary', 
+            fontStyle: 'italic' 
+          }}>
+            {isProject ? 'Click to view project details' : 'Click to view activity details'}
+          </Typography>
+        </Box>
+      </Box>
+    )
   }
 
   // Handle zoom with mouse wheel
@@ -750,16 +987,50 @@ function GanttChart({ user, projectId: propProjectId }) {
           bgcolor: level > 0 ? alpha('#000', 0.01 * level) : 'transparent'
         }}>
           {proj.start_date && proj.due_date && (
-            <Box sx={{
-              position: 'absolute',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              height: 20,
-              backgroundColor: 'primary.main',
-              opacity: 0.8 - (level * 0.1),
-              borderRadius: 1,
-              ...calculateBarPosition(proj.start_date, proj.due_date)
-            }} />
+            <Tooltip 
+              title={createTooltipContent(proj, 'project')}
+              arrow
+              placement="top"
+              enterDelay={200}
+              leaveDelay={300}
+              enterNextDelay={100}
+              componentsProps={{
+                tooltip: {
+                  sx: {
+                    bgcolor: 'transparent',
+                    '& .MuiTooltip-arrow': {
+                      color: `${getStatusColor(proj.status)}.main`,
+                    },
+                  },
+                },
+              }}
+            >
+              <Box sx={{
+                position: 'absolute',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                height: 20,
+                backgroundColor: `${getStatusColor(proj.status)}.main`,
+                opacity: 0.85 - (level * 0.05),
+                borderRadius: 2,
+                cursor: 'pointer',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                border: `1px solid ${alpha(theme.palette[getStatusColor(proj.status)].main, 0.3)}`,
+                boxShadow: `0 2px 4px ${alpha(theme.palette[getStatusColor(proj.status)].main, 0.2)}`,
+                '&:hover': {
+                  opacity: 1,
+                  height: 24,
+                  backgroundColor: `${getStatusColor(proj.status)}.dark`,
+                  transform: 'translateY(-50%) scale(1.05)',
+                  boxShadow: `0 4px 12px ${alpha(theme.palette[getStatusColor(proj.status)].main, 0.4)}`,
+                  zIndex: 10,
+                },
+                '&:active': {
+                  transform: 'translateY(-50%) scale(0.98)',
+                },
+                ...calculateBarPosition(proj.start_date, proj.due_date)
+              }} />
+            </Tooltip>
           )}
         </Box>
 
@@ -771,32 +1042,59 @@ function GanttChart({ user, projectId: propProjectId }) {
             bgcolor: alpha('#000', 0.02 + 0.01 * level)
           }}>
             {activity.start_date && activity.due_date && (
-              <Box 
-                onClick={() => navigate(`/dashboard/projects/activity/${activity.id}`, {
-                  state: {
-                    returnTo: '/dashboard/projects/gantt',
-                    projectId: projectId,
-                    projectName: projectName
-                  }
-                })}
-                sx={{
-                  position: 'absolute',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  height: 16,
-                  backgroundColor: 'info.main',
-                  opacity: 0.6,
-                  borderRadius: 1,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  '&:hover': {
-                    opacity: 0.9,
-                    height: 20,
-                    backgroundColor: 'info.dark'
+              <Tooltip 
+                title={createTooltipContent(activity, 'activity')}
+                arrow
+                placement="top"
+                enterDelay={200}
+                leaveDelay={300}
+                enterNextDelay={100}
+                componentsProps={{
+                  tooltip: {
+                    sx: {
+                      bgcolor: 'transparent',
+                      '& .MuiTooltip-arrow': {
+                        color: `${getStatusColor(activity.status)}.main`,
+                      },
+                    },
                   },
-                  ...calculateBarPosition(activity.start_date, activity.due_date)
-                }} 
-              />
+                }}
+              >
+                <Box 
+                  onClick={() => navigate(`/dashboard/projects/activity/${activity.id}`, {
+                    state: {
+                      returnTo: '/dashboard/projects/gantt',
+                      projectId: projectId,
+                      projectName: projectName
+                    }
+                  })}
+                  sx={{
+                    position: 'absolute',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    height: 16,
+                    backgroundColor: `${getStatusColor(activity.status)}.main`,
+                    opacity: 0.75,
+                    borderRadius: 2,
+                    cursor: 'pointer',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    border: `1px solid ${alpha(theme.palette[getStatusColor(activity.status)].main, 0.3)}`,
+                    boxShadow: `0 1px 3px ${alpha(theme.palette[getStatusColor(activity.status)].main, 0.2)}`,
+                    '&:hover': {
+                      opacity: 1,
+                      height: 20,
+                      backgroundColor: `${getStatusColor(activity.status)}.dark`,
+                      transform: 'translateY(-50%) scale(1.05)',
+                      boxShadow: `0 3px 8px ${alpha(theme.palette[getStatusColor(activity.status)].main, 0.4)}`,
+                      zIndex: 10,
+                    },
+                    '&:active': {
+                      transform: 'translateY(-50%) scale(0.98)',
+                    },
+                    ...calculateBarPosition(activity.start_date, activity.due_date)
+                  }} 
+                />
+              </Tooltip>
             )}
           </Box>
         ))}
