@@ -46,7 +46,6 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  BarChart3,
   SortAsc,
   SortDesc
 } from 'lucide-react'
@@ -57,6 +56,15 @@ import sharedApiService from '../utils/apiService'
 
 const STATUS_OPTIONS = ['ON_TRACK', 'AT_RISK', 'OFF_TRACK', 'ON_HOLD', 'COMPLETED']
 const PRIORITY_OPTIONS = ['Low', 'Normal', 'High', 'Urgent']
+
+// localStorage keys for state persistence
+const STORAGE_KEYS = {
+  PAGE: 'projectTreeView_page',
+  ROWS_PER_PAGE: 'projectTreeView_rowsPerPage',
+  FILTERS: 'projectTreeView_filters',
+  SORT_FIELD: 'projectTreeView_sortField',
+  SORT_ORDER: 'projectTreeView_sortOrder'
+}
 
 function ProjectTreeView({ user }) {
   const theme = useTheme()
@@ -97,6 +105,33 @@ function ProjectTreeView({ user }) {
     if (!a || !b) return false
     return a > b
   }, [])
+
+  // Helper functions for localStorage state persistence
+  const saveStateToStorage = useCallback((key, value) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value))
+    } catch (error) {
+      console.warn('Failed to save state to localStorage:', error)
+    }
+  }, [])
+
+  const loadStateFromStorage = useCallback((key, defaultValue) => {
+    try {
+      const saved = localStorage.getItem(key)
+      return saved ? JSON.parse(saved) : defaultValue
+    } catch (error) {
+      console.warn('Failed to load state from localStorage:', error)
+      return defaultValue
+    }
+  }, [])
+
+  const clearStoredState = useCallback(() => {
+    try {
+      Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key))
+    } catch (error) {
+      console.warn('Failed to clear stored state:', error)
+    }
+  }, [])
   
   const { showSuccess, showError } = useSnackbar()
   const { showDeleteConfirmation } = useConfirmation()
@@ -114,15 +149,15 @@ function ProjectTreeView({ user }) {
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState({})
   
-  // Pagination state
-  const [page, setPage] = useState(0) // MUI uses 0-based
-  const [rowsPerPage, setRowsPerPage] = useState(8)
+  // Pagination state - load from localStorage with fallbacks
+  const [page, setPage] = useState(() => loadStateFromStorage(STORAGE_KEYS.PAGE, 0))
+  const [rowsPerPage, setRowsPerPage] = useState(() => loadStateFromStorage(STORAGE_KEYS.ROWS_PER_PAGE, 8))
   const [totalCount, setTotalCount] = useState(0)
   
-  // Filter and sort state
-  const [filters, setFilters] = useState([])
-  const [sortField, setSortField] = useState(null)
-  const [sortOrder, setSortOrder] = useState('asc')
+  // Filter and sort state - load from localStorage with fallbacks
+  const [filters, setFilters] = useState(() => loadStateFromStorage(STORAGE_KEYS.FILTERS, []))
+  const [sortField, setSortField] = useState(() => loadStateFromStorage(STORAGE_KEYS.SORT_FIELD, null))
+  const [sortOrder, setSortOrder] = useState(() => loadStateFromStorage(STORAGE_KEYS.SORT_ORDER, 'asc'))
   
   // Filter dialog state
   const [filterDialogOpen, setFilterDialogOpen] = useState(false)
@@ -325,14 +360,38 @@ function ProjectTreeView({ user }) {
     loadProjectTree()
   }, [loadProjectTree])
 
+  // Save state to localStorage when pagination changes
+  useEffect(() => {
+    saveStateToStorage(STORAGE_KEYS.PAGE, page)
+  }, [page, saveStateToStorage])
+
+  useEffect(() => {
+    saveStateToStorage(STORAGE_KEYS.ROWS_PER_PAGE, rowsPerPage)
+  }, [rowsPerPage, saveStateToStorage])
+
+  // Save state to localStorage when filters change
+  useEffect(() => {
+    saveStateToStorage(STORAGE_KEYS.FILTERS, filters)
+  }, [filters, saveStateToStorage])
+
+  // Save state to localStorage when sort changes
+  useEffect(() => {
+    saveStateToStorage(STORAGE_KEYS.SORT_FIELD, sortField)
+  }, [sortField, saveStateToStorage])
+
+  useEffect(() => {
+    saveStateToStorage(STORAGE_KEYS.SORT_ORDER, sortOrder)
+  }, [sortOrder, saveStateToStorage])
+
   // Pagination handlers
   const handleChangePage = (event, newPage) => {
     setPage(newPage)
   }
 
   const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10))
-    setPage(0)
+    const newRowsPerPage = parseInt(event.target.value, 10)
+    setRowsPerPage(newRowsPerPage)
+    setPage(0) // Reset to first page when changing rows per page
   }
 
   // Filter handlers
@@ -400,19 +459,21 @@ function ProjectTreeView({ user }) {
       }
     }
 
-    setFilters(prev => [...prev, { ...currentFilter, value: coercedValue }])
+    const newFilters = [...filters, { ...currentFilter, value: coercedValue }]
+    setFilters(newFilters)
     handleCloseFilterDialog()
-    setPage(0)
+    setPage(0) // Reset to first page when adding filter
   }
 
   const handleRemoveFilter = (index) => {
-    setFilters(prev => prev.filter((_, i) => i !== index))
-    setPage(0)
+    const newFilters = filters.filter((_, i) => i !== index)
+    setFilters(newFilters)
+    setPage(0) // Reset to first page when removing filter
   }
 
   const handleClearAllFilters = () => {
     setFilters([])
-    setPage(0)
+    setPage(0) // Reset to first page when clearing filters
   }
 
   // Sort handler
@@ -423,7 +484,7 @@ function ProjectTreeView({ user }) {
       setSortField(fieldName)
       setSortOrder('asc')
     }
-    setPage(0)
+    setPage(0) // Reset to first page when sorting
   }
 
   const toggleExpand = (projectId) => {
@@ -810,15 +871,22 @@ function ProjectTreeView({ user }) {
             '&:hover': {
               bgcolor: 'action.hover'
             },
-            bgcolor: level > 0 ? alpha('#000', 0.01) : 'transparent'
+            bgcolor: level > 0 ? alpha('#000', 0.01) : 'transparent',
+            cursor: 'pointer'
           }}
+          onClick={() => navigate('/dashboard/projects/gantt', { 
+            state: { projectId: node.id, projectName: node.name } 
+          })}
         >
           <TableCell sx={{ pl: 2 + level * 4, borderLeft: '3px solid', borderLeftColor: `${getStatusColor(node.status)}.main` }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               {hasChildren ? (
                 <IconButton
                   size="small"
-                  onClick={() => toggleExpand(node.id)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleExpand(node.id)
+                  }}
                   sx={{ p: 0.5 }}
                 >
                   {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -858,21 +926,16 @@ function ProjectTreeView({ user }) {
 
           <TableCell align="right" sx={{ whiteSpace: 'nowrap', minWidth: { xs: 120, sm: 160 } }}>
             <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
-              <Tooltip title="View Gantt Chart">
-                <IconButton 
-                  size="small" 
-                  color="primary"
-                  onClick={() => navigate('/dashboard/projects/gantt', { 
-                    state: { projectId: node.id, projectName: node.name } 
-                  })}
-                >
-                  <BarChart3 size={18} />
-                </IconButton>
-              </Tooltip>
-              <IconButton size="small" onClick={() => openCreate(node.id)}>
+              <IconButton size="small" onClick={(e) => {
+                e.stopPropagation()
+                openCreate(node.id)
+              }}>
                 <Plus size={18} />
               </IconButton>
-              <IconButton size="small" onClick={() => openEdit(node.id)}>
+              <IconButton size="small" onClick={(e) => {
+                e.stopPropagation()
+                openEdit(node.id)
+              }}>
                 <Edit size={18} />
               </IconButton>
               {/* Delete button removed per requirements */}
@@ -970,7 +1033,21 @@ function ProjectTreeView({ user }) {
                   variant="outlined"
                   size="small"
                   startIcon={
-                    <Badge badgeContent={filters.length} color="primary">
+                    <Badge 
+                      badgeContent={filters.length} 
+                      color="primary"
+                      sx={{
+                        '& .MuiBadge-badge': {
+                          right: -6,
+                          top: -6,
+                          border: '1px solid',
+                          borderColor: 'background.paper',
+                          fontSize: '0.625rem',
+                          height: '16px',
+                          minWidth: '16px'
+                        }
+                      }}
+                    >
                       <Filter size={18} />
                     </Badge>
                   }
@@ -980,7 +1057,12 @@ function ProjectTreeView({ user }) {
                     fontWeight: 500,
                     minWidth: '100px',
                     borderColor: filters.length > 0 ? 'primary.main' : 'divider',
-                    color: filters.length > 0 ? 'primary.main' : 'text.secondary'
+                    color: filters.length > 0 ? 'primary.main' : 'text.secondary',
+                    overflow: 'visible', // Allow badge to overflow button bounds
+                    '& .MuiButton-startIcon': {
+                      marginRight: '8px',
+                      overflow: 'visible' // Allow badge overflow
+                    }
                   }}
                 >
                   {filters.length > 0 ? `${filters.length} Filter${filters.length > 1 ? 's' : ''}` : 'Filter'}
@@ -1106,7 +1188,7 @@ function ProjectTreeView({ user }) {
                 setSortField(field.name)
                 setSortOrder('asc')
               }
-              setPage(0)
+              setPage(0) // Reset to first page when sorting
               setSortMenuAnchor(null)
             }}
             selected={sortField === field.name}
@@ -1128,7 +1210,7 @@ function ProjectTreeView({ user }) {
               onClick={() => {
                 setSortField(null)
                 setSortOrder('asc')
-                setPage(0)
+                setPage(0) // Reset to first page when clearing sort
                 setSortMenuAnchor(null)
               }}
               sx={{ color: 'error.main' }}

@@ -39,6 +39,15 @@ import { Plus, Edit, CheckCircle, Circle, Flag, Filter, SortAsc, SortDesc, Arrow
 import { useSnackbar } from '../contexts/SnackbarContext'
 import sharedApiService from '../utils/apiService'
 
+// localStorage keys for state persistence
+const STORAGE_KEYS = {
+  PAGINATION: 'projectPlanning_pagination',
+  FILTERS: 'projectPlanning_filters',
+  SORT_FIELD: 'projectPlanning_sortField',
+  SORT_ORDER: 'projectPlanning_sortOrder',
+  VISIBLE_COLUMNS: 'projectPlanning_visibleColumns'
+}
+
 // Showing all activity types together; tabs removed
 
 function ProjectPlanning({ user, projectId }) {
@@ -53,19 +62,50 @@ function ProjectPlanning({ user, projectId }) {
   const tokenRef = useRef(token)
   tokenRef.current = token
 
+  // Helper functions for localStorage state persistence
+  const saveStateToStorage = useCallback((key, value) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value))
+    } catch (error) {
+      console.warn('Failed to save state to localStorage:', error)
+    }
+  }, [])
+
+  const loadStateFromStorage = useCallback((key, defaultValue) => {
+    try {
+      const saved = localStorage.getItem(key)
+      return saved ? JSON.parse(saved) : defaultValue
+    } catch (error) {
+      console.warn('Failed to load state from localStorage:', error)
+      return defaultValue
+    }
+  }, [])
+
+  const clearStoredState = useCallback(() => {
+    try {
+      Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key))
+    } catch (error) {
+      console.warn('Failed to clear stored state:', error)
+    }
+  }, [])
+
   const [activities, setActivities] = useState([])
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
-  const [pagination, setPagination] = useState({
-    page: 0,
-    rowsPerPage: 8,
-    total: 0
-  })
   
-  // Filter and sort state
-  const [filters, setFilters] = useState([])
-  const [sortField, setSortField] = useState(null)
-  const [sortOrder, setSortOrder] = useState('asc')
+  // Pagination state - load from localStorage with fallbacks
+  const [pagination, setPagination] = useState(() => 
+    loadStateFromStorage(STORAGE_KEYS.PAGINATION, {
+      page: 0,
+      rowsPerPage: 8,
+      total: 0
+    })
+  )
+  
+  // Filter and sort state - load from localStorage with fallbacks
+  const [filters, setFilters] = useState(() => loadStateFromStorage(STORAGE_KEYS.FILTERS, []))
+  const [sortField, setSortField] = useState(() => loadStateFromStorage(STORAGE_KEYS.SORT_FIELD, null))
+  const [sortOrder, setSortOrder] = useState(() => loadStateFromStorage(STORAGE_KEYS.SORT_ORDER, 'asc'))
   const [fieldMetadata, setFieldMetadata] = useState([])
   
   // Filter dialog state
@@ -79,22 +119,24 @@ function ProjectPlanning({ user, projectId }) {
   // Sort menu state
   const [sortMenuAnchor, setSortMenuAnchor] = useState(null)
   
-  // Column customization state
+  // Column customization state - load from localStorage with fallbacks
   const [columnDialogOpen, setColumnDialogOpen] = useState(false)
   // Predefined initial columns (common ones shown by default)
-  const [visibleColumns, setVisibleColumns] = useState({
-    project_id: true,
-    type: true,
-    subject: true,
-    status: true,
-    start_date: true,
-    due_date: true,
-    assignee: true,
-    approver: true,
-    progress: true,
-    // Others off by default
-    priority: false
-  })
+  const [visibleColumns, setVisibleColumns] = useState(() => 
+    loadStateFromStorage(STORAGE_KEYS.VISIBLE_COLUMNS, {
+      project_id: true,
+      type: true,
+      subject: true,
+      status: true,
+      start_date: true,
+      due_date: true,
+      assignee: true,
+      approver: true,
+      progress: true,
+      // Others off by default
+      priority: false
+    })
+  )
   
   // Tabs removed: show all activity types
   // Preferred column order
@@ -304,6 +346,30 @@ function ProjectPlanning({ user, projectId }) {
 
     loadActivities(1, pagination.rowsPerPage)
   }, [token, projectId, filters, sortField, sortOrder, showError])
+
+  // Save state to localStorage when pagination changes
+  useEffect(() => {
+    saveStateToStorage(STORAGE_KEYS.PAGINATION, pagination)
+  }, [pagination, saveStateToStorage])
+
+  // Save state to localStorage when filters change
+  useEffect(() => {
+    saveStateToStorage(STORAGE_KEYS.FILTERS, filters)
+  }, [filters, saveStateToStorage])
+
+  // Save state to localStorage when sort changes
+  useEffect(() => {
+    saveStateToStorage(STORAGE_KEYS.SORT_FIELD, sortField)
+  }, [sortField, saveStateToStorage])
+
+  useEffect(() => {
+    saveStateToStorage(STORAGE_KEYS.SORT_ORDER, sortOrder)
+  }, [sortOrder, saveStateToStorage])
+
+  // Save state to localStorage when visible columns change
+  useEffect(() => {
+    saveStateToStorage(STORAGE_KEYS.VISIBLE_COLUMNS, visibleColumns)
+  }, [visibleColumns, saveStateToStorage])
   
   const loadActivities = useCallback(async (page = 1, pageSize = 8) => {
     if (isLoadingRef.current || !isMountedRef.current) return
@@ -431,19 +497,21 @@ function ProjectPlanning({ user, projectId }) {
       }
     }
 
-    setFilters(prev => [...prev, { ...currentFilter, value: coercedValue }])
+    const newFilters = [...filters, { ...currentFilter, value: coercedValue }]
+    setFilters(newFilters)
     handleCloseFilterDialog()
-    setPagination(prev => ({ ...prev, page: 0 }))
+    setPagination(prev => ({ ...prev, page: 0 })) // Reset to first page when adding filter
   }
 
   const handleRemoveFilter = (index) => {
-    setFilters(prev => prev.filter((_, i) => i !== index))
-    setPagination(prev => ({ ...prev, page: 0 }))
+    const newFilters = filters.filter((_, i) => i !== index)
+    setFilters(newFilters)
+    setPagination(prev => ({ ...prev, page: 0 })) // Reset to first page when removing filter
   }
 
   const handleClearAllFilters = () => {
     setFilters([])
-    setPagination(prev => ({ ...prev, page: 0 }))
+    setPagination(prev => ({ ...prev, page: 0 })) // Reset to first page when clearing filters
   }
 
   // Sort handler
@@ -454,7 +522,7 @@ function ProjectPlanning({ user, projectId }) {
       setSortField(fieldName)
       setSortOrder('asc')
     }
-    setPagination(prev => ({ ...prev, page: 0 }))
+    setPagination(prev => ({ ...prev, page: 0 })) // Reset to first page when sorting
   }
 
   // Get field definition by name
@@ -863,7 +931,21 @@ function ProjectPlanning({ user, projectId }) {
                   variant="outlined"
                   size="small"
                   startIcon={
-                    <Badge badgeContent={filters.length} color="primary">
+                    <Badge 
+                      badgeContent={filters.length} 
+                      color="primary"
+                      sx={{
+                        '& .MuiBadge-badge': {
+                          right: -6,
+                          top: -6,
+                          border: '1px solid',
+                          borderColor: 'background.paper',
+                          fontSize: '0.625rem',
+                          height: '16px',
+                          minWidth: '16px'
+                        }
+                      }}
+                    >
                       <Filter size={18} />
                     </Badge>
                   }
@@ -873,7 +955,12 @@ function ProjectPlanning({ user, projectId }) {
                     fontWeight: 500,
                     minWidth: '100px',
                     borderColor: filters.length > 0 ? 'primary.main' : 'divider',
-                    color: filters.length > 0 ? 'primary.main' : 'text.secondary'
+                    color: filters.length > 0 ? 'primary.main' : 'text.secondary',
+                    overflow: 'visible', // Allow badge to overflow button bounds
+                    '& .MuiButton-startIcon': {
+                      marginRight: '8px',
+                      overflow: 'visible' // Allow badge overflow
+                    }
                   }}
                 >
                   {filters.length > 0 ? `${filters.length} Filter${filters.length > 1 ? 's' : ''}` : 'Filter'}
@@ -997,7 +1084,7 @@ function ProjectPlanning({ user, projectId }) {
                 setSortField(field.name)
                 setSortOrder('asc')
               }
-              setPagination(prev => ({ ...prev, page: 0 }))
+              setPagination(prev => ({ ...prev, page: 0 })) // Reset to first page when sorting
               setSortMenuAnchor(null)
             }}
             selected={sortField === field.name}
@@ -1019,7 +1106,7 @@ function ProjectPlanning({ user, projectId }) {
               onClick={() => {
                 setSortField(null)
                 setSortOrder('asc')
-                setPagination(prev => ({ ...prev, page: 0 }))
+                setPagination(prev => ({ ...prev, page: 0 })) // Reset to first page when clearing sort
                 setSortMenuAnchor(null)
               }}
               sx={{ color: 'error.main' }}
