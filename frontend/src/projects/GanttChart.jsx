@@ -857,8 +857,15 @@ function GanttChart({ user, projectId: propProjectId }) {
   return (
     <>
       {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: { xs: 'column', sm: 'row' },
+        justifyContent: 'space-between', 
+        alignItems: { xs: 'flex-start', sm: 'center' }, 
+        gap: { xs: 2, sm: 0 },
+        mb: 3 
+      }}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
           <Button
             startIcon={<ArrowLeft size={20} />}
             onClick={() => navigate(-1)}
@@ -867,7 +874,15 @@ function GanttChart({ user, projectId: propProjectId }) {
           >
             Back
           </Button>
-          <Typography variant="h4" gutterBottom>
+          <Typography 
+            variant="h4" 
+            gutterBottom
+            sx={{
+              fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' },
+              wordBreak: 'break-word',
+              overflowWrap: 'break-word'
+            }}
+          >
             Gantt Chart: {project.name}
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -903,8 +918,25 @@ function GanttChart({ user, projectId: propProjectId }) {
       {/* Timeline Section - Completely Separate */}
       <Card sx={{ border: 1, borderColor: 'divider', borderRadius: 1 }}>
         <CardContent sx={{ p: 2 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mb: 2, position: 'relative' }}>
-            <Typography variant="h6" sx={{ position: 'absolute', left: 0 }}>Timeline View</Typography>
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: { xs: 'column', md: 'row' },
+            justifyContent: { xs: 'flex-start', md: 'center' }, 
+            alignItems: { xs: 'flex-start', md: 'center' }, 
+            gap: { xs: 2, md: 0 },
+            mb: 2, 
+            position: 'relative' 
+          }}>
+            <Typography 
+              variant="h6" 
+              sx={{ 
+                position: { xs: 'static', md: 'absolute' }, 
+                left: { md: 0 },
+                fontSize: { xs: '1rem', md: '1.25rem' }
+              }}
+            >
+              Timeline View
+            </Typography>
             <ToggleButtonGroup
               value={viewMode}
               exclusive
@@ -915,25 +947,38 @@ function GanttChart({ user, projectId: propProjectId }) {
               }}
               size="small"
               aria-label="timeline view mode"
+              sx={{
+                flexWrap: { xs: 'wrap', sm: 'nowrap' },
+                '& .MuiToggleButton-root': {
+                  fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                  px: { xs: 1, sm: 2 }
+                }
+              }}
             >
               <ToggleButton value="daily" aria-label="daily view">
                 <CalendarDays size={16} style={{ marginRight: '4px' }} />
-                Daily
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Daily</Box>
               </ToggleButton>
               <ToggleButton value="weekly" aria-label="weekly view">
                 <Calendar size={16} style={{ marginRight: '4px' }} />
-                Weekly
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Weekly</Box>
               </ToggleButton>
               <ToggleButton value="monthly" aria-label="monthly view">
                 <Calendar size={16} style={{ marginRight: '4px' }} />
-                Monthly
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Monthly</Box>
               </ToggleButton>
               <ToggleButton value="yearly" aria-label="yearly view">
                 <Calendar size={16} style={{ marginRight: '4px' }} />
-                Yearly
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Yearly</Box>
               </ToggleButton>
             </ToggleButtonGroup>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', position: 'absolute', right: 0 }}>
+            <Box sx={{ 
+              display: 'flex', 
+              gap: 1, 
+              alignItems: 'center', 
+              position: { xs: 'static', md: 'absolute' }, 
+              right: { md: 0 }
+            }}>
               <IconButton onClick={() => setZoomLevel(prev => Math.max(0.5, prev - 0.1))} size="small">
                 <ZoomOut size={20} />
               </IconButton>

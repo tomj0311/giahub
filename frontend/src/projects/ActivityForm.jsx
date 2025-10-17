@@ -518,7 +518,7 @@ function ActivityForm({ user, projectId: propProjectId }) {
 
   return (
     <>
-    <Box sx={{ p: 3 }}>
+    <Box>
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -767,7 +767,7 @@ function ActivityForm({ user, projectId: propProjectId }) {
     
     {/* Notifications - Rendered outside form container to prevent flickering */}
     {isEditMode && activityId && (
-      <Box sx={{ p: 3, pt: 0, maxWidth: 1200, margin: '0 auto' }}>
+      <Box sx={{ maxWidth: 1200, margin: '0 auto' }}>
         <ActivityNotifications 
           user={stableUser} 
           activityId={activityId} 
