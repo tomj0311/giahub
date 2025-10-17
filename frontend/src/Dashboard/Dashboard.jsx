@@ -64,6 +64,7 @@ const ProjectStatusHome = lazy(() => import('../projects/ProjectStatusHome'))
 const ProjectTreeView = lazy(() => import('../projects/ProjectTreeView'))
 const ProjectPlanning = lazy(() => import('../projects/ProjectPlanning'))
 const ActivityForm = lazy(() => import('../projects/ActivityForm'))
+const ProjectForm = lazy(() => import('../projects/ProjectForm'))
 const GanttChart = lazy(() => import('../projects/GanttChart'))
 const WorkflowConfig = lazy(() => import('../workflows/WorkflowConfig'))
 const WorkflowDashboard = lazy(() => import('../workflows/WorkflowDashboard'))
@@ -1085,6 +1086,8 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="projects/planning" element={<ProjectPlanning user={user} />} />
 				<Route path="projects/activity/new" element={<ActivityForm user={user} />} />
 				<Route path="projects/activity/:activityId" element={<ActivityForm user={user} />} />
+				<Route path="projects/project/new" element={<ProjectForm user={user} />} />
+				<Route path="projects/project/:id" element={<ProjectForm user={user} />} />
 				<Route path="projects/gantt" element={<GanttChart user={user} />} />
 				<Route path="agents" element={<Agent user={user} />} />
 				<Route path="models" element={<ModelConfig user={user} />} />
