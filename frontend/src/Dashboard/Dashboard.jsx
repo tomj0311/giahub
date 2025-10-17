@@ -44,6 +44,7 @@ import {
 } from 'lucide-react'
 import PasswordResetDialog from '../components/PasswordResetDialog'
 const Home = lazy(() => import('./Home'))
+const AgentHome = lazy(() => import('../agents/AgentHome'))
 const Users = lazy(() => import('./Users'))
 const RoleManagement = lazy(() => import('./RoleManagement'))
 const UserInvitation = lazy(() => import('./UserInvitation'))
@@ -89,12 +90,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 
 	// Hardcoded menu items based on screenshot
 	const menuItems = [
-		{
-			label: 'Home',
-			to: '/dashboard/home',
-			icon: 'Home',
-			order: 10
-		},
+		// Home moved under Agents as Agent Home
 		{
 			label: 'Projects',
 			icon: 'FolderKanban',
@@ -124,6 +120,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			expandable: true,
 			order: 20,
 			children: [
+				{
+					label: 'Home',
+					to: '/dashboard/agents/home',
+					icon: 'Home'
+				},
 				{
 					label: 'Playground',
 					to: '/dashboard/agent-playground',
@@ -166,6 +167,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			order: 40,
 			children: [
 				{
+					label: 'Home',
+					to: '/dashboard/monitor',
+					icon: 'Home'
+				},
+				{
 					label: 'Run Workflow',
 					to: '/dashboard/workflow-ui',
 					icon: 'Play'
@@ -196,11 +202,6 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 					label: 'Create Processes',
 					to: '/dashboard/bpmn',
 					icon: 'GitBranch'
-				},
-				{
-					label: 'Manage Wrokflows',
-					to: '/dashboard/monitor',
-					icon: 'Monitor'
 				}
 			]
 		},
@@ -673,12 +674,24 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 							{drawerOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
 						</IconButton>
 					)}
-					<Typography variant="h6" sx={{
-						fontWeight: 700,
-						flexGrow: 1,
-						color: theme.palette.mode === 'dark' ? '#ffffff !important' : '#000000 !important',
-						fontSize: '1.25rem'
-					}}>GIA</Typography>
+					<Typography 
+						variant="h6" 
+						component={RouterLink}
+						to="/dashboard/home"
+						sx={{
+							fontWeight: 700,
+							flexGrow: 1,
+							color: theme.palette.mode === 'dark' ? '#ffffff !important' : '#000000 !important',
+							fontSize: '1.25rem',
+							textDecoration: 'none',
+							cursor: 'pointer',
+							'&:hover': {
+								opacity: 0.8
+							}
+						}}
+					>
+						GIA
+					</Typography>
 
 					<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
 						<IconButton sx={{ color: theme.palette.mode === 'dark' ? '#ffffff !important' : '#000000 !important' }}>
@@ -892,6 +905,7 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 		<Route path="/" element={<DashboardLayout user={user} onLogout={onLogout} themeKey={themeKey} setThemeKey={setThemeKey} />}>
 			<Route index element={<Navigate to="home" replace />} />
 			<Route path="home" element={<Home user={user} />} />
+			<Route path="agents/home" element={<AgentHome user={user} />} />
 			<Route path="users" element={<Users user={user} />} />
 			<Route path="role-management" element={<RoleManagement user={user} />} />
 			<Route path="user-invitation" element={<UserInvitation user={user} />} />
