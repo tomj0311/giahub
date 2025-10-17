@@ -94,13 +94,15 @@ function ProjectPlanning({ user, projectId }) {
   const [loading, setLoading] = useState(true)
   
   // Pagination state - load from localStorage with fallbacks
-  const [pagination, setPagination] = useState(() => 
-    loadStateFromStorage(STORAGE_KEYS.PAGINATION, {
+  const [pagination, setPagination] = useState(() => {
+    const storedPagination = loadStateFromStorage(STORAGE_KEYS.PAGINATION, {
       page: 0,
       rowsPerPage: 10,
       total: 0
     })
-  )
+    console.log('[ProjectPlanning] Initial pagination from localStorage:', storedPagination)
+    return storedPagination
+  })
   
   // Filter and sort state - load from localStorage with fallbacks
   const [filters, setFilters] = useState(() => loadStateFromStorage(STORAGE_KEYS.FILTERS, []))
@@ -344,8 +346,9 @@ function ProjectPlanning({ user, projectId }) {
       }
     }
 
-    loadActivities(1, pagination.rowsPerPage)
-  }, [token, projectId, filters, sortField, sortOrder, showError])
+    // Use stored page position (pagination.page is 0-based, backend expects 1-based)
+    loadActivities(pagination.page + 1, pagination.rowsPerPage)
+  }, [token, projectId, filters, sortField, sortOrder, showError, pagination.page, pagination.rowsPerPage])
 
   // Save state to localStorage when pagination changes
   useEffect(() => {
@@ -699,12 +702,12 @@ function ProjectPlanning({ user, projectId }) {
   // Tabs removed
 
   const handlePageChange = (event, newPage) => {
-    loadActivities(newPage + 1, pagination.rowsPerPage)
+    setPagination(prev => ({ ...prev, page: newPage }))
   }
 
   const handleRowsPerPageChange = (event) => {
     const newSize = parseInt(event.target.value, 10)
-    loadActivities(1, newSize)
+    setPagination(prev => ({ ...prev, rowsPerPage: newSize, page: 0 }))
   }
 
   const handleColumnToggle = (columnName) => {

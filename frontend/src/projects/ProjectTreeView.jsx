@@ -1249,7 +1249,7 @@ function ProjectTreeView({ user }) {
                 onPageChange={handleChangePage}
                 rowsPerPage={rowsPerPage}
                 onRowsPerPageChange={handleChangeRowsPerPage}
-                rowsPerPageOptions={[10, 20, 50, 100]}
+                rowsPerPageOptions={[8, 10, 20, 50, 100]}
               />
             </>
           )}
