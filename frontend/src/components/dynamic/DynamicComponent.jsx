@@ -246,6 +246,15 @@ const DynamicComponent = ({ componentCode, onSubmit, submitting, children }) => 
           TableHead: MUIComponents.TableHead,
           TableRow: MUIComponents.TableRow,
           TablePagination: MUIComponents.TablePagination,
+          // Chart.js Components
+          LineChart: MUIComponents.LineChart,
+          BarChart: MUIComponents.BarChart,
+          PieChart: MUIComponents.PieChart,
+          DoughnutChart: MUIComponents.DoughnutChart,
+          Line: MUIComponents.Line,
+          Bar: MUIComponents.Bar,
+          Pie: MUIComponents.Pie,
+          Doughnut: MUIComponents.Doughnut,
           // HTML Elements (lowercase to match JSX)
           div: 'div',
           span: 'span',

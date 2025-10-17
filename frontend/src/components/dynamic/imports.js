@@ -2,6 +2,36 @@ import React, { useState, useEffect, lazy, Suspense } from 'react';
 import * as MUICore from '@mui/material';
 import * as MUIIcons from '@mui/icons-material';
 
+// Import Chart.js components
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+} from 'chart.js';
+
+// Import react-chartjs-2 components
+import { Line, Bar, Pie, Doughnut } from 'react-chartjs-2';
+
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement
+);
+
 // Dynamic component loaders
 const cachedIcons = {};
 const cachedComponents = {};
@@ -59,7 +89,26 @@ export const MUIComponents = {
   ...MUICore,
   // All MUI Icons
   ...MUIIcons,
+  // Chart.js components
+  ChartJS,
+  Line,
+  Bar,
+  Pie,
+  Doughnut,
+  LineChart: Line,
+  BarChart: Bar,
+  PieChart: Pie,
+  DoughnutChart: Doughnut,
   // Dynamic loaders
   loadMuiIcon,
   loadMuiComponent
 };
+
+// Debug: Log that chart components are available
+console.log('📊 Chart components loaded:', {
+  Line: typeof Line,
+  Bar: typeof Bar, 
+  Pie: typeof Pie,
+  Doughnut: typeof Doughnut,
+  PieChart: typeof MUIComponents.PieChart
+});
