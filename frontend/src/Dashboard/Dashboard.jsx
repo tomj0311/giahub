@@ -786,8 +786,14 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 							avatar={
 								<Avatar
 									sx={{
-										bgcolor: theme.palette.mode === 'dark' ? theme.palette.primary.main : theme.palette.secondary.main,
-										color: theme.palette.getContrastText(theme.palette.mode === 'dark' ? theme.palette.primary.main : theme.palette.secondary.main),
+										bgcolor: (() => {
+											const bgColor = theme.palette.mode === 'dark' ? theme.palette.primary.main : theme.palette.secondary.main;
+											return bgColor;
+										})(),
+										color: (() => {
+											const bgColor = theme.palette.mode === 'dark' ? theme.palette.primary.main : theme.palette.secondary.main;
+											return theme.palette.getContrastText(bgColor);
+										})(),
 										width: 24,
 										height: 24,
 										fontSize: 12
@@ -799,11 +805,17 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 							label={user?.name || 'User'}
 							onClick={handleProfileMenuOpen}
 							sx={{
-								color: theme.palette.text.primary,
-								bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
-								borderColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.24)' : 'rgba(0,0,0,0.23)',
-								'& .MuiChip-label': { color: 'inherit' },
-								cursor: 'pointer'
+								color: theme.palette.mode === 'dark' ? '#ffffff' : '#000000',
+								bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+								borderColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)',
+								'& .MuiChip-label': { 
+									color: theme.palette.mode === 'dark' ? '#ffffff !important' : '#000000 !important',
+									fontWeight: 500
+								},
+								cursor: 'pointer',
+								'&:hover': {
+									bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.12)',
+								}
 							}}
 							variant="outlined"
 							clickable
