@@ -281,3 +281,68 @@ async def logout(user: dict = Depends(verify_token_middleware)):
 async def get_current_user(user: dict = Depends(verify_token_middleware)):
     """Get current user information"""
     return await AuthService.get_current_user_info(user)
+
+
+@router.post("/forgot-password")
+async def forgot_password(request: dict):
+    """Send password reset email"""
+    from ..services.email_service import send_password_reset_email
+    from ..db import get_collections
+    import secrets
+    from datetime import datetime
+    
+    email = request.get("email")
+    if not email:
+        raise HTTPException(400, "Email required")
+    
+    # Check if user exists
+    collections = get_collections()
+    user = await collections["users"].find_one({"email": email})
+    if not user:
+        return {"message": "Reset link sent if email exists"}
+    
+    # Generate token and save
+    token = secrets.token_urlsafe(20)
+    await collections["users"].update_one(
+        {"email": email}, 
+        {"$set": {"reset_token": token, "reset_expires": datetime.utcnow().timestamp() + 3600}}
+    )
+    
+    # Send email
+    await send_password_reset_email(email, token)
+    
+    return {"message": "Reset link sent"}
+
+
+@router.post("/reset-password")
+async def reset_password(request: dict):
+    """Reset password with token"""
+    from ..db import get_collections
+    from ..utils.auth import hash_password
+    from datetime import datetime
+    
+    token = request.get("token")
+    password = request.get("password")
+    
+    if not token or not password:
+        raise HTTPException(400, "Token and password required")
+    
+    collections = get_collections()
+    user = await collections["users"].find_one({
+        "reset_token": token,
+        "reset_expires": {"$gt": datetime.utcnow().timestamp()}
+    })
+    
+    if not user:
+        raise HTTPException(400, "Invalid or expired token")
+    
+    # Update password
+    await collections["users"].update_one(
+        {"_id": user["_id"]},
+        {
+            "$set": {"password_hash": hash_password(password)},
+            "$unset": {"reset_token": "", "reset_expires": ""}
+        }
+    )
+    
+    return {"message": "Password reset successfully"}

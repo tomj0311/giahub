@@ -13,6 +13,7 @@ import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
 import VerifyPage from './pages/VerifyPage'
 import SetPasswordPage from './pages/SetPasswordPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 import AuthCallback from './pages/AuthCallback'
 import Dashboard from './Dashboard/Dashboard'
 import { buildTheme, getThemeKeyForMode } from './theme'
@@ -159,6 +160,7 @@ export default function App() {
         <Route path="/signup" element={!auth.token ? <SignupPage themeKey={themeKey} setThemeKey={setThemeKey} /> : <Navigate to="/dashboard" replace />} />
         <Route path="/verify" element={<VerifyPage />} />
         <Route path="/set-password" element={<SetPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/auth/callback" element={<AuthCallback onLogin={auth.login} />} />
 
         {/* Dashboard - handles all authenticated routes */}
