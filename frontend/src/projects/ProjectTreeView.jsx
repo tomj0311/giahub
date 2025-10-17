@@ -34,7 +34,10 @@ import {
   Menu,
   ListItemIcon,
   ListItemText,
-  Divider
+  Divider,
+  Checkbox,
+  FormControlLabel,
+  FormGroup
 } from '@mui/material'
 import {
   Plus,
@@ -47,7 +50,8 @@ import {
   ArrowUp,
   ArrowDown,
   SortAsc,
-  SortDesc
+  SortDesc,
+  Settings
 } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { useConfirmation } from '../contexts/ConfirmationContext'
@@ -63,7 +67,8 @@ const STORAGE_KEYS = {
   ROWS_PER_PAGE: 'projectTreeView_rowsPerPage',
   FILTERS: 'projectTreeView_filters',
   SORT_FIELD: 'projectTreeView_sortField',
-  SORT_ORDER: 'projectTreeView_sortOrder'
+  SORT_ORDER: 'projectTreeView_sortOrder',
+  VISIBLE_COLUMNS: 'projectTreeView_visibleColumns'
 }
 
 function ProjectTreeView({ user }) {
@@ -170,6 +175,22 @@ function ProjectTreeView({ user }) {
   // Sort menu state
   const [sortMenuAnchor, setSortMenuAnchor] = useState(null)
   
+  // Column customization state - load from localStorage with fallbacks
+  const [columnDialogOpen, setColumnDialogOpen] = useState(false)
+  // Predefined initial columns (common ones shown by default)
+  const [visibleColumns, setVisibleColumns] = useState(() => 
+    loadStateFromStorage(STORAGE_KEYS.VISIBLE_COLUMNS, {
+      name: true,
+      priority: true,
+      status: true,
+      assignee: true,
+      approver: true,
+      start_date: true,
+      due_date: true,
+      progress: true
+    })
+  )
+  
   // Project dialog state
   const [dialogOpen, setDialogOpen] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
@@ -188,6 +209,17 @@ function ProjectTreeView({ user }) {
     progress: 0,
     is_public: false
   })
+
+  // Preferred column order
+  const PREFERRED_ORDER = ['name', 'priority', 'status', 'assignee', 'approver', 'start_date', 'due_date', 'progress']
+
+  const orderedFields = React.useMemo(() => {
+    const orderIndex = (name) => {
+      const idx = PREFERRED_ORDER.indexOf(name)
+      return idx === -1 ? Number.MAX_SAFE_INTEGER : idx
+    }
+    return [...fieldMetadata].sort((a, b) => orderIndex(a.name) - orderIndex(b.name))
+  }, [fieldMetadata])
 
   // Load field metadata from API - NO HARDCODING!
   const loadFieldMetadata = useCallback(async () => {
@@ -383,6 +415,11 @@ function ProjectTreeView({ user }) {
     saveStateToStorage(STORAGE_KEYS.SORT_ORDER, sortOrder)
   }, [sortOrder, saveStateToStorage])
 
+  // Save state to localStorage when visible columns change
+  useEffect(() => {
+    saveStateToStorage(STORAGE_KEYS.VISIBLE_COLUMNS, visibleColumns)
+  }, [visibleColumns, saveStateToStorage])
+
   // Pagination handlers
   const handleChangePage = (event, newPage) => {
     setPage(newPage)
@@ -492,6 +529,21 @@ function ProjectTreeView({ user }) {
       ...prev,
       [projectId]: !prev[projectId]
     }))
+  }
+
+  const handleColumnToggle = (columnName) => {
+    setVisibleColumns(prev => ({
+      ...prev,
+      [columnName]: !prev[columnName]
+    }))
+  }
+
+  const handleOpenColumnDialog = () => {
+    setColumnDialogOpen(true)
+  }
+
+  const handleCloseColumnDialog = () => {
+    setColumnDialogOpen(false)
   }
 
   const openCreate = (parentId = 'root') => {
@@ -731,6 +783,66 @@ function ProjectTreeView({ user }) {
       in: 'In'
     }
     return labels[operator] || operator
+  }
+
+  // Get column label mapping
+  const getColumnLabel = (columnName) => {
+    const labels = {
+      name: 'Subject',
+      priority: 'Priority',
+      status: 'Status',
+      assignee: 'Assignee',
+      approver: 'Approver',
+      start_date: 'Start Date',
+      due_date: 'Due Date',
+      progress: 'Progress'
+    }
+    return labels[columnName] || columnName
+  }
+
+  // Render cell value based on column type
+  const renderCellValue = (node, columnName) => {
+    const value = node[columnName]
+    
+    if (columnName === 'name') {
+      return (
+        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+          {value}
+        </Typography>
+      )
+    }
+    
+    if (columnName === 'status') {
+      return (
+        <Chip
+          label={getStatusLabel(value)}
+          color={getStatusColor(value)}
+          size="small"
+        />
+      )
+    }
+    
+    if (columnName === 'start_date') {
+      return formatDate(value)
+    }
+    
+    if (columnName === 'due_date') {
+      return (
+        <Typography variant="body2" sx={getDueDateStyle(value, node.status)}>
+          {formatDate(value)}
+        </Typography>
+      )
+    }
+    
+    if (columnName === 'progress') {
+      return `${value}%`
+    }
+    
+    if (columnName === 'assignee' || columnName === 'approver') {
+      return value || '-'
+    }
+    
+    return value || '-'
   }
 
   // Render filter value based on type
@@ -1068,6 +1180,25 @@ function ProjectTreeView({ user }) {
                   {filters.length > 0 ? `${filters.length} Filter${filters.length > 1 ? 's' : ''}` : 'Filter'}
                 </Button>
               </Tooltip>
+
+              {/* Customize Columns Button */}
+              <Tooltip title="Customize Columns">
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<Settings size={18} />}
+                  onClick={handleOpenColumnDialog}
+                  sx={{ 
+                    textTransform: 'none',
+                    fontWeight: 500,
+                    minWidth: '100px',
+                    borderColor: 'divider',
+                    color: 'text.secondary'
+                  }}
+                >
+                  Columns
+                </Button>
+              </Tooltip>
             </Box>
           </Box>
 
@@ -1081,54 +1212,16 @@ function ProjectTreeView({ user }) {
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort('name')}>
-                          Subject
-                          {sortField === 'name' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort('priority')}>
-                          Priority
-                          {sortField === 'priority' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort('status')}>
-                          Status
-                          {sortField === 'status' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort('assignee')}>
-                          Assignee
-                          {sortField === 'assignee' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort('approver')}>
-                          Approver
-                          {sortField === 'approver' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort('start_date')}>
-                          Start Date
-                          {sortField === 'start_date' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort('due_date')}>
-                          Due Date
-                          {sortField === 'due_date' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort('progress')}>
-                          Progress
-                          {sortField === 'progress' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
-                        </Box>
-                      </TableCell>
+                      {orderedFields.map((field) => (
+                        visibleColumns[field.name] && (
+                          <TableCell key={field.name}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort(field.name)}>
+                              {getColumnLabel(field.name)}
+                              {sortField === field.name && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                            </Box>
+                          </TableCell>
+                        )
+                      ))}
                       <TableCell align="right" sx={{ whiteSpace: 'nowrap', minWidth: { xs: 120, sm: 160 } }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
