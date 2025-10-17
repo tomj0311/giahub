@@ -33,6 +33,11 @@ import {
 } from 'lucide-react';
 import sharedApiService from '../utils/apiService';
 
+// localStorage keys for state persistence
+const STORAGE_KEYS = {
+  PAGINATION: 'workflowDashboard_pagination'
+}
+
 function WorkflowCard({ workflow, onEdit, onRun }) {
   const theme = useTheme()
 
@@ -156,22 +161,41 @@ export default function WorkflowDashboard({ user }) {
   // Create a ref to store the current token to avoid useCallback dependency issues
   const tokenRef = useRef(token);
   tokenRef.current = token;
+
+  // Helper functions for localStorage state persistence
+  const saveStateToStorage = (key, value) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value))
+    } catch (error) {
+      console.warn('Failed to save state to localStorage:', error)
+    }
+  }
+
+  const loadStateFromStorage = (key, defaultValue) => {
+    try {
+      const saved = localStorage.getItem(key)
+      return saved ? JSON.parse(saved) : defaultValue
+    } catch (error) {
+      console.warn('Failed to load state from localStorage:', error)
+      return defaultValue
+    }
+  }
   
   const [loading, setLoading] = useState(true)
   const [workflows, setWorkflows] = useState([])
   const [displayedWorkflows, setDisplayedWorkflows] = useState([])
 
-
-
-  // Pagination state
-  const [pagination, setPagination] = useState({
-    page: 1,
-    page_size: 8,
-    total: 0,
-    total_pages: 0,
-    has_next: false,
-    has_prev: false
-  })
+  // Pagination state - load from localStorage with fallbacks
+  const [pagination, setPagination] = useState(() => 
+    loadStateFromStorage(STORAGE_KEYS.PAGINATION, {
+      page: 1,
+      page_size: 8,
+      total: 0,
+      total_pages: 0,
+      has_next: false,
+      has_prev: false
+    })
+  )
 
   useEffect(() => {
     // Set mounted to true
@@ -239,6 +263,11 @@ export default function WorkflowDashboard({ user }) {
       isLoadingRef.current = false;
     };
   }, [pagination.page, pagination.page_size]); // Re-fetch when page or page_size changes
+
+  // Save pagination state to localStorage when it changes
+  useEffect(() => {
+    saveStateToStorage(STORAGE_KEYS.PAGINATION, pagination)
+  }, [pagination])
 
   const handleShowMore = () => {
     if (pagination.has_next) {

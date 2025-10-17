@@ -27,6 +27,11 @@ import {
 import { useNavigate } from 'react-router-dom'
 import sharedApiService from '../utils/apiService'
 
+// localStorage keys for state persistence
+const STORAGE_KEYS = {
+  PAGINATION: 'agentHome_pagination'
+}
+
 function AgentCard({ agent, onEdit, onChat }) {
   const theme = useTheme()
 
@@ -160,15 +165,36 @@ export default function AgentHome({ user }) {
   const isMountedRef = useRef(true)
   const isLoadingRef = useRef(false)
 
-  // Pagination state
-  const [pagination, setPagination] = useState({
-    page: 1,
-    page_size: 8,
-    total: 0,
-    total_pages: 0,
-    has_next: false,
-    has_prev: false
-  })
+  // Helper functions for localStorage state persistence
+  const saveStateToStorage = (key, value) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value))
+    } catch (error) {
+      console.warn('Failed to save state to localStorage:', error)
+    }
+  }
+
+  const loadStateFromStorage = (key, defaultValue) => {
+    try {
+      const saved = localStorage.getItem(key)
+      return saved ? JSON.parse(saved) : defaultValue
+    } catch (error) {
+      console.warn('Failed to load state from localStorage:', error)
+      return defaultValue
+    }
+  }
+
+  // Pagination state - load from localStorage with fallbacks
+  const [pagination, setPagination] = useState(() => 
+    loadStateFromStorage(STORAGE_KEYS.PAGINATION, {
+      page: 1,
+      page_size: 8,
+      total: 0,
+      total_pages: 0,
+      has_next: false,
+      has_prev: false
+    })
+  )
 
   // Separate function to fetch agents data
   const fetchAgentsData = async (page = 1, pageSize = 8) => {
@@ -216,10 +242,10 @@ export default function AgentHome({ user }) {
     }
   }
 
-  // Initial data fetch on component mount
+  // Data fetch effect - triggers on pagination changes
   useEffect(() => {
     isMountedRef.current = true;
-    const fetchInitialData = async () => {
+    const fetchData = async () => {
       if (!isMountedRef.current) return;
       try {
         await fetchAgentsData(pagination.page, pagination.page_size)
@@ -228,24 +254,27 @@ export default function AgentHome({ user }) {
       }
     }
 
-    fetchInitialData()
+    fetchData()
     return () => {
       isMountedRef.current = false;
       isLoadingRef.current = false;
     };
-  }, [])
+  }, [pagination.page, pagination.page_size]) // Re-fetch when page or page_size changes
 
-  const handleShowMore = async () => {
+  // Save pagination state to localStorage when it changes
+  useEffect(() => {
+    saveStateToStorage(STORAGE_KEYS.PAGINATION, pagination)
+  }, [pagination])
+
+  const handleShowMore = () => {
     if (pagination.has_next) {
-      const nextPage = pagination.page + 1
-      await fetchAgentsData(nextPage, pagination.page_size)
+      setPagination(prev => ({ ...prev, page: prev.page + 1 }))
     }
   }
 
-  const handleShowLess = async () => {
+  const handleShowLess = () => {
     if (pagination.has_prev) {
-      const prevPage = pagination.page - 1
-      await fetchAgentsData(prevPage, pagination.page_size)
+      setPagination(prev => ({ ...prev, page: prev.page - 1 }))
     }
   }
 
