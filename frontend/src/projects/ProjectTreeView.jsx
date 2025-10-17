@@ -39,7 +39,6 @@ import {
 import {
   Plus,
   Edit,
-  Trash2,
   ChevronRight,
   ChevronDown,
   Filter,
@@ -876,13 +875,7 @@ function ProjectTreeView({ user }) {
               <IconButton size="small" onClick={() => openEdit(node.id)}>
                 <Edit size={18} />
               </IconButton>
-              <IconButton
-                size="small"
-                color="error"
-                onClick={() => deleteProject(node.id, node.name)}
-              >
-                <Trash2 size={18} />
-              </IconButton>
+              {/* Delete button removed per requirements */}
             </Box>
           </TableCell>
         </TableRow>

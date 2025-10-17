@@ -35,10 +35,8 @@ import {
   FormControlLabel,
   FormGroup
 } from '@mui/material'
-import { Plus, Edit, Trash2, CheckCircle, Circle, Flag, Filter, SortAsc, SortDesc, ArrowUp, ArrowDown, X, Settings } from 'lucide-react'
+import { Plus, Edit, CheckCircle, Circle, Flag, Filter, SortAsc, SortDesc, ArrowUp, ArrowDown, X, Settings } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
-import { useConfirmation } from '../contexts/ConfirmationContext'
-import { apiCall } from '../config/api'
 import sharedApiService from '../utils/apiService'
 
 // Showing all activity types together; tabs removed
@@ -46,8 +44,7 @@ import sharedApiService from '../utils/apiService'
 function ProjectPlanning({ user, projectId }) {
   const token = user?.token
   const navigate = useNavigate()
-  const { showSuccess, showError } = useSnackbar()
-  const { showDeleteConfirmation } = useConfirmation()
+  const { showError } = useSnackbar()
 
   const isMountedRef = useRef(true)
   const isLoadingRef = useRef(false)
@@ -675,29 +672,7 @@ function ProjectPlanning({ user, projectId }) {
     })
   }
 
-  const deleteActivity = async (activityId, activitySubject) => {
-    const confirmed = await showDeleteConfirmation(
-      `Are you sure you want to delete the activity "${activitySubject}"?`,
-      'This action cannot be undone.'
-    )
-
-    if (!confirmed) return
-
-    try {
-      const res = await apiCall(`/api/projects/activities/${activityId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.detail || 'Failed to delete activity')
-      }
-      showSuccess('Activity deleted successfully')
-      loadActivities(pagination.page + 1, pagination.rowsPerPage)
-    } catch (error) {
-      showError(error.message || 'Failed to delete activity')
-    }
-  }
+  // Delete action removed per requirements (no delete button in table)
 
   const getStatusColor = (status) => {
     const colors = {
@@ -973,13 +948,7 @@ function ProjectPlanning({ user, projectId }) {
                               <IconButton onClick={() => openEdit(activity.id)} size="small">
                                 <Edit size={18} />
                               </IconButton>
-                              <IconButton
-                                onClick={() => deleteActivity(activity.id, activity.subject)}
-                                size="small"
-                                color="error"
-                              >
-                                <Trash2 size={18} />
-                              </IconButton>
+                              {/* Delete button removed */}
                             </Box>
                           </TableCell>
                         </TableRow>
