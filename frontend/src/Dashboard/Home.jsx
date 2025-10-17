@@ -133,7 +133,7 @@ export default function Home({ user }) {
                 variant="contained"
                 size="large"
                 endIcon={<ArrowRight size={20} />}
-                onClick={() => navigate('/dashboard/agents')}
+                onClick={() => navigate('/dashboard/agents/home')}
                 sx={{ 
                   px: 4,
                   py: 1.5,
@@ -266,7 +266,7 @@ export default function Home({ user }) {
                 variant="contained"
                 size="large"
                 endIcon={<ArrowRight size={20} />}
-                onClick={() => navigate('/dashboard/agents')}
+                onClick={() => navigate('/dashboard/agents/home')}
                 sx={{ 
                   px: 5,
                   py: 1.5,

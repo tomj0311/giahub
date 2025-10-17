@@ -167,6 +167,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			order: 40,
 			children: [
 				{
+					label: 'Home',
+					to: '/dashboard/monitor',
+					icon: 'Home'
+				},
+				{
 					label: 'Run Workflow',
 					to: '/dashboard/workflow-ui',
 					icon: 'Play'
@@ -197,11 +202,6 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 					label: 'Create Processes',
 					to: '/dashboard/bpmn',
 					icon: 'GitBranch'
-				},
-				{
-					label: 'Manage Wrokflows',
-					to: '/dashboard/monitor',
-					icon: 'Monitor'
 				}
 			]
 		},

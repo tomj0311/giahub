@@ -10,11 +10,6 @@ import {
   IconButton,
   Avatar,
   Chip,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemAvatar,
-  Divider,
   Paper,
   useTheme,
   alpha,
@@ -25,7 +20,6 @@ import {
   MessageSquare,
   Plus,
   Edit,
-  Clock,
   Settings,
   ArrowLeft,
   ArrowRight
@@ -155,52 +149,12 @@ function AgentCard({ agent, onEdit, onChat }) {
   )
 }
 
-function ConversationItem({ conversation, onClick }) {
-  return (
-    <ListItem
-      button
-      onClick={() => onClick(conversation)}
-      sx={{
-        cursor: 'pointer',
-        '&:hover': {
-          backgroundColor: 'action.hover'
-        }
-      }}
-    >
-      <ListItemAvatar>
-        <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32, fontSize: '0.875rem' }}>
-          {conversation.avatar}
-        </Avatar>
-      </ListItemAvatar>
-      <ListItemText
-        primary={
-          <Typography variant="body2">
-            <strong>{conversation.agentName}</strong>
-          </Typography>
-        }
-        secondary={
-          <Box>
-            <Typography variant="caption" color="text.secondary">
-              {conversation.lastMessage}
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-              <Clock size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />
-              {conversation.time}
-            </Typography>
-          </Box>
-        }
-      />
-    </ListItem>
-  )
-}
-
 export default function AgentHome({ user }) {
   const theme = useTheme()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [agents, setAgents] = useState([])
   const [displayedAgents, setDisplayedAgents] = useState([])
-  const [recentConversations, setRecentConversations] = useState([])
 
   // Add ref to track if component is mounted
   const isMountedRef = useRef(true)
@@ -215,11 +169,6 @@ export default function AgentHome({ user }) {
     has_next: false,
     has_prev: false
   })
-
-  // Handler for when a conversation is clicked - navigate to AgentPlayground with conversation ID
-  const handleConversationClick = (conversation) => {
-    navigate(`/dashboard/agent-playground?conversation=${conversation.id}`)
-  }
 
   // Separate function to fetch agents data
   const fetchAgentsData = async (page = 1, pageSize = 8) => {
@@ -274,52 +223,8 @@ export default function AgentHome({ user }) {
       if (!isMountedRef.current) return;
       try {
         await fetchAgentsData(pagination.page, pagination.page_size)
-
-        // Fetch recent conversations
-        try {
-          const conversationsResult = await sharedApiService.makeRequest(
-            '/api/agent-runtime/conversations?page=1&page_size=5',
-            {
-              headers: {
-                ...(user?.token ? { 'Authorization': `Bearer ${user?.token}` } : {})
-              }
-            },
-            {
-              token: user?.token?.substring(0, 10),
-              endpoint: 'conversations'
-            }
-          );
-
-          if (!isMountedRef.current) return;
-
-          if (conversationsResult.success) {
-            const conversationsData = conversationsResult.data
-            let allConversations = []
-            if (conversationsData.conversations) {
-              allConversations = conversationsData.conversations
-            } else if (Array.isArray(conversationsData)) {
-              allConversations = conversationsData
-            }
-
-            const recentConvs = allConversations
-              .sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0))
-              .slice(0, 5)
-              .map(conv => ({
-                id: conv.conversation_id,
-                agentName: conv.agent_name,
-                avatar: conv.agent_name ? conv.agent_name.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2) : 'AG',
-                lastMessage: conv.title || 'No title',
-                time: new Date(conv.updated_at || Date.now()).toLocaleString()
-              }))
-            setRecentConversations(recentConvs)
-          }
-        } catch (error) {
-          console.error('Failed to fetch conversations:', error)
-          setRecentConversations([])
-        }
       } catch (error) {
         console.error('Failed to fetch Agent Home data:', error)
-        setRecentConversations([])
       }
     }
 
@@ -479,54 +384,6 @@ export default function AgentHome({ user }) {
           </>
         )}
       </Box>
-
-      {/* Recent Conversations */}
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <Card sx={{ 
-            height: '100%',
-            background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.95)})`,
-            backdropFilter: 'blur(10px)',
-            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`
-          }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Typography variant="h6" fontWeight="bold">
-                  Recent Conversations
-                </Typography>
-                <Avatar sx={{ 
-                  backgroundColor: alpha(theme.palette.primary.main, 0.1),
-                  color: theme.palette.primary.main,
-                  width: 32,
-                  height: 32
-                }}>
-                  <MessageSquare size={16} />
-                </Avatar>
-              </Box>
-              <List sx={{ p: 0 }}>
-                {recentConversations.length > 0 ? (
-                  recentConversations.map((conversation, index) => (
-                    <React.Fragment key={conversation.id}>
-                      <ConversationItem
-                        conversation={conversation}
-                        onClick={handleConversationClick}
-                      />
-                      {index < recentConversations.length - 1 && <Divider />}
-                    </React.Fragment>
-                  ))
-                ) : (
-                  <Box sx={{ textAlign: 'center', py: 4 }}>
-                    <MessageSquare size={48} color={theme.palette.text.secondary} style={{ marginBottom: 16 }} />
-                    <Typography variant="body2" color="text.secondary">
-                      No recent conversations
-                    </Typography>
-                  </Box>
-                )}
-              </List>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
     </Box>
   )
 }
