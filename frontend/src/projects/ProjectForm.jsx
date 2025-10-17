@@ -13,6 +13,7 @@ import {
   Autocomplete,
   Card,
   CardContent,
+  CardActions,
   Paper,
   Alert
 } from '@mui/material'
@@ -91,7 +92,7 @@ function ProjectForm({ user }) {
         const projects = data.projects || []
         setAllProjects(projects.map(p => ({
           id: p.id,
-          displayName: `${p.name} (ID: ${p.id})`
+          displayName: p.name
         })))
       }
     } catch (error) {
@@ -273,7 +274,7 @@ function ProjectForm({ user }) {
   }
 
   return (
-    <Box sx={{ p: 3, maxWidth: '800px', mx: 'auto' }}>
+    <Box sx={{ width: '100%' }}>
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
         <Button
@@ -288,53 +289,39 @@ function ProjectForm({ user }) {
         </Typography>
       </Box>
 
-      {/* Form Card */}
+      {/* Form - Two Column Layout: Left = Name + Description, Right = all other fields */}
       <Card>
         <CardContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {/* Project Name */}
-            <TextField
-              label="Project Name"
-              value={form.name}
-              onChange={(e) => {
-                setForm({ ...form, name: e.target.value })
-                setFormErrors({ ...formErrors, name: undefined })
-              }}
-              fullWidth
-              required
-              error={!!formErrors.name}
-              helperText={formErrors.name}
-            />
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1.2fr 1fr' }, gap: 3, alignItems: 'start' }}>
+            {/* Left column: Name and Description */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr', gap: 2, alignSelf: 'start', alignContent: 'start', alignItems: 'start', gridAutoRows: 'min-content' }}>
+              <TextField
+                label="Project Name"
+                value={form.name}
+                onChange={(e) => {
+                  setForm({ ...form, name: e.target.value })
+                  setFormErrors({ ...formErrors, name: undefined })
+                }}
+                fullWidth
+                required
+                error={!!formErrors.name}
+                helperText={formErrors.name}
+              />
 
-            {/* Description */}
-            <TextField
-              label="Description"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              fullWidth
-              multiline
-              rows={3}
-              maxRows={5}
-            />
+              <TextField
+                label="Description"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                fullWidth
+                multiline
+                rows={8}
+                placeholder="Enter detailed description of the project..."
+              />
+            </Box>
 
-            {/* Parent Project */}
-            <Autocomplete
-              options={[{ id: 'root', displayName: 'Root (No Parent)' }, ...allProjects]}
-              getOptionLabel={(option) => option.displayName}
-              value={
-                form.parent_id === 'root'
-                  ? { id: 'root', displayName: 'Root (No Parent)' }
-                  : allProjects.find(p => p.id === form.parent_id) || null
-              }
-              onChange={(event, newValue) => {
-                setForm({ ...form, parent_id: newValue ? newValue.id : 'root' })
-              }}
-              renderInput={(params) => <TextField {...params} label="Parent Project" />}
-              fullWidth
-            />
-
-            {/* Status and Priority Row */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+            {/* Right column: All other fields (2-column grid on md+) */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+              {/* Status */}
               <FormControl fullWidth>
                 <InputLabel>Status</InputLabel>
                 <Select
@@ -350,6 +337,7 @@ function ProjectForm({ user }) {
                 </Select>
               </FormControl>
 
+              {/* Priority */}
               <FormControl fullWidth>
                 <InputLabel>Priority</InputLabel>
                 <Select
@@ -364,10 +352,37 @@ function ProjectForm({ user }) {
                   ))}
                 </Select>
               </FormControl>
-            </Box>
 
-            {/* Assignee and Approver Row */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+              {/* Parent Project */}
+              <Autocomplete
+                options={[{ id: 'root', displayName: 'Root (No Parent)' }, ...allProjects]}
+                getOptionLabel={(option) => option.displayName}
+                value={
+                  form.parent_id === 'root'
+                    ? { id: 'root', displayName: 'Root (No Parent)' }
+                    : allProjects.find(p => p.id === form.parent_id) || null
+                }
+                onChange={(event, newValue) => {
+                  setForm({ ...form, parent_id: newValue ? newValue.id : 'root' })
+                }}
+                renderInput={(params) => (
+                  <TextField {...params} label="Parent Project" />
+                )}
+                fullWidth
+              />
+
+              {/* Progress */}
+              <TextField
+                label="Progress (%)"
+                type="number"
+                value={form.progress}
+                onChange={(e) => setForm({ ...form, progress: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) })}
+                fullWidth
+                inputProps={{ min: 0, max: 100 }}
+                helperText="Completion (0-100)"
+              />
+
+              {/* Assignee */}
               <Autocomplete
                 options={tenantUsers}
                 getOptionLabel={(option) => option.displayName}
@@ -399,6 +414,7 @@ function ProjectForm({ user }) {
                 isOptionEqualToValue={(option, value) => option.email === value.email}
               />
 
+              {/* Approver */}
               <Autocomplete
                 options={tenantUsers.filter(u => u.email !== form.assignee)}
                 getOptionLabel={(option) => option.displayName}
@@ -413,7 +429,7 @@ function ProjectForm({ user }) {
                     label="Approver"
                     required
                     error={!!formErrors.approver}
-                    helperText={formErrors.approver || 'Required - Must be different from Assignee'}
+                    helperText={formErrors.approver || 'Must differ from Assignee'}
                   />
                 )}
                 renderOption={(props, option) => (
@@ -429,10 +445,8 @@ function ProjectForm({ user }) {
                 fullWidth
                 isOptionEqualToValue={(option, value) => option.email === value.email}
               />
-            </Box>
 
-            {/* Dates and Progress Row */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 2 }}>
+              {/* Start Date */}
               <TextField
                 label="Start Date"
                 type="date"
@@ -449,6 +463,7 @@ function ProjectForm({ user }) {
                 helperText={formErrors.start_date || 'Required'}
               />
 
+              {/* Due Date */}
               <TextField
                 label="Due Date"
                 type="date"
@@ -464,37 +479,19 @@ function ProjectForm({ user }) {
                 error={!!formErrors.due_date}
                 helperText={formErrors.due_date || 'Required'}
               />
-
-              <TextField
-                label="Progress (%)"
-                type="number"
-                value={form.progress}
-                onChange={(e) => setForm({ ...form, progress: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) })}
-                fullWidth
-                inputProps={{ min: 0, max: 100 }}
-              />
-            </Box>
-
-            {/* Action Buttons */}
-            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 2 }}>
-              <Button
-                variant="outlined"
-                onClick={handleCancel}
-                disabled={loading}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<Save size={20} />}
-                onClick={handleSave}
-                disabled={loading}
-              >
-                {loading ? 'Saving...' : (isEditMode ? 'Update Project' : 'Create Project')}
-              </Button>
             </Box>
           </Box>
         </CardContent>
+        <CardActions sx={{ display: 'flex', justifyContent: 'flex-end', p: 2, pt: 0 }}>
+          <Button
+            variant="contained"
+            startIcon={<Save size={20} />}
+            onClick={handleSave}
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={20} /> : (isEditMode ? 'Update' : 'Create')}
+          </Button>
+        </CardActions>
       </Card>
     </Box>
   )

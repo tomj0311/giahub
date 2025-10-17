@@ -77,6 +77,9 @@ function ActivityForm({ user, projectId: propProjectId }) {
   
   // Check if navigating from Gantt chart
   const isFromGantt = location.state?.returnTo === '/dashboard/projects/gantt'
+  
+  // Check if navigating from email notification
+  const isFromEmail = new URLSearchParams(location.search).get('source') === 'email'
 
   // Strict date validation helpers
   const isValidISODateString = useCallback((str, { minYear = 1900, maxYear = 2100 } = {}) => {
@@ -389,8 +392,8 @@ function ActivityForm({ user, projectId: propProjectId }) {
     )
   }
 
-  // If coming from Gantt chart, show only notifications (no edit form)
-  if (isFromGantt && isEditMode && activityId) {
+  // If coming from Gantt chart or email notification, show only notifications (no edit form)
+  if ((isFromGantt || isFromEmail) && isEditMode && activityId) {
     return (
       <Box sx={{ p: 3 }}>
         {/* Header */}
@@ -404,7 +407,7 @@ function ActivityForm({ user, projectId: propProjectId }) {
               Back
             </Button>
             <Typography variant="h4">
-              Activity Notifications
+              Activity Details
             </Typography>
           </Box>
         </Box>

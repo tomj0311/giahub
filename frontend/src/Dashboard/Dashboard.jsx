@@ -980,8 +980,8 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 					width: '100%',
 					minWidth: 0, // Allow shrinking
 					overflow: 'auto', // Allow scrolling within content area only
-					// Conditional styling for BPMN, workflow-execution, workflow-ui, projects, portfolio, planning, and gantt routes
-					...(location.pathname === '/dashboard/bpmn' || location.pathname === '/dashboard/workflow-execution' || location.pathname === '/dashboard/workflow-ui' || location.pathname === '/dashboard/projects' || location.pathname === '/dashboard/projects/portfolio' || location.pathname === '/dashboard/projects/planning' || location.pathname === '/dashboard/projects/gantt' ? {
+					// Conditional styling for BPMN, workflow-execution, workflow-ui, projects, portfolio, planning, gantt, and project form routes
+					...(location.pathname === '/dashboard/bpmn' || location.pathname === '/dashboard/workflow-execution' || location.pathname === '/dashboard/workflow-ui' || location.pathname === '/dashboard/projects' || location.pathname === '/dashboard/projects/portfolio' || location.pathname === '/dashboard/projects/planning' || location.pathname === '/dashboard/projects/gantt' || location.pathname.startsWith('/dashboard/projects/project/') ? {
 						// Full width with minimal padding
 						maxWidth: 'none',
 						mx: 0,

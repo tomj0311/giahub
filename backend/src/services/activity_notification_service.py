@@ -175,7 +175,7 @@ You were mentioned in a notification for activity: <strong>{activity_subject}</s
                     to=user_email,
                     title=f"Activity Notification: {activity_subject}",
                     message=email_message,
-                    action_url=f"{redirect_url}/dashboard/projects/activity/{activity.get('id')}",
+                    action_url=f"{redirect_url}/dashboard/projects/activity/{activity.get('id')}?source=email",
                     action_text="View Activity"
                 )
                 
