@@ -663,12 +663,36 @@ function GanttChart({ user, projectId: propProjectId }) {
     if (viewMode === 'daily') {
       // Calculate position based on days array
       const unitWidth = 30 * zoomLevel
+      
+      // Find the exact day index in the timeline
+      let startIndex = -1
+      for (let i = 0; i < timelineDays.length; i++) {
+        const day = timelineDays[i]
+        const dayStart = new Date(day)
+        dayStart.setHours(0, 0, 0, 0)
+        const dayEnd = new Date(day)
+        dayEnd.setHours(23, 59, 59, 999)
+        
+        if (start >= dayStart && start <= dayEnd) {
+          startIndex = i
+          break
+        }
+      }
+      
+      if (startIndex === -1) {
+        // If start is before timeline, position at beginning
+        if (start < timelineDays[0]) {
+          startIndex = 0
+        } else {
+          // If start is after timeline, position at end
+          startIndex = timelineDays.length - 1
+        }
+      }
+      
       const msPerDay = 1000 * 60 * 60 * 24
+      const duration = Math.max(1, (due - start) / msPerDay)
       
-      const daysFromStart = (start - timelineStart) / msPerDay
-      const duration = (due - start) / msPerDay
-      
-      leftPx = Math.max(0, daysFromStart * unitWidth)
+      leftPx = startIndex * unitWidth + 10 // Add 10px offset to align properly
       widthPx = Math.max(unitWidth * 0.3, duration * unitWidth)
       
     } else if (viewMode === 'weekly') {
@@ -676,8 +700,7 @@ function GanttChart({ user, projectId: propProjectId }) {
       const unitWidth = 80 * zoomLevel
       
       // Find which week the start and due dates fall into
-      let startWeekIndex = 0
-      let dueWeekIndex = 0
+      let startWeekIndex = -1
       
       for (let i = 0; i < timelineWeeks.length; i++) {
         const weekStart = timelineWeeks[i]
@@ -694,17 +717,18 @@ function GanttChart({ user, projectId: propProjectId }) {
           const normalizedWeekStart = new Date(weekStart)
           normalizedWeekStart.setHours(0, 0, 0, 0)
           const dayInWeek = Math.floor((normalizedStart - normalizedWeekStart) / msPerDay)
-          leftPx = (i * unitWidth) + ((dayInWeek / 7) * unitWidth)
-        }
-        
-        if (due >= weekStart && due <= weekEnd) {
-          dueWeekIndex = i
+          leftPx = (i * unitWidth) + ((dayInWeek / 7) * unitWidth) + 10 // Add 10px offset
+          break
         }
       }
       
-      // If start is before first week, position at beginning
-      if (timelineWeeks.length > 0 && start < timelineWeeks[0]) {
-        leftPx = 0
+      // If start is before first week or not found, position at beginning
+      if (startWeekIndex === -1) {
+        if (timelineWeeks.length > 0 && start < timelineWeeks[0]) {
+          leftPx = 10 // Add 10px offset
+        } else {
+          leftPx = (timelineWeeks.length - 1) * unitWidth + 10 // Add 10px offset
+        }
       }
       
       // Calculate width
@@ -721,8 +745,7 @@ function GanttChart({ user, projectId: propProjectId }) {
       const unitWidth = 300 * zoomLevel
       
       // Find which year the start and due dates fall into
-      let startYearIndex = 0
-      let dueYearIndex = 0
+      let startYearIndex = -1
       
       for (let i = 0; i < timelineYears.length; i++) {
         const year = timelineYears[i].getFullYear()
@@ -734,22 +757,23 @@ function GanttChart({ user, projectId: propProjectId }) {
           // Calculate fractional position within the year
           const daysInYear = (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)) ? 366 : 365
           const dayOfYear = Math.floor((start - yearStart) / (1000 * 60 * 60 * 24))
-          leftPx = (i * unitWidth) + (dayOfYear / daysInYear * unitWidth)
-        }
-        
-        if (due >= yearStart && due <= yearEnd) {
-          dueYearIndex = i
+          leftPx = (i * unitWidth) + (dayOfYear / daysInYear * unitWidth) + 10 // Add 10px offset
+          break
         }
       }
       
-      // If start is before first year, position at beginning
-      if (timelineYears.length > 0 && start < timelineYears[0]) {
-        leftPx = 0
+      // If start is before first year or not found, position at beginning
+      if (startYearIndex === -1) {
+        if (timelineYears.length > 0 && start < timelineYears[0]) {
+          leftPx = 10 // Add 10px offset
+        } else {
+          leftPx = (timelineYears.length - 1) * unitWidth + 10 // Add 10px offset
+        }
       }
       
       // Calculate width based on actual time span
       const msPerDay = 1000 * 60 * 60 * 24
-      const totalDays = (due - start) / msPerDay
+      const totalDays = Math.max(1, (due - start) / msPerDay)
       const avgDaysPerYear = 365.25
       widthPx = Math.max(unitWidth * 0.2, (totalDays / avgDaysPerYear) * unitWidth)
       
@@ -758,8 +782,7 @@ function GanttChart({ user, projectId: propProjectId }) {
       const unitWidth = 120 * zoomLevel
       
       // Find which month the start and due dates fall into
-      let startMonthIndex = 0
-      let dueMonthIndex = 0
+      let startMonthIndex = -1
       
       for (let i = 0; i < timelineMonths.length; i++) {
         const month = timelineMonths[i]
@@ -771,22 +794,23 @@ function GanttChart({ user, projectId: propProjectId }) {
           // Calculate fractional position within the month
           const daysInMonth = monthEnd.getDate()
           const dayInMonth = start.getDate() - 1 // 0-indexed
-          leftPx = (i * unitWidth) + (dayInMonth / daysInMonth * unitWidth)
-        }
-        
-        if (due >= month && due <= monthEnd) {
-          dueMonthIndex = i
+          leftPx = (i * unitWidth) + (dayInMonth / daysInMonth * unitWidth) + 10 // Add 10px offset
+          break
         }
       }
       
-      // If start is before first month, position at beginning
-      if (timelineMonths.length > 0 && start < timelineMonths[0]) {
-        leftPx = 0
+      // If start is before first month or not found, position at beginning
+      if (startMonthIndex === -1) {
+        if (timelineMonths.length > 0 && start < timelineMonths[0]) {
+          leftPx = 10 // Add 10px offset
+        } else {
+          leftPx = (timelineMonths.length - 1) * unitWidth + 10 // Add 10px offset
+        }
       }
       
       // Calculate width based on actual time span
       const msPerDay = 1000 * 60 * 60 * 24
-      const totalDays = (due - start) / msPerDay
+      const totalDays = Math.max(1, (due - start) / msPerDay)
       const avgDaysPerMonth = 30.44 // More accurate average
       widthPx = Math.max(unitWidth * 0.3, (totalDays / avgDaysPerMonth) * unitWidth)
     }
