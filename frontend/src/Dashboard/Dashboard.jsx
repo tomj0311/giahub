@@ -643,7 +643,13 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 	)
 
 	return (
-		<Box sx={{ display: 'flex', minHeight: '100vh' }}>
+		<Box sx={{ 
+			display: 'flex', 
+			minHeight: '100vh',
+			width: '100vw',
+			maxWidth: '100vw',
+			overflowX: 'hidden' // Prevent horizontal scroll at root level
+		}}>
 			{/* AppBar */}
 			<AppBar
 				position="fixed"
@@ -809,11 +815,18 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			)}
 
 			{/* Main content */}
-			<Box component="main" sx={{ flexGrow: 1, width: '100%' }}>
+			<Box component="main" sx={{ 
+				flexGrow: 1, 
+				width: `calc(100% - ${leftWidth}px)`,
+				minWidth: 0, // Allow shrinking below content width
+				overflowX: 'hidden' // Prevent horizontal scroll
+			}}>
 				{/* Offset for fixed AppBar */}
 				<Toolbar />
 				<Box sx={{
 					width: '100%',
+					minWidth: 0, // Allow shrinking
+					overflowX: 'hidden', // Prevent horizontal scroll
 					// Conditional styling for BPMN, workflow-execution, workflow-ui, projects, portfolio, planning, and gantt routes
 					...(location.pathname === '/dashboard/bpmn' || location.pathname === '/dashboard/workflow-execution' || location.pathname === '/dashboard/workflow-ui' || location.pathname === '/dashboard/projects' || location.pathname === '/dashboard/projects/portfolio' || location.pathname === '/dashboard/projects/planning' || location.pathname === '/dashboard/projects/gantt' ? {
 						// Full width with minimal padding
@@ -835,7 +848,13 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 				}}>
 					<Suspense fallback={<RouteLoader />}>
 						<RouteTransition>
-							<Outlet />
+							<Box sx={{ 
+								width: '100%', 
+								minWidth: 0, // Allow shrinking
+								overflowX: 'hidden' // Prevent content overflow
+							}}>
+								<Outlet />
+							</Box>
 						</RouteTransition>
 					</Suspense>
 				</Box>
