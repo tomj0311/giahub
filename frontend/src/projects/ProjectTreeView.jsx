@@ -1392,6 +1392,7 @@ function ProjectTreeView({ user }) {
               fullWidth
               multiline
               rows={3}
+              maxRows={3}
             />
             <Autocomplete
               options={[{ id: 'root', displayName: 'Root (No Parent)' }, ...allProjects]}
@@ -1541,6 +1542,52 @@ function ProjectTreeView({ user }) {
           <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
           <Button onClick={saveProject} variant="contained">
             {isEditMode ? 'Update' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Column Customization Dialog */}
+      <Dialog open={columnDialogOpen} onClose={handleCloseColumnDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Customize Columns</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Select which columns to display in the table
+          </Typography>
+          <FormGroup>
+            {orderedFields.map((field) => (
+              <FormControlLabel
+                key={field.name}
+                control={
+                  <Checkbox
+                    checked={visibleColumns[field.name] || false}
+                    onChange={() => handleColumnToggle(field.name)}
+                  />
+                }
+                label={getColumnLabel(field.name)}
+              />
+            ))}
+          </FormGroup>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseColumnDialog}>Close</Button>
+          <Button
+            onClick={() => {
+              // Reset to default visible columns
+              const defaultVisible = {
+                name: true,
+                priority: true,
+                status: true,
+                assignee: true,
+                approver: true,
+                start_date: true,
+                due_date: true,
+                progress: true
+              }
+              setVisibleColumns(defaultVisible)
+            }}
+            variant="outlined"
+          >
+            Reset to Default
           </Button>
         </DialogActions>
       </Dialog>

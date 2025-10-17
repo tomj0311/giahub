@@ -49,12 +49,19 @@ import {
   MoreVertical,
   ArrowUp,
   ArrowDown,
-  X
+  X,
+  MessageCircle,
+  Send,
+  Bot,
+  User,
+  Clock,
+  XCircle
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { apiCall } from '../config/api'
 import sharedApiService from '../utils/apiService'
 import { useSnackbar } from '../contexts/SnackbarContext'
+import ProjectChat from './ProjectChat'
 
 // Summary Card Component
 const SummaryCard = ({ title, value, subtitle, icon: Icon, gradient, delay = 0 }) => {
@@ -553,28 +560,6 @@ export default function ProjectStatusHome({ user }) {
                 </Button>
               </Tooltip>
 
-              {/* Filter Button */}
-              <Tooltip title="Add Filter">
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={
-                    <Badge badgeContent={filters.length} color="primary">
-                      <Filter size={18} />
-                    </Badge>
-                  }
-                  onClick={handleOpenFilterDialog}
-                  sx={{ 
-                    textTransform: 'none',
-                    fontWeight: 500,
-                    minWidth: '100px',
-                    borderColor: filters.length > 0 ? 'primary.main' : 'divider',
-                    color: filters.length > 0 ? 'primary.main' : 'text.secondary'
-                  }}
-                >
-                  {filters.length > 0 ? `${filters.length} Filter${filters.length > 1 ? 's' : ''}` : 'Filter'}
-                </Button>
-              </Tooltip>
             </Box>
           </Box>
 
@@ -885,6 +870,9 @@ export default function ProjectStatusHome({ user }) {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Project Chat Component */}
+      <ProjectChat user={user} />
     </Box>
   )
 }
