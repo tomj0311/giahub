@@ -184,6 +184,7 @@ export default function WorkflowDashboard({ user }) {
   const [loading, setLoading] = useState(true)
   const [workflows, setWorkflows] = useState([])
   const [displayedWorkflows, setDisplayedWorkflows] = useState([])
+  const [error, setError] = useState(null)
 
   // Pagination state - load from localStorage with fallbacks
   const [pagination, setPagination] = useState(() => 
@@ -212,10 +213,13 @@ export default function WorkflowDashboard({ user }) {
       try {
         isLoadingRef.current = true;
         setLoading(true)
+        setError(null)
 
         // Fetch workflows with pagination - use singleton service
         const workflowsUrl = `/api/workflows/configs?page=${pagination.page}&page_size=${pagination.page_size}`
-  // removed verbose debugging logs
+        
+        console.log('[WorkflowDashboard] Fetching workflows:', workflowsUrl);
+        console.log('[WorkflowDashboard] Token exists:', !!tokenRef.current);
         
         const workflowsResult = await sharedApiService.makeRequest(
           workflowsUrl,
@@ -229,6 +233,8 @@ export default function WorkflowDashboard({ user }) {
           }
         );
 
+        console.log('[WorkflowDashboard] API Response:', workflowsResult);
+
         if (!isMountedRef.current) {
           return;
         }
@@ -238,13 +244,22 @@ export default function WorkflowDashboard({ user }) {
           const workflowsList = workflowsData.configurations || []
           const paginationData = workflowsData.pagination || {}
 
+          console.log('[WorkflowDashboard] Workflows list:', workflowsList);
+          console.log('[WorkflowDashboard] Pagination data:', paginationData);
+
           setWorkflows(workflowsList)
           setDisplayedWorkflows(workflowsList)
           setPagination(paginationData)
+        } else {
+          console.error('[WorkflowDashboard] API request failed:', workflowsResult.error);
+          setError(workflowsResult.error || 'Failed to fetch workflows');
+          setWorkflows([])
+          setDisplayedWorkflows([])
         }
 
       } catch (error) {
         console.error('Failed to fetch workflow data:', error)
+        setError(error.message || 'An error occurred while fetching workflows')
         setWorkflows([])
         setDisplayedWorkflows([])
       } finally {
@@ -328,6 +343,33 @@ export default function WorkflowDashboard({ user }) {
           Manage your BPMN workflows and process configurations.
         </Typography>
       </Box>
+
+      {/* Error Display */}
+      {error && (
+        <Paper sx={{ 
+          p: 3, 
+          mb: 3,
+          bgcolor: 'error.light',
+          border: `1px solid ${theme.palette.error.main}`,
+          borderRadius: 2
+        }}>
+          <Typography variant="h6" color="error.dark" gutterBottom>
+            Error Loading Workflows
+          </Typography>
+          <Typography variant="body2" color="error.dark">
+            {error}
+          </Typography>
+          <Button
+            variant="outlined"
+            color="error"
+            size="small"
+            onClick={() => window.location.reload()}
+            sx={{ mt: 2 }}
+          >
+            Retry
+          </Button>
+        </Paper>
+      )}
 
       {/* Create Workflow Button */}
       <Box sx={{ mb: 4 }}>

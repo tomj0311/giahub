@@ -1261,7 +1261,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
           setGeneratedBpmnBlob(file);
           setIsWorkflowDialogOpen(true);
           
-        }, 300); // Give it time to generate
+        }, 300); // Give it time to generatey
       }
     } catch (error) {
       console.error('Error generating BPMN:', error);

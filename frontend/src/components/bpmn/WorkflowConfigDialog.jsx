@@ -204,8 +204,8 @@ const WorkflowConfigDialog = ({ open, onClose, bpmnFile, user }) => {
                     />
 
                     {bpmnFile && (
-                        <Box>
-                            <Typography variant="caption" color="text.secondary">
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5 }}>
                                 BPMN File:
                             </Typography>
                             <Chip 
@@ -213,7 +213,7 @@ const WorkflowConfigDialog = ({ open, onClose, bpmnFile, user }) => {
                                 variant="outlined" 
                                 color="primary"
                                 size="small"
-                                sx={{ mt: 1 }}
+                                sx={{ alignSelf: 'flex-start' }}
                             />
                         </Box>
                     )}
