@@ -37,6 +37,8 @@ function WorkflowUI({ user }) {
   const [instanceId, setInstanceId] = useState(null);
   const [pendingTaskId, setPendingTaskId] = useState(null);
   const [readyTaskData, setReadyTaskData] = useState(null); // Store complete ready task data
+  const [taskHistory, setTaskHistory] = useState([]); // Store task execution history
+  const [currentTasks, setCurrentTasks] = useState({}); // Store current task states
   
   // Workflow selector
   const [workflows, setWorkflows] = useState([]);
@@ -222,6 +224,41 @@ function WorkflowUI({ user }) {
         const workflowData = instance.serialized_data?.data || {};
         const tasks = instance.serialized_data?.tasks || {};
         
+        // Update current tasks state for real-time display
+        setCurrentTasks(tasks);
+        
+        // Build task history for completed/running tasks
+        const history = Object.entries(tasks)
+          .map(([taskId, task]) => {
+            const stateMap = {
+              1: 'Future',
+              2: 'Likely',
+              4: 'Maybe',
+              8: 'Waiting',
+              16: 'Ready',
+              32: 'Completed',
+              64: 'Completed', // Treat cancelled as completed
+              128: 'Failed'
+            };
+            
+            return {
+              id: taskId,
+              name: task.task_spec || 'Unknown Task',
+              state: stateMap[task.state] || `State ${task.state}`,
+              stateCode: task.state === 64 ? 32 : task.state, // Convert 64 to 32 (Completed)
+              data: task.data || {},
+              timestamp: new Date().toISOString()
+            };
+          })
+          .sort((a, b) => {
+            // Sort by state priority: Running > Ready > Completed > Others
+            const priority = { 'Ready': 1, 'Completed': 2, 'Failed': 3, 'Waiting': 4 };
+            return (priority[a.state] || 99) - (priority[b.state] || 99);
+          });
+        
+        console.log('📊 Task History:', history.length, 'tasks');
+        setTaskHistory(history);
+        
         // CHECK 1: Is workflow complete? (Only check the completed flag!)
         const isCompleted = instance.serialized_data?.completed === true || 
                            workflowData.workflow_status?.completed === true;
@@ -292,6 +329,8 @@ function WorkflowUI({ user }) {
     setInstanceId(null);
     setPendingTaskId(null);
     setReadyTaskData(null);
+    setTaskHistory([]);
+    setCurrentTasks({});
     setState('idle');
     setError('');
     if (pollInterval.current) clearInterval(pollInterval.current);
@@ -345,6 +384,36 @@ function WorkflowUI({ user }) {
         return 'success';
       case 'failed':
         return 'error';
+      default:
+        return 'default';
+    }
+  };
+
+  const getTaskStateIcon = (stateCode) => {
+    switch (stateCode) {
+      case 32: // Completed
+        return <CheckCircle size={16} color={theme.palette.success.main} />;
+      case 16: // Ready
+        return <Clock size={16} color={theme.palette.warning.main} />;
+      case 128: // Failed
+        return <XCircle size={16} color={theme.palette.error.main} />;
+      case 8: // Waiting
+        return <Clock size={16} color={theme.palette.info.main} />;
+      default:
+        return <Clock size={16} color={theme.palette.grey[500]} />;
+    }
+  };
+
+  const getTaskStateColor = (stateCode) => {
+    switch (stateCode) {
+      case 32: // Completed
+        return 'success';
+      case 16: // Ready
+        return 'warning';
+      case 128: // Failed
+        return 'error';
+      case 8: // Waiting
+        return 'info';
       default:
         return 'default';
     }
@@ -496,19 +565,163 @@ function WorkflowUI({ user }) {
             </Box>
           )}
 
-          {workflowName && state === 'running' && (
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                height: '100%',
-                gap: 2,
-              }}
-            >
-              <CircularProgress size={60} />
-              <Typography variant="h6">Workflow running...</Typography>
+          {workflowName && (state === 'running' || state === 'completed' || state === 'failed') && (
+            <Box sx={{ p: 3, height: '100%', overflow: 'auto' }}>
+              {/* Header Section */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+                {state === 'running' && <CircularProgress size={32} />}
+                {state === 'completed' && <CheckCircle size={32} color={theme.palette.success.main} />}
+                {state === 'failed' && <XCircle size={32} color={theme.palette.error.main} />}
+                
+                <Typography variant="h6">
+                  {state === 'running' && 'Workflow Executing...'}
+                  {state === 'completed' && 'Workflow Completed Successfully!'}
+                  {state === 'failed' && 'Workflow Failed'}
+                </Typography>
+              </Box>
+
+              {/* Error Alert for Failed State */}
+              {state === 'failed' && error && (
+                <Alert severity="error" sx={{ mb: 3 }}>
+                  <Typography variant="body1" gutterBottom fontWeight="bold">
+                    Error Details:
+                  </Typography>
+                  <Typography 
+                    variant="body2" 
+                    component="pre" 
+                    sx={{ 
+                      whiteSpace: 'pre-wrap', 
+                      wordBreak: 'break-word',
+                      fontFamily: 'monospace',
+                      mt: 1 
+                    }}
+                  >
+                    {error || 'An error occurred during execution'}
+                  </Typography>
+                </Alert>
+              )}
+
+              {/* Success Message for Completed State */}
+              {state === 'completed' && (
+                <Alert severity="success" sx={{ mb: 3 }}>
+                  <Typography variant="body1">
+                    All workflow tasks have been completed successfully.
+                  </Typography>
+                </Alert>
+              )}
+
+              {/* Task History Display */}
+              {taskHistory.length > 0 && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Typography variant="subtitle1" fontWeight="bold">
+                      Task Progress ({taskHistory.filter(t => t.stateCode === 32).length} / {taskHistory.length} completed)
+                    </Typography>
+                    {(state === 'completed' || state === 'failed') && (
+                      <Button 
+                        variant="contained" 
+                        onClick={handleResetWorkflow}
+                        size="medium"
+                      >
+                        Back
+                      </Button>
+                    )}
+                  </Box>
+                  
+                  {taskHistory.map((task, idx) => (
+                    <Card 
+                      key={`${task.id}-${idx}`}
+                      variant="outlined"
+                      sx={{ 
+                        borderLeft: `4px solid ${
+                          task.stateCode === 32 ? theme.palette.success.main :
+                          task.stateCode === 16 ? theme.palette.warning.main :
+                          task.stateCode === 128 ? theme.palette.error.main :
+                          theme.palette.info.main
+                        }`,
+                        transition: 'all 0.3s ease',
+                        '&:hover': {
+                          boxShadow: 2,
+                        }
+                      }}
+                    >
+                      <CardContent>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {getTaskStateIcon(task.stateCode)}
+                            <Typography variant="body1" fontWeight="medium">
+                              {task.name}
+                            </Typography>
+                          </Box>
+                          <Chip 
+                            label={task.state} 
+                            size="small" 
+                            color={getTaskStateColor(task.stateCode)}
+                          />
+                        </Box>
+                        
+                        {task.data && Object.keys(task.data).length > 0 && (
+                          <Paper 
+                            sx={{ 
+                              p: 2, 
+                              mt: 2, 
+                              bgcolor: alpha(theme.palette.background.default, 0.5),
+                              maxHeight: '200px',
+                              overflow: 'auto'
+                            }}
+                          >
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                              Task Data:
+                            </Typography>
+                            <Typography 
+                              variant="body2" 
+                              component="pre"
+                              sx={{ 
+                                fontFamily: 'monospace',
+                                fontSize: '0.75rem',
+                                whiteSpace: 'pre-wrap',
+                                wordBreak: 'break-word',
+                                m: 0
+                              }}
+                            >
+                              {JSON.stringify(task.data, null, 2)}
+                            </Typography>
+                          </Paper>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Box>
+              )}
+
+              {taskHistory.length === 0 && state === 'running' && (
+                <Box sx={{ 
+                  display: 'flex', 
+                  flexDirection: 'column',
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  py: 8,
+                  gap: 2
+                }}>
+                  <CircularProgress size={40} />
+                  <Typography variant="body1" color="text.secondary">
+                    Initializing workflow tasks...
+                  </Typography>
+                </Box>
+              )}
+
+              {/* Show Back button if no tasks but workflow is completed/failed */}
+              {taskHistory.length === 0 && (state === 'completed' || state === 'failed') && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                  <Button 
+                    variant="contained" 
+                    onClick={handleResetWorkflow}
+                    size="large"
+                  >
+                    Back
+                  </Button>
+                </Box>
+              )}
             </Box>
           )}
 
@@ -522,74 +735,6 @@ function WorkflowUI({ user }) {
               isDialog={false}
               onSuccess={handleTaskSuccess}
             />
-          )}
-
-          {workflowName && state === 'completed' && (
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                height: '100%',
-                gap: 2,
-                p: 3,
-              }}
-            >
-              <CheckCircle size={64} color={theme.palette.success.main} />
-              <Typography variant="h5" color="success.main">
-                Success!
-              </Typography>
-            </Box>
-          )}
-
-          {workflowName && state === 'failed' && (
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                height: '100%',
-                gap: 2,
-                p: 3,
-              }}
-            >
-              <XCircle size={64} color={theme.palette.error.main} />
-              <Typography variant="h5" color="error" gutterBottom>
-                Failure
-              </Typography>
-              <Alert severity="error" sx={{ maxWidth: 600, width: '100%' }}>
-                <Typography variant="body1" gutterBottom fontWeight="bold">
-                  Error Details:
-                </Typography>
-                <Typography 
-                  variant="body2" 
-                  component="pre" 
-                  sx={{ 
-                    whiteSpace: 'pre-wrap', 
-                    wordBreak: 'break-word',
-                    fontFamily: 'monospace',
-                    mt: 1 
-                  }}
-                >
-                  {error || 'An error occurred during execution'}
-                </Typography>
-              </Alert>
-            </Box>
-          )}
-
-          {/* Single Back button for both completed and failed states */}
-          {workflowName && (state === 'completed' || state === 'failed') && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-              <Button 
-                variant="contained" 
-                onClick={handleResetWorkflow}
-                size="large"
-              >
-                Back
-              </Button>
-            </Box>
           )}
         </Box>
       </Box>
