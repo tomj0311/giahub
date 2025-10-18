@@ -49,7 +49,8 @@ class PythonScriptEngine(object):
         return the result.
         """
         try:
-            return self.environment.evaluate(expression, task.data, external_context)
+            flattened_data = self.environment._flatten_dict(task.data) if hasattr(self.environment, '_flatten_dict') else task.data
+            return self.environment.evaluate(expression, flattened_data, external_context)
         except SpiffWorkflowException as se:
             se.add_note(f"Error evaluating expression '{expression}'")
             raise se
@@ -69,7 +70,7 @@ class PythonScriptEngine(object):
         try:
             return self.environment.call_service(task.data, **kwargs)
         except Exception as err:
-            wte = self.create_task_exec_exception(task, script, err)
+            wte = self.create_task_exec_exception(task, '', err)
             raise wte
 
     def create_task_exec_exception(self, task, script, err):
