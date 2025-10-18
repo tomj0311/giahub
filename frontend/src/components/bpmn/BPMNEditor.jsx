@@ -119,13 +119,44 @@ const generateBpmnId = (elementType) => {
 
 const getId = (elementType = 'element') => generateBpmnId(elementType);
 
-// Generate the initial start node with proper ID - keep it stable
+// Generate the initial start node with proper ID and complete metadata - EXACT match to BPMN parser
+const initialStartNodeId = getId('startEvent');
 const initialNodes = [
   {
-    id: getId('startEvent'),
+    id: initialStartNodeId,
     type: 'startEvent',
     position: { x: 250, y: 250 },
-    data: { label: 'Start' },
+    data: { 
+      label: 'Start',
+      taskType: 'startEvent', // EXACT match to BPMN parser
+      processId: 'Process_1',
+      participantId: undefined,
+      laneId: undefined,
+      laneName: undefined,
+      // Store original metadata for preservation during export - EXACT match to parser
+      originalProcessId: 'Process_1',
+      originalIsExecutable: 'true', // String, not boolean - EXACT match
+      originalShapeId: undefined,
+      originalBounds: {
+        x: 250,
+        y: 250,
+        width: 36,
+        height: 36
+      },
+      originalLabelBounds: undefined,
+      originalAttributes: {
+        id: initialStartNodeId,
+        name: 'Start'
+      },
+      originalDocumentation: [], // Array, not undefined - EXACT match
+      documentation: '', // String, not undefined - EXACT match
+      originalNestedElements: '', // Empty string - EXACT match
+      // Add color information from BPMN shapes - EXACT match
+      backgroundColor: undefined,
+      borderColor: undefined,
+      // Store original extension elements from diagram for preservation - EXACT match
+      originalDiagramExtensionElements: undefined
+    },
   },
 ];
 
@@ -717,10 +748,23 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
       const newEdge = {
         ...params,
         id: edgeId,
-        type: 'smoothstep',
+        type: 'smoothstep', // EXACT match to BPMN parser
+        label: '', // EXACT match to BPMN parser
         data: {
           ...(isMessageFlow ? { isMessageFlow: true } : {}),
-          originalXML: `<${edgeType} id="${edgeId}" sourceRef="${params.source}" targetRef="${params.target}" />`
+          // EXACT match to BPMN parser structure
+          originalEdgeShapeId: `${edgeId}_di`,
+          originalWaypoints: [],
+          originalLabelBounds: undefined,
+          originalAttributes: {
+            id: edgeId,
+            sourceRef: params.source,
+            targetRef: params.target,
+            ...(isMessageFlow ? {} : { name: '' })
+          },
+          originalDocumentation: [], // Array, not undefined - EXACT match
+          documentation: '', // String, not undefined - EXACT match
+          originalNestedElements: '' // Empty string - EXACT match
         },
       };
       
@@ -795,17 +839,78 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
         return typeNames[nodeType] || nodeType.charAt(0).toUpperCase() + nodeType.slice(1);
       };
 
+      // Determine the React Flow node type (same mapping as BPMN parser)
+      let reactFlowNodeType = type;
+      if (['task', 'serviceTask', 'userTask', 'scriptTask', 'businessRuleTask',
+        'sendTask', 'receiveTask', 'manualTask'].includes(type)) {
+        reactFlowNodeType = 'task';
+      } else if (['exclusiveGateway', 'inclusiveGateway', 'parallelGateway',
+        'eventBasedGateway', 'complexGateway'].includes(type)) {
+        reactFlowNodeType = 'gateway';
+      } else if (['intermediateThrowEvent', 'intermediateCatchEvent', 'boundaryEvent'].includes(type)) {
+        reactFlowNodeType = 'intermediateEvent';
+      } else if (['dataObject', 'dataObjectReference'].includes(type)) {
+        reactFlowNodeType = 'dataObject';
+      } else if (['dataStore', 'dataStoreReference'].includes(type)) {
+        reactFlowNodeType = 'dataStore';
+      }
+
       const nodeId = getId(type);
       const nodeLabel = getDefaultLabel(type);
       
       const newNode = {
         id: nodeId,
-        type,
+        type: reactFlowNodeType, // Use mapped type for React Flow
         position,
         data: { 
           label: nodeLabel,
-          taskType: type,
-          originalXML: `<${type} id="${nodeId}" name="${nodeLabel}" />`
+          taskType: type, // Store original BPMN type - EXACT match to BPMN parser
+          processId: 'Process_1',
+          participantId: undefined,
+          laneId: undefined,
+          laneName: undefined,
+          // Store original metadata for preservation during export - EXACT match to parser
+          originalProcessId: 'Process_1',
+          originalIsExecutable: 'true', // String, not boolean - EXACT match
+          originalShapeId: undefined,
+          originalBounds: {
+            x: position.x,
+            y: position.y,
+            width: type === 'group' ? 300 : (type === 'participant' ? 400 : 100),
+            height: type === 'group' ? 200 : (type === 'participant' ? 200 : 60)
+          },
+          originalLabelBounds: undefined,
+          originalAttributes: {
+            id: nodeId,
+            name: nodeLabel,
+            ...(type === 'participant' ? { processRef: `Process_${nodeId}` } : {})
+          },
+          originalDocumentation: [], // Array, not undefined - EXACT match
+          documentation: '', // String, not undefined - EXACT match
+          originalNestedElements: '', // Empty string - EXACT match
+          // Add color information from BPMN shapes - EXACT match
+          backgroundColor: undefined,
+          borderColor: undefined,
+          // Store original extension elements from diagram for preservation - EXACT match
+          originalDiagramExtensionElements: undefined,
+          // Additional metadata specific to node types
+          ...(type === 'participant' ? {
+            processRef: `Process_${nodeId}`,
+            participantBounds: {
+              x: position.x,
+              y: position.y,
+              width: 400,
+              height: 200
+            }
+          } : {}),
+          ...(type === 'group' ? {
+            groupBounds: {
+              x: position.x,
+              y: position.y,
+              width: 300,
+              height: 200
+            }
+          } : {})
         },
       };
 
@@ -854,7 +959,11 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
           newNode.extent = 'parent';
           newNode.position.x = position.x - droppedInParticipant.position.x;
           newNode.position.y = position.y - droppedInParticipant.position.y;
+          
+          // Update metadata to match participant context
           newNode.data.participantId = droppedInParticipant.id;
+          newNode.data.processId = droppedInParticipant.data?.processRef || 'Process_1';
+          newNode.data.originalProcessId = droppedInParticipant.data?.processRef || 'Process_1';
           
           // Ensure minimum left padding for lane area
           if (newNode.position.x < 80) {
@@ -957,9 +1066,25 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   // Update node data from property panel
   const handleNodeUpdate = useCallback((updatedNode) => {
     setNodes((nds) => {
-      const newNodes = nds.map((node) =>
-        node.id === updatedNode.id ? updatedNode : node
-      );
+      const newNodes = nds.map((node) => {
+        if (node.id === updatedNode.id) {
+          // Preserve all original metadata when updating
+          return {
+            ...updatedNode,
+            data: {
+              ...node.data, // Keep original metadata
+              ...updatedNode.data, // Apply updates
+              // Ensure critical metadata is preserved
+              originalAttributes: {
+                ...node.data.originalAttributes,
+                id: updatedNode.id,
+                name: updatedNode.data.label || node.data.label
+              }
+            }
+          };
+        }
+        return node;
+      });
       
       // Save to history
       if (!readOnly) {
@@ -974,9 +1099,26 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   // Update edge data from property panel
   const handleEdgeUpdate = useCallback((updatedEdge) => {
     setEdges((eds) => {
-      const newEdges = eds.map((edge) =>
-        edge.id === updatedEdge.id ? updatedEdge : edge
-      );
+      const newEdges = eds.map((edge) => {
+        if (edge.id === updatedEdge.id) {
+          // Preserve all original metadata when updating
+          return {
+            ...updatedEdge,
+            data: {
+              ...edge.data, // Keep original metadata
+              ...updatedEdge.data, // Apply updates
+              // Ensure critical metadata is preserved
+              originalAttributes: {
+                ...edge.data.originalAttributes,
+                id: updatedEdge.id,
+                sourceRef: edge.source,
+                targetRef: edge.target
+              }
+            }
+          };
+        }
+        return edge;
+      });
       
       // Save to history
       if (!readOnly) {
@@ -1141,6 +1283,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
 
   const handleAddParticipant = useCallback((participantName) => {
     const participantId = `participant_${Date.now()}`;
+    const processRef = `Process_${participantId}`;
     const newParticipant = {
       id: participantId,
       name: participantName,
@@ -1152,19 +1295,37 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
     // Add participant as a visual node with dynamic initial sizing
     const defaultWidth = 400;
     const defaultHeight = 200;
+    const position = { x: 50, y: 50 + participants.length * 220 };
     
     const newNode = {
       id: participantId,
       type: 'participant',
-      position: { x: 50, y: 50 + participants.length * 220 },
+      position,
       data: { 
         label: participantName,
+        processRef: processRef, // EXACT match to BPMN parser
+        lanes: [], // EXACT match to BPMN parser
         participantBounds: {
-          x: 50,
-          y: 50 + participants.length * 220,
+          x: position.x,
+          y: position.y,
           width: defaultWidth,
           height: defaultHeight
-        }
+        },
+        // EXACT match to BPMN parser structure
+        originalShapeId: undefined,
+        originalBounds: {
+          x: position.x,
+          y: position.y,
+          width: defaultWidth,
+          height: defaultHeight
+        },
+        originalLabelBounds: undefined,
+        originalAttributes: {
+          id: participantId,
+          name: participantName,
+          processRef: processRef
+        },
+        originalDocumentation: [] // Array, not undefined - EXACT match
       },
       style: { 
         zIndex: -1,
@@ -1198,15 +1359,21 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
       return participant;
     }));
     
-    // Add lane as a visual node
+    // Add lane as a visual node (this is our editor-specific feature)
     const participant = participants.find(p => p.id === participantId);
     const laneCount = participant ? participant.lanes.length : 0;
+    const position = { x: 90, y: 80 + laneCount * 130 };
     
     const newNode = {
       id: laneId,
       type: 'lane',
-      position: { x: 90, y: 80 + laneCount * 130 },
-      data: { label: laneName, participantId },
+      position,
+      data: { 
+        label: laneName, 
+        participantId,
+        // Minimal metadata for lanes since they're visual-only in our editor
+        flowNodeRefs: []
+      },
       parentNode: participantId,
       style: { zIndex: 0 }
     };
