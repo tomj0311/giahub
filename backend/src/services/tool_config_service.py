@@ -171,6 +171,58 @@ class ToolConfigService:
             raise HTTPException(status_code=500, detail="Failed to retrieve tool configurations")
 
     @classmethod
+    async def list_all_tool_configs_minimal(
+        cls,
+        user: dict,
+        active_only: bool = True
+    ) -> Dict[str, Any]:
+        """Get all tool configs with minimal fields for dropdowns"""
+        tenant_id = await cls.validate_tenant_access(user)
+        
+        try:
+            # Build filter query
+            filter_query = {}
+            if active_only:
+                filter_query["is_active"] = {"$ne": False}
+            
+            # Only project essential fields
+            projection = {
+                "_id": 1,
+                "name": 1,
+                "category": 1,
+                "tool_name": 1,
+                "description": 1
+            }
+            
+            # Get all configs sorted by name
+            docs = await MongoStorageService.find_many(
+                "toolConfig",
+                filter_query,
+                tenant_id=tenant_id,
+                sort_field="name",
+                sort_order=1,
+                projection=projection
+            )
+            
+            configs = []
+            for doc in docs:
+                configs.append({
+                    "id": str(doc["_id"]),
+                    "name": doc.get("name", ""),
+                    "category": doc.get("category", ""),
+                    "tool_name": doc.get("tool_name", ""),
+                    "description": doc.get("description", "")
+                })
+            
+            return {
+                "configurations": configs,
+                "total": len(configs)
+            }
+        except Exception as e:
+            logger.error(f"[TOOL] Failed to list all tool configs minimal: {e}")
+            raise HTTPException(status_code=500, detail="Failed to retrieve tool configurations")
+
+    @classmethod
     async def get_tool_config_by_name(cls, name: str, user: dict) -> dict:
         """Get a specific tool configuration by name"""
         tenant_id = await cls.validate_tenant_access(user)

@@ -152,22 +152,8 @@ export default function Agent({ user }) {
         sort_order: 'desc'
       });
 
-      // Build query parameters for models, tools, knowledge to get max items (backend limit is 100)
-      const maxPageSize = '100';
-      const modelsQueryParams = new URLSearchParams({
-        page: '1',
-        page_size: maxPageSize
-      });
-      const toolsQueryParams = new URLSearchParams({
-        page: '1',
-        page_size: maxPageSize
-      });
-      const knowledgeQueryParams = new URLSearchParams({
-        page: '1',
-        page_size: maxPageSize
-      });
-
       // Use the singleton service for all API calls to prevent duplicates
+      // For dropdowns, use the /all endpoints to get all items with minimal fields
       const [agentsResult, modelsResult, toolsResult, knowledgeResult] = await Promise.all([
         sharedApiService.makeRequest(
           `/api/agents?${agentsQueryParams}`,
@@ -175,17 +161,17 @@ export default function Agent({ user }) {
           { page, pageSize, token: token?.substring(0, 10) }
         ),
         sharedApiService.makeRequest(
-          `/api/models/configs?${modelsQueryParams}`,
+          `/api/models/configs/all`,
           { headers: authHeaders },
           { token: token?.substring(0, 10), bypassCache: true }
         ),
         sharedApiService.makeRequest(
-          `/api/tools/configs?${toolsQueryParams}`,
+          `/api/tools/configs/all`,
           { headers: authHeaders },
           { token: token?.substring(0, 10), bypassCache: true }
         ),
         sharedApiService.makeRequest(
-          `/api/knowledge/configs?${knowledgeQueryParams}`,
+          `/api/knowledge/collections/all`,
           { headers: authHeaders },
           { token: token?.substring(0, 10), bypassCache: true }
         )

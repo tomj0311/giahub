@@ -84,6 +84,26 @@ async def list_collections(
         raise HTTPException(status_code=500, detail=error_msg)
 
 
+@router.get("/collections/all")
+async def list_all_collections(
+    user: dict = Depends(verify_token_middleware),
+    active_only: bool = Query(True, description="Return only active collections")
+):
+    """Get all knowledge collections with minimal fields for dropdowns/selects."""
+    try:
+        result = await KnowledgeService.list_all_collections_minimal(
+            user=user,
+            active_only=active_only
+        )
+        return result
+    except Exception as e:
+        import traceback
+        error_msg = str(e) if str(e) else repr(e)
+        logger.error(f"Error listing all collections: {error_msg}")
+        logger.error(f"All collections error traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=error_msg)
+
+
 @router.get("/collection/{collection}")
 async def get_collection(collection: str, user: dict = Depends(verify_token_middleware)):
     """Get collection details with files from MinIO."""

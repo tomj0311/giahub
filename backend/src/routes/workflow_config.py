@@ -14,6 +14,19 @@ from ..utils.log import logger
 router = APIRouter(tags=["workflows"])
 
 
+@router.get("/configs/all")
+async def list_all_workflow_configs(
+    user: dict = Depends(verify_token_middleware),
+    active_only: bool = Query(True, description="Return only active configurations")
+):
+    """Get all workflow configs with minimal fields for dropdowns/selects."""
+    result = await WorkflowConfigService.list_all_workflow_configs_minimal(
+        user=user,
+        active_only=active_only
+    )
+    return result
+
+
 @router.get("/configs")
 async def list_workflow_configs(
     user: dict = Depends(verify_token_middleware),

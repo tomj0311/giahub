@@ -36,6 +36,25 @@ async def create_tool_config(
         )
 
 
+@router.get("/configs/all")
+async def get_all_tool_configs(
+    user: dict = Depends(verify_token_middleware),
+    active_only: bool = Query(True, description="Return only active configurations")
+):
+    """Get all tool configs with minimal fields for dropdowns/selects."""
+    try:
+        result = await ToolConfigService.list_all_tool_configs_minimal(
+            user=user,
+            active_only=active_only
+        )
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching all tool configs: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch tool configurations")
+
+
 @router.get("/configs")
 async def get_tool_configs(
     user: dict = Depends(verify_token_middleware),

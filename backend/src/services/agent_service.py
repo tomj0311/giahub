@@ -294,6 +294,56 @@ class AgentService:
             raise HTTPException(status_code=500, detail="Failed to retrieve agents")
     
     @classmethod
+    async def list_all_agents_minimal(
+        cls,
+        user: dict,
+        active_only: bool = True
+    ) -> Dict[str, Any]:
+        """Get all agents with minimal fields for dropdowns"""
+        tenant_id = await cls.validate_tenant_access(user)
+        
+        try:
+            # Build filter query
+            filter_query = {}
+            if active_only:
+                filter_query["is_active"] = {"$ne": False}  # Include docs without is_active field
+            
+            # Only project essential fields
+            projection = {
+                "_id": 1,
+                "name": 1,
+                "category": 1,
+                "description": 1
+            }
+            
+            # Get all agents sorted by name
+            docs = await MongoStorageService.find_many(
+                "agents",
+                filter_query,
+                tenant_id=tenant_id,
+                sort_field="name",
+                sort_order=1,
+                projection=projection
+            )
+            
+            agents = []
+            for doc in docs:
+                agents.append({
+                    "id": str(doc["_id"]),
+                    "name": doc.get("name", ""),
+                    "category": doc.get("category", ""),
+                    "description": doc.get("description", "")
+                })
+            
+            return {
+                "agents": agents,
+                "total": len(agents)
+            }
+        except Exception as e:
+            logger.error(f"[AGENTS] Failed to list all agents minimal for tenant {tenant_id}: {e}")
+            raise HTTPException(status_code=500, detail="Failed to retrieve agents")
+    
+    @classmethod
     async def get_agent_by_name(cls, name: str, user: dict) -> Dict[str, Any]:
         """Get a specific agent by name"""
         tenant_id = await cls.validate_tenant_access(user)

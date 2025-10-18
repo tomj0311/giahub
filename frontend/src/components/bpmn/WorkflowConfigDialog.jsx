@@ -64,7 +64,7 @@ const WorkflowConfigDialog = ({ open, onClose, bpmnFile, user }) => {
         try {
             setLoadingConfigs(true);
             const result = await sharedApiService.makeRequest(
-                '/api/workflows/configs?page=1&page_size=1000',
+                '/api/workflows/configs/all',
                 {
                     headers: tokenRef.current ? { 'Authorization': `Bearer ${tokenRef.current}` } : {}
                 },

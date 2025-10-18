@@ -542,9 +542,9 @@ export default function AgentPlayground({ user }) {
       setLoading(true)
       try {
         const result = await sharedApiService.makeRequest(
-          '/api/agents',
+          '/api/agents/all',
           { headers: token ? { Authorization: `Bearer ${token}` } : {} },
-          { endpoint: 'agents', token: token?.substring(0, 10) }
+          { endpoint: 'agents-all', token: token?.substring(0, 10) }
         )
         
         if (!result.success) {
