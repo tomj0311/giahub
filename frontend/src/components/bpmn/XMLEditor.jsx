@@ -100,15 +100,62 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
 ]]></script>`;
       setEditedXml(formatXML(scriptXml));
     } else if (selectedNode?.type && selectedNode.type.includes('gateway')) {
-      // Generate gateway sequence flows XML
+      // For gateways, MERGE the updated conditions with existing XML
+      const parser = new DOMParser();
+      const currentDoc = parser.parseFromString(`<root>${editedXml}</root>`, 'text/xml');
+      const serializer = new XMLSerializer();
+      
+      // Create a map of all existing flows from the current XML
+      const flowsMap = new Map();
+      Array.from(currentDoc.querySelectorAll('sequenceFlow')).forEach(flow => {
+        const flowId = flow.getAttribute('id');
+        if (flowId) {
+          flowsMap.set(flowId, flow);
+        }
+      });
+      
+      // Update only the flows that are in the properties panel
       const validConditions = xmlProperties.gateway.conditions.filter(condition =>
-        condition.flowId?.trim() && condition.name?.trim() && condition.condition?.trim()
+        condition.flowId?.trim()
       );
-      const gatewayXml = validConditions.map(condition => 
-        `<sequenceFlow id="${condition.flowId}" sourceRef="${selectedNode.id}" targetRef="TARGET_REF" name="${condition.name}">
-  <conditionExpression xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xsi:type="tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">${condition.condition}</conditionExpression>
-</sequenceFlow>`
-      ).join('\n');
+      
+      validConditions.forEach(condition => {
+        // Find the edge to get actual targetRef
+        const relatedEdge = edges.find(edge => edge.id === condition.flowId);
+        const targetRef = relatedEdge?.target || flowsMap.get(condition.flowId)?.getAttribute('targetRef') || 'TARGET_REF';
+        
+        // Only update if the edge exists or flow already exists in XML
+        if (relatedEdge || flowsMap.has(condition.flowId)) {
+          // Create updated flow element
+          const flowDoc = parser.parseFromString('<root></root>', 'text/xml');
+          const flowElement = flowDoc.createElement('sequenceFlow');
+          flowElement.setAttribute('id', condition.flowId);
+          flowElement.setAttribute('sourceRef', condition.sourceRef || selectedNode.id);
+          flowElement.setAttribute('targetRef', targetRef);
+          
+          if (condition.name?.trim()) {
+            flowElement.setAttribute('name', condition.name);
+          }
+          
+          // Add condition expression if provided
+          if (condition.condition?.trim()) {
+            const condExpr = flowDoc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'conditionExpression');
+            condExpr.setAttribute('xmlns', 'http://www.omg.org/spec/BPMN/20100524/MODEL');
+            condExpr.setAttribute('xsi:type', 'tFormalExpression');
+            condExpr.setAttribute('xmlns:xsi', 'http://www.w3.org/2001/XMLSchema-instance');
+            condExpr.textContent = condition.condition;
+            flowElement.appendChild(condExpr);
+          }
+          
+          // Update the flow in the map
+          flowsMap.set(condition.flowId, flowElement);
+        }
+      });
+      
+      // Serialize all flows back to XML
+      const gatewayXml = Array.from(flowsMap.values())
+        .map(flow => serializer.serializeToString(flow))
+        .join('\n');
       
       setEditedXml(formatXML(gatewayXml));
     }
@@ -283,11 +330,26 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
         }));
       } else if (selectedNode?.type && selectedNode.type.includes('gateway')) {
         // Parse gateway sequence flows
-        const sequenceFlows = Array.from(doc.querySelectorAll('sequenceFlow')).map(flow => ({
-          flowId: flow.getAttribute('id') || '',
-          name: flow.getAttribute('name') || '',
-          condition: flow.querySelector('conditionExpression')?.textContent?.trim() || ''
-        })).filter(flow => flow.name.trim() && flow.condition.trim());
+        const sequenceFlows = Array.from(doc.querySelectorAll('sequenceFlow')).map(flow => {
+          const sourceRef = flow.getAttribute('sourceRef') || '';
+          const targetRef = flow.getAttribute('targetRef') || '';
+          
+          return {
+            flowId: flow.getAttribute('id') || '',
+            name: flow.getAttribute('name') || '',
+            condition: flow.querySelector('conditionExpression')?.textContent?.trim() || '',
+            sourceRef: sourceRef,
+            targetRef: targetRef
+          };
+        }).filter(flow => {
+          // Include flows that:
+          // 1. Have sourceRef pointing to this gateway
+          // 2. Have targetRef pointing to a different node (not back to gateway)
+          // Note: We now include flows WITHOUT conditions so users can see and edit them
+          return flow.sourceRef === selectedNode.id && 
+                 flow.targetRef && 
+                 flow.targetRef !== selectedNode.id;
+        });
         
         // Update gateway properties
         setXmlProperties(prev => ({
@@ -568,18 +630,39 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
     
     console.log('🔥 FINAL XML TO BE SAVED EXACTLY AS IS:', finalXml);
     
-    // For gateway nodes, update all sequence flows
+    // For gateway nodes, update all sequence flows AND save to gateway node
     if (selectedNode && selectedNode.type && selectedNode.type.includes('gateway')) {
       const parser = new DOMParser();
       const tempDoc = parser.parseFromString(`<root>${finalXml}</root>`, 'text/xml');
       const sequenceFlows = tempDoc.querySelectorAll('sequenceFlow');
       
+      console.log('🔍 Processing gateway sequence flows from XML Editor:', sequenceFlows.length);
+      
+      // Update existing edges with their conditions
       sequenceFlows.forEach(flow => {
         const flowId = flow.getAttribute('id');
         const flowName = flow.getAttribute('name') || '';
+        const sourceRef = flow.getAttribute('sourceRef') || '';
+        const targetRef = flow.getAttribute('targetRef') || '';
+        
+        console.log(`🔍 Checking flow: ${flowId}, source: ${sourceRef}, target: ${targetRef}`);
+        
+        // Find the related edge
         const relatedEdge = edges.find(edge => edge.id === flowId);
         
         if (relatedEdge) {
+          // Validate: only update if sourceRef is this gateway and targetRef is different
+          if (sourceRef !== selectedNode.id) {
+            console.log(`⚠️ Skipping flow ${flowId}: sourceRef ${sourceRef} doesn't match gateway ${selectedNode.id}`);
+            return;
+          }
+          
+          if (!targetRef || targetRef === selectedNode.id) {
+            console.log(`⚠️ Skipping flow ${flowId}: invalid targetRef ${targetRef}`);
+            return;
+          }
+          
+          console.log(`✅ Updating edge ${flowId} with condition`);
           const serializer = new XMLSerializer();
           let originalNestedElements = '';
           Array.from(flow.children).forEach(child => {
@@ -597,8 +680,33 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
           };
           
           onEdgeUpdate(updatedEdge);
+        } else {
+          console.log(`ℹ️ Edge ${flowId} not found in edges array - may be a new condition or incoming flow`);
         }
       });
+      
+      // IMPORTANT: Save the complete XML from the editor to the gateway node
+      // This preserves ALL sequence flows (incoming, outgoing with/without conditions)
+      const updatedNode = {
+        ...selectedNode,
+        data: {
+          ...selectedNode.data,
+          label: nodeData?.name || selectedNode.data?.name,
+          documentation: nodeData?.documentation || selectedNode.data?.documentation,
+          versionTag: nodeData?.versionTag || selectedNode.data?.versionTag,
+          backgroundColor: nodeData?.backgroundColor || selectedNode.data?.backgroundColor,
+          borderColor: nodeData?.borderColor || selectedNode.data?.borderColor,
+          originalNestedElements: finalXml,  // Save EXACT XML from editor - preserves all flows
+          originalXML: finalXml
+        },
+        style: {
+          ...selectedNode.style,
+          backgroundColor: nodeData?.backgroundColor || selectedNode.style?.backgroundColor,
+          borderColor: nodeData?.borderColor || selectedNode.style?.borderColor
+        }
+      };
+      console.log('🚀 CALLING onNodeUpdate for gateway with complete XML (preserves all flows):', finalXml);
+      onNodeUpdate(updatedNode);
     } else if (selectedEdge) {
       console.log('📄 SINGLE EDGE UPDATE');
             // Single edge update
@@ -1543,14 +1651,8 @@ ${e.target.value}
                             size="small"
                             label="Flow ID"
                             value={condition.flowId}
-                            onChange={(e) => {
-                              const newConditions = [...xmlProperties.gateway.conditions];
-                              newConditions[index].flowId = e.target.value;
-                              setXmlProperties(prev => ({
-                                ...prev,
-                                gateway: { ...prev.gateway, conditions: newConditions }
-                              }));
-                              updateXmlFromProperties();
+                            InputProps={{
+                              readOnly: true,
                             }}
                             sx={{ flex: 1 }}
                           />
@@ -1584,36 +1686,9 @@ ${e.target.value}
                             }}
                             sx={{ flex: 2 }}
                           />
-                          <button
-                            onClick={() => {
-                              const newConditions = xmlProperties.gateway.conditions.filter((_, i) => i !== index);
-                              setXmlProperties(prev => ({
-                                ...prev,
-                                gateway: { ...prev.gateway, conditions: newConditions }
-                              }));
-                              updateXmlFromProperties();
-                            }}
-                            style={{ background: 'red', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}
-                          >
-                            ×
-                          </button>
                         </div>
                       ))
                     )}
-                    <Button
-                      onClick={() => {
-                        const newConditions = [...xmlProperties.gateway.conditions, { flowId: '', condition: '', name: '' }];
-                        setXmlProperties(prev => ({
-                          ...prev,
-                          gateway: { ...prev.gateway, conditions: newConditions }
-                        }));
-                        updateXmlFromProperties();
-                      }}
-                      variant="outlined"
-                      size="small"
-                    >
-                      Add Condition
-                    </Button>
                   </div>
                 )}
 
@@ -1683,14 +1758,57 @@ ${configXml}
 ${xmlProperties.scriptTask.scriptCode}
 ]]></script>`;
                       } else if (selectedNode?.type && selectedNode.type.includes('gateway')) {
+                        // For gateways, MERGE the updated conditions with existing XML
+                        const parser = new DOMParser();
+                        const currentDoc = parser.parseFromString(`<root>${editedXml}</root>`, 'text/xml');
+                        const serializer = new XMLSerializer();
+                        
+                        // Create a map of all existing flows from the XML editor
+                        const flowsMap = new Map();
+                        Array.from(currentDoc.querySelectorAll('sequenceFlow')).forEach(flow => {
+                          const flowId = flow.getAttribute('id');
+                          flowsMap.set(flowId, flow);
+                        });
+                        
+                        // Update only the flows that are in the properties panel
                         const validConditions = xmlProperties.gateway.conditions.filter(condition =>
-                          condition.flowId?.trim() && condition.name?.trim() && condition.condition?.trim()
+                          condition.flowId?.trim()
                         );
-                        generatedXml = validConditions.map(condition => 
-                          `<sequenceFlow id="${condition.flowId}" sourceRef="${selectedNode.id}" targetRef="TARGET_REF" name="${condition.name}">
-  <conditionExpression xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xsi:type="tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">${condition.condition}</conditionExpression>
-</sequenceFlow>`
-                        ).join('\n');
+                        
+                        validConditions.forEach(condition => {
+                          // Find the edge to get actual targetRef
+                          const relatedEdge = edges.find(edge => edge.id === condition.flowId);
+                          const targetRef = relatedEdge?.target || 'TARGET_REF';
+                          
+                          // Create updated flow element
+                          const flowDoc = parser.parseFromString('<root></root>', 'text/xml');
+                          const flowElement = flowDoc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'sequenceFlow');
+                          flowElement.setAttribute('id', condition.flowId);
+                          flowElement.setAttribute('sourceRef', selectedNode.id);
+                          flowElement.setAttribute('targetRef', targetRef);
+                          
+                          if (condition.name?.trim()) {
+                            flowElement.setAttribute('name', condition.name);
+                          }
+                          
+                          // Add condition expression if provided
+                          if (condition.condition?.trim()) {
+                            const condExpr = flowDoc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'conditionExpression');
+                            condExpr.setAttribute('xmlns', 'http://www.omg.org/spec/BPMN/20100524/MODEL');
+                            condExpr.setAttribute('xsi:type', 'tFormalExpression');
+                            condExpr.setAttribute('xmlns:xsi', 'http://www.w3.org/2001/XMLSchema-instance');
+                            condExpr.textContent = condition.condition;
+                            flowElement.appendChild(condExpr);
+                          }
+                          
+                          // Update the flow in the map
+                          flowsMap.set(condition.flowId, flowElement);
+                        });
+                        
+                        // Serialize all flows back to XML
+                        generatedXml = Array.from(flowsMap.values())
+                          .map(flow => serializer.serializeToString(flow))
+                          .join('\n');
                       }
                       
                       setEditedXml(formatXML(generatedXml));
