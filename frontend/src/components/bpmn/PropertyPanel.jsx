@@ -53,6 +53,43 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
     }
   }, [selectedNode, selectedEdge]);
 
+  // Update XML content when edges change (for gateways showing connected sequence flows)
+  useEffect(() => {
+    if (selectedNode && selectedNode.type && selectedNode.type.includes('Gateway') && edges) {
+      const gatewayId = selectedNode.id;
+      const relatedEdges = edges.filter(edge => 
+        edge.source === gatewayId || edge.target === gatewayId
+      );
+
+      if (relatedEdges.length > 0) {
+        const sequenceFlowsXML = relatedEdges.map(edge => {
+          const id = edge.id;
+          const sourceRef = edge.source;
+          const targetRef = edge.target;
+          const name = edge.label || edge.data?.label || '';
+
+          // Use originalXML if available (for manually created flows)
+          if (edge.data?.originalXML) {
+            return edge.data.originalXML;
+          }
+          
+          // Generate proper XML for manually created flows
+          let xml = `<sequenceFlow id="${id}" sourceRef="${sourceRef}" targetRef="${targetRef}"`;
+          if (name) {
+            xml += ` name="${name}"`;
+          }
+          xml += ' />';
+          
+          return xml;
+        });
+
+        setXmlContent(sequenceFlowsXML.join('\n\n'));
+      } else {
+        setXmlContent('');
+      }
+    }
+  }, [edges, selectedNode]);
+
   const handleXmlChange = (value) => {
     setXmlContent(value);
     // Changes are now stored locally until Save button is clicked
@@ -186,7 +223,7 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
 
   const getGatewaySequenceFlows = () => {
     if (!selectedNode || !edges) {
-      return 'No gateway or edges data available';
+      return '';
     }
 
     const gatewayId = selectedNode.id;
@@ -195,18 +232,17 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
     );
 
     if (relatedEdges.length === 0) {
-      return 'No sequence flows found for this gateway';
+      return '';
     }
 
     const sequenceFlowsXML = relatedEdges.map(edge => {
+      const id = edge.id;
+      const sourceRef = edge.source;
+      const targetRef = edge.target;
+      const name = edge.label || edge.data?.label || '';
 
       // Check for originalNestedElements (from BPMNManager import)
       if (edge.data?.originalNestedElements) {
-        const id = edge.id;
-        const sourceRef = edge.source;
-        const targetRef = edge.target;
-        const name = edge.label || '';
-        
         // Construct complete sequenceFlow XML
         let xml = `<sequenceFlow id="${id}" sourceRef="${sourceRef}" targetRef="${targetRef}"`;
         if (name) {
@@ -222,13 +258,19 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
         return xml;
       }
       
-      // Fallback to originalXML if available
+      // Use originalXML if available (for manually created flows)
       if (edge.data?.originalXML) {
         return edge.data.originalXML;
       }
       
-      // Last resort: basic XML
-      return `<sequenceFlow id="${edge.id}" sourceRef="${edge.source}" targetRef="${edge.target}" />`;
+      // Generate proper XML for manually created flows
+      let xml = `<sequenceFlow id="${id}" sourceRef="${sourceRef}" targetRef="${targetRef}"`;
+      if (name) {
+        xml += ` name="${name}"`;
+      }
+      xml += ' />';
+      
+      return xml;
     });
 
     return sequenceFlowsXML.join('\n\n');
@@ -236,7 +278,7 @@ const PropertyPanel = ({ selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate,
 
   const getInnerXMLContent = () => {
     // Special handling for gateways - show related sequence flows
-    if (selectedNode && selectedNode.type && selectedNode.type.includes('gateway')) {
+    if (selectedNode && selectedNode.type && selectedNode.type.includes('Gateway')) {
       return getGatewaySequenceFlows();
     }
     

@@ -658,8 +658,11 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
 
   const onConnect = useCallback(
     (params) => {
+      console.log('🚀 MANUALLY ADDING SEQUENCE FLOW:', params);
       const sourceNode = nodes.find(n => n.id === params.source);
       const targetNode = nodes.find(n => n.id === params.target);
+      console.log('🚀 SOURCE NODE:', sourceNode?.type, sourceNode?.id);
+      console.log('🚀 TARGET NODE:', targetNode?.type, targetNode?.id);
       
       // BPMN 2.0 Validation Rules (Simple)
       if (sourceNode && targetNode) {
@@ -713,20 +716,32 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
       // Generate a short BPMN-compliant ID for the edge
       const edgeType = isMessageFlow ? 'messageFlow' : 'sequenceFlow';
       const edgeId = getId(edgeType);
+      console.log('🚀 GENERATED EDGE ID:', edgeId, 'TYPE:', edgeType);
 
       const newEdge = {
         ...params,
         id: edgeId,
         type: 'smoothstep',
+        label: '', // Initialize with empty label
         data: {
           ...(isMessageFlow ? { isMessageFlow: true } : {}),
-          originalXML: `<${edgeType} id="${edgeId}" sourceRef="${params.source}" targetRef="${params.target}" />`
+          label: '', // Store label in data as well
+          originalXML: `<${edgeType} id="${edgeId}" sourceRef="${params.source}" targetRef="${params.target}" />`,
+          // Add these properties to ensure consistency with imported BPMN
+          sourceRef: params.source,
+          targetRef: params.target,
+          elementType: edgeType
         },
       };
+      
+      console.log('🚀 CREATED NEW EDGE:', newEdge);
       
       setEdges((eds) => {
         const updatedEdges = addEdge(newEdge, eds);
         const finalEdges = updateEdgesWithArrows(updatedEdges);
+        
+        console.log('🚀 FINAL EDGES AFTER ADDING:', finalEdges.length);
+        console.log('🚀 NEW EDGE IN FINAL ARRAY:', finalEdges.find(e => e.id === edgeId));
         
         // Save to history
         if (!readOnly) {
