@@ -1226,43 +1226,31 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   // Function to generate BPMN XML and create a blob for new workflows
   const handleGenerateAndSaveAsNew = useCallback(() => {
     try {
-      // Get the BPMNManager component and trigger XML generation
-      const bpmnManager = document.querySelector('.bpmn-exporter');
-      if (!bpmnManager) {
-        console.error('BPMNManager not found');
+      // Use the silent XML generation function to avoid showing the XML preview
+      if (!window.generateBPMNXMLSilent) {
+        console.error('Silent XML generation function not available');
+        alert('Failed to generate BPMN XML. Please try again.');
         return;
       }
 
-      // Trigger the internal generateBPMNXML function through the Generate XML button
-      const generateBtn = Array.from(bpmnManager.querySelectorAll('button')).find(
-        btn => btn.textContent.trim() === 'Generate XML'
-      );
+      const generatedXML = window.generateBPMNXMLSilent();
       
-      if (generateBtn) {
-        generateBtn.click();
-        
-        // Wait a bit for the XML to be generated and stored in window.lastGeneratedBPMN
-        setTimeout(() => {
-          const generatedXML = window.lastGeneratedBPMN;
-          
-          if (!generatedXML) {
-            console.error('Failed to generate BPMN XML');
-            alert('Failed to generate BPMN XML. Please try again.');
-            return;
-          }
-
-          // Create a blob from the generated XML
-          const blob = new Blob([generatedXML], { type: 'application/xml' });
-          
-          // Create a File object from the blob with a default name
-          const file = new File([blob], 'workflow.bpmn', { type: 'application/xml' });
-          
-          // Store the blob and open the workflow config dialog
-          setGeneratedBpmnBlob(file);
-          setIsWorkflowDialogOpen(true);
-          
-        }, 300); // Give it time to generatey
+      if (!generatedXML) {
+        console.error('Failed to generate BPMN XML');
+        alert('Failed to generate BPMN XML. Please try again.');
+        return;
       }
+
+      // Create a blob from the generated XML
+      const blob = new Blob([generatedXML], { type: 'application/xml' });
+      
+      // Create a File object from the blob with a default name
+      const file = new File([blob], 'workflow.bpmn', { type: 'application/xml' });
+      
+      // Store the blob and open the workflow config dialog
+      setGeneratedBpmnBlob(file);
+      setIsWorkflowDialogOpen(true);
+      
     } catch (error) {
       console.error('Error generating BPMN:', error);
       alert('Failed to generate BPMN. Please try again.');
