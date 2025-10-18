@@ -67,7 +67,6 @@ const ActivityForm = lazy(() => import('../projects/ActivityForm'))
 const ProjectForm = lazy(() => import('../projects/ProjectForm'))
 const GanttChart = lazy(() => import('../projects/GanttChart'))
 const WorkflowConfig = lazy(() => import('../workflows/WorkflowConfig'))
-const WorkflowDashboard = lazy(() => import('../workflows/WorkflowDashboard'))
 const WorkflowExecution = lazy(() => import('../workflows/WorkflowExecution'))
 const WorkflowUI = lazy(() => import('../workflows/WorkflowUI'))
 const TaskCompletion = lazy(() => import('../workflows/TaskCompletion'))
@@ -240,7 +239,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			children: [
 				{
 					label: 'Home',
-					to: '/dashboard/monitor',
+					to: '/dashboard/workflows',
 					icon: 'Home'
 				},
 				{
@@ -1101,7 +1100,6 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="scheduler-jobs" element={<SchedulerJobs user={user} />} />
 				<Route path="dynamic" element={<DynamicComponentLoader user={user} />} />
 				<Route path="bpmn" element={<BPMNEditorWrapper />} />
-				<Route path="monitor" element={<WorkflowDashboard user={user} />} />
 				<Route path="workflow-execution" element={<WorkflowExecution user={user} />} />
 				<Route path="manage" element={<BPMN initialTheme={themeKey === 'aurora' ? 'dark' : themeKey === 'ocean' ? 'light' : 'auto'} key={themeKey} style={{ width: '100%', minHeight: '70vh', borderRadius: 8, overflow: 'hidden' }} />} />
 				<Route path="tenants" element={<div>Tenants - Coming Soon</div>} />
