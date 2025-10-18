@@ -732,7 +732,11 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
           {/* Accordion headers */}
           <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)' }}>
             <button
-              onClick={() => toggleAccordion(TAB_XML_PROPERTIES)}
+              onClick={() => {
+                console.log('XML PROPERTIES BUTTON CLICKED');
+                console.log('Current tab:', accordionOpen, 'Switching to:', TAB_XML_PROPERTIES);
+                toggleAccordion(TAB_XML_PROPERTIES);
+              }}
               style={{
                 flex: 1,
                 background: accordionOpen === TAB_XML_PROPERTIES ? 'var(--bg-secondary)' : 'var(--bg-primary)',
@@ -749,7 +753,11 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
             {((selectedNode?.data?.taskType === 'userTask' || selectedNode?.data?.taskType === 'scriptTask' || selectedNode?.data?.taskType === 'manualTask') || 
               (elementType === 'userTask' || elementType === 'scriptTask' || elementType === 'manualTask')) && (
               <button
-                onClick={() => toggleAccordion(TAB_CODE_GENERATOR)}
+                onClick={() => {
+                  console.log('CODE GENERATOR BUTTON CLICKED');
+                  console.log('Current tab:', accordionOpen, 'Switching to:', TAB_CODE_GENERATOR);
+                  toggleAccordion(TAB_CODE_GENERATOR);
+                }}
                 style={{
                   flex: 1,
                   background: accordionOpen === TAB_CODE_GENERATOR ? 'var(--bg-secondary)' : 'var(--bg-primary)',
@@ -764,7 +772,11 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
               >Code Generator</button>
             )}
             <button
-              onClick={() => toggleAccordion(TAB_XML_EDITOR)}
+              onClick={() => {
+                console.log('XML EDITOR BUTTON CLICKED');
+                console.log('Current tab:', accordionOpen, 'Switching to:', TAB_XML_EDITOR);
+                toggleAccordion(TAB_XML_EDITOR);
+              }}
               style={{
                 flex: 1,
                 background: accordionOpen === TAB_XML_EDITOR ? 'var(--bg-secondary)' : 'var(--bg-primary)',
@@ -1319,18 +1331,21 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                           <InputLabel>Module</InputLabel>
                           <Select
                             value={xmlProperties.serviceTask.function.moduleName}
-                            onChange={(e) => setXmlProperties(prev => ({
-                              ...prev,
-                              serviceTask: { 
-                                ...prev.serviceTask, 
-                                function: { 
-                                  ...prev.serviceTask.function, 
-                                  moduleName: e.target.value,
-                                  functionName: '', // Reset function when module changes
-                                  parameters: []
+                            onChange={(e) => {
+                              console.log('📦 Module dropdown changed:', e.target.value);
+                              setXmlProperties(prev => ({
+                                ...prev,
+                                serviceTask: { 
+                                  ...prev.serviceTask, 
+                                  function: { 
+                                    ...prev.serviceTask.function, 
+                                    moduleName: e.target.value,
+                                    functionName: '', // Reset function when module changes
+                                    parameters: []
+                                  }
                                 }
-                              }
-                            }))}
+                              }));
+                            }}
                             label="Module"
                             disabled={loadingModules}
                           >
@@ -1353,13 +1368,20 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                           <InputLabel>Function</InputLabel>
                           <Select
                             value={xmlProperties.serviceTask.function.functionName}
-                            onChange={(e) => setXmlProperties(prev => ({
-                              ...prev,
-                              serviceTask: { 
-                                ...prev.serviceTask, 
-                                function: { ...prev.serviceTask.function, functionName: e.target.value }
-                              }
-                            }))}
+                            onChange={(e) => {
+                              console.log('⚙️ Function dropdown changed:', e.target.value);
+                              setXmlProperties(prev => ({
+                                ...prev,
+                                serviceTask: { 
+                                  ...prev.serviceTask, 
+                                  function: { 
+                                    ...prev.serviceTask.function, 
+                                    functionName: e.target.value,
+                                    parameters: [] // Clear parameters when function changes
+                                  }
+                                }
+                              }));
+                            }}
                             label="Function"
                             disabled={!xmlProperties.serviceTask.function.moduleName || loadingFunctions}
                           >
