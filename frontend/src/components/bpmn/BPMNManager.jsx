@@ -9,6 +9,24 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false, minioFullPa
   const [showPasteArea, setShowPasteArea] = useState(false);
   const [pastedXML, setPastedXML] = useState('');
 
+  // Expose silent XML generation function
+  useEffect(() => {
+    window.generateBPMNXMLSilent = () => {
+      try {
+        const xml = generateBPMNXML();
+        window.lastGeneratedBPMN = xml;
+        return xml;
+      } catch (error) {
+        console.error('Error generating BPMN XML:', error);
+        return null;
+      }
+    };
+    
+    return () => {
+      delete window.generateBPMNXMLSilent;
+    };
+  }, [nodes, edges]);
+
   // Simple XML formatter - preserves CDATA content exactly as is
   const formatXML = (xml) => {
     try {

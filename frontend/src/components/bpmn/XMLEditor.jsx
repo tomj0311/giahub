@@ -4,6 +4,8 @@ import { agentRuntimeService } from '../../services/agentRuntimeService';
 import { apiCall } from '../../config/api';
 
 
+import Editor from '@monaco-editor/react';
+
 const XMLEditor = ({ isOpen, onClose, xmlContent, elementType, selectedNode, selectedEdge, onNodeUpdate, onEdgeUpdate, edges, nodeData }) => {
   const theme = useTheme();
   const [editedXml, setEditedXml] = useState('');
@@ -902,29 +904,31 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
           {/* Accordion panels */}
           <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
             {accordionOpen === TAB_XML_EDITOR && (
-              <>
-                <TextField
-                  multiline
-                  fullWidth
+              <div style={{ height: '400px', border: '1px solid var(--border-color)', borderRadius: '4px' }}>
+                <Editor
+                  height="400px"
+                  defaultLanguage="xml"
                   value={editedXml}
-                  onChange={(e) => {
-                    setEditedXml(e.target.value);
+                  onChange={(value) => {
+                    setEditedXml(value || '');
                     // Parse XML changes back to properties for gateways
-                    if (selectedNode?.type && selectedNode.type.includes('gateway') && e.target.value.trim()) {
-                      parseXmlToProperties(e.target.value);
+                    if (selectedNode?.type && selectedNode.type.includes('gateway') && value?.trim()) {
+                      parseXmlToProperties(value);
                     }
                   }}
-                  placeholder={editedXml === '' ? "No XML content available. You can add custom XML elements here or use the Code Generator tab to create content." : "Enter XML content here..."}
-                  sx={{
-                    '& .MuiInputBase-input': {
-                      fontFamily: 'monospace',
-                      fontSize: '13px',
-                      height: '300px !important',
-                      overflow: 'auto !important'
-                    }
+                  theme={theme.palette.mode === 'dark' ? 'vs-dark' : 'light'}
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 13,
+                    lineNumbers: 'on',
+                    scrollBeyondLastLine: false,
+                    wordWrap: 'on',
+                    automaticLayout: true,
+                    formatOnPaste: true,
+                    formatOnType: true
                   }}
                 />
-              </>
+              </div>
             )}
             {/* Only show Code Generator content for userTask, scriptTask, and manualTask */}
             {accordionOpen === TAB_CODE_GENERATOR && 
@@ -974,23 +978,26 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                     }
                   }}
                 />
-                <TextField
-                  label="Response"
-                  variant="outlined"
-                  multiline
-                  fullWidth
-                  value={cgResponse}
-                  onChange={(e) => setCgResponse(e.target.value)}
-                  placeholder="Code generation response will appear here..."
-                  sx={{
-                    '& .MuiInputBase-input': {
-                      fontFamily: 'monospace',
-                      fontSize: '13px',
-                      height: '200px !important',
-                      overflow: 'auto !important'
+                <div style={{ height: '300px', border: '1px solid var(--border-color)', borderRadius: '4px', marginBottom: '8px' }}>
+                  <Editor
+                    height="300px"
+                    defaultLanguage={
+                      (selectedNode?.data?.taskType === 'userTask' || elementType === 'userTask') ? 'javascript' : 'python'
                     }
-                  }}
-                />
+                    value={cgResponse}
+                    onChange={(value) => setCgResponse(value || '')}
+                    theme={theme.palette.mode === 'dark' ? 'vs-dark' : 'light'}
+                    options={{
+                      minimap: { enabled: false },
+                      fontSize: 13,
+                      lineNumbers: 'on',
+                      scrollBeyondLastLine: false,
+                      wordWrap: 'on',
+                      automaticLayout: true,
+                      readOnly: false
+                    }}
+                  />
+                </div>
                 <Button 
                   onClick={() => {
                     console.log('🟡 [XML DEBUG] Update button clicked');
@@ -1301,34 +1308,35 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                           Add Field
                         </Button>
                         
-                        <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 2, mt: 2 }}>
+                        <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 1, mt: 2 }}>
                           JSX Code:
                         </Typography>
-                        <TextField
-                          multiline
-                          fullWidth
-                          label="React JSX Code"
-                          value={xmlProperties.userTask.formData.jsxCode}
-                          onChange={(e) => {
-                            setXmlProperties(prev => ({
-                              ...prev,
-                              userTask: { 
-                                ...prev.userTask, 
-                                formData: { ...prev.userTask.formData, jsxCode: e.target.value }
-                              }
-                            }));
-                            updateXmlFromProperties();
-                          }}
-                          sx={{
-                            mb: 2,
-                            '& .MuiInputBase-input': {
-                              fontFamily: 'monospace',
-                              fontSize: '13px',
-                              height: '100px !important',
-                              overflow: 'auto !important'
-                            }
-                          }}
-                        />
+                        <div style={{ height: '200px', border: '1px solid var(--border-color)', borderRadius: '4px', marginBottom: '16px' }}>
+                          <Editor
+                            height="200px"
+                            defaultLanguage="javascript"
+                            value={xmlProperties.userTask.formData.jsxCode}
+                            onChange={(value) => {
+                              setXmlProperties(prev => ({
+                                ...prev,
+                                userTask: { 
+                                  ...prev.userTask, 
+                                  formData: { ...prev.userTask.formData, jsxCode: value || '' }
+                                }
+                              }));
+                              updateXmlFromProperties();
+                            }}
+                            theme={theme.palette.mode === 'dark' ? 'vs-dark' : 'light'}
+                            options={{
+                              minimap: { enabled: false },
+                              fontSize: 13,
+                              lineNumbers: 'on',
+                              scrollBeyondLastLine: false,
+                              wordWrap: 'on',
+                              automaticLayout: true
+                            }}
+                          />
+                        </div>
                       </div>
                     )}
                     
@@ -1606,31 +1614,36 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                 {/* ScriptTask Properties */}
                 {(selectedNode?.data?.taskType || elementType) === 'scriptTask' && (
                   <div>
-                    <TextField
-                      multiline
-                      fullWidth
-                      label="Script Code"
-                      value={xmlProperties.scriptTask.scriptCode}
-                      onChange={(e) => {
-                        setXmlProperties(prev => ({
-                          ...prev,
-                          scriptTask: { ...prev.scriptTask, scriptCode: e.target.value }
-                        }));
-                        // Update XML when script code changes
-                        const updatedXml = `<script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
-${e.target.value}
+                    <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 1 }}>
+                      Script Code:
+                    </Typography>
+                    <div style={{ height: '250px', border: '1px solid var(--border-color)', borderRadius: '4px' }}>
+                      <Editor
+                        height="250px"
+                        defaultLanguage="python"
+                        value={xmlProperties.scriptTask.scriptCode}
+                        onChange={(value) => {
+                          setXmlProperties(prev => ({
+                            ...prev,
+                            scriptTask: { ...prev.scriptTask, scriptCode: value || '' }
+                          }));
+                          // Update XML when script code changes
+                          const updatedXml = `<script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+${value || ''}
 ]]></script>`;
-                        setEditedXml(formatXML(updatedXml));
-                      }}
-                      sx={{
-                        '& .MuiInputBase-input': {
-                          fontFamily: 'monospace',
-                          fontSize: '13px',
-                          height: '150px !important',
-                          overflow: 'auto !important'
-                        }
-                      }}
-                    />
+                          setEditedXml(formatXML(updatedXml));
+                        }}
+                        theme={theme.palette.mode === 'dark' ? 'vs-dark' : 'light'}
+                        options={{
+                          minimap: { enabled: false },
+                          fontSize: 13,
+                          lineNumbers: 'on',
+                          scrollBeyondLastLine: false,
+                          wordWrap: 'on',
+                          automaticLayout: true
+                        }}
+                      />
+                    </div>
                   </div>
                 )}
 

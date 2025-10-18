@@ -150,6 +150,60 @@ class ModelConfigService:
             raise HTTPException(status_code=500, detail="Failed to retrieve model configurations")
     
     @classmethod
+    async def list_all_model_configs_minimal(
+        cls,
+        user: dict,
+        active_only: bool = True
+    ) -> Dict[str, Any]:
+        """Get all model configs with minimal fields for dropdowns"""
+        tenant_id = await cls.validate_tenant_access(user)
+        
+        try:
+            # Build filter query
+            filter_query = {}
+            if active_only:
+                filter_query["is_active"] = {"$ne": False}
+            
+            # Only project essential fields
+            projection = {
+                "_id": 1,
+                "name": 1,
+                "category": 1,
+                "provider": 1,
+                "model": 1,
+                "description": 1
+            }
+            
+            # Get all configs sorted by name
+            docs = await MongoStorageService.find_many(
+                "modelConfig",
+                filter_query,
+                tenant_id=tenant_id,
+                sort_field="name",
+                sort_order=1,
+                projection=projection
+            )
+            
+            configs = []
+            for doc in docs:
+                configs.append({
+                    "id": str(doc["_id"]),
+                    "name": doc.get("name", ""),
+                    "category": doc.get("category", ""),
+                    "provider": doc.get("provider", ""),
+                    "model": doc.get("model", ""),
+                    "description": doc.get("description", "")
+                })
+            
+            return {
+                "configurations": configs,
+                "total": len(configs)
+            }
+        except Exception as e:
+            logger.error(f"[MODEL] Failed to list all model configs minimal: {e}")
+            raise HTTPException(status_code=500, detail="Failed to retrieve model configurations")
+    
+    @classmethod
     async def get_model_config(cls, config_name: str, user: dict) -> Dict[str, Any]:
         """Get specific model configuration"""
         tenant_id = await cls.validate_tenant_access(user)

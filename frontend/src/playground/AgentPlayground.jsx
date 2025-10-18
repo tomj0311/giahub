@@ -542,9 +542,9 @@ export default function AgentPlayground({ user }) {
       setLoading(true)
       try {
         const result = await sharedApiService.makeRequest(
-          '/api/agents',
+          '/api/agents/all',
           { headers: token ? { Authorization: `Bearer ${token}` } : {} },
-          { endpoint: 'agents', token: token?.substring(0, 10) }
+          { endpoint: 'agents-all', token: token?.substring(0, 10) }
         )
         
         if (!result.success) {
@@ -1887,12 +1887,12 @@ const ChatInputBar = React.memo(function ChatInputBar({
       <Box sx={{ position: 'relative' }}>
         <TextField
           inputRef={inputRef}
-          placeholder={!selected ? 'Select an agent first' : (stagedFiles.length ? `Type your message... (${stagedFiles.length} file(s) ready) • Shift+Enter to send` : 'Type your message... • Shift+Enter to send')}
+          placeholder={!selected ? 'Select an agent first' : (stagedFiles.length ? `Type your message... (${stagedFiles.length} file(s) ready) • Press Enter to send` : 'Type your message... • Press Enter to send')}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onPaste={handlePaste}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.shiftKey || e.ctrlKey)) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
               e.preventDefault()
               if (prompt.trim()) {
                 runAgent(prompt)

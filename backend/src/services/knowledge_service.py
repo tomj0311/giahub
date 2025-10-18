@@ -603,6 +603,59 @@ class KnowledgeService:
             raise HTTPException(status_code=500, detail="Failed to retrieve knowledge collections")
     
     @classmethod
+    async def list_all_collections_minimal(
+        cls,
+        user: dict,
+        active_only: bool = True
+    ) -> Dict[str, Any]:
+        """Get all knowledge collections with minimal fields for dropdowns"""
+        tenant_id = await cls.validate_tenant_access(user)
+        
+        try:
+            # Build filter query
+            filter_query = {}
+            if active_only:
+                filter_query["is_active"] = {"$ne": False}
+            
+            # Only project essential fields
+            projection = {
+                "_id": 1,
+                "collection": 1,
+                "name": 1,
+                "category": 1,
+                "description": 1
+            }
+            
+            # Get all collections sorted by name
+            docs = await MongoStorageService.find_many(
+                "knowledgeConfig",
+                filter_query,
+                tenant_id=tenant_id,
+                sort_field="collection",
+                sort_order=1,
+                projection=projection
+            )
+            
+            collections = []
+            for doc in docs:
+                collection_name = doc.get("collection") or doc.get("name", "")
+                collections.append({
+                    "id": str(doc["_id"]),
+                    "name": collection_name,
+                    "collection": collection_name,
+                    "category": doc.get("category", ""),
+                    "description": doc.get("description", "")
+                })
+            
+            return {
+                "collections": collections,
+                "total": len(collections)
+            }
+        except Exception as e:
+            logger.error(f"[KNOWLEDGE] Failed to list all collections minimal: {e}")
+            raise HTTPException(status_code=500, detail="Failed to retrieve knowledge collections")
+    
+    @classmethod
     async def get_collection(cls, collection_name: str, user: dict) -> Dict[str, Any]:
         """Get collection details with files from MinIO"""
         tenant_id = await cls.validate_tenant_access(user)

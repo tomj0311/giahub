@@ -622,4 +622,27 @@
 .lasso-icon svg {
   width: 100%;
   height: 100%;
+}}
+
+.delete-icon {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.delete-icon svg {
+  width: 100%;
+  height: 100%;
+  color: var(--text-primary);
+  transition: color 0.2s;
+}
+
+.delete-tool:hover .delete-icon svg {
+  color: #ef4444;
+}
+
+.delete-tool:active {
+  background: rgba(239, 68, 68, 0.1);
 }

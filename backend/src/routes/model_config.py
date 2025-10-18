@@ -41,6 +41,19 @@ async def get_available_providers():
     return {"providers": providers}
 
 
+@router.get("/configs/all")
+async def list_all_model_configs(
+    user: dict = Depends(verify_token_middleware),
+    active_only: bool = Query(True, description="Return only active configurations")
+):
+    """Get all model configs with minimal fields for dropdowns/selects."""
+    result = await ModelConfigService.list_all_model_configs_minimal(
+        user=user,
+        active_only=active_only
+    )
+    return result
+
+
 @router.get("/configs")
 async def list_model_configs(
     user: dict = Depends(verify_token_middleware),

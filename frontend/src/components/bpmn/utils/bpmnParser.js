@@ -118,6 +118,13 @@ export const parseBPMNXML = (xmlString) => {
 
     shapes.forEach(shape => {
       const bpmnElement = shape.getAttribute('bpmnElement');
+      
+      // Check for duplicate shape definitions - only use the first occurrence
+      if (shapeMap[bpmnElement]) {
+        console.warn(`Duplicate BPMNShape detected for element: ${bpmnElement}. Using first occurrence.`);
+        return; // Skip duplicate shape
+      }
+      
       const bounds = shape.querySelector('dc\\:Bounds, Bounds');
       if (bounds) {
         // Parse label bounds if present
@@ -191,6 +198,13 @@ export const parseBPMNXML = (xmlString) => {
     const edgeShapeMap = {};
     bpmndiEdges.forEach(edgeShape => {
       const bpmnElement = edgeShape.getAttribute('bpmnElement');
+      
+      // Check for duplicate edge shape definitions - only use the first occurrence
+      if (edgeShapeMap[bpmnElement]) {
+        console.warn(`Duplicate BPMNEdge detected for element: ${bpmnElement}. Using first occurrence.`);
+        return; // Skip duplicate edge shape
+      }
+      
       const shapeId = edgeShape.getAttribute('id');
       const waypoints = [];
       edgeShape.querySelectorAll('di\\:waypoint, waypoint').forEach(wp => {
@@ -493,6 +507,13 @@ export const parseBPMNXML = (xmlString) => {
             originalDiagramExtensionElements: shapeMap[id]?.originalExtensionElements
           };
 
+          // Check for duplicate node IDs before adding
+          const existingNode = nodes.find(n => n.id === id);
+          if (existingNode) {
+            console.warn(`Duplicate node ID detected: ${id}. Skipping duplicate element.`);
+            return; // Skip this duplicate node
+          }
+
           const node = {
             id,
             type: nodeType,
@@ -522,6 +543,13 @@ export const parseBPMNXML = (xmlString) => {
         const originalNestedElements = captureNestedElements(element);
 
         if (sourceRef && targetRef) {
+          // Check for duplicate edge IDs before adding
+          const existingEdge = edges.find(e => e.id === id);
+          if (existingEdge) {
+            console.warn(`Duplicate edge ID detected: ${id}. Skipping duplicate sequence flow.`);
+            return; // Skip this duplicate edge
+          }
+
           // Find original edge info from diagram
           const edgeInfo = edgeShapeMap[id];
           const originalEdgeShapeId = edgeInfo?.shapeId || `${id}_di`;
@@ -558,6 +586,13 @@ export const parseBPMNXML = (xmlString) => {
         const originalDocumentation = Array.from(docEls).map(d => d.textContent || '');
 
         if (sourceRef && targetRef) {
+          // Check for duplicate message flow IDs before adding
+          const existingEdge = edges.find(e => e.id === id);
+          if (existingEdge) {
+            console.warn(`Duplicate edge ID detected: ${id}. Skipping duplicate message flow.`);
+            return; // Skip this duplicate edge
+          }
+
           const sourceNode = nodes.find(n => n.id === sourceRef);
           const targetNode = nodes.find(n => n.id === targetRef);
 

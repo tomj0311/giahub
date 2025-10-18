@@ -81,21 +81,26 @@ function WorkflowUI({ user }) {
       setError('');
       setInstanceId(instId);
 
-      // Get workflow config to find workflow ID
-      const configResult = await sharedApiService.makeRequest(
-        '/api/workflows/configs',
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      // Find workflow from already loaded workflows list
+      let workflow = workflows.find(w => w.name === workflowName);
+      
+      // If not found in loaded list, fetch all workflows
+      if (!workflow) {
+        const configResult = await sharedApiService.makeRequest(
+          '/api/workflows/configs/all',
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
           },
-        },
-        { action: 'get_configs', bypassCache: true }
-      );
+          { action: 'get_configs_all', bypassCache: true }
+        );
 
-      const workflow = configResult.data.configurations?.find(w => w.name === workflowName);
-      if (!workflow) throw new Error(`Workflow "${workflowName}" not found`);
+        workflow = configResult.data.configurations?.find(w => w.name === workflowName);
+        if (!workflow) throw new Error(`Workflow "${workflowName}" not found`);
+      }
 
       const wfId = workflow.id || workflow.workflow_id || workflow._id;
       setWorkflowId(wfId);
@@ -113,7 +118,7 @@ function WorkflowUI({ user }) {
     try {
       setState('loading');
       const result = await sharedApiService.makeRequest(
-        '/api/workflows/configs',
+        '/api/workflows/configs/all',
         {
           method: 'GET',
           headers: {
@@ -121,7 +126,7 @@ function WorkflowUI({ user }) {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
         },
-        { action: 'get_configs', bypassCache: true }
+        { action: 'get_configs_all', bypassCache: true }
       );
 
       if (result.success) {
@@ -142,21 +147,26 @@ function WorkflowUI({ user }) {
       setState('loading');
       setError('');
 
-      // Get workflow config
-      const configResult = await sharedApiService.makeRequest(
-        '/api/workflows/configs',
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      // Find workflow from already loaded workflows list
+      let workflow = workflows.find(w => w.name === workflowName);
+      
+      // If not found in loaded list, fetch all workflows
+      if (!workflow) {
+        const configResult = await sharedApiService.makeRequest(
+          '/api/workflows/configs/all',
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
           },
-        },
-        { action: 'get_configs', bypassCache: true }
-      );
+          { action: 'get_configs_all', bypassCache: true }
+        );
 
-      const workflow = configResult.data.configurations?.find(w => w.name === workflowName);
-      if (!workflow) throw new Error(`Workflow "${workflowName}" not found`);
+        workflow = configResult.data.configurations?.find(w => w.name === workflowName);
+        if (!workflow) throw new Error(`Workflow "${workflowName}" not found`);
+      }
 
       const wfId = workflow.id || workflow.workflow_id || workflow._id;
       setWorkflowId(wfId);

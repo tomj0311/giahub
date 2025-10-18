@@ -20,6 +20,23 @@ from ..utils.log import logger
 router = APIRouter(tags=["agents"])
 
 
+@router.get("/all")
+async def list_all_agents(
+    user: dict = Depends(verify_token_middleware),
+    active_only: bool = Query(True, description="Return only active agents")
+):
+    """Get all agents with minimal fields for dropdowns/selects."""
+    try:
+        result = await AgentService.list_all_agents_minimal(
+            user=user,
+            active_only=active_only
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error listing all agents: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("")
 async def list_agents(
     user: dict = Depends(verify_token_middleware),
