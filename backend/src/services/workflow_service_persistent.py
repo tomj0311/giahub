@@ -251,79 +251,6 @@ class WorkflowServicePersistent:
         })
 
     @classmethod
-    def _extract_python_code(cls, raw_script):
-        """Extract Python code - strip markdown code fences if present and format properly"""
-        import re
-        import textwrap
-        
-        # Try to extract code from markdown code blocks (optional backticks)
-        pattern = r'```(?:python)?\s*\n(.*?)\n\s*```'
-        matches = re.findall(pattern, raw_script, re.DOTALL)
-        
-        if matches:
-            # Join all code blocks with newlines
-            code = '\n'.join(matches)
-        else:
-            # No markdown blocks found, use raw script as-is
-            code = raw_script
-        
-        # Remove common leading whitespace to dedent the code
-        code = textwrap.dedent(code).strip()
-        return code
-
-    @classmethod
-    async def handle_script_task(cls, workflow, task, user):
-        """Handle ScriptTask execution - extract code from ```python``` blocks"""
-        try:
-            bpmn_id = task.task_spec.bpmn_id
-            logger.info(f"[WORKFLOW] Handling ScriptTask: {bpmn_id}")
-            
-            # Get script code
-            raw_script = getattr(task.task_spec, 'script', None)
-            if not raw_script:
-                logger.warning(f"[WORKFLOW] ScriptTask {bpmn_id} has no script to execute")
-                task.complete()
-                return
-            
-            # Extract code from ```python``` blocks
-            code = cls._extract_python_code(raw_script)
-            if not code:
-                logger.warning(f"[WORKFLOW] No Python code found in script for {bpmn_id}")
-                task.complete()
-                return
-            
-            # Pass local variables from task.data
-            local_vars = dict(task.data)
-            initial_vars = set(local_vars.keys())
-            
-            # Execute the code locally (supports imports)
-            exec(code, {}, local_vars)
-            
-            # Grab output variables (new/changed only) - FILTER for JSON-serializable types only
-            output_vars = {}
-            for key, value in local_vars.items():
-                if key not in initial_vars or local_vars[key] != task.data.get(key):
-                    if not key.startswith('_'):  # Skip private vars
-                        # Only include JSON-serializable types
-                        if isinstance(value, (str, int, float, bool, list, dict)):
-                            output_vars[f'{key}'] = value
-                        else:
-                            logger.warning(f"[WORKFLOW] Skipping non-serializable variable '{key}' of type {type(value).__name__}")
-            
-            # Add timestamp to output variables
-            output_vars[f'timestamp'] = datetime.now(timezone.utc).isoformat()
-            
-            # Serialize into one object and update task.data
-            task.data[task.task_spec.bpmn_id] = output_vars
-            task.complete()
-            
-            logger.info(f"[WORKFLOW] ScriptTask {bpmn_id} completed with outputs: {list(output_vars.keys())}")
-                
-        except Exception as e:
-            logger.error(f"[WORKFLOW] Error handling ScriptTask {task.task_spec.bpmn_id}: {e}")
-            raise
-
-    @classmethod
     async def handle_service_task(cls, workflow, task, user):
         """Handle ServiceTask by reading extensionElements for function calls or fallback to external API"""
         try:
@@ -358,11 +285,10 @@ class WorkflowServicePersistent:
                             if param_name:
                                 # Check if value is in task data, otherwise use config value
                                 if param_value in task.data:
-                                    function_params[param_name] = task.data[param_value]
-                                    logger.info(f"[WORKFLOW] Mapped parameter '{param_name}' from task.data['{param_value}'] = {task.data[param_value]}")
+                                    function_params[param_name] = task.data[param_name]
                                 else:
                                     function_params[param_name] = param_value
-                                    logger.info(f"[WORKFLOW] Using config value for parameter '{param_name}' = {param_value}")
+                                    logger.info(f"[WORKFLOW] Using config default value for parameter '{param_name}' = {param_value}")
                     
                     logger.info(f"[WORKFLOW] Final function parameters: {function_params}")
                     
