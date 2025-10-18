@@ -20,8 +20,31 @@ const Toolbar = ({ isDarkMode, isPropertyPanelOpen, onTogglePropertyPanel, selec
           >
             <div className="lasso-icon">
               <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M7 17l5-5 5 5M7 7l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
                 <rect x="4" y="4" width="16" height="16" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3,3" fill="none" opacity="0.6"/>
+              </svg>
+            </div>
+          </button>
+          <button
+            className="toolbar-tool delete-tool"
+            onClick={() => {
+              // Find the ReactFlow wrapper and dispatch the event from there
+              const reactFlowWrapper = document.querySelector('.reactflow-wrapper');
+              if (reactFlowWrapper) {
+                const event = new KeyboardEvent('keydown', { 
+                  key: 'Delete',
+                  bubbles: true,
+                  cancelable: true
+                });
+                reactFlowWrapper.dispatchEvent(event);
+              }
+            }}
+            title="Delete Selected Node(s)"
+            aria-label="Delete selected nodes"
+          >
+            <div className="delete-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
             </div>
           </button>
