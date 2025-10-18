@@ -1428,7 +1428,10 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                             }));
                           }}
                           sx={{ flex: 1 }}
-                          disabled={functionDetails && functionDetails.parameters} // Disable if auto-generated
+                          helperText="Name of the variable"
+                          FormHelperTextProps={{
+                            sx: { fontSize: '10px', color: 'var(--text-secondary)', mt: 0.5 }
+                          }}
                         />
                         <TextField
                           size="small"
@@ -1448,6 +1451,10 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                             }));
                           }}
                           sx={{ flex: 1 }}
+                          helperText="Default value - can be overwritten if variable exists in the code"
+                          FormHelperTextProps={{
+                            sx: { fontSize: '10px', color: 'var(--text-secondary)', mt: 0.5 }
+                          }}
                         />
                         <button
                           onClick={() => {
