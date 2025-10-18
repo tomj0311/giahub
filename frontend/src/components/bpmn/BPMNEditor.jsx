@@ -33,6 +33,7 @@ import ParticipantNode from './nodes/ParticipantNode';
 import LaneNode from './nodes/LaneNode';
 import PropertyPanel from './PropertyPanel';
 import XMLEditor from './XMLEditor';
+import WorkflowConfigDialog from './WorkflowConfigDialog';
 import './BPMNEditor.css';
 
 const nodeTypes = {
@@ -128,7 +129,7 @@ const initialNodes = [
   },
 ];
 
-const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPropertyPanel = true, readOnly = false, initialBPMN = null, taskStatusData = null, onNodeClick: onNodeClickProp = null }) => {
+const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPropertyPanel = true, readOnly = false, initialBPMN = null, taskStatusData = null, onNodeClick: onNodeClickProp = null, user = null }) => {
   const reactFlowWrapper = useRef(null);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -145,6 +146,10 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   // XMLEditor state
   const [isXmlEditorOpen, setIsXmlEditorOpen] = useState(false);
   const [xmlContent, setXmlContent] = useState('');
+  
+  // Workflow config dialog state
+  const [isWorkflowDialogOpen, setIsWorkflowDialogOpen] = useState(false);
+  const [generatedBpmnBlob, setGeneratedBpmnBlob] = useState(null);
   
   const { project, fitView } = useReactFlow();
 
@@ -1218,6 +1223,52 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
     });
   }, [participants, setNodes, setParticipants, saveToHistory, edges, readOnly]);
 
+  // Function to generate BPMN XML and create a blob for new workflows
+  const handleGenerateAndSaveAsNew = useCallback(() => {
+    try {
+      // Get the BPMNManager component and trigger XML generation
+      const bpmnManager = document.querySelector('.bpmn-exporter');
+      if (!bpmnManager) {
+        console.error('BPMNManager not found');
+        return;
+      }
+
+      // Trigger the internal generateBPMNXML function through the Generate XML button
+      const generateBtn = Array.from(bpmnManager.querySelectorAll('button')).find(
+        btn => btn.textContent.trim() === 'Generate XML'
+      );
+      
+      if (generateBtn) {
+        generateBtn.click();
+        
+        // Wait a bit for the XML to be generated and stored in window.lastGeneratedBPMN
+        setTimeout(() => {
+          const generatedXML = window.lastGeneratedBPMN;
+          
+          if (!generatedXML) {
+            console.error('Failed to generate BPMN XML');
+            alert('Failed to generate BPMN XML. Please try again.');
+            return;
+          }
+
+          // Create a blob from the generated XML
+          const blob = new Blob([generatedXML], { type: 'application/xml' });
+          
+          // Create a File object from the blob with a default name
+          const file = new File([blob], 'workflow.bpmn', { type: 'application/xml' });
+          
+          // Store the blob and open the workflow config dialog
+          setGeneratedBpmnBlob(file);
+          setIsWorkflowDialogOpen(true);
+          
+        }, 300); // Give it time to generate
+      }
+    } catch (error) {
+      console.error('Error generating BPMN:', error);
+      alert('Failed to generate BPMN. Please try again.');
+    }
+  }, [nodes, edges]);
+
   return (
     <div className={`bpmn-editor ${readOnly ? 'readonly-mode' : ''}`}>
       {showToolbox && !readOnly && (
@@ -1233,27 +1284,20 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
       <div className="editor-content">
         {!readOnly && (
           <div className="bpmn-action-bar">
-            {minioFullPath && (
-              <button onClick={() => {
+            <button onClick={() => {
+              if (minioFullPath) {
+                // Existing workflow - upload to MinIO
                 const bpmnManager = document.querySelector('.bpmn-exporter');
                 if (bpmnManager) {
-                  // Find the Upload BPMN button specifically
                   const uploadBtn = Array.from(bpmnManager.querySelectorAll('button')).find(btn => btn.textContent.trim() === 'Upload BPMN');
                   if (uploadBtn) uploadBtn.click();
                 }
-              }} className="btn-secondary">
-                Upload BPMN
-              </button>
-            )}
-            <button onClick={() => {
-              const bpmnManager = document.querySelector('.bpmn-exporter');
-              if (bpmnManager) {
-                // Find the Generate XML button specifically
-                const generateBtn = Array.from(bpmnManager.querySelectorAll('button')).find(btn => btn.textContent.trim() === 'Generate XML');
-                if (generateBtn) generateBtn.click();
+              } else {
+                // New workflow - generate BPMN and open WorkflowConfig dialog
+                handleGenerateAndSaveAsNew();
               }
             }} className="btn-primary">
-              Generate XML
+              Save
             </button>
             <button onClick={() => {
               const bpmnManager = document.querySelector('.bpmn-exporter');
@@ -1372,6 +1416,21 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
             borderColor: selectedEdge.style?.borderColor || selectedEdge.data?.borderColor || ''
           } : {}}
         />
+        
+        {/* Workflow Config Dialog for new workflows */}
+        <WorkflowConfigDialog
+          open={isWorkflowDialogOpen}
+          onClose={(success) => {
+            setIsWorkflowDialogOpen(false);
+            setGeneratedBpmnBlob(null);
+            if (success) {
+              // Optionally redirect or show success message
+              console.log('Workflow saved successfully');
+            }
+          }}
+          bpmnFile={generatedBpmnBlob}
+          user={user}
+        />
       </div>
     </div>
   );
@@ -1387,11 +1446,12 @@ const MemoizedBPMNEditorFlow = React.memo(BPMNEditorFlow, (prevProps, nextProps)
     prevProps.initialBPMN === nextProps.initialBPMN &&
     prevProps.onToggleTheme === nextProps.onToggleTheme &&
     prevProps.taskStatusData === nextProps.taskStatusData &&
-    prevProps.onNodeClick === nextProps.onNodeClick
+    prevProps.onNodeClick === nextProps.onNodeClick &&
+    prevProps.user === nextProps.user
   );
 });
 
-const BPMNEditor = ({ isDarkMode, onToggleTheme, showToolbox, showPropertyPanel, readOnly, initialBPMN, taskStatusData, onNodeClick }) => (
+const BPMNEditor = ({ isDarkMode, onToggleTheme, showToolbox, showPropertyPanel, readOnly, initialBPMN, taskStatusData, onNodeClick, user }) => (
   <ReactFlowProvider>
     <MemoizedBPMNEditorFlow 
       isDarkMode={isDarkMode} 
@@ -1402,6 +1462,7 @@ const BPMNEditor = ({ isDarkMode, onToggleTheme, showToolbox, showPropertyPanel,
       initialBPMN={initialBPMN}
       taskStatusData={taskStatusData}
       onNodeClick={onNodeClick}
+      user={user}
     />
   </ReactFlowProvider>
 );
