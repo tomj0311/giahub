@@ -428,6 +428,24 @@ def get_openapi_schema():
                     "responses": {"200": {"description": "Current user information"}}
                 }
             },
+            "/auth/forgot-password": {
+                "post": {
+                    "tags": ["Authentication"],
+                    "summary": "Forgot password",
+                    "description": "Send password reset email to user",
+                    "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object", "properties": {"email": {"type": "string", "format": "email"}}, "required": ["email"]}}}},
+                    "responses": {"200": {"description": "Reset link sent if email exists"}}
+                }
+            },
+            "/auth/reset-password": {
+                "post": {
+                    "tags": ["Authentication"],
+                    "summary": "Reset password",
+                    "description": "Reset password using token from email",
+                    "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object", "properties": {"token": {"type": "string"}, "password": {"type": "string"}}, "required": ["token", "password"]}}}},
+                    "responses": {"200": {"description": "Password reset successfully"}}
+                }
+            },
             
             # User management
             "/api/users": {
@@ -990,6 +1008,15 @@ def get_openapi_schema():
                     "description": "Introspect model capabilities",
                     "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
                     "responses": {"200": {"description": "Model introspection results"}}
+                }
+            },
+            "/api/models/categories": {
+                "get": {
+                    "tags": ["Models"],
+                    "summary": "List model categories",
+                    "description": "Get all unique categories for model configurations",
+                    "security": [{"BearerAuth": []}],
+                    "responses": {"200": {"description": "List of model categories"}}
                 }
             },
             
