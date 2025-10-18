@@ -1241,11 +1241,15 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
         return;
       }
 
+      // Generate a unique 6-digit hex UUID for the filename
+      const uniqueHex = Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0').toUpperCase();
+      const uniqueFilename = `workflow_${uniqueHex}.bpmn`;
+
       // Create a blob from the generated XML
       const blob = new Blob([generatedXML], { type: 'application/xml' });
       
-      // Create a File object from the blob with a default name
-      const file = new File([blob], 'workflow.bpmn', { type: 'application/xml' });
+      // Create a File object from the blob with a unique name
+      const file = new File([blob], uniqueFilename, { type: 'application/xml' });
       
       // Store the blob and open the workflow config dialog
       setGeneratedBpmnBlob(file);
