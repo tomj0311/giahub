@@ -558,7 +558,7 @@ function WorkflowExecution({ user }) {
       }}
     >
       {/* Header */}
-      <Grid container sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+      <Grid container sx={{ p: 2, borderBottom: '2px solid rgba(255, 255, 255, 0.08)' }}>
         <Grid item xs={12} display="flex" alignItems="center" justifyContent="space-between">
           <Grid container alignItems="center" spacing={2} sx={{ flex: 1 }}>
             <Grid item>
@@ -615,9 +615,8 @@ function WorkflowExecution({ user }) {
           md={4} 
           lg={3} 
           sx={{ 
-            borderRight: { xs: 'none', md: '1px solid' },
-            borderBottom: { xs: '1px solid', md: 'none' },
-            borderColor: 'divider',
+            borderRight: { xs: 'none', md: '2px solid rgba(255, 255, 255, 0.08)' },
+            borderBottom: { xs: '2px solid rgba(255, 255, 255, 0.08)', md: 'none' },
             display: 'flex',
             flexDirection: 'column',
             height: { xs: 'auto', md: '100%' },
@@ -626,7 +625,7 @@ function WorkflowExecution({ user }) {
           }}
         >
           {/* Left Header */}
-          <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
+          <Box sx={{ p: 2, borderBottom: '2px solid rgba(255, 255, 255, 0.08)', bgcolor: 'background.paper' }}>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
               <Typography variant="h6">
                 {workflowConfig?.name || 'Active Instances'}
