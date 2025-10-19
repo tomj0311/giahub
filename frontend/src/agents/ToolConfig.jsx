@@ -506,7 +506,7 @@ function ToolConfig({ user }) {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Box>
                     <Typography variant="h4" gutterBottom>
-                        Tool Configurations
+                        Tools
                     </Typography>
                     <Typography variant="body1" color="text.secondary">
                         Discover tools from ai.functions and configure their parameters.

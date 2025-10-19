@@ -653,7 +653,7 @@ function ModelConfig({ user }) {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Box>
                     <Typography variant="h4" gutterBottom>
-                        Model Configurations
+                        Models
                     </Typography>
                     <Typography variant="body1" color="text.secondary">
                         Configure and manage AI model settings for your agents.

@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BPMN from '../components/bpmn/BPMN';
-import JsonViewer from '../components/JsonViewer';
 import TaskCompletion from './TaskCompletion';
 import {
   Box,
+  Grid,
   Typography,
   Button,
   IconButton,
@@ -559,126 +559,154 @@ function WorkflowExecution({ user }) {
       }}
     >
       {/* Header */}
-      <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid', borderColor: 'divider' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <IconButton onClick={() => navigate('/dashboard/monitor')}>
-            <ArrowLeft />
-          </IconButton>
-          <Typography variant="h5" fontWeight="bold">
-            Workflow Execution
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            ID: <strong>{workflowId || 'NOT PROVIDED'}</strong>
-          </Typography>
-        </Box>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Tooltip title="Start workflow">
-            <span>
-              <Button
-                variant="contained"
-                color="primary"
-                startIcon={running ? <CircularProgress color="inherit" size={16} /> : <Play />}
-                disabled={!workflowId || running}
-                onClick={executeWorkflow}
-              >
-                {running ? 'Starting…' : 'Start Workflow'}
-              </Button>
-            </span>
-          </Tooltip>
-          <Tooltip title="Edit BPMN diagram">
-            <span>
-              <Button
-                variant="outlined"
-                color="secondary"
-                startIcon={<Edit />}
-                disabled={!bpmnData}
-                onClick={handleEditBPMN}
-              >
-                Edit BPMN
-              </Button>
-            </span>
-          </Tooltip>
-        </Stack>
-      </Box>
-
-      {/* Two Column Layout */}
-      <Box sx={{ display: 'flex', height: 'calc(100vh - 120px)', width: '100%', maxWidth: '100%', margin: '0', overflow: 'hidden' }}>
-        
-        {/* Left Pane - Instances */}
-        <Box sx={{ 
-          width: '450px', 
-          minWidth: '450px',
-          maxWidth: '450px',
-          borderRight: '1px solid', 
-          borderColor: 'divider',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden'
-        }}>
-          {/* Left Header */}
-          <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-              <Typography variant="h6">
-                {workflowConfig?.name || 'Active Instances'}
-              </Typography>
-              <IconButton 
-                size="small" 
-                onClick={() => loadAllWorkflows(currentPage)}
-                disabled={loadingWorkflows}
-                title="Refresh list"
-              >
-                <RefreshCw size={16} />
+      <Grid container sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+        <Grid item xs={12} display="flex" alignItems="center" justifyContent="space-between">
+          <Grid container alignItems="center" spacing={2} sx={{ flex: 1 }}>
+            <Grid item>
+              <IconButton onClick={() => navigate('/dashboard/monitor')}>
+                <ArrowLeft />
               </IconButton>
-            </Box>
-            {workflowConfig?.description && (
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                {workflowConfig.description}
+            </Grid>
+            <Grid item>
+              <Typography variant="h5" fontWeight="bold">
+                Workflow Execution
               </Typography>
-            )}
-            {selectedInstanceForBpmn && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 1 }}>
-                <Chip 
-                  label={`Selected: ${selectedInstanceForBpmn.substring(0, 8)}...`}
-                  color="primary"
-                  size="small"
-                  variant="outlined"
-                />
-                {(() => {
-                  const selectedWorkflow = allWorkflows.find(wf => wf.instance_id === selectedInstanceForBpmn);
-                  if (selectedWorkflow && selectedWorkflow.status !== 'completed') {
-                    return (
-                      <Chip 
-                        label={selectedWorkflow.status === 'error' ? 'Error' : selectedWorkflow.status === 'waiting' ? 'Waiting' : 'Incomplete'}
-                        size="small"
-                        variant="outlined"
-                        sx={{ 
-                          borderColor: selectedWorkflow.status === 'error' ? '#f44336' : '#ff9800',
-                          color: selectedWorkflow.status === 'error' ? '#f44336' : '#ff9800',
-                          '& .MuiChip-icon': {
-                            color: selectedWorkflow.status === 'error' ? '#f44336' : '#ff9800'
-                          }
-                        }}
-                        icon={selectedWorkflow.status === 'error' ? <XCircle size={12} /> : <Clock size={12} />}
-                      />
-                    );
-                  }
-                  return null;
-                })()}
-                {showJsonViewer && (
-                  <Chip 
-                    label="JSON View Active"
-                    size="small"
+            </Grid>
+            <Grid item>
+              <Typography variant="body2" color="text.secondary">
+                ID: <strong>{workflowId || 'NOT PROVIDED'}</strong>
+              </Typography>
+            </Grid>
+          </Grid>
+          <Grid item>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Tooltip title="Start workflow">
+                <span>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    startIcon={running ? <CircularProgress color="inherit" size={16} /> : <Play />}
+                    disabled={!workflowId || running}
+                    onClick={executeWorkflow}
+                  >
+                    {running ? 'Starting…' : 'Start Workflow'}
+                  </Button>
+                </span>
+              </Tooltip>
+              <Tooltip title="Edit BPMN diagram">
+                <span>
+                  <Button
                     variant="outlined"
                     color="secondary"
-                    icon={<Eye size={12} />}
-                  />
-                )}
-              </Box>
-            )}
-          </Box>
+                    startIcon={<Edit />}
+                    disabled={!bpmnData}
+                    onClick={handleEditBPMN}
+                  >
+                    Edit BPMN
+                  </Button>
+                </span>
+              </Tooltip>
+            </Stack>
+          </Grid>
+        </Grid>
+      </Grid>
+
+      {/* Two Column Layout */}
+      <Grid container sx={{ height: 'calc(100vh - 120px)', overflow: 'hidden' }}>
+        
+        {/* Left Pane - Instances */}
+        <Grid 
+          item 
+          xs={12} 
+          md={4} 
+          lg={3} 
+          xl={3} 
+          sx={{ 
+            borderRight: '1px solid', 
+            borderColor: 'divider',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            minWidth: '450px',
+            maxWidth: { xs: '100%', md: '450px' }
+          }}
+        >
+          {/* Left Header */}
+          <Grid container sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
+            <Grid item xs={12}>
+              <Grid container alignItems="center" spacing={2} sx={{ mb: 1 }}>
+                <Grid item xs>
+                  <Typography variant="h6">
+                    {workflowConfig?.name || 'Active Instances'}
+                  </Typography>
+                </Grid>
+                <Grid item>
+                  <IconButton 
+                    size="small" 
+                    onClick={() => loadAllWorkflows(currentPage)}
+                    disabled={loadingWorkflows}
+                    title="Refresh list"
+                  >
+                    <RefreshCw size={16} />
+                  </IconButton>
+                </Grid>
+              </Grid>
+              {workflowConfig?.description && (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  {workflowConfig.description}
+                </Typography>
+              )}
+              {selectedInstanceForBpmn && (
+                <Grid container spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                  <Grid item>
+                    <Chip 
+                      label={`Selected: ${selectedInstanceForBpmn.substring(0, 8)}...`}
+                      color="primary"
+                      size="small"
+                      variant="outlined"
+                    />
+                  </Grid>
+                  {(() => {
+                    const selectedWorkflow = allWorkflows.find(wf => wf.instance_id === selectedInstanceForBpmn);
+                    if (selectedWorkflow && selectedWorkflow.status !== 'completed') {
+                      return (
+                        <Grid item>
+                          <Chip 
+                            label={selectedWorkflow.status === 'error' ? 'Error' : selectedWorkflow.status === 'waiting' ? 'Waiting' : 'Incomplete'}
+                            size="small"
+                            variant="outlined"
+                            sx={{ 
+                              borderColor: selectedWorkflow.status === 'error' ? '#f44336' : '#ff9800',
+                              color: selectedWorkflow.status === 'error' ? '#f44336' : '#ff9800',
+                              '& .MuiChip-icon': {
+                                color: selectedWorkflow.status === 'error' ? '#f44336' : '#ff9800'
+                              }
+                            }}
+                            icon={selectedWorkflow.status === 'error' ? <XCircle size={12} /> : <Clock size={12} />}
+                          />
+                        </Grid>
+                      );
+                    }
+                    return null;
+                  })()}
+                  {showJsonViewer && (
+                    <Grid item>
+                      <Chip 
+                        label="JSON View Active"
+                        size="small"
+                        variant="outlined"
+                        color="secondary"
+                        icon={<Eye size={12} />}
+                      />
+                    </Grid>
+                  )}
+                </Grid>
+              )}
+            </Grid>
+          </Grid>
 
           {/* Instances List */}
-          <Box sx={{ flex: 1, overflow: 'auto' }}>
+          <Grid item xs={12} sx={{ flex: 1, overflow: 'auto' }}>
             {error && (
               <Alert severity="error" sx={{ m: 2 }}>
                 {error}
@@ -686,9 +714,11 @@ function WorkflowExecution({ user }) {
             )}
             
             {loadingWorkflows ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-                <CircularProgress size={20} />
-              </Box>
+              <Grid container justifyContent="center" sx={{ p: 2 }}>
+                <Grid item>
+                  <CircularProgress size={20} />
+                </Grid>
+              </Grid>
             ) : allWorkflows.length > 0 ? (
               <TableContainer key={refreshKey}>
                 <Table size="small">
@@ -809,27 +839,31 @@ function WorkflowExecution({ user }) {
                 </Table>
               </TableContainer>
             ) : (
-              <Box sx={{ p: 4, textAlign: 'center' }}>
-                <Typography color="text.secondary">No workflow instances found</Typography>
-              </Box>
+              <Grid container justifyContent="center" sx={{ p: 4 }}>
+                <Grid item>
+                  <Typography color="text.secondary">No workflow instances found</Typography>
+                </Grid>
+              </Grid>
             )}
             
             {/* Pagination */}
             {totalPages > 1 && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-                <Pagination 
-                  count={totalPages} 
-                  page={currentPage} 
-                  onChange={handlePageChange}
-                  color="primary"
-                  size="small"
-                />
-              </Box>
+              <Grid container justifyContent="center" sx={{ p: 2 }}>
+                <Grid item>
+                  <Pagination 
+                    count={totalPages} 
+                    page={currentPage} 
+                    onChange={handlePageChange}
+                    color="primary"
+                    size="small"
+                  />
+                </Grid>
+              </Grid>
             )}
 
             {/* JSON Viewer */}
             {showJsonViewer && selectedInstanceData && (
-              <Box sx={{ p: 2 }}>
+              <Grid item xs={12} sx={{ p: 2 }}>
                 <JsonViewer
                   data={selectedInstanceData}
                   title={`Instance Data: ${selectedInstanceData.instance_id || 'Unknown'}`}
@@ -838,33 +872,47 @@ function WorkflowExecution({ user }) {
                     setSelectedInstanceData(null);
                   }}
                 />
-              </Box>
+              </Grid>
             )}
-          </Box>
-        </Box>
+          </Grid>
+        </Grid>
 
         {/* Right Pane - BPMN Preview */}
-        <Box sx={{ 
-          flex: 1,
-          display: 'flex', 
-          flexDirection: 'column', 
-          overflow: 'hidden',
-          minWidth: 0
-        }}>
+        <Grid 
+          item 
+          xs={12} 
+          md={8} 
+          lg={9} 
+          xl={9} 
+          sx={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            overflow: 'hidden',
+            minWidth: 0
+          }}
+        >
           {/* BPMN Content */}
-          <Box sx={{ 
-            width: '100%',
-            height: 'calc(100vh - 120px)', 
-            position: 'relative', 
-            overflow: 'hidden' 
-          }}>
+          <Grid 
+            item 
+            xs={12} 
+            sx={{ 
+              width: '100%',
+              height: 'calc(100vh - 120px)', 
+              position: 'relative', 
+              overflow: 'hidden' 
+            }}
+          >
             {loadingWorkflow ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                <CircularProgress size={40} />
-                <Typography variant="body2" sx={{ ml: 2 }}>
-                  Loading workflow...
-                </Typography>
-              </Box>
+              <Grid container justifyContent="center" alignItems="center" sx={{ height: '100%' }}>
+                <Grid item>
+                  <CircularProgress size={40} />
+                </Grid>
+                <Grid item sx={{ ml: 2 }}>
+                  <Typography variant="body2">
+                    Loading workflow...
+                  </Typography>
+                </Grid>
+              </Grid>
             ) : bpmnData ? (
               <BPMN 
                 readOnly={true}
@@ -885,21 +933,25 @@ function WorkflowExecution({ user }) {
                 }}
               />
             ) : workflowId && !loadingWorkflow ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                <Alert severity="warning">
-                  No workflow diagram available for this workflow ID.
-                </Alert>
-              </Box>
+              <Grid container justifyContent="center" alignItems="center" sx={{ height: '100%' }}>
+                <Grid item>
+                  <Alert severity="warning">
+                    No workflow diagram available for this workflow ID.
+                  </Alert>
+                </Grid>
+              </Grid>
             ) : (
-              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                <Typography color="text.secondary">
-                  Select a workflow to view the diagram
-                </Typography>
-              </Box>
+              <Grid container justifyContent="center" alignItems="center" sx={{ height: '100%' }}>
+                <Grid item>
+                  <Typography color="text.secondary">
+                    Select a workflow to view the diagram
+                  </Typography>
+                </Grid>
+              </Grid>
             )}
-          </Box>
-        </Box>
-      </Box>
+          </Grid>
+        </Grid>
+      </Grid>
 
       {/* User Task Dialog */}
       <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>

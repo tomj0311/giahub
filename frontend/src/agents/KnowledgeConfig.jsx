@@ -642,7 +642,7 @@ export default function KnowledgeConfig({ user }) {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h4" gutterBottom>
-            Knowledge Collections
+            Knowledge
           </Typography>
           <Typography variant="body1" color="text.secondary">
             Manage knowledge collections for file upload and vector indexing.
