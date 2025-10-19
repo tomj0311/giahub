@@ -97,7 +97,7 @@ function ProjectPlanning({ user, projectId }) {
   const [pagination, setPagination] = useState(() => {
     const storedPagination = loadStateFromStorage(STORAGE_KEYS.PAGINATION, {
       page: 0,
-      rowsPerPage: 10,
+      rowsPerPage: 8,
       total: 0
     })
     console.log('[ProjectPlanning] Initial pagination from localStorage:', storedPagination)
@@ -1070,7 +1070,7 @@ function ProjectPlanning({ user, projectId }) {
                 onPageChange={handlePageChange}
                 rowsPerPage={pagination.rowsPerPage}
                 onRowsPerPageChange={handleRowsPerPageChange}
-                rowsPerPageOptions={[10, 20, 50, 100]}
+                rowsPerPageOptions={[8, 16, 32, 64]}
               />
             </>
           )}
