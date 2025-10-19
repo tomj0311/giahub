@@ -73,8 +73,18 @@ function GanttChart({ user, projectId: propProjectId }) {
   const createTooltipContent = (item, type = 'project') => {
     const isProject = type === 'project'
     const title = isProject ? item.name : item.subject
+    
+    // Ensure item and item.status exist before calling getStatusColor
+    if (!item || (!item.status && item.status !== 0)) {
+      console.warn(`[GanttChart] Item or status is missing in createTooltipContent:`, item)
+      return null
+    }
+    
     const statusColor = getStatusColor(item.status)
     const dueDateStyle = getDueDateStyle(item.due_date, item.status)
+    
+    // Ensure statusColor is valid
+    const safeStatusColor = theme.palette[statusColor] ? statusColor : 'primary'
     
     // Calculate duration
     const startDate = item.start_date ? new Date(item.start_date) : null
@@ -91,7 +101,7 @@ function GanttChart({ user, projectId: propProjectId }) {
         maxWidth: 300,
         minWidth: 230,
         bgcolor: theme.palette.mode === 'light' ? '#ffffff' : 'background.paper',
-        border: `2px solid ${theme.palette[statusColor].main}`,
+        border: `2px solid ${theme.palette[safeStatusColor].main}`,
         borderRadius: 2,
         boxShadow: 3,
         color: theme.palette.mode === 'light' ? '#000000' : 'text.primary'
@@ -102,7 +112,7 @@ function GanttChart({ user, projectId: propProjectId }) {
             sx={{ 
               width: 6, 
               height: 6, 
-              bgcolor: `${statusColor}.main`, 
+              bgcolor: `${safeStatusColor}.main`, 
               borderRadius: '50%' 
             }} 
           />
@@ -116,7 +126,7 @@ function GanttChart({ user, projectId: propProjectId }) {
           </Typography>
           <Chip 
             label={getStatusLabel(item.status)} 
-            color={statusColor} 
+            color={safeStatusColor} 
             size="small" 
             sx={{ fontSize: '0.7rem' }}
           />
@@ -170,7 +180,7 @@ function GanttChart({ user, projectId: propProjectId }) {
                 }}>
                   <Box sx={{ 
                     height: '100%', 
-                    bgcolor: theme.palette[statusColor].main, 
+                    bgcolor: theme.palette[safeStatusColor].main, 
                     width: `${item.progress || 0}%`,
                     transition: 'width 0.3s ease'
                   }} />
@@ -829,6 +839,15 @@ function GanttChart({ user, projectId: propProjectId }) {
   }
 
   const getStatusColor = (status) => {
+    // Add debug logging and handle null/undefined status
+    console.log(`[GanttChart] Getting status color for status: "${status}" (type: ${typeof status})`)
+    
+    // Handle null, undefined, or empty status
+    if (!status || status === null || status === undefined || status === '') {
+      console.warn(`[GanttChart] Status is null/undefined/empty: "${status}", using 'primary'`)
+      return 'primary'
+    }
+    
     const colors = {
       ON_TRACK: 'success',
       AT_RISK: 'warning',
@@ -840,7 +859,16 @@ function GanttChart({ user, projectId: propProjectId }) {
       'Completed': 'success',
       'Cancelled': 'error'
     }
-    return colors[status] || 'default'
+    const color = colors[status] || 'primary'
+    
+    // Ensure the color exists in the theme palette
+    if (!theme.palette[color]) {
+      console.warn(`[GanttChart] Color '${color}' not found in theme palette for status '${status}', using 'primary'`)
+      return 'primary'
+    }
+    
+    console.log(`[GanttChart] Status '${status}' mapped to color '${color}'`)
+    return color
   }
 
   const getStatusLabel = (status) => {
@@ -885,6 +913,15 @@ function GanttChart({ user, projectId: propProjectId }) {
     const hasActivities = activitiesByProject[proj.id] && activitiesByProject[proj.id].length > 0
     const hasChildren = proj.children && proj.children.length > 0
     const isExpanded = ganttExpanded[proj.id]
+    
+    // Safety check for project data
+    if (!proj) {
+      console.warn(`[GanttChart] Project is null/undefined in renderGanttProjectNode`)
+      return null
+    }
+    
+    const statusColor = getStatusColor(proj.status || 'New')
+    const safeStatusColor = theme.palette[statusColor] ? statusColor : 'primary'
 
     console.log(`[Render] Project: ${proj.name}, Level: ${level}, HasChildren: ${hasChildren}, Children Count: ${proj.children?.length || 0}, IsExpanded: ${isExpanded}`)
 
@@ -898,7 +935,7 @@ function GanttChart({ user, projectId: propProjectId }) {
             bgcolor: level > 0 ? alpha('#000', 0.01 * level) : 'transparent'
           }}
         >
-          <TableCell sx={{ pl: 2 + level * 4, borderLeft: '3px solid', borderLeftColor: `${getStatusColor(proj.status)}.main` }}>
+          <TableCell sx={{ pl: 2 + level * 4, borderLeft: '3px solid', borderLeftColor: theme.palette[safeStatusColor].main }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               {hasActivities || hasChildren ? (
                 <IconButton
@@ -920,7 +957,7 @@ function GanttChart({ user, projectId: propProjectId }) {
           <TableCell>
             <Chip
               label={getStatusLabel(proj.status)}
-              color={getStatusColor(proj.status)}
+              color={safeStatusColor}
               size="small"
             />
           </TableCell>
@@ -941,49 +978,60 @@ function GanttChart({ user, projectId: propProjectId }) {
         </TableRow>
 
         {/* Render activities if expanded and has activities */}
-        {isExpanded && hasActivities && activitiesByProject[proj.id].map(activity => (
-          <TableRow
-            key={`activity-${activity.id}`}
-            onClick={() => navigate(`/dashboard/projects/activity/${activity.id}`, {
-              state: {
-                returnTo: '/dashboard/projects/gantt',
-                projectId: projectId,
-                projectName: projectName
-              }
-            })}
-            sx={{
-              '&:hover': {
-                bgcolor: 'action.hover',
-                cursor: 'pointer'
-              },
-              bgcolor: alpha('#000', 0.02 + 0.01 * level)
-            }}
-          >
-            <TableCell sx={{ pl: 6 + level * 4 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Box sx={{ width: 24 }} />
-                <Typography variant="body2">{activity.subject}</Typography>
-              </Box>
-            </TableCell>
-            <TableCell>
-              <Chip
-                label={activity.status}
-                color={getStatusColor(activity.status)}
-                size="small"
-                variant="outlined"
-              />
-            </TableCell>
-            <TableCell>{activity.assignee || '-'}</TableCell>
-            <TableCell>{activity.approver || '-'}</TableCell>
-            <TableCell>
-              {formatDate(activity.start_date)}
-            </TableCell>
-            <TableCell sx={getDueDateStyle(activity.due_date, activity.status)}>
-              {formatDate(activity.due_date)}
-            </TableCell>
-            <TableCell>{activity.progress || 0}%</TableCell>
-          </TableRow>
-        ))}
+        {isExpanded && hasActivities && activitiesByProject[proj.id].map(activity => {
+          // Safety check for activity data
+          if (!activity) {
+            console.warn(`[GanttChart] Activity is null/undefined in table render`)
+            return null
+          }
+          
+          const activityStatusColor = getStatusColor(activity.status || 'New')
+          const safeActivityStatusColor = theme.palette[activityStatusColor] ? activityStatusColor : 'primary'
+          
+          return (
+            <TableRow
+              key={`activity-${activity.id}`}
+              onClick={() => navigate(`/dashboard/projects/activity/${activity.id}`, {
+                state: {
+                  returnTo: '/dashboard/projects/gantt',
+                  projectId: projectId,
+                  projectName: projectName
+                }
+              })}
+              sx={{
+                '&:hover': {
+                  bgcolor: 'action.hover',
+                  cursor: 'pointer'
+                },
+                bgcolor: alpha('#000', 0.02 + 0.01 * level)
+              }}
+            >
+              <TableCell sx={{ pl: 6 + level * 4 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ width: 24 }} />
+                  <Typography variant="body2">{activity.subject}</Typography>
+                </Box>
+              </TableCell>
+              <TableCell>
+                <Chip
+                  label={activity.status || 'New'}
+                  color={safeActivityStatusColor}
+                  size="small"
+                  variant="outlined"
+                />
+              </TableCell>
+              <TableCell>{activity.assignee || '-'}</TableCell>
+              <TableCell>{activity.approver || '-'}</TableCell>
+              <TableCell>
+                {formatDate(activity.start_date)}
+              </TableCell>
+              <TableCell sx={getDueDateStyle(activity.due_date, activity.status)}>
+                {formatDate(activity.due_date)}
+              </TableCell>
+              <TableCell>{activity.progress || 0}%</TableCell>
+            </TableRow>
+          )
+        })}
 
         {/* Render child projects if expanded and has children */}
         {isExpanded && hasChildren && (
@@ -1000,6 +1048,15 @@ function GanttChart({ user, projectId: propProjectId }) {
     const hasActivities = activitiesByProject[proj.id] && activitiesByProject[proj.id].length > 0
     const hasChildren = proj.children && proj.children.length > 0
     const isExpanded = ganttExpanded[proj.id]
+    
+    // Safety check for project data
+    if (!proj) {
+      console.warn(`[GanttChart] Project is null/undefined in renderTimelineNode`)
+      return null
+    }
+    
+    const statusColor = getStatusColor(proj.status || 'New')
+    const safeStatusColor = theme.palette[statusColor] ? statusColor : 'primary'
 
     console.log(`[Timeline Render] Project: ${proj.name}, Level: ${level}, HasChildren: ${hasChildren}, IsExpanded: ${isExpanded}`)
 
@@ -1023,7 +1080,7 @@ function GanttChart({ user, projectId: propProjectId }) {
                   sx: {
                     bgcolor: 'transparent',
                     '& .MuiTooltip-arrow': {
-                      color: `${getStatusColor(proj.status)}.main`,
+                      color: theme.palette[safeStatusColor].main,
                     },
                   },
                 },
@@ -1034,19 +1091,19 @@ function GanttChart({ user, projectId: propProjectId }) {
                 top: '50%',
                 transform: 'translateY(-50%)',
                 height: 20,
-                backgroundColor: `${getStatusColor(proj.status)}.main`,
+                backgroundColor: theme.palette[safeStatusColor].main,
                 opacity: 0.85 - (level * 0.05),
                 borderRadius: 2,
                 cursor: 'pointer',
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                border: `1px solid ${alpha(theme.palette[getStatusColor(proj.status)].main, 0.3)}`,
-                boxShadow: `0 2px 4px ${alpha(theme.palette[getStatusColor(proj.status)].main, 0.2)}`,
+                border: `1px solid ${alpha(theme.palette[safeStatusColor].main, 0.3)}`,
+                boxShadow: `0 2px 4px ${alpha(theme.palette[safeStatusColor].main, 0.2)}`,
                 '&:hover': {
                   opacity: 1,
                   height: 24,
-                  backgroundColor: `${getStatusColor(proj.status)}.dark`,
+                  backgroundColor: theme.palette[safeStatusColor].dark,
                   transform: 'translateY(-50%) scale(1.05)',
-                  boxShadow: `0 4px 12px ${alpha(theme.palette[getStatusColor(proj.status)].main, 0.4)}`,
+                  boxShadow: `0 4px 12px ${alpha(theme.palette[safeStatusColor].main, 0.4)}`,
                   zIndex: 10,
                 },
                 '&:active': {
@@ -1059,69 +1116,80 @@ function GanttChart({ user, projectId: propProjectId }) {
         </Box>
 
         {/* Render activity timelines if expanded and has activities */}
-        {isExpanded && hasActivities && activitiesByProject[proj.id].map(activity => (
-          <Box key={`timeline-activity-${activity.id}`} sx={{ 
-            height: 41, 
-            position: 'relative',
-            bgcolor: alpha('#000', 0.02 + 0.01 * level)
-          }}>
-            {activity.start_date && activity.due_date && (
-              <Tooltip 
-                title={createTooltipContent(activity, 'activity')}
-                arrow
-                placement="top"
-                enterDelay={200}
-                leaveDelay={300}
-                enterNextDelay={100}
-                componentsProps={{
-                  tooltip: {
-                    sx: {
-                      bgcolor: 'transparent',
-                      '& .MuiTooltip-arrow': {
-                        color: `${getStatusColor(activity.status)}.main`,
+        {isExpanded && hasActivities && activitiesByProject[proj.id].map(activity => {
+          // Safety check for activity data
+          if (!activity) {
+            console.warn(`[GanttChart] Activity is null/undefined in timeline render`)
+            return null
+          }
+          
+          const activityStatusColor = getStatusColor(activity.status || 'New')
+          const safeActivityStatusColor = theme.palette[activityStatusColor] ? activityStatusColor : 'primary'
+          
+          return (
+            <Box key={`timeline-activity-${activity.id}`} sx={{ 
+              height: 41, 
+              position: 'relative',
+              bgcolor: alpha('#000', 0.02 + 0.01 * level)
+            }}>
+              {activity.start_date && activity.due_date && (
+                <Tooltip 
+                  title={createTooltipContent(activity, 'activity')}
+                  arrow
+                  placement="top"
+                  enterDelay={200}
+                  leaveDelay={300}
+                  enterNextDelay={100}
+                  componentsProps={{
+                    tooltip: {
+                      sx: {
+                        bgcolor: 'transparent',
+                        '& .MuiTooltip-arrow': {
+                          color: theme.palette[safeActivityStatusColor].main,
+                        },
                       },
                     },
-                  },
-                }}
-              >
-                <Box 
-                  onClick={() => navigate(`/dashboard/projects/activity/${activity.id}`, {
-                    state: {
-                      returnTo: '/dashboard/projects/gantt',
-                      projectId: projectId,
-                      projectName: projectName
-                    }
-                  })}
-                  sx={{
-                    position: 'absolute',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    height: 16,
-                    backgroundColor: `${getStatusColor(activity.status)}.main`,
-                    opacity: 0.75,
-                    borderRadius: 2,
-                    cursor: 'pointer',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    border: `1px solid ${alpha(theme.palette[getStatusColor(activity.status)].main, 0.3)}`,
-                    boxShadow: `0 1px 3px ${alpha(theme.palette[getStatusColor(activity.status)].main, 0.2)}`,
-                    '&:hover': {
-                      opacity: 1,
-                      height: 20,
-                      backgroundColor: `${getStatusColor(activity.status)}.dark`,
-                      transform: 'translateY(-50%) scale(1.05)',
-                      boxShadow: `0 3px 8px ${alpha(theme.palette[getStatusColor(activity.status)].main, 0.4)}`,
-                      zIndex: 10,
-                    },
-                    '&:active': {
-                      transform: 'translateY(-50%) scale(0.98)',
-                    },
-                    ...calculateBarPosition(activity.start_date, activity.due_date)
-                  }} 
-                />
-              </Tooltip>
-            )}
-          </Box>
-        ))}
+                  }}
+                >
+                  <Box 
+                    onClick={() => navigate(`/dashboard/projects/activity/${activity.id}`, {
+                      state: {
+                        returnTo: '/dashboard/projects/gantt',
+                        projectId: projectId,
+                        projectName: projectName
+                      }
+                    })}
+                    sx={{
+                      position: 'absolute',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      height: 16,
+                      backgroundColor: theme.palette[safeActivityStatusColor].main,
+                      opacity: 0.75,
+                      borderRadius: 2,
+                      cursor: 'pointer',
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                      border: `1px solid ${alpha(theme.palette[safeActivityStatusColor].main, 0.3)}`,
+                      boxShadow: `0 1px 3px ${alpha(theme.palette[safeActivityStatusColor].main, 0.2)}`,
+                      '&:hover': {
+                        opacity: 1,
+                        height: 20,
+                        backgroundColor: theme.palette[safeActivityStatusColor].dark,
+                        transform: 'translateY(-50%) scale(1.05)',
+                        boxShadow: `0 3px 8px ${alpha(theme.palette[safeActivityStatusColor].main, 0.4)}`,
+                        zIndex: 10,
+                      },
+                      '&:active': {
+                        transform: 'translateY(-50%) scale(0.98)',
+                      },
+                      ...calculateBarPosition(activity.start_date, activity.due_date)
+                    }} 
+                  />
+                </Tooltip>
+              )}
+            </Box>
+          )
+        })}
 
         {/* Render child project timelines if expanded and has children */}
         {isExpanded && hasChildren && (
