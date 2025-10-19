@@ -156,7 +156,9 @@ export default function ProjectStatusHome({ user }) {
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState({
     total: 0,
-    inProgress: 0,
+    onTrack: 0,
+    atRisk: 0,
+    offTrack: 0,
     onHold: 0,
     completed: 0
   })
@@ -326,35 +328,61 @@ export default function ProjectStatusHome({ user }) {
         const tree = result.data.tree || []
         setProjectTree(tree)
 
-        // Calculate summary from tree data
-        const allProjects = flattenTree(tree)
+        // Calculate summary from tree data (excluding district nodes themselves)
+        const allProjects = tree.reduce((acc, district) => {
+          if (district.children) {
+            return acc.concat(flattenTree(district.children))
+          }
+          return acc
+        }, [])
+        
+        // Debug: Log project statuses to verify calculations
+        const statusCounts = allProjects.reduce((acc, project) => {
+          acc[project.status] = (acc[project.status] || 0) + 1
+          return acc
+        }, {})
+        console.log('Project status breakdown:', statusCounts)
+        
         const summaryData = {
           total: allProjects.length,
-          inProgress: allProjects.filter(p => p.status === 'ON_TRACK' || p.status === 'AT_RISK').length,
-          onHold: allProjects.filter(p => p.status === 'OFF_TRACK').length,
+          onTrack: allProjects.filter(p => p.status === 'ON_TRACK').length,
+          atRisk: allProjects.filter(p => p.status === 'AT_RISK').length,
+          offTrack: allProjects.filter(p => p.status === 'OFF_TRACK').length,
+          onHold: allProjects.filter(p => p.status === 'ON_HOLD').length,
           completed: allProjects.filter(p => p.status === 'COMPLETED').length
         }
+        
+        // Debug: Verify totals add up
+        const calculatedTotal = summaryData.onTrack + summaryData.atRisk + summaryData.offTrack + summaryData.onHold + summaryData.completed
+        console.log('Summary totals - Total:', summaryData.total, 'Calculated:', calculatedTotal, 'Match:', summaryData.total === calculatedTotal)
 
         setSummary(summaryData)
 
         // Process first-level projects as districts
         const districts = tree.map(district => {
-          const allChildren = flattenTree([district])
+          // Get only children projects, not the district itself
+          const allChildren = district.children ? flattenTree(district.children) : []
           const total = allChildren.length
-          const inProgress = allChildren.filter(p => p.status === 'ON_TRACK' || p.status === 'AT_RISK').length
-          const onHold = allChildren.filter(p => p.status === 'OFF_TRACK').length
+          const onTrack = allChildren.filter(p => p.status === 'ON_TRACK').length
+          const atRisk = allChildren.filter(p => p.status === 'AT_RISK').length
+          const offTrack = allChildren.filter(p => p.status === 'OFF_TRACK').length
+          const onHoldOnly = allChildren.filter(p => p.status === 'ON_HOLD').length
           const completed = allChildren.filter(p => p.status === 'COMPLETED').length
 
           return {
             id: district.id,
             name: district.name,
             total,
-            inProgress,
-            onHold,
+            onTrack,
+            atRisk,
+            offTrack,
+            onHoldOnly,
             completed,
             // Calculate percentages for trend display
-            inProgressPercent: total > 0 ? ((inProgress / total) * 100).toFixed(1) : '0',
-            onHoldPercent: total > 0 ? ((onHold / total) * 100).toFixed(1) : '0',
+            onTrackPercent: total > 0 ? ((onTrack / total) * 100).toFixed(1) : '0',
+            atRiskPercent: total > 0 ? ((atRisk / total) * 100).toFixed(1) : '0',
+            offTrackPercent: total > 0 ? ((offTrack / total) * 100).toFixed(1) : '0',
+            onHoldPercent: total > 0 ? ((onHoldOnly / total) * 100).toFixed(1) : '0',
             completedPercent: total > 0 ? ((completed / total) * 100).toFixed(1) : '0'
           }
         })
@@ -460,7 +488,7 @@ export default function ProjectStatusHome({ user }) {
 
       {/* Summary Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2}>
           <SummaryCard
             title="Total Projects"
             value={summary.total}
@@ -470,34 +498,54 @@ export default function ProjectStatusHome({ user }) {
             delay={0}
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2}>
           <SummaryCard
-            title="Projects in Progress"
-            value={summary.inProgress}
-            subtitle="-2.06%"
+            title="On Track"
+            value={summary.onTrack}
+            subtitle="+1.25%"
             icon={Activity}
             gradient="linear-gradient(135deg, #66BB6A 0%, #4CAF50 100%)"
             delay={100}
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2}>
           <SummaryCard
-            title="Projects On Hold"
+            title="At Risk"
+            value={summary.atRisk}
+            subtitle="-2.06%"
+            icon={TrendingUp}
+            gradient="linear-gradient(135deg, #FF9800 0%, #F57C00 100%)"
+            delay={200}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={2}>
+          <SummaryCard
+            title="Off Track"
+            value={summary.offTrack}
+            subtitle="+1.8%"
+            icon={TrendingDown}
+            gradient="linear-gradient(135deg, #F44336 0%, #D32F2F 100%)"
+            delay={300}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={2}>
+          <SummaryCard
+            title="On Hold"
             value={summary.onHold}
             subtitle="+2.46%"
             icon={PauseCircle}
             gradient="linear-gradient(135deg, #AB47BC 0%, #9C27B0 100%)"
-            delay={200}
+            delay={400}
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2}>
           <SummaryCard
-            title="Projects Completed"
+            title="Completed"
             value={summary.completed}
             subtitle="+3.36%"
             icon={CheckCircle}
             gradient="linear-gradient(135deg, #5C6BC0 0%, #3F51B5 100%)"
-            delay={300}
+            delay={500}
           />
         </Grid>
       </Grid>
@@ -567,7 +615,7 @@ export default function ProjectStatusHome({ user }) {
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
-                  <TableCell sx={{ fontWeight: 'bold', width: '25%' }}>
+                  <TableCell sx={{ fontWeight: 'bold', width: '20%' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }} onClick={() => handleSort('name')}>
                       District
                       {sortField === 'name' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
@@ -582,19 +630,35 @@ export default function ProjectStatusHome({ user }) {
                     </Box>
                   </TableCell>
                   <TableCell align="center" sx={{ fontWeight: 'bold' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', justifyContent: 'center' }} onClick={() => handleSort('inProgress')}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', justifyContent: 'center' }} onClick={() => handleSort('onTrack')}>
                       <Typography variant="body2" color="text.secondary">
-                        In Progress
+                        On Track
                       </Typography>
-                      {sortField === 'inProgress' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                      {sortField === 'onTrack' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
                     </Box>
                   </TableCell>
                   <TableCell align="center" sx={{ fontWeight: 'bold' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', justifyContent: 'center' }} onClick={() => handleSort('onHold')}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', justifyContent: 'center' }} onClick={() => handleSort('atRisk')}>
+                      <Typography variant="body2" color="text.secondary">
+                        At Risk
+                      </Typography>
+                      {sortField === 'atRisk' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                    </Box>
+                  </TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 'bold' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', justifyContent: 'center' }} onClick={() => handleSort('offTrack')}>
+                      <Typography variant="body2" color="text.secondary">
+                        Off Track
+                      </Typography>
+                      {sortField === 'offTrack' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                    </Box>
+                  </TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 'bold' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', justifyContent: 'center' }} onClick={() => handleSort('onHoldOnly')}>
                       <Typography variant="body2" color="text.secondary">
                         On Hold
                       </Typography>
-                      {sortField === 'onHold' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                      {sortField === 'onHoldOnly' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
                     </Box>
                   </TableCell>
                   <TableCell align="center" sx={{ fontWeight: 'bold' }}>
@@ -605,7 +669,7 @@ export default function ProjectStatusHome({ user }) {
                       {sortField === 'completed' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
                     </Box>
                   </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold', width: '15%' }}>
+                  <TableCell align="right" sx={{ fontWeight: 'bold', width: '12%' }}>
                     Actions
                   </TableCell>
                 </TableRow>
@@ -613,7 +677,7 @@ export default function ProjectStatusHome({ user }) {
               <TableBody>
                 {filteredAndSortedData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
                       <Typography variant="body2" color="text.secondary">
                         {districtData.length === 0 
                           ? 'No district data available. Create first-level projects to see data.'
@@ -652,11 +716,11 @@ export default function ProjectStatusHome({ user }) {
                       <TableCell align="center">
                         <Box>
                           <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                            {district.inProgress}
+                            {district.onTrack}
                           </Typography>
                           {district.total > 0 && (
                             <Chip
-                              label={`+${district.inProgressPercent}%`}
+                              label={`${district.onTrackPercent}%`}
                               size="small"
                               sx={{
                                 mt: 0.5,
@@ -673,18 +737,60 @@ export default function ProjectStatusHome({ user }) {
                       <TableCell align="center">
                         <Box>
                           <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                            {district.onHold}
+                            {district.atRisk}
                           </Typography>
                           {district.total > 0 && (
                             <Chip
-                              label={`+${district.onHoldPercent}%`}
+                              label={`${district.atRiskPercent}%`}
                               size="small"
                               sx={{
                                 mt: 0.5,
                                 height: 20,
                                 fontSize: '0.7rem',
-                                bgcolor: alpha(theme.palette.warning.main, 0.1),
-                                color: theme.palette.warning.main,
+                                bgcolor: alpha('#FF9800', 0.1),
+                                color: '#FF9800',
+                                fontWeight: 'bold'
+                              }}
+                            />
+                          )}
+                        </Box>
+                      </TableCell>
+                      <TableCell align="center">
+                        <Box>
+                          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                            {district.offTrack}
+                          </Typography>
+                          {district.total > 0 && (
+                            <Chip
+                              label={`${district.offTrackPercent}%`}
+                              size="small"
+                              sx={{
+                                mt: 0.5,
+                                height: 20,
+                                fontSize: '0.7rem',
+                                bgcolor: alpha(theme.palette.error.main, 0.1),
+                                color: theme.palette.error.main,
+                                fontWeight: 'bold'
+                              }}
+                            />
+                          )}
+                        </Box>
+                      </TableCell>
+                      <TableCell align="center">
+                        <Box>
+                          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                            {district.onHoldOnly}
+                          </Typography>
+                          {district.total > 0 && (
+                            <Chip
+                              label={`${district.onHoldPercent}%`}
+                              size="small"
+                              sx={{
+                                mt: 0.5,
+                                height: 20,
+                                fontSize: '0.7rem',
+                                bgcolor: alpha('#AB47BC', 0.1),
+                                color: '#AB47BC',
                                 fontWeight: 'bold'
                               }}
                             />
@@ -698,14 +804,14 @@ export default function ProjectStatusHome({ user }) {
                           </Typography>
                           {district.total > 0 && (
                             <Chip
-                              label={`-${district.completedPercent}%`}
+                              label={`${district.completedPercent}%`}
                               size="small"
                               sx={{
                                 mt: 0.5,
                                 height: 20,
                                 fontSize: '0.7rem',
-                                bgcolor: alpha(theme.palette.error.main, 0.1),
-                                color: theme.palette.error.main,
+                                bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                color: theme.palette.primary.main,
                                 fontWeight: 'bold'
                               }}
                             />
@@ -754,8 +860,10 @@ export default function ProjectStatusHome({ user }) {
         {[
           { key: 'name', label: 'District Name' },
           { key: 'total', label: 'Total Projects' },
-          { key: 'inProgress', label: 'In Progress' },
-          { key: 'onHold', label: 'On Hold' },
+          { key: 'onTrack', label: 'On Track' },
+          { key: 'atRisk', label: 'At Risk' },
+          { key: 'offTrack', label: 'Off Track' },
+          { key: 'onHoldOnly', label: 'On Hold' },
           { key: 'completed', label: 'Completed' }
         ].map((field) => (
           <MenuItem
@@ -816,8 +924,10 @@ export default function ProjectStatusHome({ user }) {
               >
                 <MenuItem value="name">District Name</MenuItem>
                 <MenuItem value="total">Total Projects</MenuItem>
-                <MenuItem value="inProgress">In Progress</MenuItem>
-                <MenuItem value="onHold">On Hold</MenuItem>
+                <MenuItem value="onTrack">On Track</MenuItem>
+                <MenuItem value="atRisk">At Risk</MenuItem>
+                <MenuItem value="offTrack">Off Track</MenuItem>
+                <MenuItem value="onHoldOnly">On Hold</MenuItem>
                 <MenuItem value="completed">Completed</MenuItem>
               </Select>
             </FormControl>

@@ -124,7 +124,9 @@ function ProjectForm({ user }) {
           const mappedUsers = users.map(user => ({
             id: user.id,
             email: user.email,
-            displayName: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email
+            firstName: user.firstName || '',
+            lastName: user.lastName || '',
+            displayName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email
           }))
           console.log('Mapped users for dropdown:', mappedUsers)
           setTenantUsers(mappedUsers)
