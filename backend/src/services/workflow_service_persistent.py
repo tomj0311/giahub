@@ -474,6 +474,10 @@ class WorkflowServicePersistent:
             # Clean workflow data before serialization
             workflow.data = _clean_data_for_serialization(workflow.data)
             
+            # Clean all task data using existing _clean_data_for_serialization function
+            for task in workflow.get_tasks():
+                task.data = _clean_data_for_serialization(task.data)
+            
             serializer = BpmnWorkflowSerializer()
             serialized_json = serializer.serialize_json(workflow)
 

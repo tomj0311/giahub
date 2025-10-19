@@ -971,10 +971,18 @@ export default function AgentPlayground({ user }) {
         throw new Error('No authentication token available')
       }
 
+      // Ensure we have some user identification for filtering conversations
+      if (!user?.id && !user?.username && !user?.email) {
+        console.warn('No user identification available for filtering conversations')
+      }
+
       const params = {
         page: currentPage,
         page_size: pageSize,
-        ...(selected && { agent_name: selected })
+        ...(selected && { agent_name: selected }),
+        ...(user?.id && { userId: user.id }),
+        ...(user?.username && !user?.id && { username: user.username }),
+        ...(user?.email && !user?.id && !user?.username && { email: user.email })
       }
       
       const result = await agentRuntimeService.listConversations(token, params)
