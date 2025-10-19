@@ -102,24 +102,46 @@ function ProjectForm({ user }) {
 
   // Load tenant users
   const loadTenantUsers = useCallback(async () => {
+    if (!token) {
+      console.warn('No token available for loading users')
+      return
+    }
+
     try {
-      const res = await apiCall('/api/users/tenant-users', {
+      console.log('Loading tenant users...')
+      const res = await apiCall('/api/users/', {
         method: 'GET',
         headers: { Authorization: `Bearer ${token}` }
       })
 
+      console.log('Users API response status:', res.status)
+
       if (res.ok) {
         const users = await res.json()
-        setTenantUsers(users.map(user => ({
-          id: user.id,
-          email: user.email,
-          displayName: `${user.first_name} ${user.last_name}`.trim() || user.email
-        })))
+        console.log('Received users:', users)
+        
+        if (Array.isArray(users)) {
+          const mappedUsers = users.map(user => ({
+            id: user.id,
+            email: user.email,
+            displayName: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email
+          }))
+          console.log('Mapped users for dropdown:', mappedUsers)
+          setTenantUsers(mappedUsers)
+        } else {
+          console.error('Users response is not an array:', users)
+          showError('Invalid users data received')
+        }
+      } else {
+        const errorData = await res.json().catch(() => ({ detail: 'Unknown error' }))
+        console.error('Failed to load users - Status:', res.status, 'Error:', errorData)
+        showError(`Failed to load users: ${errorData.detail || 'Unknown error'}`)
       }
     } catch (error) {
       console.error('Failed to load users:', error)
+      showError('Failed to load users - Network error')
     }
-  }, [token])
+  }, [token, showError])
 
   // Load project details for editing
   const loadProjectDetails = useCallback(async () => {

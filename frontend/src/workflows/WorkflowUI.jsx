@@ -233,12 +233,35 @@ function WorkflowUI({ user }) {
         const instance = result.data.data;
         const workflowData = instance.serialized_data?.data || {};
         const tasks = instance.serialized_data?.tasks || {};
+        const taskSpecs = instance.serialized_data?.spec?.task_specs || {};
         
         // Update current tasks state for real-time display
         setCurrentTasks(tasks);
         
-        // Build task history for completed/running tasks
+        // Build task history for completed/running tasks, excluding start/end related tasks
         const history = Object.entries(tasks)
+          .filter(([taskId, task]) => {
+            // Get the task spec to check typename
+            const taskSpecName = task.task_spec;
+            const taskSpec = taskSpecs[taskSpecName];
+            const typename = taskSpec?.typename;
+            
+            // Filter out system/framework tasks - only show business tasks
+            const excludedTypenames = [
+              'BpmnStartTask',
+              'StartEvent', 
+              'EndEvent',
+              '_EndJoin',
+              'SimpleBpmnTask',
+              'Task'
+            ];
+            
+            // Also exclude tasks with names that indicate start/end
+            const excludedNames = ['Start', 'End', 'Process_1.EndJoin'];
+            
+            return !excludedTypenames.includes(typename) && 
+                   !excludedNames.includes(taskSpecName);
+          })
           .map(([taskId, task]) => {
             const stateMap = {
               1: 'Future',
@@ -251,9 +274,14 @@ function WorkflowUI({ user }) {
               128: 'Failed'
             };
             
+            // Get the task spec to show better names
+            const taskSpecName = task.task_spec;
+            const taskSpec = taskSpecs[taskSpecName];
+            const displayName = taskSpec?.bpmn_name || taskSpec?.description || taskSpecName || 'Unknown Task';
+            
             return {
               id: taskId,
-              name: task.task_spec || 'Unknown Task',
+              name: displayName,
               state: stateMap[task.state] || `State ${task.state}`,
               stateCode: task.state === 64 ? 32 : task.state, // Convert 64 to 32 (Completed)
               data: task.data || {},

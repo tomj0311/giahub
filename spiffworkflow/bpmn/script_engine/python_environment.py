@@ -104,6 +104,16 @@ class TaskDataEnvironment(BasePythonScriptEngineEnvironment):
     def _prepare_context(self, context):
         pass
 
+    def _is_safe_for_deepcopy(self, obj):
+        """Check if an object is safe for deepcopy by testing common problematic attributes"""
+        try:
+            # Quick test - try to pickle the object (similar issue to deepcopy)
+            import pickle
+            pickle.dumps(obj)
+            return True
+        except (TypeError, AttributeError, pickle.PicklingError):
+            return False
+
     def _remove_globals_and_functions_from_context(self, context, external_context=None):
         """When executing a script, don't leave the globals, functions,
         modules, and external methods in the context that we have modified.
@@ -119,7 +129,13 @@ class TaskDataEnvironment(BasePythonScriptEngineEnvironment):
                     external_context and k in external_context:
                 context.pop(k)
             else:
-                # Convert non-serializable objects to JSON
+                # Check if object is safe for deepcopy (generic approach)
+                if not self._is_safe_for_deepcopy(obj):
+                    print(f"[SPIFF] Removing non-serializable object '{k}' (type: {type(obj).__name__}) from context")
+                    context.pop(k)
+                    continue
+                
+                # Convert other known non-serializable objects to JSON
                 type_name = type(obj).__name__
                 if type_name == 'DataFrame':
                     context[k] = json.loads(obj.to_json(orient='records'))
@@ -141,7 +157,9 @@ class TaskDataEnvironment(BasePythonScriptEngineEnvironment):
                             context[k] = obj.item()
                         else:
                             context[k] = str(obj)
-
+                
+        return context
+    
     def check_for_overwrite(self, context, external_context):
         """It's possible that someone will define a variable with the
         same name as a pre-defined script, rendering the script un-callable.
