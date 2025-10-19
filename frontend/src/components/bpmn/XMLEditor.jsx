@@ -563,6 +563,32 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
     }
   }, [xmlContent, elementType, selectedNode]);
 
+  // New useEffect to populate code editor with existing code when XML properties change
+  useEffect(() => {
+    const taskType = selectedNode?.data?.taskType || elementType;
+    
+    // Only populate if cgResponse is empty and we have existing code
+    if (!cgResponse) {
+      if (taskType === 'userTask' && xmlProperties.userTask.formData.jsxCode) {
+        // Set existing JSX code in the code editor for userTask
+        console.log('🔄 Populating code editor with existing JSX code:', xmlProperties.userTask.formData.jsxCode);
+        setCgResponse(xmlProperties.userTask.formData.jsxCode);
+      } else if (taskType === 'scriptTask' && xmlProperties.scriptTask.scriptCode) {
+        // Set existing script code in the code editor for scriptTask
+        console.log('🔄 Populating code editor with existing script code:', xmlProperties.scriptTask.scriptCode);
+        setCgResponse(xmlProperties.scriptTask.scriptCode);
+      }
+    }
+  }, [xmlProperties.userTask.formData.jsxCode, xmlProperties.scriptTask.scriptCode, selectedNode, elementType]);
+
+  // Clear code editor when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      setCgResponse('');
+      setCgPrompt('');
+    }
+  }, [isOpen]);
+
   const formatXML = (xml) => {
     if (!xml) return '';
     
@@ -781,11 +807,25 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
       agentName = 'Python Code Generator';
     }
 
+    // Prepare the prompt with existing code if available
+    let fullPrompt = cgPrompt;
+    let existingCode = '';
+    
+    if (taskType === 'userTask' && xmlProperties.userTask.formData.jsxCode) {
+      existingCode = xmlProperties.userTask.formData.jsxCode;
+    } else if (taskType === 'scriptTask' && xmlProperties.scriptTask.scriptCode) {
+      existingCode = xmlProperties.scriptTask.scriptCode;
+    }
+    
+    if (existingCode.trim()) {
+      fullPrompt = `${cgPrompt}\n\n# Based on current code:\n${existingCode} ouput new modified code.`;
+    }
+
     try {
       const response = await agentRuntimeService.runAgentStream(
         {
           agent_name: agentName,
-          prompt: cgPrompt,
+          prompt: fullPrompt,
           conv_id: `xmleditor_${Date.now()}`
         },
         token
@@ -985,7 +1025,28 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                       (selectedNode?.data?.taskType === 'userTask' || elementType === 'userTask') ? 'javascript' : 'python'
                     }
                     value={cgResponse}
-                    onChange={(value) => setCgResponse(value || '')}
+                    onChange={(value) => {
+                      setCgResponse(value || '');
+                      // Also sync with XML properties for scriptTask
+                      const taskType = selectedNode?.data?.taskType || elementType;
+                      if (taskType === 'scriptTask') {
+                        setXmlProperties(prev => ({
+                          ...prev,
+                          scriptTask: { ...prev.scriptTask, scriptCode: value || '' }
+                        }));
+                      } else if (taskType === 'userTask') {
+                        setXmlProperties(prev => ({
+                          ...prev,
+                          userTask: { 
+                            ...prev.userTask, 
+                            formData: { 
+                              ...prev.userTask.formData, 
+                              jsxCode: value || '' 
+                            }
+                          }
+                        }));
+                      }
+                    }}
                     theme={theme.palette.mode === 'dark' ? 'vs-dark' : 'light'}
                     options={{
                       minimap: { enabled: false },
@@ -1309,36 +1370,6 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                           Add Field
                         </Button>
                         </div>
-                        
-                        <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 1, mt: 2, flexShrink: 0 }}>
-                          JSX Code:
-                        </Typography>
-                        <div style={{ flex: 1, border: '1px solid var(--border-color)', borderRadius: '4px', marginBottom: '16px', minHeight: '200px' }}>
-                          <Editor
-                            height="100%"
-                            defaultLanguage="javascript"
-                            value={xmlProperties.userTask.formData.jsxCode}
-                            onChange={(value) => {
-                              setXmlProperties(prev => ({
-                                ...prev,
-                                userTask: { 
-                                  ...prev.userTask, 
-                                  formData: { ...prev.userTask.formData, jsxCode: value || '' }
-                                }
-                              }));
-                              updateXmlFromProperties();
-                            }}
-                            theme={theme.palette.mode === 'dark' ? 'vs-dark' : 'light'}
-                            options={{
-                              minimap: { enabled: false },
-                              fontSize: 13,
-                              lineNumbers: 'on',
-                              scrollBeyondLastLine: false,
-                              wordWrap: 'on',
-                              automaticLayout: true
-                            }}
-                          />
-                        </div>
                       </div>
                     )}
                     
@@ -1631,6 +1662,8 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                             ...prev,
                             scriptTask: { ...prev.scriptTask, scriptCode: value || '' }
                           }));
+                          // Also update the code generator editor
+                          setCgResponse(value || '');
                           // Update XML when script code changes
                           const updatedXml = `<script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
 ${value || ''}

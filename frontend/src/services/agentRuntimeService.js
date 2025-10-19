@@ -165,11 +165,14 @@ export const agentRuntimeService = {
     let url = `/api/agent-runtime/conversations`
 
     // Add pagination and agent filter parameters if provided
-    if (pagination && (pagination.page || pagination.page_size || pagination.agent_name)) {
+    if (pagination && (pagination.page || pagination.page_size || pagination.agent_name || pagination.userId || pagination.username || pagination.email)) {
       const params = new URLSearchParams()
       if (pagination.page) params.append('page', pagination.page.toString())
       if (pagination.page_size) params.append('page_size', pagination.page_size.toString())
       if (pagination.agent_name) params.append('agent_name', pagination.agent_name)
+      if (pagination.userId) params.append('user_id', pagination.userId)
+      if (pagination.username) params.append('username', pagination.username)
+      if (pagination.email) params.append('email', pagination.email)
       url += `?${params.toString()}`
     }
 

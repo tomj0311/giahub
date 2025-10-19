@@ -212,11 +212,17 @@ async def list_conversations(
     page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     sort_by: str = Query("updated_at", description="Sort field"),
     sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order"),
-    agent_name: Optional[str] = Query(None, description="Filter by agent name")
+    agent_name: Optional[str] = Query(None, description="Filter by agent name"),
+    user_id: Optional[str] = Query(None, description="Filter by user ID (admin only)"),
+    username: Optional[str] = Query(None, description="Filter by username (admin only)"),
+    email: Optional[str] = Query(None, description="Filter by email (admin only)")
 ):
-    """List conversations for current tenant with pagination and sorting."""
+    """List conversations for current user with pagination and sorting."""
     # CRITICAL: tenant_id is required - no fallbacks allowed
     tenant_id = user.get("tenantId")
+    current_user_id = user.get("id") or user.get("userId")
+    current_username = user.get("username")
+    current_email = user.get("email")
     
     if not tenant_id:
         logger.error(f"[AGENT_RUNTIME] CRITICAL: No tenant ID found in user object: {user}")
@@ -226,16 +232,43 @@ async def list_conversations(
         )
     
     try:
-        logger.info(f"[CONVERSATIONS] Fetching conversations - page: {page}, page_size: {page_size}, tenant: {tenant_id}, agent_name: {agent_name}")
+        logger.info(f"[CONVERSATIONS] Fetching conversations - page: {page}, page_size: {page_size}, tenant: {tenant_id}, agent_name: {agent_name}, current_user: {current_user_id}")
         
         # Calculate pagination
         skip = (page - 1) * page_size
         logger.info(f"[CONVERSATIONS] Pagination - skip: {skip}, limit: {page_size}")
         
-        # Build filter
+        # Build filter - ALWAYS filter by current user for security
         filter_dict = {}
+        
+        # Add agent name filter if specified
         if agent_name:
             filter_dict["agent_name"] = agent_name
+        
+        # SECURITY: Always filter by current user's identity unless admin override
+        # Check if admin is trying to filter by different user (admin functionality)
+        is_admin_override = (user_id or username or email) and any([user_id, username, email])
+        
+        if is_admin_override:
+            # Admin override - filter by specified user (implement admin check if needed)
+            if user_id:
+                filter_dict["userId"] = user_id
+            elif username:
+                filter_dict["username"] = username
+            elif email:
+                filter_dict["email"] = email
+            logger.info(f"[CONVERSATIONS] Admin override - filtering by specified user")
+        else:
+            # Normal user - filter by current user's identity
+            if current_user_id:
+                filter_dict["userId"] = current_user_id
+            elif current_username:
+                filter_dict["username"] = current_username
+            elif current_email:
+                filter_dict["email"] = current_email
+            else:
+                logger.warning(f"[CONVERSATIONS] No user identification found for filtering: {user}")
+                # Still continue but conversations won't be properly filtered by user
         
         # Get total count first for debugging
         total_count = await MongoStorageService.count_documents("conversations", filter_dict, tenant_id=tenant_id)
@@ -330,19 +363,26 @@ async def list_conversations(
 async def get_conversation(conversation_id: str, user: dict = Depends(verify_token_middleware)):
     # CRITICAL: tenant_id is required - no fallbacks allowed
     tenant_id = user.get("tenantId")
+    current_user_id = user.get("id") or user.get("userId")
+    
     if not tenant_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User tenant information missing. Please re-login."
         )
     
+    # Build filter to ensure user can only access their own conversations
+    filter_dict = {"conversation_id": conversation_id}
+    if current_user_id:
+        filter_dict["userId"] = current_user_id
+    
     doc = await MongoStorageService.find_one(
         "conversations", 
-        {"conversation_id": conversation_id}, 
+        filter_dict, 
         tenant_id=tenant_id
     )
     if not doc:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+        raise HTTPException(status_code=404, detail="Conversation not found or access denied")
     # sanitize
     conv_id = doc.get("conv_id") or doc.get("conversation_id")
     return {
@@ -412,17 +452,24 @@ async def save_conversation(body: Dict[str, Any], user: dict = Depends(verify_to
 async def delete_conversation(conversation_id: str, user: dict = Depends(verify_token_middleware)):
     # CRITICAL: tenant_id is required - no fallbacks allowed
     tenant_id = user.get("tenantId")
+    current_user_id = user.get("id") or user.get("userId")
+    
     if not tenant_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User tenant information missing. Please re-login."
         )
     
+    # Build filter to ensure user can only delete their own conversations
+    filter_dict = {"conversation_id": conversation_id}
+    if current_user_id:
+        filter_dict["userId"] = current_user_id
+    
     deleted = await MongoStorageService.delete_one(
         "conversations",
-        {"conversation_id": conversation_id},
+        filter_dict,
         tenant_id=tenant_id
     )
     if not deleted:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+        raise HTTPException(status_code=404, detail="Conversation not found or access denied")
     return {"message": "deleted"}
