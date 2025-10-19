@@ -838,9 +838,9 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
     <Dialog open={isOpen} onClose={onClose} maxWidth="xl" fullWidth>
       <DialogTitle>Edit XML - {elementType}</DialogTitle>
       <DialogContent>
-        <Box sx={{ height: '70vh' }}>
+        <Box sx={{ height: '80vh', display: 'flex', flexDirection: 'column' }}>
           {/* Accordion headers */}
-          <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', flexShrink: 0 }}>
             <button
               onClick={() => {
                 console.log('XML PROPERTIES BUTTON CLICKED');
@@ -902,11 +902,11 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
           </div>
 
           {/* Accordion panels */}
-          <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+          <div style={{ flex: 1, overflow: 'auto', padding: '16px', minHeight: 0 }}>
             {accordionOpen === TAB_XML_EDITOR && (
-              <div style={{ height: '400px', border: '1px solid var(--border-color)', borderRadius: '4px' }}>
+              <div style={{ height: 'calc(100% - 20px)', border: '1px solid var(--border-color)', borderRadius: '4px' }}>
                 <Editor
-                  height="400px"
+                  height="100%"
                   defaultLanguage="xml"
                   value={editedXml}
                   onChange={(value) => {
@@ -978,9 +978,9 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                     }
                   }}
                 />
-                <div style={{ height: '300px', border: '1px solid var(--border-color)', borderRadius: '4px', marginBottom: '8px' }}>
+                <div style={{ flex: 1, border: '1px solid var(--border-color)', borderRadius: '4px', marginBottom: '8px', minHeight: '200px' }}>
                   <Editor
-                    height="300px"
+                    height="100%"
                     defaultLanguage={
                       (selectedNode?.data?.taskType === 'userTask' || elementType === 'userTask') ? 'javascript' : 'python'
                     }
@@ -1143,16 +1143,16 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
               </form>
             )}
             {accordionOpen === TAB_XML_PROPERTIES && (
-              <>
-                <Typography variant="h6" gutterBottom sx={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 'bold' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <Typography variant="h6" gutterBottom sx={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 'bold', flexShrink: 0 }}>
                   XML Properties - {selectedNode?.data?.taskType || elementType}
                 </Typography>
                 
                 {/* UserTask Properties */}
                 {(selectedNode?.data?.taskType || elementType) === 'userTask' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }}>
                     {/* Sub-accordion headers */}
-                    <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)' }}>
+                    <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', flexShrink: 0 }}>
                       <button
                         onClick={() => setUserTaskAccordion(0)}
                         style={{
@@ -1185,10 +1185,11 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                     
                     {/* Form Data Section */}
                     {userTaskAccordion === 0 && (
-                      <div style={{ padding: '12px 0' }}>
-                        <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 1 }}>
+                      <div style={{ padding: '12px 0', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                        <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 1, flexShrink: 0 }}>
                           Form Fields:
                         </Typography>
+                        <div style={{ flexShrink: 0 }}>
                         {xmlProperties.userTask.formData.formFields.map((field, index) => (
                           <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
                             <TextField
@@ -1307,13 +1308,14 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                         >
                           Add Field
                         </Button>
+                        </div>
                         
-                        <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 1, mt: 2 }}>
+                        <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 1, mt: 2, flexShrink: 0 }}>
                           JSX Code:
                         </Typography>
-                        <div style={{ height: '200px', border: '1px solid var(--border-color)', borderRadius: '4px', marginBottom: '16px' }}>
+                        <div style={{ flex: 1, border: '1px solid var(--border-color)', borderRadius: '4px', marginBottom: '16px', minHeight: '200px' }}>
                           <Editor
-                            height="200px"
+                            height="100%"
                             defaultLanguage="javascript"
                             value={xmlProperties.userTask.formData.jsxCode}
                             onChange={(value) => {
@@ -1342,10 +1344,11 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                     
                     {/* Assignee Section */}
                     {userTaskAccordion === 1 && (
-                      <div style={{ padding: '12px 0' }}>
-                        <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 1 }}>
+                      <div style={{ padding: '12px 0', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                        <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 1, flexShrink: 0 }}>
                           Assignee Fields:
                         </Typography>
+                        <div style={{ flex: 1, overflow: 'auto' }}>
                         {xmlProperties.userTask.assignee.fields.map((field, index) => (
                           <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
                             <TextField
@@ -1432,6 +1435,7 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
                         >
                           Add Field
                         </Button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1439,7 +1443,7 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
 
                 {/* ServiceTask and CallActivity Properties */}
                 {((selectedNode?.data?.taskType || elementType) === 'serviceTask' || (selectedNode?.data?.taskType || elementType) === 'callActivity') && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, minHeight: 0 }}>
                     {/* Module and Function Selection in one line */}
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
                       <div style={{ flex: 1 }}>
@@ -1613,13 +1617,13 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
 
                 {/* ScriptTask Properties */}
                 {(selectedNode?.data?.taskType || elementType) === 'scriptTask' && (
-                  <div>
-                    <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 1 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                    <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontSize: '12px', mb: 1, flexShrink: 0 }}>
                       Script Code:
                     </Typography>
-                    <div style={{ height: '250px', border: '1px solid var(--border-color)', borderRadius: '4px' }}>
+                    <div style={{ flex: 1, border: '1px solid var(--border-color)', borderRadius: '4px', minHeight: '200px' }}>
                       <Editor
-                        height="250px"
+                        height="100%"
                         defaultLanguage="python"
                         value={xmlProperties.scriptTask.scriptCode}
                         onChange={(value) => {
@@ -1833,12 +1837,12 @@ ${xmlProperties.scriptTask.scriptCode}
                     Update
                   </Button>
                 </Box>
-              </>
+              </div>
             )}
           </div>
           
-          {/* Action buttons in the middle */}
-          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 3, mb: 2, p: 2, borderTop: '1px solid var(--border-color)', pt: 2 }}>
+          {/* Action buttons at the bottom */}
+          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, p: 2, borderTop: '1px solid var(--border-color)', flexShrink: 0 }}>
             <Button onClick={onClose} variant="outlined">Cancel</Button>
             <Button onClick={handleSave} variant="contained">Save</Button>
           </Box>
