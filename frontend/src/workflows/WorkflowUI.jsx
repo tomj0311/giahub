@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -16,7 +16,14 @@ import {
   Autocomplete,
   IconButton,
   Grid,
+  List,
+  ListItemButton,
+  ListItemText,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { CheckCircle, XCircle, Clock, AlertTriangle, ArrowLeft, Play } from 'lucide-react';
 import sharedApiService from '../utils/apiService';
 import TaskCompletion from './TaskCompletion';
@@ -44,6 +51,8 @@ function WorkflowUI({ user }) {
   // Workflow selector
   const [workflows, setWorkflows] = useState([]);
   const [selectedWorkflow, setSelectedWorkflow] = useState(null);
+  const [groupedWorkflows, setGroupedWorkflows] = useState({});
+  const [expandedCategory, setExpandedCategory] = useState(null); // Track which category is expanded
   
   const pollInterval = useRef(null);
   const hasStarted = useRef(false);
@@ -131,7 +140,23 @@ function WorkflowUI({ user }) {
       );
 
       if (result.success) {
-        setWorkflows(result.data.configurations || []);
+        const workflowList = result.data.configurations || [];
+        setWorkflows(workflowList);
+        
+        // Group workflows by category
+        const groupedByCat = workflowList.reduce((acc, w) => {
+          const cat = w.category || '_root';
+          acc[cat] = acc[cat] || [];
+          acc[cat].push(w);
+          return acc;
+        }, {});
+        
+        // Sort workflows within each category by name
+        Object.keys(groupedByCat).forEach(k => {
+          groupedByCat[k].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        });
+        
+        setGroupedWorkflows(groupedByCat);
         setState('idle');
       } else {
         setError('Failed to load workflows');
@@ -458,6 +483,73 @@ function WorkflowUI({ user }) {
     }
   };
 
+  // Handle accordion expansion - only one can be open at a time
+  const handleAccordionChange = (category) => (event, isExpanded) => {
+    setExpandedCategory(isExpanded ? category : null);
+  };
+
+  // Render workflows grouped by category in accordions
+  const renderGroupedWorkflowList = () => {
+    const cats = Object.keys(groupedWorkflows).sort((a, b) => a.localeCompare(b));
+    
+    if (!cats.length && !state === 'loading') {
+      return (
+        <Typography variant="body2" sx={{ p: 2, color: 'text.secondary' }}>
+          No workflows found.
+        </Typography>
+      );
+    }
+    
+    if (state === 'loading' && workflows.length === 0) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+          <CircularProgress size={20} />
+        </Box>
+      );
+    }
+    
+    return cats.map((cat) => {
+      const items = groupedWorkflows[cat] || [];
+      const title = cat === '_root' ? 'Uncategorized' : cat;
+      
+      return (
+        <Accordion 
+          key={cat} 
+          disableGutters 
+          elevation={0} 
+          square
+          expanded={expandedCategory === cat}
+          onChange={handleAccordionChange(cat)}
+        >
+          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ pl: 1 }}>
+            <Typography variant="subtitle2" sx={{ pl: 1 }}>
+              {title} ({items.length})
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails sx={{ p: 0 }}>
+            <List dense sx={{ py: 0 }}>
+              {items.map((workflow) => (
+                <ListItemButton
+                  key={workflow.name}
+                  selected={selectedWorkflow?.name === workflow.name}
+                  onClick={() => {
+                    setSelectedWorkflow(workflow);
+                  }}
+                  sx={{ pl: 2 }}
+                >
+                  <ListItemText 
+                    primary={workflow.name} 
+                    primaryTypographyProps={{ sx: { pl: 1 } }} 
+                  />
+                </ListItemButton>
+              ))}
+            </List>
+          </AccordionDetails>
+        </Accordion>
+      );
+    });
+  };
+
   // Main workflow screen
   return (
     <Box sx={{ p: 0, height: '100%', width: '100%', overflow: 'hidden' }}>
@@ -496,44 +588,50 @@ function WorkflowUI({ user }) {
           }}
         >
           {/* Workflow Selector - ALWAYS VISIBLE */}
-          <Typography variant="h6" gutterBottom>
-            Select a Workflow
-          </Typography>
-          {state === 'loading' && workflows.length === 0 ? (
-            <Box sx={{ display: 'flex', alignItems: 'center', py: 4 }}>
-              <CircularProgress size={40} />
-              <Typography sx={{ ml: 2 }}>Loading...</Typography>
-            </Box>
-          ) : (
-            <>
-              <Autocomplete
-                options={workflows}
-                getOptionLabel={(option) => option.name || 'Unnamed'}
-                value={selectedWorkflow}
-                onChange={(_, newValue) => setSelectedWorkflow(newValue)}
-                renderInput={(params) => (
-                  <TextField {...params} label="Select Workflow" variant="outlined" />
-                )}
-                sx={{ mb: 2 }}
-              />
-              <Button
-                variant="contained"
-                size="large"
-                fullWidth
-                startIcon={<Play size={20} />}
-                onClick={() => {
-                  if (selectedWorkflow) {
-                    // Reset hasStarted ref to allow workflow to start
-                    hasStarted.current = false;
-                    setSearchParams({ workflow: selectedWorkflow.name });
-                  }
-                }}
-                disabled={!selectedWorkflow}
-              >
-                Start Workflow
-              </Button>
-            </>
-          )}
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="h6" gutterBottom>
+              Select a Workflow
+            </Typography>
+            {selectedWorkflow && (
+              <Box sx={{ mt: 1, mb: 2 }}>
+                <Chip 
+                  label={selectedWorkflow.name} 
+                  color="primary" 
+                  sx={{ maxWidth: '100%' }}
+                />
+              </Box>
+            )}
+          </Box>
+          
+          {/* Workflow List by Category */}
+          <Box sx={{ 
+            flexGrow: 1, 
+            overflow: 'auto',
+            mb: 2,
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1
+          }}>
+            {renderGroupedWorkflowList()}
+          </Box>
+          
+          {/* Start Workflow Button */}
+          <Button
+            variant="contained"
+            size="large"
+            fullWidth
+            startIcon={<Play size={20} />}
+            onClick={() => {
+              if (selectedWorkflow) {
+                // Reset hasStarted ref to allow workflow to start
+                hasStarted.current = false;
+                setSearchParams({ workflow: selectedWorkflow.name });
+              }
+            }}
+            disabled={!selectedWorkflow}
+          >
+            Start Workflow
+          </Button>
 
           {/* Workflow Info - Show when workflow is running */}
           {workflowName && (
