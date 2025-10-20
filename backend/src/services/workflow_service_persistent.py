@@ -113,19 +113,17 @@ class WorkflowServicePersistent:
 
                 try:
                     logger.info(f"[TRACE] About to execute workflow.do_engine_steps() - step {step_count}")
-                    workflow.do_engine_steps()
+                                      
+                    # Run engine steps in a worker thread to allow thread-safe scheduling above
+                    await asyncio.to_thread(workflow.do_engine_steps)
                     logger.info(f"[TRACE] Successfully completed workflow.do_engine_steps() - step {step_count}")
+
                 except Exception as engine_error:
                     import traceback
                     full_trace = traceback.format_exc()
-                    logger.error(f"[WORKFLOW] Engine step {step_count} failed: {engine_error}")
                     logger.error(f"[TRACE] FULL ERROR TRACE:\n{full_trace}")
-                    await cls._handle_task_error(workflow, instance_id, tenant_id, task, engine_error, "Engine")
-                    await cls._handle_engine_error(workflow, instance_id, tenant_id, engine_error, step_count)
+                    await cls._update_workflow_status(workflow, instance_id, tenant_id, step_count)
                     raise HTTPException(status_code=500, detail=f"Workflow engine error: {str(engine_error)}")
-                
-                # Update status after each step
-                current_status = await cls._update_workflow_status(workflow, instance_id, tenant_id, step_count)
                 
                 # Check if user input needed - check for manual tasks
                 ready_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY]
@@ -149,7 +147,7 @@ class WorkflowServicePersistent:
                             
                         break
                                     
-            # Final update
+            # Final update if all went well
             await cls._update_workflow_status(workflow, instance_id, tenant_id)
             logger.info(f"[WORKFLOW] Workflow execution completed after {step_count} steps")
             
@@ -207,25 +205,6 @@ class WorkflowServicePersistent:
                 logger.warning(f"[WORKFLOW] No ioSpec outputs found, keeping original data")
                 
         return data
-
-    @classmethod
-    async def _handle_task_error(cls, workflow, instance_id, tenant_id, task, error, task_type):
-        """Helper method to handle task errors consistently"""
-        
-        # Structure error response
-        error_response = {
-            'error': str(error),
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        }
-        task.data[task.task_spec.bpmn_id] = error_response
-        task.error()
-        
-        # Update status with task error information
-        await cls._update_workflow_status(workflow, instance_id, tenant_id, extra_data={
-            "error": str(error),
-            "error_task_id": task.task_spec.bpmn_id,
-            "error_task_type": task_type
-        })
 
     @classmethod
     async def _handle_engine_error(cls, workflow, instance_id, tenant_id, error, step_count):
@@ -629,6 +608,16 @@ class WorkflowServicePersistent:
             )
         return tenant_id
 
+    @classmethod
+    def _get_current_error_task(cls, workflow):
+        """Get current task ID if waiting for user input"""
+        if workflow.manual_input_required():
+            error_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.ERROR]
+            if error_tasks:
+                return error_tasks[0]
+            
+        return None
+    
     @classmethod
     def _get_current_task_id(cls, workflow):
         """Get current task ID if waiting for user input"""

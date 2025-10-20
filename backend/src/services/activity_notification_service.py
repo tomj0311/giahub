@@ -212,19 +212,6 @@ You were mentioned in a notification for activity: <strong>{activity_subject}</s
             # Fetch notifications with EXACT match on activity_id
             query_filter = {"activity_id": activity_id}
             
-            # ALSO query ALL notifications for this tenant to see what's in the database
-            all_notifications = await MongoStorageService.find_many(
-                "activityNotifications",
-                {},
-                tenant_id=tenant_id,
-                sort_field="created_at",
-                sort_order=-1
-            )
-            logger.info(f"[NOTIFICATION_QUERY] 🔍 Total notifications in database for tenant: {len(all_notifications)}")
-            if all_notifications:
-                for idx, notif in enumerate(all_notifications[:5]):  # Show first 5
-                    logger.info(f"[NOTIFICATION_QUERY] 🔍 Sample {idx+1}: activity_id={notif.get('activity_id')}, created_at={notif.get('created_at')}")
-            
             notifications = await MongoStorageService.find_many(
                 "activityNotifications",
                 query_filter,
@@ -235,19 +222,36 @@ You were mentioned in a notification for activity: <strong>{activity_subject}</s
             
             logger.info(f"[NOTIFICATION_QUERY] ✅ Raw query returned {len(notifications)} notifications for activity_id={activity_id}")
             
-            if notifications:
-                logger.info(f"[NOTIFICATION_QUERY] First notification sample: {notifications[0]}")
-            else:
-                logger.warning(f"[NOTIFICATION_QUERY] ⚠️ NO notifications found for activity_id={activity_id}")
+            # Collect unique sender emails to fetch user names
+            sender_emails = set()
+            for notif in notifications:
+                sender_email = notif.get('sender_email')
+                if sender_email:
+                    sender_emails.add(sender_email)
             
-            # Format notifications and FILTER again to be absolutely sure
+            # Fetch user names for all senders in bulk
+            email_to_name = {}
+            if sender_emails:
+                users = await MongoStorageService.find_many(
+                    "users",
+                    {"email": {"$in": list(sender_emails)}},
+                    tenant_id=tenant_id
+                )
+                
+                for user_doc in users:
+                    email = user_doc.get("email")
+                    first_name = user_doc.get("firstName", "")
+                    last_name = user_doc.get("lastName", "")
+                    display_name = f"{first_name} {last_name}".strip() or email
+                    email_to_name[email] = display_name
+                
+                logger.info(f"[NOTIFICATION] Populated {len(email_to_name)} sender names from {len(sender_emails)} emails")
+            
+            # Format notifications and populate sender names
             notification_list = []
             for notif in notifications:
                 notif_dict = dict(notif)
                 notif_activity_id = notif_dict.get('activity_id')
-                
-                # Log each notification's activity_id for debugging
-                logger.info(f"[NOTIFICATION_FILTER] Notification activity_id='{notif_activity_id}' (match: {notif_activity_id == activity_id})")
                 
                 # STRICT FILTER: Only include if activity_id matches EXACTLY
                 if notif_activity_id != activity_id:
@@ -255,6 +259,12 @@ You were mentioned in a notification for activity: <strong>{activity_subject}</s
                     continue
                 
                 notif_dict["id"] = str(notif_dict.pop("_id"))
+                
+                # Populate sender_name from email lookup
+                sender_email = notif_dict.get("sender_email")
+                if sender_email:
+                    notif_dict["sender_name"] = email_to_name.get(sender_email, sender_email)
+                
                 # Serialize datetime to ISO format
                 if "created_at" in notif_dict and notif_dict["created_at"]:
                     notif_dict["created_at"] = notif_dict["created_at"].isoformat()

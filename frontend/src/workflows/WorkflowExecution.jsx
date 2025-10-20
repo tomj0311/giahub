@@ -489,7 +489,16 @@ function WorkflowExecution({ user }) {
                          workflowConfig.bpmn_file_path ||
                          workflowConfig.filePath;
     
-
+    console.log('🔧 WorkflowExecution Edit BPMN Navigation:', {
+      workflowId,
+      minioFullPath,
+      workflowConfig_id: workflowConfig.id,
+      workflowConfig_workflow_id: workflowConfig.workflow_id,
+      workflowConfig__id: workflowConfig._id,
+      workflowConfig_name: workflowConfig.name,
+      saveEndpoint: `/api/workflows/configs/${workflowId}/bpmn`,
+      fullWorkflowConfig: workflowConfig
+    });
     
     // Navigate to dashboard/bpmn with the XML data and full minio path
     navigate('/dashboard/bpmn', {

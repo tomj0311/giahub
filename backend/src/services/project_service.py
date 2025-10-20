@@ -27,6 +27,66 @@ class ProjectService:
             )
         return tenant_id
     
+    @staticmethod
+    async def populate_user_names(projects: List[dict], tenant_id: str) -> List[dict]:
+        """Populate assignee_name and approver_name fields from user emails"""
+        # Collect unique emails from all projects
+        emails = set()
+        for project in projects:
+            if project.get("assignee"):
+                emails.add(project["assignee"])
+            if project.get("approver"):
+                emails.add(project["approver"])
+        
+        if not emails:
+            return projects
+        
+        # Fetch users in bulk
+        users = await MongoStorageService.find_many(
+            "users",
+            {"email": {"$in": list(emails)}},
+            tenant_id=tenant_id
+        )
+        
+        # Create email to name mapping
+        email_to_name = {}
+        for user in users:
+            email = user.get("email")
+            first_name = user.get("firstName", "")
+            last_name = user.get("lastName", "")
+            display_name = f"{first_name} {last_name}".strip() or email
+            email_to_name[email] = display_name
+        
+        logger.info(f"[PROJECT] Populated {len(email_to_name)} user names from {len(emails)} emails")
+        
+        # Enrich projects with user names
+        for project in projects:
+            if project.get("assignee"):
+                project["assignee_name"] = email_to_name.get(project["assignee"], project["assignee"])
+            if project.get("approver"):
+                project["approver_name"] = email_to_name.get(project["approver"], project["approver"])
+        
+        return projects
+    
+    @staticmethod
+    async def populate_user_names_in_tree(tree: List[dict], tenant_id: str) -> List[dict]:
+        """Populate user names in a tree structure (recursively)"""
+        # Flatten tree to collect all projects
+        def flatten(nodes):
+            result = []
+            for node in nodes:
+                result.append(node)
+                if node.get("children"):
+                    result.extend(flatten(node["children"]))
+            return result
+        
+        all_projects = flatten(tree)
+        
+        # Populate names for all projects
+        await ProjectService.populate_user_names(all_projects, tenant_id)
+        
+        return tree
+    
     @classmethod
     async def create_project(cls, project: dict, user: dict) -> dict:
         """Create a new project - stores payload as-is"""
@@ -131,6 +191,9 @@ class ProjectService:
                 project_dict["id"] = str(project_dict.pop("_id"))
                 projects.append(project_dict)
             
+            # Populate user names for assignee and approver
+            projects = await cls.populate_user_names(projects, tenant_id)
+            
             logger.info(f"[PROJECT] Found {len(projects)}/{total_count} projects")
             
             return {
@@ -174,6 +237,9 @@ class ProjectService:
             # Return project as-is from database, only convert _id to id
             project_dict = dict(project)
             project_dict["id"] = str(project_dict.pop("_id"))
+            
+            # Populate user names for assignee and approver
+            await cls.populate_user_names([project_dict], tenant_id)
             
             return project_dict
             
@@ -488,6 +554,9 @@ class ProjectService:
             project_dict = await build_tree_with_children(project)
             tree.append(project_dict)
         
+        # Populate user names in the entire tree
+        tree = await cls.populate_user_names_in_tree(tree, tenant_id)
+        
         return {
             "tree": tree,
             "pagination": {
@@ -523,4 +592,9 @@ class ProjectService:
             
             return result
         
-        return await build_tree(root_id)
+        tree = await build_tree(root_id)
+        
+        # Populate user names in the entire tree
+        tree = await cls.populate_user_names_in_tree(tree, tenant_id)
+        
+        return tree

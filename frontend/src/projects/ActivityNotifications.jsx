@@ -64,6 +64,16 @@ function ActivityNotifications({ user, activityId, projectId }) {
     .map(seg => encodeURIComponent(seg))
     .join('/')
 
+  // Helper function to get direct MinIO URL
+  const getMinioDirectUrl = (path) => {
+    if (!path) return null
+    // Use dedicated MinIO URL if available, otherwise fall back to API_BASE_URL
+    const MINIO_URL = import.meta.env.VITE_MINIO_URL || import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || ''
+    // Remove leading slash from path if exists
+    const cleanPath = path.startsWith('/') ? path.slice(1) : path
+    return `${MINIO_URL}/uploads/${cleanPath}`
+  }
+
   // Helper function to format date in user's local timezone
   const formatLocalDate = (dateString) => {
     if (!dateString) return 'Just now'
@@ -126,9 +136,8 @@ function ActivityNotifications({ user, activityId, projectId }) {
   useEffect(() => {
     return () => {
       isMountedRef.current = false
-      try {
-        Object.values(previewsRef.current || {}).forEach(url => URL.revokeObjectURL(url))
-      } catch {}
+      // Only revoke blob URLs for selected image previews (local file previews)
+      // Direct MinIO URLs don't need to be revoked
       try {
         (selectedImagePreviews || []).forEach(url => { if (url) URL.revokeObjectURL(url) })
       } catch {}
@@ -217,9 +226,9 @@ function ActivityNotifications({ user, activityId, projectId }) {
 
   // Load image previews for notifications with image files
   useEffect(() => {
-    if (!notifications.length || !token) return
+    if (!notifications.length) return
 
-    const loadImagePreviews = async () => {
+    const loadImagePreviews = () => {
       const newPreviews = {}
 
       for (const notification of notifications) {
@@ -229,23 +238,12 @@ function ActivityNotifications({ user, activityId, projectId }) {
           const cacheKey = file.path
           if (imagePreviews[cacheKey]) continue // Already loaded
 
-          try {
-            const encoded = encodePathSegments(file.path)
-            const res = await apiCall(`/api/download/${encoded}`, {
-              method: 'GET',
-              headers: { Authorization: `Bearer ${token}` }
-            })
-
-            if (res.ok) {
-              const blob = await res.blob()
-              const contentType = blob.type || res.headers.get('content-type') || ''
-              if (contentType.startsWith('image/') || isImageFilename(file.filename)) {
-                const url = URL.createObjectURL(blob)
-                newPreviews[cacheKey] = url
-              }
+          // For images, use direct MinIO URL
+          if (isImageFilename(file.filename)) {
+            const directUrl = getMinioDirectUrl(file.path)
+            if (directUrl) {
+              newPreviews[cacheKey] = directUrl
             }
-          } catch (error) {
-            console.error('Failed to load image preview:', error)
           }
         }
       }
@@ -260,7 +258,7 @@ function ActivityNotifications({ user, activityId, projectId }) {
     }
 
     loadImagePreviews()
-  }, [notifications, token, imagePreviews])
+  }, [notifications, imagePreviews])
 
   // Handle text input changes and detect @ mentions
   const handleMessageChange = (e) => {
@@ -459,24 +457,10 @@ function ActivityNotifications({ user, activityId, projectId }) {
         
         for (const file of result.notification.files) {
           if (isImageFilename(file.filename)) {
-            try {
-              const encoded = encodePathSegments(file.path)
-              const imgRes = await apiCall(`/api/download/${encoded}`, {
-                method: 'GET',
-                headers: { Authorization: `Bearer ${token}` }
-              })
-
-              if (imgRes.ok) {
-                const blob = await imgRes.blob()
-                const contentType = blob.type || imgRes.headers.get('content-type') || ''
-                if (contentType.startsWith('image/') || isImageFilename(file.filename)) {
-                  const url = URL.createObjectURL(blob)
-                  newPreviews[file.path] = url
-                  console.log('[NOTIFICATION] Loaded image preview for:', file.filename)
-                }
-              }
-            } catch (error) {
-              console.error('[NOTIFICATION] Failed to load image preview:', error)
+            const directUrl = getMinioDirectUrl(file.path)
+            if (directUrl) {
+              newPreviews[file.path] = directUrl
+              console.log('[NOTIFICATION] Loaded image preview for:', file.filename)
             }
           }
         }
@@ -802,25 +786,19 @@ function ActivityNotifications({ user, activityId, projectId }) {
                                 
                                 const handleDownload = async () => {
                                   try {
-                                    const encoded = encodePathSegments(file.path)
-                                    const res = await apiCall(`/api/download/${encoded}`, {
-                                      method: 'GET',
-                                      headers: { Authorization: `Bearer ${token}` }
-                                    })
-                                    
-                                    if (!res.ok) {
-                                      showError('Failed to download file')
+                                    const directUrl = getMinioDirectUrl(file.path)
+                                    if (!directUrl) {
+                                      showError('Invalid file path')
                                       return
                                     }
                                     
-                                    const blob = await res.blob()
-                                    const url = window.URL.createObjectURL(blob)
+                                    // For direct download, create a link and click it
                                     const a = document.createElement('a')
-                                    a.href = url
+                                    a.href = directUrl
                                     a.download = file.filename
+                                    a.target = '_blank' // Open in new tab as fallback
                                     document.body.appendChild(a)
                                     a.click()
-                                    window.URL.revokeObjectURL(url)
                                     document.body.removeChild(a)
                                   } catch (error) {
                                     console.error('Download error:', error)

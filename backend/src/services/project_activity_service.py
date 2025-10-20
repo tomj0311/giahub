@@ -29,6 +29,47 @@ class ProjectActivityService:
             )
         return tenant_id
     
+    @staticmethod
+    async def populate_user_names(activities: List[dict], tenant_id: str) -> List[dict]:
+        """Populate assignee_name and approver_name fields from user emails"""
+        # Collect unique emails from all activities
+        emails = set()
+        for activity in activities:
+            if activity.get("assignee"):
+                emails.add(activity["assignee"])
+            if activity.get("approver"):
+                emails.add(activity["approver"])
+        
+        if not emails:
+            return activities
+        
+        # Fetch users in bulk
+        users = await MongoStorageService.find_many(
+            "users",
+            {"email": {"$in": list(emails)}},
+            tenant_id=tenant_id
+        )
+        
+        # Create email to name mapping
+        email_to_name = {}
+        for user in users:
+            email = user.get("email")
+            first_name = user.get("firstName", "")
+            last_name = user.get("lastName", "")
+            display_name = f"{first_name} {last_name}".strip() or email
+            email_to_name[email] = display_name
+        
+        logger.info(f"[ACTIVITY] Populated {len(email_to_name)} user names from {len(emails)} emails")
+        
+        # Enrich activities with user names
+        for activity in activities:
+            if activity.get("assignee"):
+                activity["assignee_name"] = email_to_name.get(activity["assignee"], activity["assignee"])
+            if activity.get("approver"):
+                activity["approver_name"] = email_to_name.get(activity["approver"], activity["approver"])
+        
+        return activities
+    
     @classmethod
     async def create_activity(cls, activity: dict, user: dict) -> dict:
         """Create a new project activity"""
@@ -245,6 +286,9 @@ class ProjectActivityService:
                 activity_dict["id"] = str(activity_dict.pop("_id"))
                 activities.append(activity_dict)
             
+            # Populate user names for assignee and approver
+            activities = await cls.populate_user_names(activities, tenant_id)
+            
             return {
                 "activities": activities,
                 "pagination": {
@@ -287,6 +331,10 @@ class ProjectActivityService:
             
             activity_dict = dict(activity)
             activity_dict["id"] = str(activity_dict.pop("_id"))
+            
+            # Populate user names for assignee and approver
+            await cls.populate_user_names([activity_dict], tenant_id)
+            
             return activity_dict
             
         except HTTPException:

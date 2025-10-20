@@ -863,6 +863,26 @@ function ProjectPlanning({ user, projectId }) {
       return `${value}%`
     }
     
+    if (fieldName === 'assignee') {
+      // Use assignee_name from API if available, otherwise fall back to email
+      const displayValue = activity.assignee_name || value
+      return (
+        <Typography variant="body2" sx={textTruncationStyle}>
+          {displayValue || '-'}
+        </Typography>
+      )
+    }
+    
+    if (fieldName === 'approver') {
+      // Use approver_name from API if available, otherwise fall back to email
+      const displayValue = activity.approver_name || value
+      return (
+        <Typography variant="body2" sx={textTruncationStyle}>
+          {displayValue || '-'}
+        </Typography>
+      )
+    }
+    
     // Default: just return the value with text truncation
     return (
       <Typography variant="body2" sx={textTruncationStyle}>
