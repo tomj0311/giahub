@@ -63,6 +63,9 @@ class PythonScriptEngine(object):
             return self.environment.execute(script, task.data, external_context or {})
         except Exception as err:
             wte = self.create_task_exec_exception(task, script, err)
+            import traceback
+            wte_full_trace = traceback.format_exc()
+            task.data['error'] = {'error': str(err), 'error_trace': wte_full_trace}
             raise wte
 
     def call_service(self, task, **kwargs):

@@ -167,7 +167,7 @@ class BpmnWorkflow(BpmnBaseWorkflow):
         iter = self.get_tasks_iterator(state=TaskState.WAITING, spec_class=CatchingEvent)
         return [t.task_spec.event_definition.details(t) for t in iter]
 
-    def do_engine_steps(self, will_complete_task=None, did_complete_task=None):
+    def do_engine_steps(self, will_complete_task=None, did_complete_task=None, update_callback=None):
         """
         Execute any READY tasks that are engine specific (for example, gateways
         or script tasks). This is done in a loop, so it will keep completing
@@ -176,6 +176,7 @@ class BpmnWorkflow(BpmnBaseWorkflow):
 
         :param will_complete_task: Callback that will be called prior to completing a task
         :param did_complete_task: Callback that will be called after completing a task
+        :param update_callback: Simple callback to update workflow state after each task
         """
         logger.debug(f"[SPIFF] ========== do_engine_steps STARTED ==========")
         
@@ -195,6 +196,9 @@ class BpmnWorkflow(BpmnBaseWorkflow):
                 
                 if not is_manual:
                     logger.info(f"[SPIFF] >> EXECUTING non-manual task: {task_id} ({task_type})")
+                    if update_callback is not None:
+                        update_callback(task)
+
                     if will_complete_task is not None:
                         will_complete_task(task)
                     task.run()
@@ -230,7 +234,7 @@ class BpmnWorkflow(BpmnBaseWorkflow):
         new_subprocesses = len(self.get_active_subprocesses())
         if count > 0 or new_subprocesses > len(active_subprocesses):
             logger.debug(f"[SPIFF] Recursing into do_engine_steps (count={count}, new_subprocesses={new_subprocesses})")
-            self.do_engine_steps(will_complete_task, did_complete_task)
+            self.do_engine_steps(will_complete_task, did_complete_task, update_callback)
         else:
             logger.debug(f"[SPIFF] ========== do_engine_steps COMPLETED ==========")
 
