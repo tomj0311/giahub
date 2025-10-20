@@ -420,7 +420,7 @@ function WorkflowConfig({ user }) {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Box>
                     <Typography variant="h4" gutterBottom>
-                        Workflow Configurations
+                        Workflows
                     </Typography>
                     <Typography variant="body1" color="text.secondary">
                         Configure and manage BPMN workflows for your automation processes.

@@ -15,6 +15,7 @@ import {
   TextField,
   Autocomplete,
   IconButton,
+  Grid,
 } from '@mui/material';
 import { CheckCircle, XCircle, Clock, AlertTriangle, ArrowLeft, Play } from 'lucide-react';
 import sharedApiService from '../utils/apiService';
@@ -461,11 +462,8 @@ function WorkflowUI({ user }) {
   return (
     <Box sx={{ p: 0, height: '100%', width: '100%', overflow: 'hidden' }}>
       {/* Header */}
-      <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid', borderColor: 'divider' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <IconButton onClick={() => navigate('/dashboard/monitor')}>
-            <ArrowLeft />
-          </IconButton>
+      <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '2px solid rgba(255, 255, 255, 0.08)' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
           <Typography variant="h5" fontWeight="bold">
             {workflowName || 'Run Workflow'}
           </Typography>
@@ -473,22 +471,27 @@ function WorkflowUI({ user }) {
         </Box>
       </Box>
 
-      {/* Two Column Layout */}
-      <Box sx={{ display: 'flex', height: 'calc(100vh - 185px)', width: '100%', overflow: 'hidden' }}>
+      {/* Two Column Layout - Responsive Grid */}
+      <Grid container sx={{ height: { xs: 'auto', md: 'calc(100vh - 185px)' }, minHeight: { xs: 'calc(100vh - 185px)', md: 'auto' }, overflow: 'hidden' }}>
         
         {/* Left Pane - Workflow Info */}
-        <Box sx={{ 
-          width: '400px', 
-          minWidth: '400px',
-          maxWidth: '400px',
-          borderRight: '1px solid', 
-          borderColor: 'divider',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'auto',
-          p: 3,
-          gap: 2,
-        }}>
+        <Grid 
+          item 
+          xs={12} 
+          md={4} 
+          lg={3}
+          sx={{ 
+            borderRight: { xs: 'none', md: '2px solid rgba(255, 255, 255, 0.08)' },
+            borderBottom: { xs: '2px solid rgba(255, 255, 255, 0.08)', md: 'none' },
+            display: 'flex',
+            flexDirection: 'column',
+            height: { xs: 'auto', md: '100%' },
+            maxHeight: { xs: '50vh', md: '100%' },
+            overflow: 'auto',
+            p: 3,
+            gap: 2,
+          }}
+        >
           {/* Workflow Selector - ALWAYS VISIBLE */}
           <Typography variant="h6" gutterBottom>
             Select a Workflow
@@ -559,16 +562,22 @@ function WorkflowUI({ user }) {
               )}
             </>
           )}
-        </Box>
+        </Grid>
 
         {/* Right Pane - Main Content */}
-        <Box sx={{ 
-          flex: 1,
-          display: 'flex', 
-          flexDirection: 'column', 
-          overflow: 'auto',
-          minWidth: 0
-        }}>
+        <Grid 
+          item 
+          xs={12} 
+          md={8} 
+          lg={9}
+          sx={{ 
+            height: { xs: '50vh', md: '100%' },
+            minHeight: { xs: '400px', md: 'auto' },
+            display: 'flex', 
+            flexDirection: 'column', 
+            overflow: 'auto'
+          }}
+        >
           {!workflowName && (
             <Box
               sx={{
@@ -774,8 +783,8 @@ function WorkflowUI({ user }) {
               onSuccess={handleTaskSuccess}
             />
           )}
-        </Box>
-      </Box>
+        </Grid>
+      </Grid>
     </Box>
   );
 }

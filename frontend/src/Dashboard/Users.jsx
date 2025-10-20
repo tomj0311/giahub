@@ -84,6 +84,47 @@ export default function Users({ user }) {
     return userData.email || 'Unknown User'
   }
 
+  // Helper function to format date in user's local timezone
+  const formatLocalDate = (dateString) => {
+    if (!dateString) return 'Never'
+    
+    try {
+      console.log('[DATE DEBUG] Raw backend string:', dateString)
+      
+      // Force treat as UTC regardless of format
+      let utcDate
+      
+      if (dateString.includes('T')) {
+        // ISO-like format
+        const cleanString = dateString.replace('Z', '').replace(/\+.*$/, '')
+        utcDate = new Date(cleanString + 'Z')
+      } else {
+        // Try adding UTC designation
+        utcDate = new Date(dateString + ' UTC')
+      }
+      
+      console.log('[DATE DEBUG] UTC Date object:', utcDate.toISOString())
+      console.log('[DATE DEBUG] Local Date string:', utcDate.toString())
+      
+      const formatted = utcDate.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short', 
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      })
+      
+      console.log('[DATE DEBUG] Formatted result:', formatted)
+      return formatted
+      
+    } catch (error) {
+      console.error('Error formatting date:', error, dateString)
+      return dateString // Fallback to original string
+    }
+  }
+
   const handleManageRoles = () => {
     navigate('/dashboard/role-management')
   }
@@ -174,13 +215,14 @@ export default function Users({ user }) {
                       <TableCell>Roles</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Joined</TableCell>
+                      <TableCell>Last Login</TableCell>
                       <TableCell align="right">Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {users.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                        <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                           <Box sx={{ textAlign: 'center' }}>
                             <Typography variant="h6" color="text.secondary" gutterBottom>
                               No users found
@@ -268,6 +310,11 @@ export default function Users({ user }) {
                           </TableCell>
                           <TableCell>
                             {new Date(userData.created_at || userData.createdAt).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" color={userData.last_login ? 'text.primary' : 'text.secondary'}>
+                              {formatLocalDate(userData.last_login)}
+                            </Typography>
                           </TableCell>
                           <TableCell align="right">
                             <IconButton size="small" color="primary">
