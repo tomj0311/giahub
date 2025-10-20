@@ -93,7 +93,7 @@ class WorkflowServicePersistent:
                     try:
                         # Execute all service tasks in parallel using asyncio.gather
                         await asyncio.gather(*[
-                            cls.handle_service_task(workflow, task, user) 
+                            cls.handle_service_task(task, user) 
                             for task in service_tasks_to_handle
                         ])
                         await cls._update_workflow_status(workflow, instance_id, tenant_id)
@@ -101,9 +101,7 @@ class WorkflowServicePersistent:
                     except Exception as service_error:
                         logger.error(f"[WORKFLOW] ServiceTask(s) failed: {service_error}")
                         # Find which task failed (first one in the list for now)
-                        failed_task = service_tasks_to_handle[0] if service_tasks_to_handle else None
-                        if failed_task:
-                            await cls._handle_task_error(workflow, instance_id, tenant_id, failed_task, service_error, "ServiceTask")
+                        await cls._update_workflow_status(workflow, instance_id, tenant_id, step_count)
                         raise HTTPException(status_code=500, detail=f"ServiceTask failed: {str(service_error)}")
 
                 # If we handled custom tasks, continue to next iteration
@@ -235,7 +233,7 @@ class WorkflowServicePersistent:
         })
 
     @classmethod
-    async def handle_service_task(cls, workflow, task, user):
+    async def handle_service_task(cls, task, user):
         """Handle ServiceTask by reading extensionElements for function calls or fallback to external API"""
         try:
             bpmn_id = task.task_spec.bpmn_id
@@ -268,8 +266,9 @@ class WorkflowServicePersistent:
                             
                             if param_name:
                                 # Check if value is in task data, otherwise use config value
-                                if param_value in task.data:
+                                if param_name in task.data:
                                     function_params[param_name] = task.data[param_name]
+                                    logger.info(f"[WORKFLOW] Using task data for parameter '{param_name}' = {task.data[param_name]}")
                                 else:
                                     function_params[param_name] = param_value
                                     logger.info(f"[WORKFLOW] Using config default value for parameter '{param_name}' = {param_value}")
@@ -312,14 +311,13 @@ class WorkflowServicePersistent:
             else:
                 # Empty response - treat as error
                 logger.warning(f"[WORKFLOW] ServiceTask {task.task_spec.bpmn_id} received empty response")
-
+                task.error()
+                task.data['error'] = f"Empty response from service"
                 raise Exception(f"ServiceTask {task.task_spec.bpmn_id} failed: Empty response from service")
             
         except Exception as e:
             logger.error(f"[WORKFLOW] Error handling ServiceTask {task.task_spec.bpmn_id}: {e}")
             bpmn_id = task.task_spec.bpmn_id
-            
-            # Re-raise to stop workflow execution
             raise
 
     @classmethod
