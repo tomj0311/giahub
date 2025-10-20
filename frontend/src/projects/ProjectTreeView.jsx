@@ -957,56 +957,106 @@ function ProjectTreeView({ user }) {
             state: { projectId: node.id, projectName: node.name } 
           })}
         >
-          <TableCell sx={{ pl: 2 + level * 4, borderLeft: '3px solid', borderLeftColor: `${getStatusColor(node.status)}.main` }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              {hasChildren ? (
-                <IconButton
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleExpand(node.id)
-                  }}
-                  sx={{ 
-                    p: 1.5,
-                    '&:hover': {
-                      bgcolor: 'action.hover'
-                    }
-                  }}
-                >
-                  {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-                </IconButton>
-              ) : (
-                <Box sx={{ width: 40 }} />
-              )}
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                {node.name}
-              </Typography>
-            </Box>
-          </TableCell>
+          {orderedFields.map((field) => {
+            if (!visibleColumns[field.name]) return null
 
-          <TableCell>{node.priority}</TableCell>
+            // Special handling for 'name' column with tree structure
+            if (field.name === 'name') {
+              return (
+                <TableCell key={field.name} sx={{ pl: 2 + level * 4, borderLeft: '3px solid', borderLeftColor: `${getStatusColor(node.status)}.main` }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {hasChildren ? (
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleExpand(node.id)
+                        }}
+                        sx={{ 
+                          p: 1.5,
+                          '&:hover': {
+                            bgcolor: 'action.hover'
+                          }
+                        }}
+                      >
+                        {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                      </IconButton>
+                    ) : (
+                      <Box sx={{ width: 40 }} />
+                    )}
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {node.name}
+                    </Typography>
+                  </Box>
+                </TableCell>
+              )
+            }
 
-          <TableCell>
-            <Chip
-              label={getStatusLabel(node.status)}
-              color={getStatusColor(node.status)}
-              size="small"
-            />
-          </TableCell>
+            // Special handling for 'status' column with Chip
+            if (field.name === 'status') {
+              return (
+                <TableCell key={field.name}>
+                  <Chip
+                    label={getStatusLabel(node.status)}
+                    color={getStatusColor(node.status)}
+                    size="small"
+                  />
+                </TableCell>
+              )
+            }
 
-          <TableCell>{node.assignee_name || node.assignee || '-'}</TableCell>
+            // Special handling for 'due_date' with styling
+            if (field.name === 'due_date') {
+              return (
+                <TableCell key={field.name} sx={getDueDateStyle(node.due_date, node.status)}>
+                  {formatDate(node.due_date)}
+                </TableCell>
+              )
+            }
 
-          <TableCell>{node.approver_name || node.approver || '-'}</TableCell>
+            // Special handling for 'start_date'
+            if (field.name === 'start_date') {
+              return (
+                <TableCell key={field.name}>
+                  {formatDate(node.start_date)}
+                </TableCell>
+              )
+            }
 
-          <TableCell>
-            {formatDate(node.start_date)}
-          </TableCell>
+            // Special handling for 'assignee'
+            if (field.name === 'assignee') {
+              return (
+                <TableCell key={field.name}>
+                  {node.assignee_name || node.assignee || '-'}
+                </TableCell>
+              )
+            }
 
-          <TableCell sx={getDueDateStyle(node.due_date, node.status)}>
-            {formatDate(node.due_date)}
-          </TableCell>
+            // Special handling for 'approver'
+            if (field.name === 'approver') {
+              return (
+                <TableCell key={field.name}>
+                  {node.approver_name || node.approver || '-'}
+                </TableCell>
+              )
+            }
 
-          <TableCell>{node.progress}%</TableCell>
+            // Special handling for 'progress'
+            if (field.name === 'progress') {
+              return (
+                <TableCell key={field.name}>
+                  {node.progress}%
+                </TableCell>
+              )
+            }
+
+            // Default rendering for other columns
+            return (
+              <TableCell key={field.name}>
+                {renderCellValue(node, field.name)}
+              </TableCell>
+            )
+          })}
 
           <TableCell align="right" sx={{ whiteSpace: 'nowrap', minWidth: { xs: 120, sm: 160 } }}>
             <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
@@ -1200,7 +1250,7 @@ function ProjectTreeView({ user }) {
                   <TableBody>
                     {projectTree.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} align="center">
+                        <TableCell colSpan={Object.values(visibleColumns).filter(Boolean).length + 1} align="center">
                           <Typography variant="body2" color="text.secondary">
                             No projects found. Create one to get started.
                           </Typography>
@@ -1366,25 +1416,6 @@ function ProjectTreeView({ user }) {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseColumnDialog}>Close</Button>
-          <Button
-            onClick={() => {
-              // Reset to default visible columns
-              const defaultVisible = {
-                name: true,
-                priority: true,
-                status: true,
-                assignee: true,
-                approver: true,
-                start_date: true,
-                due_date: true,
-                progress: true
-              }
-              setVisibleColumns(defaultVisible)
-            }}
-            variant="outlined"
-          >
-            Reset to Default
-          </Button>
         </DialogActions>
       </Dialog>
     </Box>

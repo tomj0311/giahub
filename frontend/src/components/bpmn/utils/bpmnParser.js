@@ -2,7 +2,7 @@
 // This function parses BPMN 2.0 XML and converts it to React Flow compatible nodes and edges
 
 // Helper function to capture nested XML elements for preservation
-// Excludes incoming/outgoing flow references since they're generated dynamically
+// Excludes incoming/outgoing flow references and documentation since they're generated dynamically
 export const captureNestedElements = (element) => {
   if (!element) return '';
   
@@ -13,11 +13,14 @@ export const captureNestedElements = (element) => {
     
     // Serialize each child element individually to preserve XML structure
     Array.from(element.childNodes).forEach(child => {
-      // Skip incoming/outgoing elements since they'll be generated dynamically
+      // Skip incoming/outgoing/documentation elements since they'll be generated dynamically
       if (child.nodeType === Node.ELEMENT_NODE) {
         const tagName = child.tagName.toLowerCase();
+        // Exclude incoming, outgoing, and documentation tags to prevent duplication
         if (tagName !== 'incoming' && tagName !== 'outgoing' && 
-            !tagName.includes(':incoming') && !tagName.includes(':outgoing')) {
+            tagName !== 'documentation' &&
+            !tagName.includes(':incoming') && !tagName.includes(':outgoing') &&
+            !tagName.includes(':documentation')) {
           xmlContent += serializer.serializeToString(child);
         }
       } else if (child.nodeType === Node.TEXT_NODE && child.textContent.trim()) {
@@ -34,12 +37,14 @@ export const captureNestedElements = (element) => {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = element.innerHTML || '';
     
-    // Remove incoming and outgoing elements since they'll be generated dynamically
+    // Remove incoming, outgoing, and documentation elements since they'll be generated dynamically
     const incomingElements = tempDiv.querySelectorAll('incoming, bpmn\\:incoming, bpmn2\\:incoming');
     const outgoingElements = tempDiv.querySelectorAll('outgoing, bpmn\\:outgoing, bpmn2\\:outgoing');
+    const documentationElements = tempDiv.querySelectorAll('documentation, bpmn\\:documentation, bpmn2\\:documentation');
     
     incomingElements.forEach(el => el.remove());
     outgoingElements.forEach(el => el.remove());
+    documentationElements.forEach(el => el.remove());
     
     return tempDiv.innerHTML || '';
   }

@@ -1288,7 +1288,7 @@ function GanttChart({ user, projectId: propProjectId }) {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Subject</TableCell>
+                  <TableCell>District/Assembly</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Assignee</TableCell>
                   <TableCell>Approver</TableCell>
