@@ -22,9 +22,11 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  Stack,
+  Tooltip,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { CheckCircle, XCircle, Clock, AlertTriangle, ArrowLeft, Play } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, AlertTriangle, ArrowLeft, Play, Edit } from 'lucide-react';
 import sharedApiService from '../utils/apiService';
 import TaskCompletion from './TaskCompletion';
 
@@ -53,6 +55,10 @@ function WorkflowUI({ user }) {
   const [selectedWorkflow, setSelectedWorkflow] = useState(null);
   const [groupedWorkflows, setGroupedWorkflows] = useState({});
   const [expandedCategory, setExpandedCategory] = useState(null); // Track which category is expanded
+  
+  // BPMN data for editing
+  const [bpmnData, setBpmnData] = useState(null);
+  const [loadingBpmn, setLoadingBpmn] = useState(false);
   
   const pollInterval = useRef(null);
   const hasStarted = useRef(false);
@@ -165,6 +171,53 @@ function WorkflowUI({ user }) {
     } catch (err) {
       setError(err.message);
       setState('failed');
+    }
+  };
+
+  // Load BPMN data for selected workflow
+  const loadBpmnData = async (workflowConfig) => {
+    if (!workflowConfig) return;
+    
+    const wfId = workflowConfig.id || workflowConfig.workflow_id || workflowConfig._id;
+    if (!wfId) return;
+    
+    setLoadingBpmn(true);
+    try {
+      const bpmnResult = await sharedApiService.makeRequest(
+        `/api/workflows/configs/${wfId}/bpmn`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/xml, text/xml, */*',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        },
+        { workflowId: wfId, action: 'get_bpmn' }
+      );
+
+      if (bpmnResult.success || (typeof bpmnResult === 'string' && bpmnResult.includes('<'))) {
+        // Handle different response formats
+        let bpmnContent = bpmnResult.data || bpmnResult;
+        
+        // If it's still an object, try to extract the actual content
+        if (typeof bpmnContent === 'object' && bpmnContent.data) {
+          bpmnContent = bpmnContent.data;
+        }
+        
+        if (typeof bpmnContent === 'string' && bpmnContent.includes('<')) {
+          setBpmnData(bpmnContent);
+        } else {
+          setBpmnData(null);
+        }
+      } else {
+        setBpmnData(null);
+      }
+    } catch (err) {
+      console.error('Failed to load BPMN:', err);
+      setBpmnData(null);
+    } finally {
+      setLoadingBpmn(false);
     }
   };
 
@@ -404,6 +457,34 @@ function WorkflowUI({ user }) {
     loadWorkflows();
   };
 
+  // Handle Edit BPMN button click - navigate to BPMN editor with XML data
+  const handleEditBPMN = () => {
+    if (!bpmnData || !selectedWorkflow) return;
+    
+    const wfId = selectedWorkflow.id || selectedWorkflow.workflow_id || selectedWorkflow._id;
+    
+    // Get the minio full path from the workflow config
+    const minioFullPath = selectedWorkflow.bpmn_path || 
+                         selectedWorkflow.file_path || 
+                         selectedWorkflow.minio_path ||
+                         selectedWorkflow.path ||
+                         selectedWorkflow.s3_path ||
+                         selectedWorkflow.bpmn_file_path ||
+                         selectedWorkflow.filePath;
+    
+    // Navigate to dashboard/bpmn with the XML data and full minio path
+    navigate('/dashboard/bpmn', {
+      state: {
+        initialBPMN: bpmnData,
+        editMode: true,
+        workflowId: wfId,
+        minioFullPath: minioFullPath,
+        saveEndpoint: `/api/workflows/configs/${wfId}/bpmn`,
+        saveMode: 'workflow'
+      }
+    });
+  };
+
   const getStateIcon = () => {
     switch (state) {
       case 'loading':
@@ -534,6 +615,7 @@ function WorkflowUI({ user }) {
                   selected={selectedWorkflow?.name === workflow.name}
                   onClick={() => {
                     setSelectedWorkflow(workflow);
+                    loadBpmnData(workflow); // Load BPMN data when workflow is selected
                   }}
                   sx={{ pl: 2 }}
                 >
@@ -603,6 +685,24 @@ function WorkflowUI({ user }) {
             )}
           </Box>
           
+          {/* Edit Workflow Button - Before List */}
+          <Tooltip title={!selectedWorkflow ? "Select a workflow first" : !bpmnData ? "Loading workflow diagram..." : "Edit workflow diagram"}>
+            <span>
+              <Button
+                variant="outlined"
+                color="secondary"
+                size="large"
+                fullWidth
+                startIcon={loadingBpmn ? <CircularProgress size={16} /> : <Edit size={20} />}
+                onClick={handleEditBPMN}
+                disabled={!selectedWorkflow || !bpmnData || loadingBpmn}
+                sx={{ mb: 2 }}
+              >
+                Edit Workflow
+              </Button>
+            </span>
+          </Tooltip>
+          
           {/* Workflow List by Category */}
           <Box sx={{ 
             flexGrow: 1, 
@@ -615,23 +715,27 @@ function WorkflowUI({ user }) {
             {renderGroupedWorkflowList()}
           </Box>
           
-          {/* Start Workflow Button */}
-          <Button
-            variant="contained"
-            size="large"
-            fullWidth
-            startIcon={<Play size={20} />}
-            onClick={() => {
-              if (selectedWorkflow) {
-                // Reset hasStarted ref to allow workflow to start
-                hasStarted.current = false;
-                setSearchParams({ workflow: selectedWorkflow.name });
-              }
-            }}
-            disabled={!selectedWorkflow}
-          >
-            Start Workflow
-          </Button>
+          {/* Start Workflow Button - After List */}
+          <Tooltip title="Start a new workflow instance">
+            <span>
+              <Button
+                variant="contained"
+                size="large"
+                fullWidth
+                startIcon={<Play size={20} />}
+                onClick={() => {
+                  if (selectedWorkflow) {
+                    // Reset hasStarted ref to allow workflow to start
+                    hasStarted.current = false;
+                    setSearchParams({ workflow: selectedWorkflow.name });
+                  }
+                }}
+                disabled={!selectedWorkflow}
+              >
+                Start Workflow
+              </Button>
+            </span>
+          </Tooltip>
 
           {/* Workflow Info - Show when workflow is running */}
           {workflowName && (
