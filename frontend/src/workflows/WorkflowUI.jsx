@@ -414,11 +414,7 @@ function WorkflowUI({ user }) {
           console.log('❌ Found failed task:', task.task_spec);
           clearInterval(pollInterval.current);
           
-          const errorMsg = task.data?.error || 
-                          task.data?.error_message || 
-                          workflowData.error || 
-                          workflowData.error_message ||
-                          `Task "${task.task_spec}" failed during execution`;
+          const errorMsg = task.data?.error?.error || `Task "${task.task_spec}" failed`;
           
           setState('failed');
           setError(errorMsg);
