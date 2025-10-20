@@ -749,7 +749,7 @@ function ProjectTreeView({ user }) {
   // Get column label mapping
   const getColumnLabel = (columnName) => {
     const labels = {
-      name: 'Subject',
+      name: 'District/Assembly',
       priority: 'Priority',
       status: 'Status',
       assignee: 'Assignee',
