@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -32,6 +32,9 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
   const [taskData, setTaskData] = useState(null);
   const [formData, setFormData] = useState({});
   const [fieldErrors, setFieldErrors] = useState({});
+  
+  // Store the latest handleSubmit in a ref
+  const handleSubmitRef = useRef(null);
 
   // Helper function to extract JSX code from markdown blocks
   const extractJSXFromMarkdown = (script) => {
@@ -63,8 +66,9 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
   useEffect(() => {
     const handleDynamicFormSubmit = (event) => {
       console.log('📨 Received FormSubmit event from dynamic component:', event.detail);
-      if (event.detail && taskData) {
-        handleSubmit(event.detail);
+      // Use ref to get latest handleSubmit function
+      if (event.detail && handleSubmitRef.current) {
+        handleSubmitRef.current(event.detail);
       }
     };
 
@@ -73,7 +77,7 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
     return () => {
       window.removeEventListener('workflowFormSubmit', handleDynamicFormSubmit);
     };
-  }, [taskData, workflowId, instanceId]);
+  }, []); // No dependencies - event listener stays stable
 
   const loadTaskData = async () => {
     try {
@@ -232,6 +236,12 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
     console.log('📝 formData:', formData);
     console.log('🔧 taskData:', taskData);
     
+    // Prevent double submission
+    if (submitting) {
+      console.log('⚠️ Already submitting, ignoring...');
+      return;
+    }
+    
     // Validate required fields if using form fields (not dynamic component)
     if (submittedData === null && taskData?.formFields?.length > 0) {
       const errors = validateRequired();
@@ -363,6 +373,9 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
       setSubmitting(false);
     }
   };
+  
+  // Update ref whenever handleSubmit changes
+  handleSubmitRef.current = handleSubmit;
 
   if (loading) {
     return (

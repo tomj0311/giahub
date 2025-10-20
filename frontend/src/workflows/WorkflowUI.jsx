@@ -49,12 +49,14 @@ function WorkflowUI({ user }) {
   const [readyTaskData, setReadyTaskData] = useState(null); // Store complete ready task data
   const [taskHistory, setTaskHistory] = useState([]); // Store task execution history
   const [currentTasks, setCurrentTasks] = useState({}); // Store current task states
+  const [isWorkflowActive, setIsWorkflowActive] = useState(false); // Track if workflow is running/completed
   
   // Workflow selector
   const [workflows, setWorkflows] = useState([]);
   const [selectedWorkflow, setSelectedWorkflow] = useState(null);
   const [groupedWorkflows, setGroupedWorkflows] = useState({});
   const [expandedCategory, setExpandedCategory] = useState(null); // Track which category is expanded
+  const [workflowsLoaded, setWorkflowsLoaded] = useState(false); // Track if workflows have been loaded
   
   // BPMN data for editing
   const [bpmnData, setBpmnData] = useState(null);
@@ -71,12 +73,16 @@ function WorkflowUI({ user }) {
     };
   }, []);
 
-  // Initialize
+  // Initialize - Load workflows only once on mount
   useEffect(() => {
-    // ALWAYS load workflows on mount
-    loadWorkflows();
-    
-    if (workflowName && !hasStarted.current) {
+    if (!workflowsLoaded) {
+      loadWorkflows();
+    }
+  }, []);
+  
+  // Handle workflow execution when workflowName changes
+  useEffect(() => {
+    if (workflowName && !hasStarted.current && workflowsLoaded) {
       hasStarted.current = true;
       
       // Check if we have instance ID in URL params
@@ -89,13 +95,14 @@ function WorkflowUI({ user }) {
         startWorkflow();
       }
     }
-  }, [workflowName]);
+  }, [workflowName, workflowsLoaded]);
 
   const loadExistingInstance = async (instId) => {
     try {
       setState('loading');
       setError('');
       setInstanceId(instId);
+      setIsWorkflowActive(true);
 
       // Find workflow from already loaded workflows list
       let workflow = workflows.find(w => w.name === workflowName);
@@ -127,12 +134,12 @@ function WorkflowUI({ user }) {
     } catch (err) {
       setError(err.message);
       setState('failed');
+      setIsWorkflowActive(true); // Keep it active to show back button
     }
   };
 
   const loadWorkflows = async () => {
     try {
-      setState('loading');
       const result = await sharedApiService.makeRequest(
         '/api/workflows/configs/all',
         {
@@ -163,14 +170,12 @@ function WorkflowUI({ user }) {
         });
         
         setGroupedWorkflows(groupedByCat);
-        setState('idle');
+        setWorkflowsLoaded(true);
       } else {
         setError('Failed to load workflows');
-        setState('failed');
       }
     } catch (err) {
       setError(err.message);
-      setState('failed');
     }
   };
 
@@ -245,6 +250,7 @@ function WorkflowUI({ user }) {
     try {
       setState('loading');
       setError('');
+      setIsWorkflowActive(true);
 
       // Find workflow from already loaded workflows list
       let workflow = workflows.find(w => w.name === workflowName);
@@ -300,6 +306,7 @@ function WorkflowUI({ user }) {
     } catch (err) {
       setError(err.message);
       setState('failed');
+      setIsWorkflowActive(true); // Keep it active to show back button
     }
   };
 
@@ -394,7 +401,12 @@ function WorkflowUI({ user }) {
           });
         
         console.log('📊 Task History:', history.length, 'tasks');
-        setTaskHistory(history);
+        
+        // Only update task history if it changed (to prevent flickering)
+        setTaskHistory(prevHistory => {
+          const historyChanged = JSON.stringify(prevHistory) !== JSON.stringify(history);
+          return historyChanged ? history : prevHistory;
+        });
         
         // CHECK 1: Is workflow complete? (Only check the completed flag!)
         const isCompleted = instance.serialized_data?.completed === true || 
@@ -403,6 +415,7 @@ function WorkflowUI({ user }) {
         if (isCompleted) {
           console.log('✅ Workflow completed successfully!');
           clearInterval(pollInterval.current);
+          pollInterval.current = null;
           setState('completed');
           return;
         }
@@ -413,6 +426,7 @@ function WorkflowUI({ user }) {
           const [taskId, task] = failedTask;
           console.log('❌ Found failed task:', task.task_spec);
           clearInterval(pollInterval.current);
+          pollInterval.current = null;
           
           const errorMsg = task.data?.error?.error || `Task "${task.task_spec}" failed`;
           
@@ -431,6 +445,7 @@ function WorkflowUI({ user }) {
           const [taskId, task] = readyTask;
           console.log('✅ Found ready task:', task.task_spec);
           clearInterval(pollInterval.current);
+          pollInterval.current = null;
           
           // Store task data and show TaskCompletion
           setReadyTaskData({ taskSpec: task.task_spec });
@@ -456,7 +471,13 @@ function WorkflowUI({ user }) {
   };
 
   const handleResetWorkflow = () => {
-    // Reset all state
+    // Stop polling first
+    if (pollInterval.current) {
+      clearInterval(pollInterval.current);
+      pollInterval.current = null;
+    }
+    
+    // Reset all workflow-specific state
     hasStarted.current = false;
     setWorkflowId(null);
     setInstanceId(null);
@@ -466,11 +487,10 @@ function WorkflowUI({ user }) {
     setCurrentTasks({});
     setState('idle');
     setError('');
-    if (pollInterval.current) clearInterval(pollInterval.current);
+    setIsWorkflowActive(false);
     
-    // Clear URL and reload workflows
+    // Clear URL - do NOT reload workflows (they're already loaded)
     setSearchParams({});
-    loadWorkflows();
   };
 
   // Handle Edit BPMN button click - navigate to BPMN editor with XML data
@@ -601,19 +621,19 @@ function WorkflowUI({ user }) {
   const renderGroupedWorkflowList = () => {
     const cats = Object.keys(groupedWorkflows).sort((a, b) => a.localeCompare(b));
     
-    if (!cats.length && !state === 'loading') {
-      return (
-        <Typography variant="body2" sx={{ p: 2, color: 'text.secondary' }}>
-          No workflows found.
-        </Typography>
-      );
-    }
-    
-    if (state === 'loading' && workflows.length === 0) {
+    if (!workflowsLoaded) {
       return (
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
           <CircularProgress size={20} />
         </Box>
+      );
+    }
+    
+    if (!cats.length) {
+      return (
+        <Typography variant="body2" sx={{ p: 2, color: 'text.secondary' }}>
+          No workflows found.
+        </Typography>
       );
     }
     
@@ -744,7 +764,11 @@ function WorkflowUI({ user }) {
           </Box>
           
           {/* Start Workflow Button - After List */}
-          <Tooltip title="Start a new workflow instance">
+          <Tooltip title={
+            !selectedWorkflow ? "Select a workflow first" :
+            isWorkflowActive ? "A workflow is currently running or has finished. Click 'Back' to start a new one." :
+            "Start a new workflow instance"
+          }>
             <span>
               <Button
                 variant="contained"
@@ -752,13 +776,13 @@ function WorkflowUI({ user }) {
                 fullWidth
                 startIcon={<Play size={20} />}
                 onClick={() => {
-                  if (selectedWorkflow) {
+                  if (selectedWorkflow && !isWorkflowActive) {
                     // Reset hasStarted ref to allow workflow to start
                     hasStarted.current = false;
                     setSearchParams({ workflow: selectedWorkflow.name });
                   }
                 }}
-                disabled={!selectedWorkflow}
+                disabled={!selectedWorkflow || isWorkflowActive}
               >
                 Start Workflow
               </Button>
@@ -903,7 +927,7 @@ function WorkflowUI({ user }) {
                         onClick={handleResetWorkflow}
                         size="medium"
                       >
-                        Back
+                        Done!
                       </Button>
                     )}
                   </Box>
@@ -990,7 +1014,7 @@ function WorkflowUI({ user }) {
                 </Box>
               )}
 
-              {/* Show Back button if no tasks but workflow is completed/failed */}
+              {/* Show Done button if no tasks but workflow is completed/failed */}
               {taskHistory.length === 0 && (state === 'completed' || state === 'failed') && (
                 <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
                   <Button 
@@ -998,7 +1022,7 @@ function WorkflowUI({ user }) {
                     onClick={handleResetWorkflow}
                     size="large"
                   >
-                    Back
+                    Done!
                   </Button>
                 </Box>
               )}

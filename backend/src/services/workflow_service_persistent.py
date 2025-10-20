@@ -113,32 +113,9 @@ class WorkflowServicePersistent:
 
                 try:
                     logger.info(f"[TRACE] About to execute workflow.do_engine_steps() - step {step_count}")
-                    
-                    # Track completed tasks - simple sync callback
-                    completed_tasks = []
-                    
-                    # Capture the current running loop to schedule real-time async updates from thread
-                    loop = asyncio.get_running_loop()
-
-                    def update_callback(task):
-                        logger.info(f"[WORKFLOW] Task completed - updating workflow status in real-time")
-                        # Fire-and-forget real-time status persistence without blocking engine
-                        # try:
-                        #     fut = asyncio.run_coroutine_threadsafe(
-                        #         cls._update_workflow_status(workflow, instance_id, tenant_id, step_count),
-                        #         loop,
-                        #     )
-                        #     # Optionally attach a done callback to log errors
-                        #     def _done(f):
-                        #         exc = f.exception()
-                        #         if exc:
-                        #             logger.error(f"[WORKFLOW] Real-time status update failed: {exc}")
-                        #     fut.add_done_callback(_done)
-                        # except Exception as sched_err:
-                        #     logger.error(f"[WORKFLOW] Failed to schedule real-time status update: {sched_err}")
-                    
+                                      
                     # Run engine steps in a worker thread to allow thread-safe scheduling above
-                    await asyncio.to_thread(workflow.do_engine_steps, update_callback=update_callback)
+                    await asyncio.to_thread(workflow.do_engine_steps)
                     logger.info(f"[TRACE] Successfully completed workflow.do_engine_steps() - step {step_count}")
 
                 except Exception as engine_error:
