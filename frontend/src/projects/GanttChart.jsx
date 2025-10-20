@@ -55,7 +55,7 @@ function GanttChart({ user, projectId: propProjectId }) {
   const [timelineDays, setTimelineDays] = useState([])
   const [timelineWeeks, setTimelineWeeks] = useState([])
   const [timelineYears, setTimelineYears] = useState([])
-  const [zoomLevel, setZoomLevel] = useState(1)
+  const [zoomLevel, setZoomLevel] = useState(0.5)
   const [viewMode, setViewMode] = useState('monthly') // 'daily', 'weekly', 'monthly', 'yearly'
   const ganttRef = useRef(null)
 
@@ -269,7 +269,7 @@ function GanttChart({ user, projectId: propProjectId }) {
                   fontSize: '0.75rem',
                   color: theme.palette.mode === 'light' ? '#000000' : 'text.primary'
                 }}>
-                  {item.assignee}
+                  {item.assignee_name || item.assignee}
                 </Typography>
               </Box>
             )}
@@ -288,7 +288,7 @@ function GanttChart({ user, projectId: propProjectId }) {
                   fontSize: '0.75rem',
                   color: theme.palette.mode === 'light' ? '#000000' : 'text.primary'
                 }}>
-                  {item.approver}
+                  {item.approver_name || item.approver}
                 </Typography>
               </Box>
             )}
@@ -962,9 +962,9 @@ function GanttChart({ user, projectId: propProjectId }) {
             />
           </TableCell>
 
-          <TableCell>{proj.assignee || '-'}</TableCell>
+          <TableCell>{proj.assignee_name || proj.assignee || '-'}</TableCell>
 
-          <TableCell>{proj.approver || '-'}</TableCell>
+          <TableCell>{proj.approver_name || proj.approver || '-'}</TableCell>
 
           <TableCell>
             {formatDate(proj.start_date)}
@@ -1020,8 +1020,8 @@ function GanttChart({ user, projectId: propProjectId }) {
                   variant="outlined"
                 />
               </TableCell>
-              <TableCell>{activity.assignee || '-'}</TableCell>
-              <TableCell>{activity.approver || '-'}</TableCell>
+              <TableCell>{activity.assignee_name || activity.assignee || '-'}</TableCell>
+              <TableCell>{activity.approver_name || activity.approver || '-'}</TableCell>
               <TableCell>
                 {formatDate(activity.start_date)}
               </TableCell>

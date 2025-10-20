@@ -966,12 +966,17 @@ function ProjectTreeView({ user }) {
                     e.stopPropagation()
                     toggleExpand(node.id)
                   }}
-                  sx={{ p: 0.5 }}
+                  sx={{ 
+                    p: 1.5,
+                    '&:hover': {
+                      bgcolor: 'action.hover'
+                    }
+                  }}
                 >
-                  {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
                 </IconButton>
               ) : (
-                <Box sx={{ width: 24 }} />
+                <Box sx={{ width: 40 }} />
               )}
               <Typography variant="body2" sx={{ fontWeight: 500 }}>
                 {node.name}
@@ -989,9 +994,9 @@ function ProjectTreeView({ user }) {
             />
           </TableCell>
 
-          <TableCell>{node.assignee || '-'}</TableCell>
+          <TableCell>{node.assignee_name || node.assignee || '-'}</TableCell>
 
-          <TableCell>{node.approver || '-'}</TableCell>
+          <TableCell>{node.approver_name || node.approver || '-'}</TableCell>
 
           <TableCell>
             {formatDate(node.start_date)}
