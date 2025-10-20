@@ -558,7 +558,7 @@ function WorkflowExecution({ user }) {
       }}
     >
       {/* Header */}
-      <Grid container sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+      <Grid container sx={{ p: 2, borderBottom: '2px solid rgba(255, 255, 255, 0.08)' }}>
         <Grid item xs={12} display="flex" alignItems="center" justifyContent="space-between">
           <Grid container alignItems="center" spacing={2} sx={{ flex: 1 }}>
             <Grid item>
@@ -612,25 +612,34 @@ function WorkflowExecution({ user }) {
         <Grid 
           item 
           xs={12} 
-          md={5} 
-          lg={4} 
+          md={4} 
+          lg={3} 
           sx={{ 
-            // Use inset box-shadow for a subtler hairline separator
-            borderRight: { xs: 'none', md: 'none' },
-            boxShadow: { xs: 'none', md: `inset -1px 0 0 ${alpha(theme.palette.divider, 0.12)}` },
-            borderBottom: { xs: '1px solid', md: 'none' },
-            borderBottomColor: 'divider',
+            borderRight: { xs: 'none', md: '2px solid rgba(255, 255, 255, 0.08)' },
+            borderBottom: { xs: '2px solid rgba(255, 255, 255, 0.08)', md: 'none' },
             display: 'flex',
             flexDirection: 'column',
             height: { xs: 'auto', md: '100%' },
             maxHeight: { xs: '40vh', md: '100%' },
+            minWidth: 0, // Allow flex item to shrink below content size
             overflow: 'hidden'
           }}
         >
           {/* Left Header */}
-          <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
-            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-              <Typography variant="h6">
+          <Box sx={{ p: 2, borderBottom: '2px solid rgba(255, 255, 255, 0.08)', bgcolor: 'background.paper', minWidth: 0 }}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1, minWidth: 0 }}>
+              <Typography 
+                variant="h6" 
+                sx={{ 
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  minWidth: 0,
+                  flex: 1,
+                  mr: 1
+                }}
+                title={workflowConfig?.name || 'Active Instances'}
+              >
                 {workflowConfig?.name || 'Active Instances'}
               </Typography>
               <IconButton 
@@ -638,19 +647,32 @@ function WorkflowExecution({ user }) {
                 onClick={() => loadAllWorkflows(currentPage)}
                 disabled={loadingWorkflows}
                 title="Refresh list"
+                sx={{ flexShrink: 0 }}
               >
                 <RefreshCw size={16} />
               </IconButton>
             </Stack>
             
             {workflowConfig?.description && (
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              <Typography 
+                variant="body2" 
+                color="text.secondary" 
+                sx={{ 
+                  mb: 1,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical'
+                }}
+                title={workflowConfig.description}
+              >
                 {workflowConfig.description}
               </Typography>
             )}
             
             {selectedInstanceForBpmn && (
-              <Stack direction="row" spacing={1} alignItems="center">
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
                 <Chip 
                   label={`Selected: ${selectedInstanceForBpmn.substring(0, 8)}...`}
                   color="primary"
@@ -696,12 +718,47 @@ function WorkflowExecution({ user }) {
               </Box>
             ) : allWorkflows.length > 0 ? (
               <TableContainer key={refreshKey}>
-                <Table size="small">
+                <Table 
+                  size="small" 
+                  sx={{ 
+                    tableLayout: 'fixed', 
+                    width: '100%'
+                  }}
+                >
                   <TableHead>
                     <TableRow>
-                      <TableCell>Instance ID</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell width="60" align="center" sx={{ px: 0, textAlign: 'center' }}>Actions</TableCell>
+                      <TableCell 
+                        sx={{ 
+                          width: '40%',
+                          pl: 2,
+                          pr: 1,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}
+                      >
+                        Instance ID
+                      </TableCell>
+                      <TableCell 
+                        sx={{ 
+                          width: '35%',
+                          pl: 1,
+                          pr: 1
+                        }}
+                      >
+                        Status
+                      </TableCell>
+                      <TableCell 
+                        sx={{ 
+                          width: '25%',
+                          pl: 2,
+                          pr: 2,
+                          textAlign: 'center',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        Actions
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -742,10 +799,27 @@ function WorkflowExecution({ user }) {
                           }
                         }}
                       >
-                        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                        <TableCell 
+                          sx={{ 
+                            fontFamily: 'monospace', 
+                            fontSize: '0.75rem',
+                            pl: 2,
+                            pr: 1,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}
+                          title={wf.instance_id}
+                        >
                           {wf.instance_id.substring(0, 12)}...
                         </TableCell>
-                        <TableCell sx={{ fontSize: '0.75rem' }}>
+                        <TableCell 
+                          sx={{ 
+                            fontSize: '0.75rem',
+                            pl: 1,
+                            pr: 1
+                          }}
+                        >
                           {(() => {
                             const hasErrorTasks = selectedInstanceForBpmn === wf.instance_id && 
                               activeTasks.some(task => task.status === 128);
@@ -757,6 +831,7 @@ function WorkflowExecution({ user }) {
                                   color="error" 
                                   size="small"
                                   icon={<XCircle size={12} />}
+                                  sx={{ maxWidth: '100%' }}
                                 />
                               );
                             }
@@ -768,6 +843,7 @@ function WorkflowExecution({ user }) {
                                   color="success" 
                                   size="small"
                                   icon={<CheckCircle size={12} />}
+                                  sx={{ maxWidth: '100%' }}
                                 />
                               );
                             }
@@ -779,6 +855,7 @@ function WorkflowExecution({ user }) {
                                   color="warning" 
                                   size="small"
                                   icon={<Clock size={12} />}
+                                  sx={{ maxWidth: '100%' }}
                                 />
                               );
                             }
@@ -789,11 +866,19 @@ function WorkflowExecution({ user }) {
                                 label={wf.status.toUpperCase()} 
                                 color="default" 
                                 size="small"
+                                sx={{ maxWidth: '100%' }}
                               />
                             );
                           })()}
                         </TableCell>
-                        <TableCell align="center" sx={{ px: 0, textAlign: 'center' }}>
+                        <TableCell 
+                          sx={{ 
+                            pl: 2,
+                            pr: 2,
+                            textAlign: 'center',
+                            verticalAlign: 'middle'
+                          }}
+                        >
                           <IconButton
                             size="small"
                             color="error"

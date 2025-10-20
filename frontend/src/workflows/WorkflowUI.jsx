@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -16,8 +16,17 @@ import {
   Autocomplete,
   IconButton,
   Grid,
+  List,
+  ListItemButton,
+  ListItemText,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Stack,
+  Tooltip,
 } from '@mui/material';
-import { CheckCircle, XCircle, Clock, AlertTriangle, ArrowLeft, Play } from 'lucide-react';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { CheckCircle, XCircle, Clock, AlertTriangle, ArrowLeft, Play, Edit } from 'lucide-react';
 import sharedApiService from '../utils/apiService';
 import TaskCompletion from './TaskCompletion';
 
@@ -44,6 +53,12 @@ function WorkflowUI({ user }) {
   // Workflow selector
   const [workflows, setWorkflows] = useState([]);
   const [selectedWorkflow, setSelectedWorkflow] = useState(null);
+  const [groupedWorkflows, setGroupedWorkflows] = useState({});
+  const [expandedCategory, setExpandedCategory] = useState(null); // Track which category is expanded
+  
+  // BPMN data for editing
+  const [bpmnData, setBpmnData] = useState(null);
+  const [loadingBpmn, setLoadingBpmn] = useState(false);
   
   const pollInterval = useRef(null);
   const hasStarted = useRef(false);
@@ -131,7 +146,23 @@ function WorkflowUI({ user }) {
       );
 
       if (result.success) {
-        setWorkflows(result.data.configurations || []);
+        const workflowList = result.data.configurations || [];
+        setWorkflows(workflowList);
+        
+        // Group workflows by category
+        const groupedByCat = workflowList.reduce((acc, w) => {
+          const cat = w.category || '_root';
+          acc[cat] = acc[cat] || [];
+          acc[cat].push(w);
+          return acc;
+        }, {});
+        
+        // Sort workflows within each category by name
+        Object.keys(groupedByCat).forEach(k => {
+          groupedByCat[k].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        });
+        
+        setGroupedWorkflows(groupedByCat);
         setState('idle');
       } else {
         setError('Failed to load workflows');
@@ -140,6 +171,53 @@ function WorkflowUI({ user }) {
     } catch (err) {
       setError(err.message);
       setState('failed');
+    }
+  };
+
+  // Load BPMN data for selected workflow
+  const loadBpmnData = async (workflowConfig) => {
+    if (!workflowConfig) return;
+    
+    const wfId = workflowConfig.id || workflowConfig.workflow_id || workflowConfig._id;
+    if (!wfId) return;
+    
+    setLoadingBpmn(true);
+    try {
+      const bpmnResult = await sharedApiService.makeRequest(
+        `/api/workflows/configs/${wfId}/bpmn`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/xml, text/xml, */*',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        },
+        { workflowId: wfId, action: 'get_bpmn' }
+      );
+
+      if (bpmnResult.success || (typeof bpmnResult === 'string' && bpmnResult.includes('<'))) {
+        // Handle different response formats
+        let bpmnContent = bpmnResult.data || bpmnResult;
+        
+        // If it's still an object, try to extract the actual content
+        if (typeof bpmnContent === 'object' && bpmnContent.data) {
+          bpmnContent = bpmnContent.data;
+        }
+        
+        if (typeof bpmnContent === 'string' && bpmnContent.includes('<')) {
+          setBpmnData(bpmnContent);
+        } else {
+          setBpmnData(null);
+        }
+      } else {
+        setBpmnData(null);
+      }
+    } catch (err) {
+      console.error('Failed to load BPMN:', err);
+      setBpmnData(null);
+    } finally {
+      setLoadingBpmn(false);
     }
   };
 
@@ -379,6 +457,34 @@ function WorkflowUI({ user }) {
     loadWorkflows();
   };
 
+  // Handle Edit BPMN button click - navigate to BPMN editor with XML data
+  const handleEditBPMN = () => {
+    if (!bpmnData || !selectedWorkflow) return;
+    
+    const wfId = selectedWorkflow.id || selectedWorkflow.workflow_id || selectedWorkflow._id;
+    
+    // Get the minio full path from the workflow config
+    const minioFullPath = selectedWorkflow.bpmn_path || 
+                         selectedWorkflow.file_path || 
+                         selectedWorkflow.minio_path ||
+                         selectedWorkflow.path ||
+                         selectedWorkflow.s3_path ||
+                         selectedWorkflow.bpmn_file_path ||
+                         selectedWorkflow.filePath;
+    
+    // Navigate to dashboard/bpmn with the XML data and full minio path
+    navigate('/dashboard/bpmn', {
+      state: {
+        initialBPMN: bpmnData,
+        editMode: true,
+        workflowId: wfId,
+        minioFullPath: minioFullPath,
+        saveEndpoint: `/api/workflows/configs/${wfId}/bpmn`,
+        saveMode: 'workflow'
+      }
+    });
+  };
+
   const getStateIcon = () => {
     switch (state) {
       case 'loading':
@@ -458,6 +564,74 @@ function WorkflowUI({ user }) {
     }
   };
 
+  // Handle accordion expansion - only one can be open at a time
+  const handleAccordionChange = (category) => (event, isExpanded) => {
+    setExpandedCategory(isExpanded ? category : null);
+  };
+
+  // Render workflows grouped by category in accordions
+  const renderGroupedWorkflowList = () => {
+    const cats = Object.keys(groupedWorkflows).sort((a, b) => a.localeCompare(b));
+    
+    if (!cats.length && !state === 'loading') {
+      return (
+        <Typography variant="body2" sx={{ p: 2, color: 'text.secondary' }}>
+          No workflows found.
+        </Typography>
+      );
+    }
+    
+    if (state === 'loading' && workflows.length === 0) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+          <CircularProgress size={20} />
+        </Box>
+      );
+    }
+    
+    return cats.map((cat) => {
+      const items = groupedWorkflows[cat] || [];
+      const title = cat === '_root' ? 'Uncategorized' : cat;
+      
+      return (
+        <Accordion 
+          key={cat} 
+          disableGutters 
+          elevation={0} 
+          square
+          expanded={expandedCategory === cat}
+          onChange={handleAccordionChange(cat)}
+        >
+          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ pl: 1 }}>
+            <Typography variant="subtitle2" sx={{ pl: 1 }}>
+              {title} ({items.length})
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails sx={{ p: 0 }}>
+            <List dense sx={{ py: 0 }}>
+              {items.map((workflow) => (
+                <ListItemButton
+                  key={workflow.name}
+                  selected={selectedWorkflow?.name === workflow.name}
+                  onClick={() => {
+                    setSelectedWorkflow(workflow);
+                    loadBpmnData(workflow); // Load BPMN data when workflow is selected
+                  }}
+                  sx={{ pl: 2 }}
+                >
+                  <ListItemText 
+                    primary={workflow.name} 
+                    primaryTypographyProps={{ sx: { pl: 1 } }} 
+                  />
+                </ListItemButton>
+              ))}
+            </List>
+          </AccordionDetails>
+        </Accordion>
+      );
+    });
+  };
+
   // Main workflow screen
   return (
     <Box sx={{ p: 0, height: '100%', width: '100%', overflow: 'hidden' }}>
@@ -496,26 +670,54 @@ function WorkflowUI({ user }) {
           }}
         >
           {/* Workflow Selector - ALWAYS VISIBLE */}
-          <Typography variant="h6" gutterBottom>
-            Select a Workflow
-          </Typography>
-          {state === 'loading' && workflows.length === 0 ? (
-            <Box sx={{ display: 'flex', alignItems: 'center', py: 4 }}>
-              <CircularProgress size={40} />
-              <Typography sx={{ ml: 2 }}>Loading...</Typography>
-            </Box>
-          ) : (
-            <>
-              <Autocomplete
-                options={workflows}
-                getOptionLabel={(option) => option.name || 'Unnamed'}
-                value={selectedWorkflow}
-                onChange={(_, newValue) => setSelectedWorkflow(newValue)}
-                renderInput={(params) => (
-                  <TextField {...params} label="Select Workflow" variant="outlined" />
-                )}
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="h6" gutterBottom>
+              Select a Workflow
+            </Typography>
+            {selectedWorkflow && (
+              <Box sx={{ mt: 1, mb: 2 }}>
+                <Chip 
+                  label={selectedWorkflow.name} 
+                  color="primary" 
+                  sx={{ maxWidth: '100%' }}
+                />
+              </Box>
+            )}
+          </Box>
+          
+          {/* Edit Workflow Button - Before List */}
+          <Tooltip title={!selectedWorkflow ? "Select a workflow first" : !bpmnData ? "Loading workflow diagram..." : "Edit workflow diagram"}>
+            <span>
+              <Button
+                variant="outlined"
+                color="secondary"
+                size="large"
+                fullWidth
+                startIcon={loadingBpmn ? <CircularProgress size={16} /> : <Edit size={20} />}
+                onClick={handleEditBPMN}
+                disabled={!selectedWorkflow || !bpmnData || loadingBpmn}
                 sx={{ mb: 2 }}
-              />
+              >
+                Edit Workflow
+              </Button>
+            </span>
+          </Tooltip>
+          
+          {/* Workflow List by Category */}
+          <Box sx={{ 
+            flexGrow: 1, 
+            overflow: 'auto',
+            mb: 2,
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1
+          }}>
+            {renderGroupedWorkflowList()}
+          </Box>
+          
+          {/* Start Workflow Button - After List */}
+          <Tooltip title="Start a new workflow instance">
+            <span>
               <Button
                 variant="contained"
                 size="large"
@@ -532,8 +734,8 @@ function WorkflowUI({ user }) {
               >
                 Start Workflow
               </Button>
-            </>
-          )}
+            </span>
+          </Tooltip>
 
           {/* Workflow Info - Show when workflow is running */}
           {workflowName && (
