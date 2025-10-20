@@ -183,6 +183,26 @@ function WorkflowUI({ user }) {
     
     setLoadingBpmn(true);
     try {
+      // First, fetch the FULL workflow config to get bpmn_path and other metadata
+      const configResult = await sharedApiService.makeRequest(
+        `/api/workflows/configs/${wfId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        },
+        { workflowId: wfId, action: 'get_config' }
+      );
+
+      // Update selectedWorkflow with the full config data (including bpmn_path)
+      if (configResult.success || configResult.data || configResult.id) {
+        const fullConfig = configResult.data || configResult;
+        setSelectedWorkflow(fullConfig); // Update with full config including bpmn_path
+      }
+
+      // Then fetch the BPMN XML content
       const bpmnResult = await sharedApiService.makeRequest(
         `/api/workflows/configs/${wfId}/bpmn`,
         {
@@ -461,9 +481,10 @@ function WorkflowUI({ user }) {
   const handleEditBPMN = () => {
     if (!bpmnData || !selectedWorkflow) return;
     
+    // Extract workflow ID from selectedWorkflow - same as WorkflowExecution.jsx
     const wfId = selectedWorkflow.id || selectedWorkflow.workflow_id || selectedWorkflow._id;
     
-    // Get the minio full path from the workflow config
+    // Get the minio full path from the existing selectedWorkflow (already loaded)
     const minioFullPath = selectedWorkflow.bpmn_path || 
                          selectedWorkflow.file_path || 
                          selectedWorkflow.minio_path ||
@@ -472,13 +493,24 @@ function WorkflowUI({ user }) {
                          selectedWorkflow.bpmn_file_path ||
                          selectedWorkflow.filePath;
     
+    console.log('🔧 WorkflowUI Edit BPMN Navigation:', {
+      wfId,
+      minioFullPath,
+      selectedWorkflow_id: selectedWorkflow.id,
+      selectedWorkflow_workflow_id: selectedWorkflow.workflow_id,
+      selectedWorkflow__id: selectedWorkflow._id,
+      selectedWorkflow_name: selectedWorkflow.name,
+      saveEndpoint: `/api/workflows/configs/${wfId}/bpmn`,
+      fullSelectedWorkflow: selectedWorkflow
+    });
+    
     // Navigate to dashboard/bpmn with the XML data and full minio path
     navigate('/dashboard/bpmn', {
       state: {
         initialBPMN: bpmnData,
         editMode: true,
         workflowId: wfId,
-        minioFullPath: minioFullPath,
+        minioFullPath: minioFullPath, // Full path like "uploads/bpmn/81e395d3-1b47-4d22-b538-1ca011358887/process(36).bpmn"
         saveEndpoint: `/api/workflows/configs/${wfId}/bpmn`,
         saveMode: 'workflow'
       }
