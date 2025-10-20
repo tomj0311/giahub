@@ -462,7 +462,7 @@ function WorkflowUI({ user }) {
   return (
     <Box sx={{ p: 0, height: '100%', width: '100%', overflow: 'hidden' }}>
       {/* Header */}
-      <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '2px solid rgba(255, 255, 255, 0.08)' }}>
+      <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid', borderColor: 'divider' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
           <Typography variant="h5" fontWeight="bold">
             {workflowName || 'Run Workflow'}
@@ -481,8 +481,11 @@ function WorkflowUI({ user }) {
           md={4} 
           lg={3}
           sx={{ 
-            borderRight: { xs: 'none', md: '2px solid rgba(255, 255, 255, 0.08)' },
-            borderBottom: { xs: '2px solid rgba(255, 255, 255, 0.08)', md: 'none' },
+            // Use inset box-shadow for a subtle hairline separator (match WorkflowExecution)
+            borderRight: { xs: 'none', md: 'none' },
+            boxShadow: { xs: 'none', md: `inset -1px 0 0 ${alpha(theme.palette.divider, 0.12)}` },
+            borderBottom: { xs: '1px solid', md: 'none' },
+            borderBottomColor: 'divider',
             display: 'flex',
             flexDirection: 'column',
             height: { xs: 'auto', md: '100%' },

@@ -558,7 +558,7 @@ function WorkflowExecution({ user }) {
       }}
     >
       {/* Header */}
-      <Grid container sx={{ p: 2, borderBottom: '2px solid rgba(255, 255, 255, 0.08)' }}>
+      <Grid container sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
         <Grid item xs={12} display="flex" alignItems="center" justifyContent="space-between">
           <Grid container alignItems="center" spacing={2} sx={{ flex: 1 }}>
             <Grid item>
@@ -612,11 +612,14 @@ function WorkflowExecution({ user }) {
         <Grid 
           item 
           xs={12} 
-          md={4} 
-          lg={3} 
+          md={5} 
+          lg={4} 
           sx={{ 
-            borderRight: { xs: 'none', md: '2px solid rgba(255, 255, 255, 0.08)' },
-            borderBottom: { xs: '2px solid rgba(255, 255, 255, 0.08)', md: 'none' },
+            // Use inset box-shadow for a subtler hairline separator
+            borderRight: { xs: 'none', md: 'none' },
+            boxShadow: { xs: 'none', md: `inset -1px 0 0 ${alpha(theme.palette.divider, 0.12)}` },
+            borderBottom: { xs: '1px solid', md: 'none' },
+            borderBottomColor: 'divider',
             display: 'flex',
             flexDirection: 'column',
             height: { xs: 'auto', md: '100%' },
@@ -625,7 +628,7 @@ function WorkflowExecution({ user }) {
           }}
         >
           {/* Left Header */}
-          <Box sx={{ p: 2, borderBottom: '2px solid rgba(255, 255, 255, 0.08)', bgcolor: 'background.paper' }}>
+          <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
               <Typography variant="h6">
                 {workflowConfig?.name || 'Active Instances'}
@@ -698,7 +701,7 @@ function WorkflowExecution({ user }) {
                     <TableRow>
                       <TableCell>Instance ID</TableCell>
                       <TableCell>Status</TableCell>
-                      <TableCell width="60">Actions</TableCell>
+                      <TableCell width="60" align="center" sx={{ px: 0, textAlign: 'center' }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -790,7 +793,7 @@ function WorkflowExecution({ user }) {
                             );
                           })()}
                         </TableCell>
-                        <TableCell>
+                        <TableCell align="center" sx={{ px: 0, textAlign: 'center' }}>
                           <IconButton
                             size="small"
                             color="error"
