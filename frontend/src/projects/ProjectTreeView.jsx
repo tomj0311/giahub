@@ -799,8 +799,14 @@ function ProjectTreeView({ user }) {
       return `${value}%`
     }
     
-    if (columnName === 'assignee' || columnName === 'approver') {
-      return value || '-'
+    if (columnName === 'assignee') {
+      // Use assignee_name from API if available, otherwise fall back to email
+      return node.assignee_name || value || '-'
+    }
+    
+    if (columnName === 'approver') {
+      // Use approver_name from API if available, otherwise fall back to email
+      return node.approver_name || value || '-'
     }
     
     return value || '-'

@@ -31,7 +31,8 @@ services:
     environment:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: minio8888
-    command: server /data --address :8007 --console-address :8006
+      MINIO_BROWSER_REDIRECT_URL: http://localhost:8804
+    command: server /data --address :8007 --console-address :8006 --anonymous
     ports:
       - "8803:8007"
       - "8804:8006"
