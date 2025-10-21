@@ -72,15 +72,6 @@ const ProjectChat = ({ user }) => {
     };
   }, []);
 
-  // Auto-start workflow when dialog opens
-  useEffect(() => {
-    if (chatOpen && messages.length === 0 && !loading && !workflowId) {
-      // Start with a default query or prompt
-      const defaultQuery = "Show me project information";
-      startChat(defaultQuery);
-    }
-  }, [chatOpen]);
-
   const startChat = async (question) => {
     try {
       setLoading(true);
@@ -597,9 +588,11 @@ const ProjectChat = ({ user }) => {
                                         <Table size="small" stickyHeader>
                                           <TableHead>
                                             <TableRow>
-                                              {Object.keys(msg.projectDocuments[0] || {}).map((key) => (
+                                              {Object.keys(msg.projectDocuments[0] || {})
+                                                .filter(key => !key.toLowerCase().includes('id') && key !== '_id')
+                                                .map((key) => (
                                                 <TableCell key={key} sx={{ fontWeight: 'bold', bgcolor: 'background.default' }}>
-                                                  {key}
+                                                  {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                                                 </TableCell>
                                               ))}
                                             </TableRow>
@@ -607,7 +600,9 @@ const ProjectChat = ({ user }) => {
                                           <TableBody>
                                             {msg.projectDocuments.map((doc, idx) => (
                                               <TableRow key={idx} hover>
-                                                {Object.entries(doc).map(([key, value]) => (
+                                                {Object.entries(doc)
+                                                  .filter(([key]) => !key.toLowerCase().includes('id') && key !== '_id')
+                                                  .map(([key, value]) => (
                                                   <TableCell key={key}>
                                                     {typeof value === 'object' ? JSON.stringify(value) : String(value)}
                                                   </TableCell>
