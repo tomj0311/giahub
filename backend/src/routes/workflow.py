@@ -74,6 +74,14 @@ async def start_workflow_by_name(
 ):
     """Start a new workflow instance using workflow name"""
     try:
+        # Log incoming request context (sanitize user)
+        safe_user = {
+            "id": user.get("id") or user.get("userId"),
+            "email": user.get("email"),
+            "username": user.get("username"),
+            "tenantId": user.get("tenantId") or user.get("tenant_id")
+        }
+        logger.info(f"[WORKFLOW][START by-name] workflow_name={workflow_name} user={safe_user} initial_keys={list((request or {}).get('initial_data', {}).keys())}")
         tenant_id = await WorkflowServicePersistent.validate_tenant_access(user)
         
         workflow_config = await WorkflowConfigService.get_workflow_config_by_name(workflow_name, user)
@@ -100,6 +108,7 @@ async def start_workflow_by_name(
         })
         
         background_tasks.add_task(_run_workflow_background, workflow_id, instance_id, initial_data, user)
+        logger.info(f"[WORKFLOW][START by-name] queued background run workflow_id={workflow_id} instance_id={instance_id} tenant={tenant_id}")
         
         return {
             "success": True,
@@ -111,7 +120,7 @@ async def start_workflow_by_name(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to start workflow by name '{workflow_name}': {str(e)}")
+        logger.error(f"Failed to start workflow by name '{workflow_name}': {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to start workflow: {str(e)}"
@@ -204,14 +213,16 @@ async def get_workflow_instance(
 ):
     """Get specific workflow instance data"""
     try:
+        logger.info(f"[WORKFLOW][GET instance] workflow_id={workflow_id} instance_id={instance_id} user_tenant={user.get('tenantId') or user.get('tenant_id')}")
         tenant_id = await WorkflowServicePersistent.validate_tenant_access(user)
         instance = await WorkflowServicePersistent.get_workflow_instance(
             workflow_id, instance_id, tenant_id
         )
+        logger.debug(f"[WORKFLOW][GET instance] found keys: serialized={list(instance.get('serialized_data', {}).keys())} created_at={instance.get('created_at')}")
         return {"success": True, "data": instance}
     except Exception as e:
         error_msg = f"Failed to get workflow instance: {str(e)}"
-        logger.error(error_msg)
+        logger.error(error_msg, exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_msg)
 
 
