@@ -190,6 +190,25 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   const workflowId = location.state?.workflowId;
   const [saving, setSaving] = useState(false);
 
+  // Ensure edges are always in sync with existing nodes (cleanup orphaned edges)
+  useEffect(() => {
+    const existingNodeIds = new Set(nodes.map(node => node.id));
+    setEdges(currentEdges => {
+      const validEdges = currentEdges.filter(edge => 
+        existingNodeIds.has(edge.source) && existingNodeIds.has(edge.target)
+      );
+      
+      // Only update if we found orphaned edges
+      if (validEdges.length !== currentEdges.length) {
+        const orphanedCount = currentEdges.length - validEdges.length;
+        console.log(`🧹 Cleanup: Removed ${orphanedCount} orphaned edge(s)`);
+        return validEdges;
+      }
+      
+      return currentEdges;
+    });
+  }, [nodes, setEdges]);
+
   // Undo/Redo state
   const [history, setHistory] = useState([{ nodes: initialNodes, edges: initialEdges }]);
   const [historyIndex, setHistoryIndex] = useState(0);
@@ -459,10 +478,17 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
     
     // If nodes are being removed, also remove connected edges
     if (removedNodeIds.length > 0) {
+      console.log('🗑️ Removing nodes:', removedNodeIds);
       setEdges(currentEdges => {
+        const edgesToRemove = currentEdges.filter(edge => 
+          removedNodeIds.includes(edge.source) || removedNodeIds.includes(edge.target)
+        );
+        console.log('🗑️ Removing edges:', edgesToRemove.map(e => `${e.id} (${e.source} -> ${e.target})`));
+        
         const newEdges = currentEdges.filter(edge => 
           !removedNodeIds.includes(edge.source) && !removedNodeIds.includes(edge.target)
         );
+        console.log('✅ Remaining edges after deletion:', newEdges.length);
         return newEdges;
       });
     }
