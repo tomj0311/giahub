@@ -871,6 +871,7 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 			<PasswordResetDialog
 				open={showPasswordReset}
 				onClose={() => setShowPasswordReset(false)}
+				onLogout={handleLogout}
 			/>
 
 			{/* Profile Dialog */}

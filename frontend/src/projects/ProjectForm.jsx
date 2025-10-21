@@ -316,6 +316,11 @@ function ProjectForm({ user }) {
       errors.approver = 'Approver must be different from Assignee'
     }
 
+    // Prevent project from being its own parent
+    if (isEditMode && form.parent_id === form.id) {
+      errors.parent_id = 'Project cannot be its own parent'
+    }
+
     if (!form.start_date) {
       errors.start_date = 'Start date is required'
     } else if (!isValidISODateString(form.start_date)) {
@@ -494,7 +499,10 @@ function ProjectForm({ user }) {
 
               {/* Parent Project */}
               <Autocomplete
-                options={[{ id: 'root', displayName: 'Root (No Parent)' }, ...allProjects]}
+                options={[
+                  { id: 'root', displayName: 'Root (No Parent)' },
+                  ...allProjects.filter(p => !isEditMode || p.id !== form.id)
+                ]}
                 getOptionLabel={(option) => option.displayName}
                 value={
                   form.parent_id === 'root'
@@ -503,9 +511,15 @@ function ProjectForm({ user }) {
                 }
                 onChange={(event, newValue) => {
                   setForm({ ...form, parent_id: newValue ? newValue.id : 'root' })
+                  setFormErrors({ ...formErrors, parent_id: undefined })
                 }}
                 renderInput={(params) => (
-                  <TextField {...params} label="Parent Project" />
+                  <TextField
+                    {...params}
+                    label="Parent Project"
+                    error={!!formErrors.parent_id}
+                    helperText={formErrors.parent_id}
+                  />
                 )}
                 fullWidth
               />
