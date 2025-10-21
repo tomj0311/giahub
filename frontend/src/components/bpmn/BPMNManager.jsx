@@ -117,12 +117,18 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false, minioFullPa
     // Create a set of all existing node IDs for fast lookup
     const existingNodeIds = new Set(nodes.map(node => node.id));
     
+    console.log('🔍 EDGE VALIDATION:');
+    console.log('   Total nodes:', nodes.length);
+    console.log('   Node IDs:', Array.from(existingNodeIds));
+    console.log('   All sequence flows before filtering:', allSequenceFlows.length);
+    console.log('   All message flows before filtering:', allMessageFlows.length);
+    
     // Filter out sequence flows that reference non-existent nodes
     const sequenceFlows = allSequenceFlows.filter(flow => {
       const sourceExists = existingNodeIds.has(flow.source);
       const targetExists = existingNodeIds.has(flow.target);
       if (!sourceExists || !targetExists) {
-        console.warn(`🚨 Filtering out sequence flow ${flow.id}: source ${flow.source} exists: ${sourceExists}, target ${flow.target} exists: ${targetExists}`);
+        console.warn(`🚨 FILTERING OUT sequence flow ${flow.id}: source ${flow.source} exists: ${sourceExists}, target ${flow.target} exists: ${targetExists}`);
         return false;
       }
       return true;
@@ -133,11 +139,17 @@ const BPMNManager = ({ nodes, edges, onImportBPMN, readOnly = false, minioFullPa
       const sourceExists = existingNodeIds.has(flow.source);
       const targetExists = existingNodeIds.has(flow.target);
       if (!sourceExists || !targetExists) {
-        console.warn(`🚨 Filtering out message flow ${flow.id}: source ${flow.source} exists: ${sourceExists}, target ${flow.target} exists: ${targetExists}`);
+        console.warn(`🚨 FILTERING OUT message flow ${flow.id}: source ${flow.source} exists: ${sourceExists}, target ${flow.target} exists: ${targetExists}`);
         return false;
       }
       return true;
     });
+    
+    console.log('✅ VALID EDGES:');
+    console.log('   Valid sequence flows:', sequenceFlows.length);
+    console.log('   Valid message flows:', messageFlows.length);
+    console.log('   Sequence flow IDs:', sequenceFlows.map(f => `${f.id} (${f.source} -> ${f.target})`));
+    console.log('   Message flow IDs:', messageFlows.map(f => `${f.id} (${f.source} -> ${f.target})`));
 
     let xml = `<?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"

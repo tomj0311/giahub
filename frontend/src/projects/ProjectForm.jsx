@@ -15,9 +15,14 @@ import {
   CardContent,
   CardActions,
   Paper,
-  Alert
+  Alert,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  FormControlLabel,
+  Switch
 } from '@mui/material'
-import { ArrowLeft, Save } from 'lucide-react'
+import { ArrowLeft, Save, ChevronDown } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { apiCall } from '../config/api'
 
@@ -40,7 +45,9 @@ function ProjectForm({ user }) {
   const isEditMode = Boolean(id)
 
   // Form state
-  const [loading, setLoading] = useState(false)
+  // Loading states
+  const [isFetching, setIsFetching] = useState(false) // initial data load for edit mode
+  const [isSaving, setIsSaving] = useState(false) // form save state (avoid full-page spinner flicker)
   const [allProjects, setAllProjects] = useState([])
   const [tenantUsers, setTenantUsers] = useState([])
   const [formErrors, setFormErrors] = useState({})
@@ -56,8 +63,38 @@ function ProjectForm({ user }) {
     due_date: '',
     start_date: '',
     progress: 0,
-    is_public: false
+    is_public: false,
+    // Additional information fields
+    district: '',
+    location: '',
+    assembly: '',
+    date_of_sanction_from: '',
+    date_of_sanction_to: '',
+    project_short_name: '',
+    file_number: '',
+    executing_agency: '',
+    implementing_agency: '',
+    head_of_account: '',
+    architect: '',
+    expenditure: 0,
+    inaugurated: false,
+    operation_started: false,
+    remarks: ''
   })
+
+  // State for distinct values
+  const [distinctValues, setDistinctValues] = useState({
+    district: [],
+    location: [],
+    assembly: [],
+    executing_agency: [],
+    implementing_agency: [],
+    head_of_account: [],
+    architect: []
+  })
+
+  // Control the Additional Information accordion to keep it expanded by default
+  const [additionalExpanded, setAdditionalExpanded] = useState(false)
 
   // Strict date validation helpers
   const isValidISODateString = useCallback((str, { minYear = 1900, maxYear = 2100 } = {}) => {
@@ -145,12 +182,58 @@ function ProjectForm({ user }) {
     }
   }, [token, showError])
 
+  // Load distinct values for dropdown fields
+  const loadDistinctValues = useCallback(async () => {
+    if (!token) return
+
+    const fields = ['district', 'location', 'assembly', 'executing_agency', 'implementing_agency', 'head_of_account', 'architect']
+    
+    try {
+      console.log('Loading distinct values for fields:', fields)
+      const promises = fields.map(async (field) => {
+        try {
+          const url = `/api/projects/distinct-values/${field}`
+          console.log(`Calling API: ${url}`)
+          const res = await apiCall(url, {
+            method: 'GET',
+            headers: { Authorization: `Bearer ${token}` }
+          })
+          
+          console.log(`API response for ${field}:`, res.status, res.ok)
+          
+          if (res.ok) {
+            const data = await res.json()
+            console.log(`Loaded ${data.values?.length || 0} values for ${field}:`, data)
+            return { field, values: data.values || [] }
+          } else {
+            const errorData = await res.json().catch(() => ({}))
+            console.error(`Failed to load values for ${field}:`, res.status, errorData)
+            return { field, values: [] }
+          }
+        } catch (error) {
+          console.error(`Failed to load distinct values for ${field}:`, error)
+          return { field, values: [] }
+        }
+      })
+
+      const results = await Promise.all(promises)
+      const newDistinctValues = {}
+      results.forEach(({ field, values }) => {
+        newDistinctValues[field] = values
+      })
+      console.log('All distinct values loaded:', newDistinctValues)
+      setDistinctValues(newDistinctValues)
+    } catch (error) {
+      console.error('Failed to load distinct values:', error)
+    }
+  }, [token])
+
   // Load project details for editing
   const loadProjectDetails = useCallback(async () => {
     if (!id || !isEditMode) return
 
     try {
-      setLoading(true)
+      setIsFetching(true)
       const res = await apiCall(`/api/projects/projects/${id}`, {
         method: 'GET',
         headers: { Authorization: `Bearer ${token}` }
@@ -174,27 +257,44 @@ function ProjectForm({ user }) {
         due_date: response.due_date || '',
         start_date: response.start_date || '',
         progress: response.progress || 0,
-        is_public: response.is_public || false
+        is_public: response.is_public || false,
+        // Additional information fields
+        district: response.district || '',
+        location: response.location || '',
+        assembly: response.assembly || '',
+        date_of_sanction_from: response.date_of_sanction_from || '',
+        date_of_sanction_to: response.date_of_sanction_to || '',
+        project_short_name: response.project_short_name || '',
+        file_number: response.file_number || '',
+        executing_agency: response.executing_agency || '',
+        implementing_agency: response.implementing_agency || '',
+        head_of_account: response.head_of_account || '',
+        architect: response.architect || '',
+        expenditure: response.expenditure || 0,
+        inaugurated: response.inaugurated || false,
+        operation_started: response.operation_started || false,
+        remarks: response.remarks || ''
       })
     } catch (error) {
       showError('Failed to load project details')
       navigate(-1)
     } finally {
-      setLoading(false)
+      setIsFetching(false)
     }
-  }, [id, isEditMode, token, showError, navigate, returnTo])
+  }, [id, isEditMode, token, showError, navigate])
 
   // Initialize data
   useEffect(() => {
     isMountedRef.current = true
     loadAllProjects()
     loadTenantUsers()
+    loadDistinctValues()
     loadProjectDetails()
 
     return () => {
       isMountedRef.current = false
     }
-  }, [loadAllProjects, loadTenantUsers, loadProjectDetails])
+  }, [loadAllProjects, loadTenantUsers, loadDistinctValues, loadProjectDetails])
 
   // Handle form submission
   const handleSave = async () => {
@@ -216,6 +316,11 @@ function ProjectForm({ user }) {
       errors.approver = 'Approver must be different from Assignee'
     }
 
+    // Prevent project from being its own parent
+    if (isEditMode && form.parent_id === form.id) {
+      errors.parent_id = 'Project cannot be its own parent'
+    }
+
     if (!form.start_date) {
       errors.start_date = 'Start date is required'
     } else if (!isValidISODateString(form.start_date)) {
@@ -234,6 +339,21 @@ function ProjectForm({ user }) {
       }
     }
 
+    // Validate additional date fields
+    if (form.date_of_sanction_from && !isValidISODateString(form.date_of_sanction_from)) {
+      errors.date_of_sanction_from = 'Invalid date. Use YYYY-MM-DD (1900-01-01 to 2100-12-31)'
+    }
+
+    if (form.date_of_sanction_to && !isValidISODateString(form.date_of_sanction_to)) {
+      errors.date_of_sanction_to = 'Invalid date. Use YYYY-MM-DD (1900-01-01 to 2100-12-31)'
+    }
+
+    if (form.date_of_sanction_from && form.date_of_sanction_to && !errors.date_of_sanction_from && !errors.date_of_sanction_to) {
+      if (!isISOAfter(form.date_of_sanction_to, form.date_of_sanction_from)) {
+        errors.date_of_sanction_to = 'Date of sanction to must be after date of sanction from'
+      }
+    }
+
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors)
       return
@@ -242,7 +362,7 @@ function ProjectForm({ user }) {
     setFormErrors({})
 
     try {
-      setLoading(true)
+      setIsSaving(true)
       const payload = { ...form }
       delete payload.id
 
@@ -281,7 +401,7 @@ function ProjectForm({ user }) {
       console.error('Failed to save project:', error)
       showError(error.message || 'Failed to save project')
     } finally {
-      setLoading(false)
+      setIsSaving(false)
     }
   }
 
@@ -289,7 +409,7 @@ function ProjectForm({ user }) {
     navigate(-1)
   }
 
-  if (loading && isEditMode) {
+  if (isFetching && isEditMode) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
         <CircularProgress />
@@ -379,7 +499,10 @@ function ProjectForm({ user }) {
 
               {/* Parent Project */}
               <Autocomplete
-                options={[{ id: 'root', displayName: 'Root (No Parent)' }, ...allProjects]}
+                options={[
+                  { id: 'root', displayName: 'Root (No Parent)' },
+                  ...allProjects.filter(p => !isEditMode || p.id !== form.id)
+                ]}
                 getOptionLabel={(option) => option.displayName}
                 value={
                   form.parent_id === 'root'
@@ -388,9 +511,15 @@ function ProjectForm({ user }) {
                 }
                 onChange={(event, newValue) => {
                   setForm({ ...form, parent_id: newValue ? newValue.id : 'root' })
+                  setFormErrors({ ...formErrors, parent_id: undefined })
                 }}
                 renderInput={(params) => (
-                  <TextField {...params} label="Parent Project" />
+                  <TextField
+                    {...params}
+                    label="Parent Project"
+                    error={!!formErrors.parent_id}
+                    helperText={formErrors.parent_id}
+                  />
                 )}
                 fullWidth
               />
@@ -505,15 +634,288 @@ function ProjectForm({ user }) {
               />
             </Box>
           </Box>
+
+          {/* Additional Information Accordion */}
+          <Box sx={{ mt: 3 }}>
+            <Accordion
+              expanded={additionalExpanded}
+              onChange={(event, isExpanded) => setAdditionalExpanded(isExpanded)}
+            >
+              <AccordionSummary expandIcon={<ChevronDown size={20} />}>
+                <Typography variant="h6">Additional Information</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+                  {/* District */}
+                  <Autocomplete
+                    freeSolo
+                    options={distinctValues.district || []}
+                    value={form.district || ''}
+                    onChange={(event, newValue) => {
+                      setForm({ ...form, district: newValue || '' })
+                    }}
+                    onInputChange={(event, newInputValue) => {
+                      if (event && event.type === 'change') {
+                        setForm({ ...form, district: newInputValue || '' })
+                      }
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="District"
+                        placeholder="Select or type district"
+                      />
+                    )}
+                    fullWidth
+                  />
+
+                  {/* Location */}
+                  <Autocomplete
+                    freeSolo
+                    options={distinctValues.location || []}
+                    value={form.location || ''}
+                    onChange={(event, newValue) => {
+                      setForm({ ...form, location: newValue || '' })
+                    }}
+                    onInputChange={(event, newInputValue) => {
+                      if (event && event.type === 'change') {
+                        setForm({ ...form, location: newInputValue || '' })
+                      }
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Location"
+                        placeholder="Select or type location"
+                      />
+                    )}
+                    fullWidth
+                  />
+
+                  {/* Assembly */}
+                  <Autocomplete
+                    freeSolo
+                    options={distinctValues.assembly || []}
+                    value={form.assembly || ''}
+                    onChange={(event, newValue) => {
+                      setForm({ ...form, assembly: newValue || '' })
+                    }}
+                    onInputChange={(event, newInputValue) => {
+                      if (event && event.type === 'change') {
+                        setForm({ ...form, assembly: newInputValue || '' })
+                      }
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Assembly"
+                        placeholder="Select or type assembly"
+                      />
+                    )}
+                    fullWidth
+                  />
+
+                  {/* Project Short Name */}
+                  <TextField
+                    label="Project Short Name"
+                    value={form.project_short_name}
+                    onChange={(e) => setForm({ ...form, project_short_name: e.target.value })}
+                    fullWidth
+                    placeholder="Enter short name"
+                  />
+
+                  {/* Date of Sanction From */}
+                  <TextField
+                    label="Date of Sanction From"
+                    type="date"
+                    value={form.date_of_sanction_from}
+                    onChange={(e) => {
+                      setForm({ ...form, date_of_sanction_from: e.target.value })
+                      setFormErrors({ ...formErrors, date_of_sanction_from: undefined, date_of_sanction_to: undefined })
+                    }}
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
+                    inputProps={{ min: '1900-01-01', max: '2100-12-31' }}
+                    error={!!formErrors.date_of_sanction_from}
+                    helperText={formErrors.date_of_sanction_from}
+                  />
+
+                  {/* Date of Sanction To */}
+                  <TextField
+                    label="Date of Sanction To"
+                    type="date"
+                    value={form.date_of_sanction_to}
+                    onChange={(e) => {
+                      setForm({ ...form, date_of_sanction_to: e.target.value })
+                      setFormErrors({ ...formErrors, date_of_sanction_to: undefined })
+                    }}
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
+                    inputProps={{ min: '1900-01-01', max: '2100-12-31' }}
+                    error={!!formErrors.date_of_sanction_to}
+                    helperText={formErrors.date_of_sanction_to}
+                  />
+
+                  {/* File Number */}
+                  <TextField
+                    label="File Number"
+                    value={form.file_number}
+                    onChange={(e) => setForm({ ...form, file_number: e.target.value })}
+                    fullWidth
+                    placeholder="Enter file number"
+                  />
+
+                  {/* Executing Agency */}
+                  <Autocomplete
+                    freeSolo
+                    options={distinctValues.executing_agency || []}
+                    value={form.executing_agency || ''}
+                    onChange={(event, newValue) => {
+                      setForm({ ...form, executing_agency: newValue || '' })
+                    }}
+                    onInputChange={(event, newInputValue) => {
+                      if (event && event.type === 'change') {
+                        setForm({ ...form, executing_agency: newInputValue || '' })
+                      }
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Executing Agency"
+                        placeholder="Select or type agency"
+                      />
+                    )}
+                    fullWidth
+                  />
+
+                  {/* Implementing Agency */}
+                  <Autocomplete
+                    freeSolo
+                    options={distinctValues.implementing_agency || []}
+                    value={form.implementing_agency || ''}
+                    onChange={(event, newValue) => {
+                      setForm({ ...form, implementing_agency: newValue || '' })
+                    }}
+                    onInputChange={(event, newInputValue) => {
+                      if (event && event.type === 'change') {
+                        setForm({ ...form, implementing_agency: newInputValue || '' })
+                      }
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Implementing Agency"
+                        placeholder="Select or type agency"
+                      />
+                    )}
+                    fullWidth
+                  />
+
+                  {/* Head of Account */}
+                  <Autocomplete
+                    freeSolo
+                    options={distinctValues.head_of_account || []}
+                    value={form.head_of_account || ''}
+                    onChange={(event, newValue) => {
+                      setForm({ ...form, head_of_account: newValue || '' })
+                    }}
+                    onInputChange={(event, newInputValue) => {
+                      if (event && event.type === 'change') {
+                        setForm({ ...form, head_of_account: newInputValue || '' })
+                      }
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Head of Account"
+                        placeholder="Select or type head of account"
+                      />
+                    )}
+                    fullWidth
+                  />
+
+                  {/* Architect */}
+                  <Autocomplete
+                    freeSolo
+                    options={distinctValues.architect || []}
+                    value={form.architect || ''}
+                    onChange={(event, newValue) => {
+                      setForm({ ...form, architect: newValue || '' })
+                    }}
+                    onInputChange={(event, newInputValue) => {
+                      if (event && event.type === 'change') {
+                        setForm({ ...form, architect: newInputValue || '' })
+                      }
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Architect"
+                        placeholder="Select or type architect"
+                      />
+                    )}
+                    fullWidth
+                  />
+
+                  {/* Expenditure */}
+                  <TextField
+                    label="Expenditure"
+                    type="number"
+                    value={form.expenditure}
+                    onChange={(e) => setForm({ ...form, expenditure: parseFloat(e.target.value) || 0 })}
+                    fullWidth
+                    inputProps={{ min: 0, step: 0.01 }}
+                    placeholder="Enter expenditure amount"
+                  />
+
+                  {/* Inaugurated */}
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={form.inaugurated}
+                        onChange={(e) => setForm({ ...form, inaugurated: e.target.checked })}
+                      />
+                    }
+                    label="Inaugurated"
+                  />
+
+                  {/* Operation Started */}
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={form.operation_started}
+                        onChange={(e) => setForm({ ...form, operation_started: e.target.checked })}
+                      />
+                    }
+                    label="Operation Started"
+                  />
+
+                  {/* Remarks - Full Width */}
+                  <TextField
+                    label="Remarks"
+                    value={form.remarks}
+                    onChange={(e) => setForm({ ...form, remarks: e.target.value })}
+                    fullWidth
+                    multiline
+                    rows={3}
+                    placeholder="Enter any additional remarks..."
+                    sx={{ gridColumn: '1 / -1' }}
+                  />
+                </Box>
+              </AccordionDetails>
+            </Accordion>
+          </Box>
         </CardContent>
         <CardActions sx={{ display: 'flex', justifyContent: 'flex-end', p: 2, pt: 0 }}>
           <Button
             variant="contained"
-            startIcon={<Save size={20} />}
+            startIcon={isSaving ? <CircularProgress size={18} /> : <Save size={20} />}
             onClick={handleSave}
-            disabled={loading}
+            disabled={isSaving}
+            aria-busy={isSaving}
+            sx={{ minWidth: 120 }}
           >
-            {loading ? <CircularProgress size={20} /> : (isEditMode ? 'Update' : 'Create')}
+            {isEditMode ? 'Update' : 'Create'}
           </Button>
         </CardActions>
       </Card>

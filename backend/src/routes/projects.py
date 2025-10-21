@@ -29,6 +29,40 @@ async def get_project_fields_metadata(
         raise HTTPException(status_code=500, detail="Failed to fetch field metadata")
 
 
+@router.get("/projects/distinct-values/{field_name}")
+async def get_distinct_field_values(
+    field_name: str,
+    user: dict = Depends(verify_token_middleware)
+):
+    """Get distinct values for a specific field from projects collection"""
+    try:
+        result = await ProjectService.get_distinct_field_values(field_name, user)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching distinct values for field {field_name}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch distinct field values")
+
+
+# Alias without the extra "/projects" segment so frontend calls to
+# /api/projects/distinct-values/{field_name} also work (backwards compatible)
+@router.get("/distinct-values/{field_name}")
+async def get_distinct_field_values_alias(
+    field_name: str,
+    user: dict = Depends(verify_token_middleware)
+):
+    """Alias route for distinct values to avoid 404 on /api/projects/distinct-values/*"""
+    try:
+        result = await ProjectService.get_distinct_field_values(field_name, user)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching distinct values for field {field_name} (alias): {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch distinct field values")
+
+
 @router.post("/projects", status_code=status.HTTP_201_CREATED)
 async def create_project(
     project: dict,

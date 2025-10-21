@@ -49,6 +49,355 @@ import { agentRuntimeService } from '../services/agentRuntimeService'
 import sharedApiService from '../utils/apiService'
 import { parseBPMNXML } from '../components/bpmn/utils/bpmnParser'
 
+// Memoized Message Component to prevent re-renders
+const MessageItem = React.memo(({ message, messageAudio, theme, handleEditBPMN }) => {
+  const m = message
+  
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
+      <Typography variant="caption" sx={{ opacity: 0.6, fontSize: 11, textTransform: 'uppercase' }}>
+        {m.role}{m.streaming ? ' (streaming...)' : ''}
+      </Typography>
+      {m.role === 'user' ? (
+        <Typography variant="body2" dir="auto" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxWidth: '90ch', unicodeBidi: 'plaintext' }}>
+          {m.content}
+        </Typography>
+      ) : (
+        <MessageContent message={m} messageAudio={messageAudio} theme={theme} handleEditBPMN={handleEditBPMN} />
+      )}
+    </Box>
+  )
+}, (prevProps, nextProps) => {
+  // Only re-render if content changed or streaming status changed
+  return prevProps.message.content === nextProps.message.content &&
+         prevProps.message.streaming === nextProps.message.streaming
+})
+
+// Separate component for agent message content
+const MessageContent = React.memo(({ message, messageAudio, theme, handleEditBPMN }) => {
+  const m = message
+  const bpmnData = detectBPMN(m.content)
+  const jsxData = detectJSX(m.content)
+  const imageData = detectBase64Images(m.content)
+  const audioData = messageAudio[m.ts]
+  
+  return (
+    <>
+      <Box dir="auto" sx={{
+        fontSize: 15,
+        lineHeight: 1.5,
+        maxWidth: '90ch',
+        wordBreak: 'break-word',
+        unicodeBidi: 'plaintext',
+        containIntrinsicSize: m.streaming ? 'auto 500px' : 'auto',
+        contentVisibility: m.streaming ? 'auto' : 'visible',
+        '& p': { my: 0.6 },
+        '& pre': { 
+          p: 1, 
+          bgcolor: 'action.hover', 
+          borderRadius: 1, 
+          overflowX: 'auto', 
+          fontSize: 13, 
+          lineHeight: 1.4,
+          contain: 'layout style paint'
+        },
+        '& code': { fontFamily: 'monospace', bgcolor: 'action.hover', px: 0.5, borderRadius: 0.5 },
+        '& table': {
+          borderCollapse: 'collapse',
+          width: '100%',
+          mt: 1,
+          mb: 1,
+          border: '1px solid',
+          borderColor: 'divider'
+        },
+        '& th': {
+          border: '1px solid',
+          borderColor: 'divider',
+          p: 1,
+          bgcolor: 'action.hover',
+          fontWeight: 600,
+          textAlign: 'left'
+        },
+        '& td': {
+          border: '1px solid',
+          borderColor: 'divider',
+          p: 1
+        },
+        '& tr:nth-of-type(even)': {
+          bgcolor: 'action.selected'
+        }
+      }}>
+        <ReactMarkdown 
+          remarkPlugins={[remarkGfm]}
+          components={{
+            a: ({ node, ...props }) => (
+              <a {...props} target="_blank" rel="noopener noreferrer" />
+            ),
+            pre: ({ children, ...props }) => {
+              let language = ''
+              let codeContent = ''
+              
+              if (children?.props?.className) {
+                language = children.props.className.replace('language-', '')
+                codeContent = children.props.children || ''
+              }
+              
+              const actualCode = typeof children?.props?.children === 'string' 
+                ? children.props.children 
+                : children?.toString?.() || ''
+              
+              const fullCodeBlock = language 
+                ? `\`\`\`${language}\n${actualCode}\n\`\`\``
+                : actualCode
+              
+              return (
+                <Box
+                  component="pre"
+                  {...props}
+                  sx={{ 
+                    position: 'relative',
+                    p: 1, 
+                    bgcolor: 'action.hover', 
+                    borderRadius: 1, 
+                    overflowX: 'auto', 
+                    fontSize: 13, 
+                    lineHeight: 1.4,
+                    m: 0,
+                    '&:hover .copy-btn': { opacity: 1 }
+                  }}
+                >
+                  {language && (
+                    <Box sx={{ 
+                      fontFamily: 'monospace',
+                      fontSize: '11px',
+                      color: 'text.secondary',
+                      opacity: 0.7,
+                      mb: 0.5,
+                      userSelect: 'none'
+                    }}>
+                      ```{language}
+                    </Box>
+                  )}
+                  
+                  <IconButton
+                    className="copy-btn"
+                    size="small"
+                    onClick={() => navigator.clipboard.writeText(fullCodeBlock)}
+                    sx={{ 
+                      position: 'absolute', 
+                      top: 4, 
+                      right: 4,
+                      opacity: 0, 
+                      transition: 'opacity 0.2s',
+                      p: 0.5,
+                      minWidth: 0,
+                      width: 20,
+                      height: 20
+                    }}
+                  >
+                    <ContentCopyIcon sx={{ fontSize: 12 }} />
+                  </IconButton>
+                  
+                  {children}
+                  
+                  {language && (
+                    <Box sx={{ 
+                      fontFamily: 'monospace',
+                      fontSize: '11px',
+                      color: 'text.secondary',
+                      opacity: 0.7,
+                      mt: 0.5,
+                      userSelect: 'none'
+                    }}>
+                      ```
+                    </Box>
+                  )}
+                </Box>
+              )
+            }
+          }}
+        >
+          {imageData.hasImages ? imageData.contentWithoutImages : m.content}
+        </ReactMarkdown>
+        
+        {imageData.hasImages && (
+          <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            {imageData.images.map((img, idx) => (
+              <Box 
+                key={idx} 
+                sx={{ 
+                  border: '1px solid', 
+                  borderColor: 'divider', 
+                  borderRadius: 1, 
+                  overflow: 'hidden',
+                  maxWidth: 400,
+                  maxHeight: 400
+                }}
+              >
+                <img 
+                  src={img.src} 
+                  alt={`Image ${idx + 1}`}
+                  style={{ 
+                    width: '100%', 
+                    height: '100%', 
+                    objectFit: 'contain',
+                    display: 'block'
+                  }}
+                  onError={(e) => {
+                    e.target.style.display = 'none'
+                    console.error('Failed to load base64 image')
+                  }}
+                />
+              </Box>
+            ))}
+          </Box>
+        )}
+        
+        {jsxData.hasJSX && (
+          <Box sx={{ mt: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              bgcolor: 'action.hover', 
+              px: 1, 
+              py: 0.5, 
+              borderBottom: '1px solid', 
+              borderColor: 'divider'
+            }}>
+              <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                JSX Component Preview
+              </Typography>
+            </Box>
+            <Box sx={{ p: 2 }}>
+              <DynamicComponent componentCode={jsxData.jsxCode} />
+            </Box>
+          </Box>
+        )}
+        
+        {bpmnData.hasBPMN && bpmnData.error && (
+          <Box sx={{ mt: 2, border: '1px solid', borderColor: 'error.main', borderRadius: 1, overflow: 'hidden', bgcolor: alpha(theme.palette.error.main, 0.05) }}>
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              bgcolor: alpha(theme.palette.error.main, 0.1), 
+              px: 1, 
+              py: 0.5, 
+              borderBottom: '1px solid', 
+              borderColor: 'error.main'
+            }}>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: 'error.main' }}>
+                ⚠️ BPMN Validation Error
+              </Typography>
+            </Box>
+            <Box sx={{ p: 2 }}>
+              <Typography variant="body2" sx={{ color: 'error.main', fontFamily: 'monospace' }}>
+                {bpmnData.error}
+              </Typography>
+            </Box>
+          </Box>
+        )}
+        
+        {bpmnData.hasBPMN && !bpmnData.error && bpmnData.bpmnXML && (
+          <Box sx={{ mt: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              bgcolor: 'action.hover', 
+              px: 1, 
+              py: 0.5, 
+              borderBottom: '1px solid', 
+              borderColor: 'divider'
+            }}>
+              <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                BPMN Diagram Visualization
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<EditIcon />}
+                onClick={() => handleEditBPMN(bpmnData.bpmnXML)}
+                sx={{ 
+                  minWidth: 'auto',
+                  fontSize: '11px',
+                  textTransform: 'none',
+                  py: 0.25,
+                  px: 1
+                }}
+              >
+                Edit
+              </Button>
+            </Box>
+            <Box sx={{ position: 'relative', height: '500px', width: '100%' }}>
+              <BPMN 
+                readOnly={true}
+                showToolbox={false}
+                showPropertyPanel={false}
+                initialTheme={theme.palette.mode}
+                initialBPMN={bpmnData.bpmnXML}
+                style={{ 
+                  height: '100%', 
+                  width: '100%',
+                  '--toolbar-display': 'none'
+                }}
+                className="bpmn-readonly-viewer"
+                onError={(error) => {
+                  console.error('🔥 BPMN Component Error:', error)
+                }}
+                onLoad={() => {}}
+              />
+            </Box>
+          </Box>
+        )}
+      </Box>
+      
+      {audioData && (audioData.audio || audioData.response_audio) && (
+        <Box sx={{ mt: 1 }}>
+          {(() => {
+            let audioChunks = null
+            if (audioData.audio && Array.isArray(audioData.audio)) {
+              audioChunks = audioData.audio
+            } else if (audioData.response_audio) {
+              audioChunks = Array.isArray(audioData.response_audio) 
+                ? audioData.response_audio 
+                : [audioData.response_audio]
+            }
+            
+            const shouldAutoPlay = m.streaming === true
+            
+            return (
+              <>
+                {audioChunks && audioChunks.length > 0 && (
+                  <AudioPlayer audioChunks={audioChunks} autoPlay={shouldAutoPlay} />
+                )}
+                {audioData.transcript && audioData.transcript.trim() && (
+                  <Box sx={{ 
+                    mt: 1, 
+                    p: 1.5, 
+                    bgcolor: 'action.hover',
+                    borderRadius: 1,
+                    border: '1px solid',
+                    borderColor: 'divider'
+                  }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.5, color: 'text.secondary' }}>
+                      Audio Transcript:
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
+                      {audioData.transcript}
+                    </Typography>
+                  </Box>
+                )}
+              </>
+            )
+          })()}
+        </Box>
+      )}
+    </>
+  )
+})
+
 // Simple function to detect and extract BPMN content
 const detectBPMN = (content) => {
   // Debug logs removed for production cleanliness
@@ -534,6 +883,8 @@ export default function AgentPlayground({ user }) {
   const bottomRef = useRef(null)
   const [autoScroll, setAutoScroll] = useState(true)
   const [atBottom, setAtBottom] = useState(true)
+  const scrollTimeoutRef = useRef(null)
+  const renderFrameRef = useRef(null)
   // Dynamic input area height spacing so last message rests right above input (no extra gap / no overlap)
   const [inputHeight, setInputHeight] = useState(180) // fallback default
 
@@ -627,47 +978,57 @@ export default function AgentPlayground({ user }) {
     }
   }, [currentConversationId, messages.length, location.search, location.pathname, navigate])
 
-  // Scroll control - now uses window scroll instead of chat area scroll
+  // Throttled scroll control for smooth streaming
   useEffect(() => {
     if (!autoScroll) return
-    // Avoid expensive smooth animation for every token while streaming
-    const last = messages[messages.length - 1]
-    const lastIsStreaming = !!last?.streaming
-    const target = Math.max(0, document.documentElement.scrollHeight - inputHeight)
-    window.scrollTo({
-      top: target,
-      behavior: lastIsStreaming ? 'auto' : 'smooth'
+    
+    // Cancel any pending scroll
+    if (renderFrameRef.current) {
+      cancelAnimationFrame(renderFrameRef.current)
+    }
+    
+    // Throttle scroll updates using requestAnimationFrame
+    renderFrameRef.current = requestAnimationFrame(() => {
+      const target = document.documentElement.scrollHeight - window.innerHeight
+      if (target > window.pageYOffset) {
+        window.scrollTo(0, target)
+      }
     })
-  }, [messages, autoScroll, inputHeight])
+    
+    return () => {
+      if (renderFrameRef.current) {
+        cancelAnimationFrame(renderFrameRef.current)
+      }
+    }
+  }, [messages, autoScroll])
 
   const handleInputHeightChange = useCallback((h) => {
     setInputHeight(h)
   }, [])
 
-  const handleScroll = (e) => {
-    // Handle window scroll instead of chat area scroll
+  const handleScroll = useCallback(() => {
     const scrollTop = window.pageYOffset || document.documentElement.scrollTop
     const windowHeight = window.innerHeight
     const documentHeight = document.documentElement.scrollHeight
     const distanceFromBottom = documentHeight - windowHeight - scrollTop
-    const atB = distanceFromBottom < 50  // Reduced threshold for faster stop
+    const atB = distanceFromBottom < 100
     setAtBottom(atB)
     
-    // Disable auto-scroll when user manually scrolls up
-    if (!atB) {
+    // Only disable auto-scroll if user scrolls up significantly
+    if (!atB && autoScroll) {
       setAutoScroll(false)
     }
-    // Re-enable auto-scroll when user scrolls back to bottom
-    else if (atB) {
+    // Re-enable when back at bottom
+    else if (atB && !autoScroll) {
       setAutoScroll(true)
     }
-  }
+  }, [autoScroll])
 
   // Add window scroll listener
   useEffect(() => {
-    window.addEventListener('scroll', handleScroll)
+    window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
-  }, [autoScroll]) // Re-add listener when autoScroll changes
+  }, [handleScroll])
 
   // File selection
   const handleFilesSelected = (filesList) => {
@@ -826,16 +1187,18 @@ export default function AgentPlayground({ user }) {
                     // Filter out "None" strings from content
                     const filteredContent = event.payload.content === 'None' ? '' : event.payload.content
                     
-                    // Update the streaming message with new content (streaming mode)
-                    setMessages(prev => {
-                      const updated = prev.map(msg =>
-                        msg.ts === agentMsgId && msg.streaming
-                          ? { ...msg, content: msg.content + filteredContent }
-                          : msg
-                      )
-                      finalMessages = updated
-                      return updated
-                    })
+                    if (filteredContent) {
+                      // Update immediately for smooth streaming
+                      setMessages(prev => {
+                        const updated = prev.map(msg =>
+                          msg.ts === agentMsgId && msg.streaming
+                            ? { ...msg, content: msg.content + filteredContent }
+                            : msg
+                        )
+                        finalMessages = updated
+                        return updated
+                      })
+                    }
                   }
                   
                   // Store audio data if present - accumulate audio chunks
@@ -950,6 +1313,24 @@ export default function AgentPlayground({ user }) {
       setAbortController(null)
     }
   }, [selected, stagedFiles, uploadedFiles, messages, currentConversationId, sessionCollection, vectorCollectionName, token])
+
+  // Handle agent change - clear chat and create new session
+  const handleAgentChange = useCallback((newAgentName) => {
+    if (newAgentName !== selected) {
+      // Clear all chat state
+      setMessages([])
+      setMessageAudio({})
+      setUploadedFiles([])
+      setStagedFiles([])
+      setCurrentConversationId(null)
+      setSessionCollection(genUuidHex())
+      setVectorCollectionName(null)
+      setLastUserMessage('')
+      
+      // Set the new agent
+      setSelected(newAgentName)
+    }
+  }, [selected])
 
   const openHistory = async (page = 1) => {
     // Only show full loading on initial open, not on pagination
@@ -1120,7 +1501,7 @@ export default function AgentPlayground({ user }) {
                   key={name}
                   selected={name === selected}
                   onClick={() => {
-                    setSelected(name)
+                    handleAgentChange(name)
                     setSelectorOpen(false)
                   }}
                   sx={{ pl: 2 }}
@@ -1164,364 +1545,13 @@ export default function AgentPlayground({ user }) {
           sx={{ p: isSmall ? 1 : 2, overflow: 'visible', display: 'flex', flexDirection: 'column', gap: 1, mb: 4 }}
         >
           {messages.map((m, idx) => (
-            <Box key={idx} sx={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
-              <Typography variant="caption" sx={{ opacity: 0.6, fontSize: 11, textTransform: 'uppercase' }}>
-                {m.role}{m.streaming ? ' (streaming...)' : ''}
-              </Typography>
-              {m.role === 'user' ? (
-                <Typography variant="body2" dir="auto" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxWidth: '90ch', unicodeBidi: 'plaintext' }}>
-                  {m.content}
-                </Typography>
-              ) : (
-                <>
-                  <Box dir="auto" sx={{
-                  fontSize: 15,
-                  lineHeight: 1.5,
-                  maxWidth: '90ch',
-                  wordBreak: 'break-word',
-                  unicodeBidi: 'plaintext',
-                  '& p': { my: 0.6 },
-                  '& pre': { p: 1, bgcolor: 'action.hover', borderRadius: 1, overflowX: 'auto', fontSize: 13, lineHeight: 1.4 },
-                  '& code': { fontFamily: 'monospace', bgcolor: 'action.hover', px: 0.5, borderRadius: 0.5 },
-                  '& table': {
-                    borderCollapse: 'collapse',
-                    width: '100%',
-                    mt: 1,
-                    mb: 1,
-                    border: '1px solid',
-                    borderColor: 'divider'
-                  },
-                  '& th': {
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    p: 1,
-                    bgcolor: 'action.hover',
-                    fontWeight: 600,
-                    textAlign: 'left'
-                  },
-                  '& td': {
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    p: 1
-                  },
-                  '& tr:nth-of-type(even)': {
-                    bgcolor: 'action.selected'
-                  }
-                }}>
-                  {(() => {
-                    // Only detect for preview purposes - don't remove from markdown
-                    const bpmnData = detectBPMN(m.content)
-                    const jsxData = detectJSX(m.content)
-                    // Only remove base64 images from markdown (not code!)
-                    const imageData = detectBase64Images(m.content)
-                    
-                    return (
-                      <>
-                        {/* Show markdown content (with ALL code visible, only base64 images hidden) */}
-                        <ReactMarkdown 
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            a: ({ node, ...props }) => (
-                              <a {...props} target="_blank" rel="noopener noreferrer" />
-                            ),
-                            pre: ({ children, ...props }) => {
-                              // Extract language from code element
-                              let language = ''
-                              let codeContent = ''
-                              
-                              if (children?.props?.className) {
-                                language = children.props.className.replace('language-', '')
-                                codeContent = children.props.children || ''
-                              }
-                              
-                              // Get the actual code content from children for copying
-                              const actualCode = typeof children?.props?.children === 'string' 
-                                ? children.props.children 
-                                : children?.toString?.() || ''
-                              
-                              // Create the full code block with backticks for copying
-                              const fullCodeBlock = language 
-                                ? `\`\`\`${language}\n${actualCode}\n\`\`\``
-                                : actualCode
-                              
-                              return (
-                                <Box
-                                  component="pre"
-                                  {...props}
-                                  sx={{ 
-                                    position: 'relative',
-                                    p: 1, 
-                                    bgcolor: 'action.hover', 
-                                    borderRadius: 1, 
-                                    overflowX: 'auto', 
-                                    fontSize: 13, 
-                                    lineHeight: 1.4,
-                                    m: 0,
-                                    '&:hover .copy-btn': { opacity: 1 }
-                                  }}
-                                >
-                                  {/* Show ```language before the code */}
-                                  {language && (
-                                    <Box sx={{ 
-                                      fontFamily: 'monospace',
-                                      fontSize: '11px',
-                                      color: 'text.secondary',
-                                      opacity: 0.7,
-                                      mb: 0.5,
-                                      userSelect: 'none'
-                                    }}>
-                                      ```{language}
-                                    </Box>
-                                  )}
-                                  
-                                  {/* Copy button */}
-                                  <IconButton
-                                    className="copy-btn"
-                                    size="small"
-                                    onClick={() => navigator.clipboard.writeText(fullCodeBlock)}
-                                    sx={{ 
-                                      position: 'absolute', 
-                                      top: 4, 
-                                      right: 4,
-                                      opacity: 0, 
-                                      transition: 'opacity 0.2s',
-                                      p: 0.5,
-                                      minWidth: 0,
-                                      width: 20,
-                                      height: 20
-                                    }}
-                                  >
-                                    <ContentCopyIcon sx={{ fontSize: 12 }} />
-                                  </IconButton>
-                                  
-                                  {children}
-                                  
-                                  {/* Show closing ``` after the code */}
-                                  {language && (
-                                    <Box sx={{ 
-                                      fontFamily: 'monospace',
-                                      fontSize: '11px',
-                                      color: 'text.secondary',
-                                      opacity: 0.7,
-                                      mt: 0.5,
-                                      userSelect: 'none'
-                                    }}>
-                                      ```
-                                    </Box>
-                                  )}
-                                </Box>
-                              )
-                            }
-                          }}
-                        >
-                          {imageData.hasImages ? imageData.contentWithoutImages : m.content}
-                        </ReactMarkdown>
-                        
-                        {/* Show base64 images if detected */}
-                        {imageData.hasImages && (
-                          <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                            {imageData.images.map((img, idx) => (
-                              <Box 
-                                key={idx} 
-                                sx={{ 
-                                  border: '1px solid', 
-                                  borderColor: 'divider', 
-                                  borderRadius: 1, 
-                                  overflow: 'hidden',
-                                  maxWidth: 400,
-                                  maxHeight: 400
-                                }}
-                              >
-                                <img 
-                                  src={img.src} 
-                                  alt={`Image ${idx + 1}`}
-                                  style={{ 
-                                    width: '100%', 
-                                    height: '100%', 
-                                    objectFit: 'contain',
-                                    display: 'block'
-                                  }}
-                                  onError={(e) => {
-                                    e.target.style.display = 'none'
-                                    console.error('Failed to load base64 image')
-                                  }}
-                                />
-                              </Box>
-                            ))}
-                          </Box>
-                        )}
-                        
-                        {/* Show JSX component if detected */}
-                        {jsxData.hasJSX && (
-                          <Box sx={{ mt: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-                            <Box sx={{ 
-                              display: 'flex', 
-                              justifyContent: 'space-between', 
-                              alignItems: 'center',
-                              bgcolor: 'action.hover', 
-                              px: 1, 
-                              py: 0.5, 
-                              borderBottom: '1px solid', 
-                              borderColor: 'divider'
-                            }}>
-                              <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                                JSX Component Preview
-                              </Typography>
-                            </Box>
-                            <Box sx={{ p: 2 }}>
-                              <DynamicComponent componentCode={jsxData.jsxCode} />
-                            </Box>
-                          </Box>
-                        )}
-                        
-                        {/* Additionally show BPMN diagram if detected */}
-                        {bpmnData.hasBPMN && bpmnData.error && (
-                          <Box sx={{ mt: 2, border: '1px solid', borderColor: 'error.main', borderRadius: 1, overflow: 'hidden', bgcolor: alpha(theme.palette.error.main, 0.05) }}>
-                            <Box sx={{ 
-                              display: 'flex', 
-                              justifyContent: 'space-between', 
-                              alignItems: 'center',
-                              bgcolor: alpha(theme.palette.error.main, 0.1), 
-                              px: 1, 
-                              py: 0.5, 
-                              borderBottom: '1px solid', 
-                              borderColor: 'error.main'
-                            }}>
-                              <Typography variant="caption" sx={{ fontWeight: 600, color: 'error.main' }}>
-                                ⚠️ BPMN Validation Error
-                              </Typography>
-                            </Box>
-                            <Box sx={{ p: 2 }}>
-                              <Typography variant="body2" sx={{ color: 'error.main', fontFamily: 'monospace' }}>
-                                {bpmnData.error}
-                              </Typography>
-                            </Box>
-                          </Box>
-                        )}
-                        
-                        {bpmnData.hasBPMN && !bpmnData.error && bpmnData.bpmnXML && (
-                          <Box sx={{ mt: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-                            <Box sx={{ 
-                              display: 'flex', 
-                              justifyContent: 'space-between', 
-                              alignItems: 'center',
-                              bgcolor: 'action.hover', 
-                              px: 1, 
-                              py: 0.5, 
-                              borderBottom: '1px solid', 
-                              borderColor: 'divider'
-                            }}>
-                              <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                                BPMN Diagram Visualization
-                              </Typography>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                startIcon={<EditIcon />}
-                                onClick={() => handleEditBPMN(bpmnData.bpmnXML)}
-                                sx={{ 
-                                  minWidth: 'auto',
-                                  fontSize: '11px',
-                                  textTransform: 'none',
-                                  py: 0.25,
-                                  px: 1
-                                }}
-                              >
-                                Edit
-                              </Button>
-                            </Box>
-                            <Box sx={{ position: 'relative', height: '500px', width: '100%' }}>
-                              <BPMN 
-                                readOnly={true}
-                                showToolbox={false}
-                                showPropertyPanel={false}
-                                initialTheme={theme.palette.mode}
-                                initialBPMN={bpmnData.bpmnXML}
-                                style={{ 
-                                  height: '100%', 
-                                  width: '100%',
-                                  '--toolbar-display': 'none' // CSS custom property to force hide toolbar
-                                }}
-                                className="bpmn-readonly-viewer"
-                                onError={(error) => {
-                                  console.error('🔥 BPMN Component Error:', error)
-                                }}
-                                onLoad={() => {
-                                  // BPMN component loaded
-                                }}
-                              />
-                            </Box>
-                          </Box>
-                        )}
-                      </>
-                    )
-                  })()}
-                </Box>
-                
-                {/* Audio Player - Show if this message has audio */}
-                {(() => {
-                  const audioData = messageAudio[m.ts]
-                  
-                  if (!audioData) {
-                    return null
-                  }
-                  if (!audioData.audio && !audioData.response_audio) {
-                    return null
-                  }
-                  
-                  // Prepare audio chunks for the player
-                  let audioChunks = null
-                  
-                  // Handle streaming audio (array of chunks)
-                  if (audioData.audio && Array.isArray(audioData.audio)) {
-                    audioChunks = audioData.audio
-                  } 
-                  // Handle non-streaming audio (single response_audio)
-                  else if (audioData.response_audio) {
-                    // Wrap response_audio in an array for the AudioPlayer
-                    audioChunks = Array.isArray(audioData.response_audio) 
-                      ? audioData.response_audio 
-                      : [audioData.response_audio]
-                  }
-                  
-                  // Auto-play only if this is a streaming message (new response)
-                  const shouldAutoPlay = m.streaming === true
-                  
-                  console.log('🎵 Message audio render:', { 
-                    ts: m.ts, 
-                    streaming: m.streaming, 
-                    shouldAutoPlay, 
-                    hasAudio: !!audioChunks 
-                  })
-                  
-                  return (
-                    <Box sx={{ mt: 1 }}>
-                      {audioChunks && audioChunks.length > 0 && (
-                        <AudioPlayer audioChunks={audioChunks} autoPlay={shouldAutoPlay} />
-                      )}
-                      {audioData.transcript && audioData.transcript.trim() && (
-                        <Box sx={{ 
-                          mt: 1, 
-                          p: 1.5, 
-                          bgcolor: 'action.hover',
-                          borderRadius: 1,
-                          border: '1px solid',
-                          borderColor: 'divider'
-                        }}>
-                          <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.5, color: 'text.secondary' }}>
-                            Audio Transcript:
-                          </Typography>
-                          <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
-                            {audioData.transcript}
-                          </Typography>
-                        </Box>
-                      )}
-                    </Box>
-                  )
-                })()}
-                </>
-              )}
-            </Box>
+            <MessageItem 
+              key={`${m.ts}-${idx}`} 
+              message={m} 
+              messageAudio={messageAudio}
+              theme={theme}
+              handleEditBPMN={handleEditBPMN}
+            />
           ))}
           {!autoScroll && !atBottom && messages.length > 0 && (
             <Box sx={{ position: 'sticky', bottom: 4, alignSelf: 'center' }}>
@@ -1564,6 +1594,7 @@ export default function AgentPlayground({ user }) {
             clearChat={clearChat}
             onHeightChange={handleInputHeightChange}
             containerEl={mainContainerRef.current}
+            handleAgentChange={handleAgentChange}
           />, portalRef.current
         )}
       </Paper>
@@ -1592,7 +1623,7 @@ export default function AgentPlayground({ user }) {
             value={searchOptions.find(opt => opt.value === selected) || null}
             onChange={(_, v) => {
               if (v && v.value) {
-                setSelected(v.value);
+                handleAgentChange(v.value);
                 setSelectorOpen(false);
               }
             }}
@@ -1712,12 +1743,13 @@ const ChatInputBar = React.memo(function ChatInputBar({
   openHistory,
   clearChat,
   onHeightChange,
-  containerEl
+  containerEl,
+  handleAgentChange
 }) {
   const containerRef = useRef(null)
   const inputRef = useRef(null)
   const [prompt, setPrompt] = useState('')
-  const [alignedStyle, setAlignedStyle] = useState({ left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 650 })
+  const [alignedStyle, setAlignedStyle] = useState({ left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 500 })
   const lastHeightRef = useRef(-1)
   
   // Dragging state
@@ -1740,8 +1772,8 @@ const ChatInputBar = React.memo(function ChatInputBar({
       // Only set aligned style if not dragged to a custom position
       if (position.x === null && position.y === null && containerEl) {
         const parentRect = containerEl.getBoundingClientRect()
-        // Keep original maxWidth (650) but align center to parent center
-        const desiredWidth = Math.min(650, parentRect.width)
+        // Reduced maxWidth to 500 for narrower input area
+        const desiredWidth = Math.min(500, parentRect.width)
         const parentCenter = parentRect.left + parentRect.width / 2
         const left = parentCenter - desiredWidth / 2
         setAlignedStyle({
@@ -1860,8 +1892,8 @@ const ChatInputBar = React.memo(function ChatInputBar({
     position: 'fixed',
     left: `${position.x}px`,
     top: `${position.y}px`,
-    width: '650px',
-    maxWidth: '650px',
+    width: '500px',
+    maxWidth: '500px',
     transform: 'none'
   } : {
     ...alignedStyle,
@@ -1913,7 +1945,7 @@ const ChatInputBar = React.memo(function ChatInputBar({
           }}
           fullWidth
           multiline
-          minRows={1}
+          minRows={3}
           maxRows={10}
           disabled={!selected || running}
           size="small"

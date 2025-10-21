@@ -190,6 +190,25 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
   const workflowId = location.state?.workflowId;
   const [saving, setSaving] = useState(false);
 
+  // Ensure edges are always in sync with existing nodes (cleanup orphaned edges)
+  useEffect(() => {
+    const existingNodeIds = new Set(nodes.map(node => node.id));
+    setEdges(currentEdges => {
+      const validEdges = currentEdges.filter(edge => 
+        existingNodeIds.has(edge.source) && existingNodeIds.has(edge.target)
+      );
+      
+      // Only update if we found orphaned edges
+      if (validEdges.length !== currentEdges.length) {
+        const orphanedCount = currentEdges.length - validEdges.length;
+        console.log(`🧹 Cleanup: Removed ${orphanedCount} orphaned edge(s)`);
+        return validEdges;
+      }
+      
+      return currentEdges;
+    });
+  }, [nodes, setEdges]);
+
   // Undo/Redo state
   const [history, setHistory] = useState([{ nodes: initialNodes, edges: initialEdges }]);
   const [historyIndex, setHistoryIndex] = useState(0);
@@ -286,10 +305,9 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
     }
   }, [historyIndex, history, setNodes, setEdges]);
 
-  // Combined keyboard shortcuts for undo/redo and delete
+  // Keyboard shortcuts for undo/redo only (delete is handled by ReactFlow's built-in deleteKeyCode)
   useEffect(() => {
     const handleKeyDown = (event) => {
-
       // Handle undo/redo shortcuts
       if ((event.ctrlKey || event.metaKey) && !readOnly) {
         if ((event.key === 'z' || event.key === 'Z') && !event.shiftKey) {
@@ -302,30 +320,11 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
           return;
         }
       }
-
-      // Handle delete/backspace (only when focused on ReactFlow)
-      if ((event.key === 'Delete' || event.key === 'Backspace') && 
-          (event.target.closest('.reactflow-wrapper') || event.target.closest('.react-flow'))) {
-        setNodes((nds) => {
-          const newNodes = nds.filter((node) => !node.selected);
-          if (!readOnly && newNodes.length !== nds.length) {
-            setTimeout(() => saveToHistory(newNodes, edges), 0);
-          }
-          return newNodes;
-        });
-        setEdges((eds) => {
-          const newEdges = eds.filter((edge) => !edge.selected);
-          if (!readOnly && newEdges.length !== eds.length) {
-            setTimeout(() => saveToHistory(nodes, newEdges), 0);
-          }
-          return newEdges;
-        });
-      }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [undo, redo, readOnly, setNodes, setEdges, saveToHistory, nodes, edges]);
+  }, [undo, redo, readOnly]);
 
   // Lasso selection functionality
   const onToggleSelectionMode = useCallback(() => {
@@ -479,10 +478,17 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
     
     // If nodes are being removed, also remove connected edges
     if (removedNodeIds.length > 0) {
+      console.log('🗑️ Removing nodes:', removedNodeIds);
       setEdges(currentEdges => {
+        const edgesToRemove = currentEdges.filter(edge => 
+          removedNodeIds.includes(edge.source) || removedNodeIds.includes(edge.target)
+        );
+        console.log('🗑️ Removing edges:', edgesToRemove.map(e => `${e.id} (${e.source} -> ${e.target})`));
+        
         const newEdges = currentEdges.filter(edge => 
           !removedNodeIds.includes(edge.source) && !removedNodeIds.includes(edge.target)
         );
+        console.log('✅ Remaining edges after deletion:', newEdges.length);
         return newEdges;
       });
     }
@@ -1167,57 +1173,8 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
     }
   }, [selectedNode, selectedEdge, handleNodeUpdate, handleEdgeUpdate]);
 
-  // Delete functionality - handle Delete key press
-  const onKeyDown = useCallback((event) => {
-    if (event.key === 'Delete' || event.key === 'Backspace') {
-      // Get the IDs of nodes that will be deleted
-      const deletedNodeIds = nodes.filter((node) => node.selected).map((node) => node.id);
-      
-      setNodes((nds) => {
-        const newNodes = nds.filter((node) => !node.selected);
-        if (!readOnly && newNodes.length !== nds.length) {
-          // We'll save to history after both nodes and edges are updated
-        }
-        return newNodes;
-      });
-      
-      setEdges((eds) => {
-        // Remove selected edges AND edges connected to deleted nodes
-        const newEdges = eds.filter((edge) => {
-          // Remove if edge is selected
-          if (edge.selected) return false;
-          // Remove if edge is connected to any deleted node
-          if (deletedNodeIds.includes(edge.source) || deletedNodeIds.includes(edge.target)) return false;
-          return true;
-        });
-        
-        // Save to history only once after both nodes and edges are updated
-        if (!readOnly && (deletedNodeIds.length > 0 || newEdges.length !== eds.length)) {
-          setTimeout(() => {
-            const finalNodes = nodes.filter((node) => !node.selected);
-            saveToHistory(finalNodes, newEdges);
-          }, 0);
-        }
-        
-        return newEdges;
-      });
-    }
-  }, [setNodes, setEdges, saveToHistory, nodes, edges, readOnly]);
-
-  // Add keyboard event listener
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      // Only handle delete if the focus is on the ReactFlow container or its children
-      if (event.target.closest('.reactflow-wrapper') || event.target.closest('.react-flow')) {
-        onKeyDown(event);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [onKeyDown]);
+  // Delete functionality is now handled by onNodesChangeWithBoundsUpdate
+  // which properly removes edges when nodes are deleted (lines 475-490)
 
   // Effect to trigger fitView after BPMN import
   useEffect(() => {
@@ -1514,7 +1471,7 @@ const BPMNEditorFlow = ({ isDarkMode, onToggleTheme, showToolbox = true, showPro
             selectionMode={selectionMode ? 'partial' : null}
             elevateNodesOnSelect={false}
             nodeOrigin={[0, 0]}
-            deleteKeyCode={null}
+            deleteKeyCode={['Backspace', 'Delete']}
             connectionLineType={ConnectionLineType.SmoothStep}
             connectionMode="loose"
             defaultEdgeOptions={{

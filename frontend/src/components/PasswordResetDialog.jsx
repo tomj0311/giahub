@@ -16,7 +16,7 @@ import VisibilityOff from '@mui/icons-material/VisibilityOff'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { apiCall } from '../config/api'
 
-export default function PasswordResetDialog({ open, onClose }) {
+export default function PasswordResetDialog({ open, onClose, onLogout }) {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -69,11 +69,14 @@ export default function PasswordResetDialog({ open, onClose }) {
       })
       
       setSuccess(true)
-      showSuccess('Password changed successfully!', 4000)
+      showSuccess('Password changed successfully! Logging out...', 4000)
       
-      // Auto close after 2 seconds
+      // Auto close after 2 seconds and logout
       setTimeout(() => {
         handleClose()
+        if (onLogout) {
+          onLogout()
+        }
       }, 2000)
     } catch (err) {
       showError(err.message || 'Failed to change password. Please try again.')
@@ -125,7 +128,7 @@ export default function PasswordResetDialog({ open, onClose }) {
               Your password has been changed successfully!
             </Typography>
             <Typography variant="body2" align="center" color="text.secondary">
-              You can now use your new password to log in.
+              You will be logged out and redirected to the login page.
             </Typography>
           </Stack>
         </DialogContent>

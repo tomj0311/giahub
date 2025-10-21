@@ -64,23 +64,13 @@ function ActivityNotifications({ user, activityId, projectId }) {
     .map(seg => encodeURIComponent(seg))
     .join('/')
 
-  // Helper function to get direct MinIO URL
-  const getMinioDirectUrl = (path) => {
-    if (!path) return null
-    // Use dedicated MinIO URL if available, otherwise fall back to API_BASE_URL
-    const MINIO_URL = import.meta.env.VITE_MINIO_URL || import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || ''
-    // Remove leading slash from path if exists
-    const cleanPath = path.startsWith('/') ? path.slice(1) : path
-    return `${MINIO_URL}/uploads/${cleanPath}`
-  }
+  // Removed direct MinIO URL usage; previews and downloads will use API blobs
 
   // Helper function to format date in user's local timezone
   const formatLocalDate = (dateString) => {
     if (!dateString) return 'Just now'
     
     try {
-      console.log('[DATE DEBUG] Raw backend string:', dateString)
-      
       // Force treat as UTC regardless of format
       let utcDate
       
@@ -92,15 +82,7 @@ function ActivityNotifications({ user, activityId, projectId }) {
         // Try adding UTC designation
         utcDate = new Date(dateString + ' UTC')
       }
-      
-      console.log('[DATE DEBUG] UTC Date object:', utcDate.toISOString())
-      console.log('[DATE DEBUG] Local Date string:', utcDate.toString())
-      console.log('[DATE DEBUG] Your timezone offset (minutes):', utcDate.getTimezoneOffset())
-      
-      // Get current time for comparison
-      const now = new Date()
-      console.log('[DATE DEBUG] Current local time:', now.toString())
-      
+
       const formatted = utcDate.toLocaleString('en-US', {
         year: 'numeric',
         month: 'short', 
@@ -110,8 +92,6 @@ function ActivityNotifications({ user, activityId, projectId }) {
         hour12: true,
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
       })
-      
-      console.log('[DATE DEBUG] Formatted result:', formatted)
       return formatted
       
     } catch (error) {
@@ -137,9 +117,11 @@ function ActivityNotifications({ user, activityId, projectId }) {
     return () => {
       isMountedRef.current = false
       // Only revoke blob URLs for selected image previews (local file previews)
-      // Direct MinIO URLs don't need to be revoked
+      // Also revoke any generated blob URLs for notification previews
       try {
         (selectedImagePreviews || []).forEach(url => { if (url) URL.revokeObjectURL(url) })
+        const previewUrls = Object.values(previewsRef.current || {})
+        previewUrls.forEach(url => { if (url) URL.revokeObjectURL(url) })
       } catch {}
     }
   }, [])
@@ -224,12 +206,14 @@ function ActivityNotifications({ user, activityId, projectId }) {
     loadNotifications()
   }, [activityId, token])
 
-  // Load image previews for notifications with image files
+  // Load image previews for notifications with image files via API (blob URLs)
   useEffect(() => {
-    if (!notifications.length) return
+    if (!notifications.length || !tokenRef.current) return
 
-    const loadImagePreviews = () => {
-      const newPreviews = {}
+    let cancelled = false
+
+    const fetchPreviews = async () => {
+      const tasks = []
 
       for (const notification of notifications) {
         if (!notification.files) continue
@@ -237,28 +221,46 @@ function ActivityNotifications({ user, activityId, projectId }) {
         for (const file of notification.files) {
           const cacheKey = file.path
           if (imagePreviews[cacheKey]) continue // Already loaded
+          if (!isImageFilename(file.filename)) continue
 
-          // For images, use direct MinIO URL
-          if (isImageFilename(file.filename)) {
-            const directUrl = getMinioDirectUrl(file.path)
-            if (directUrl) {
-              newPreviews[cacheKey] = directUrl
-            }
-          }
+          tasks.push(
+            (async () => {
+              try {
+                const encoded = encodePathSegments(cacheKey)
+                const res = await apiCall(`/api/download/${encoded}`, {
+                  method: 'GET',
+                  headers: { Authorization: `Bearer ${tokenRef.current}` }
+                })
+                if (!res.ok) throw new Error('Failed to fetch image')
+                const blob = await res.blob()
+                const url = URL.createObjectURL(blob)
+                if (!cancelled) {
+                  setImagePreviews(prev => {
+                    if (prev[cacheKey] && prev[cacheKey] !== url) {
+                      try { URL.revokeObjectURL(prev[cacheKey]) } catch {}
+                    }
+                    const merged = { ...prev, [cacheKey]: url }
+                    previewsRef.current = merged
+                    return merged
+                  })
+                }
+              } catch (e) {
+                console.warn('[NOTIFICATION] Preview fetch failed for', cacheKey, e)
+              }
+            })()
+          )
         }
       }
 
-      if (Object.keys(newPreviews).length > 0) {
-        setImagePreviews(prev => {
-          const merged = { ...prev, ...newPreviews }
-          previewsRef.current = merged
-          return merged
-        })
+      if (tasks.length) {
+        await Promise.allSettled(tasks)
       }
     }
 
-    loadImagePreviews()
-  }, [notifications, imagePreviews])
+    fetchPreviews()
+
+    return () => { cancelled = true }
+  }, [notifications, imagePreviews, tokenRef])
 
   // Handle text input changes and detect @ mentions
   const handleMessageChange = (e) => {
@@ -451,28 +453,32 @@ function ActivityNotifications({ user, activityId, projectId }) {
       console.log('[NOTIFICATION] Success response:', result)
       console.log('[NOTIFICATION] Notification object:', result.notification)
       
-      // Immediately load image previews for the newly uploaded files
+      // Immediately load image previews for the newly uploaded files via API
       if (result.notification?.files?.length > 0) {
-        const newPreviews = {}
-        
         for (const file of result.notification.files) {
-          if (isImageFilename(file.filename)) {
-            const directUrl = getMinioDirectUrl(file.path)
-            if (directUrl) {
-              newPreviews[file.path] = directUrl
+          if (!isImageFilename(file.filename)) continue
+          try {
+            const encoded = encodePathSegments(file.path)
+            const res = await apiCall(`/api/download/${encoded}`, {
+              method: 'GET',
+              headers: { Authorization: `Bearer ${tokenRef.current}` }
+            })
+            if (res.ok) {
+              const blob = await res.blob()
+              const url = URL.createObjectURL(blob)
+              setImagePreviews(prev => {
+                if (prev[file.path] && prev[file.path] !== url) {
+                  try { URL.revokeObjectURL(prev[file.path]) } catch {}
+                }
+                const merged = { ...prev, [file.path]: url }
+                previewsRef.current = merged
+                return merged
+              })
               console.log('[NOTIFICATION] Loaded image preview for:', file.filename)
             }
+          } catch (e) {
+            console.warn('[NOTIFICATION] Failed to load new image preview', file.path, e)
           }
-        }
-        
-        // Update image previews state with new images
-        if (Object.keys(newPreviews).length > 0) {
-          setImagePreviews(prev => {
-            const merged = { ...prev, ...newPreviews }
-            previewsRef.current = merged
-            console.log('[NOTIFICATION] Updated image previews, total count:', Object.keys(merged).length)
-            return merged
-          })
         }
       }
       
@@ -783,23 +789,24 @@ function ActivityNotifications({ user, activityId, projectId }) {
                               {notification.files.map((file, i) => {
                                 const isImage = isImageFilename(file.filename)
                                 const imageUrl = imagePreviews[file.path]
-                                
+
                                 const handleDownload = async () => {
                                   try {
-                                    const directUrl = getMinioDirectUrl(file.path)
-                                    if (!directUrl) {
-                                      showError('Invalid file path')
-                                      return
-                                    }
-                                    
-                                    // For direct download, create a link and click it
+                                    const encoded = encodePathSegments(file.path)
+                                    const res = await apiCall(`/api/download/${encoded}`, {
+                                      method: 'GET',
+                                      headers: { Authorization: `Bearer ${tokenRef.current}` }
+                                    })
+                                    if (!res.ok) throw new Error('Download failed')
+                                    const blob = await res.blob()
+                                    const url = URL.createObjectURL(blob)
                                     const a = document.createElement('a')
-                                    a.href = directUrl
+                                    a.href = url
                                     a.download = file.filename
-                                    a.target = '_blank' // Open in new tab as fallback
                                     document.body.appendChild(a)
                                     a.click()
                                     document.body.removeChild(a)
+                                    setTimeout(() => { try { URL.revokeObjectURL(url) } catch {} }, 1000)
                                   } catch (error) {
                                     console.error('Download error:', error)
                                     showError('Failed to download file')

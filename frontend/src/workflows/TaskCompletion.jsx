@@ -114,25 +114,28 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
           return;
         }
 
-        // Find the actual task instance by matching task_spec property
-        let taskInstance = null;
-        for (const [taskInstanceId, task] of Object.entries(allTasks)) {
-          if (task.task_spec === propTaskId) {
-            taskInstance = task;
-            console.log('✅ Found task instance:', taskInstanceId, 'State:', task.state, '(16=READY, 64=COMPLETED)');
-            break;
-          }
-        }
+        // Find all task instances matching this task_spec and prefer any READY (16) state
+        const sameSpecTasks = Object.entries(allTasks).filter(([taskInstanceId, task]) => task.task_spec === propTaskId);
 
-        if (!taskInstance) {
-          console.error('❌ Task instance not found for:', propTaskId);
+        if (sameSpecTasks.length === 0) {
+          console.error('❌ No task instances found for task_spec:', propTaskId);
           setError(`Task instance for '${propTaskId}' not found.`);
           setLoading(false);
           return;
         }
 
-        const taskState = taskInstance.state;
-        const taskInstanceData = taskInstance.data || {};
+        // Prefer a READY task if any exists; otherwise pick the first match
+        const readyTaskEntry = sameSpecTasks.find(([id, task]) => task.state === 16);
+        const [selectedTaskInstanceId, selectedTaskInstance] = readyTaskEntry || sameSpecTasks[0];
+
+        console.log(
+          readyTaskEntry
+            ? `✅ Selected READY task instance: ${selectedTaskInstanceId} State: ${selectedTaskInstance.state} (16=READY, 64=COMPLETED)`
+            : `ℹ️ No READY instance found. Selected task instance: ${selectedTaskInstanceId} State: ${selectedTaskInstance.state}`
+        );
+
+        const taskState = selectedTaskInstance.state;
+        const taskInstanceData = selectedTaskInstance.data || {};
         
         console.log('=== TASK STATE HANDLING ===');
         console.log('Task ID:', propTaskId);
