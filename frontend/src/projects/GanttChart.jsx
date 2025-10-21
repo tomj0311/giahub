@@ -57,6 +57,8 @@ function GanttChart({ user, projectId: propProjectId }) {
   const [timelineYears, setTimelineYears] = useState([])
   const [zoomLevel, setZoomLevel] = useState(0.5)
   const [viewMode, setViewMode] = useState('monthly') // 'daily', 'weekly', 'monthly', 'yearly'
+  const MIN_ZOOM = 0.1
+  const MAX_ZOOM = 3
   const ganttRef = useRef(null)
 
   // Format date as dd/mm/yyyy
@@ -322,7 +324,7 @@ function GanttChart({ user, projectId: propProjectId }) {
         e.preventDefault()
         e.stopPropagation()
         const delta = e.deltaY > 0 ? -0.1 : 0.1
-        setZoomLevel(prev => Math.max(0.5, Math.min(3, prev + delta)))
+        setZoomLevel(prev => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, +(prev + delta).toFixed(2))))
       }
     }
 
@@ -824,6 +826,9 @@ function GanttChart({ user, projectId: propProjectId }) {
       const avgDaysPerMonth = 30.44 // More accurate average
       widthPx = Math.max(unitWidth * 0.3, (totalDays / avgDaysPerMonth) * unitWidth)
     }
+
+    // Ensure a minimal visible width for bars at very low zoom levels
+    widthPx = Math.max(2, widthPx)
 
     return {
       left: `${leftPx}px`,
@@ -1369,13 +1374,13 @@ function GanttChart({ user, projectId: propProjectId }) {
               position: { xs: 'static', md: 'absolute' }, 
               right: { md: 0 }
             }}>
-              <IconButton onClick={() => setZoomLevel(prev => Math.max(0.5, prev - 0.1))} size="small">
+              <IconButton onClick={() => setZoomLevel(prev => Math.max(MIN_ZOOM, +(prev - 0.1).toFixed(2)))} size="small">
                 <ZoomOut size={20} />
               </IconButton>
               <Typography variant="caption">
                 {Math.round(zoomLevel * 100)}%
               </Typography>
-              <IconButton onClick={() => setZoomLevel(prev => Math.min(3, prev + 0.1))} size="small">
+              <IconButton onClick={() => setZoomLevel(prev => Math.min(MAX_ZOOM, +(prev + 0.1).toFixed(2)))} size="small">
                 <ZoomIn size={20} />
               </IconButton>
             </Box>
