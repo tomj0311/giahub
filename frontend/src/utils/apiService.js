@@ -94,12 +94,25 @@ class SharedApiService {
         try {
             const response = await apiCall(endpoint, options);
             
-            // apiCall now returns raw Response object (backward compatible)
+            // apiCall returns raw Response
             if (response.ok) {
                 const data = await response.json();
                 return { success: true, data };
             } else {
-                return { success: false, error: `Request failed with status ${response.status}` };
+                // Try to parse error payload for more context
+                let errorPayload = null;
+                let errorText = '';
+                try {
+                    errorPayload = await response.clone().json();
+                } catch (_) {
+                    try {
+                        errorText = await response.text();
+                    } catch (_) {
+                        /* noop */
+                    }
+                }
+                const detail = errorPayload?.detail || errorPayload?.message || errorText || `Request failed with status ${response.status}`;
+                return { success: false, status: response.status, data: errorPayload, error: detail };
             }
         } catch (error) {
             console.error('❌ API request error:', error);

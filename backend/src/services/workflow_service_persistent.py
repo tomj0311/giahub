@@ -597,9 +597,10 @@ class WorkflowServicePersistent:
     @staticmethod
     async def validate_tenant_access(user: dict) -> str:
         """Validate tenant access and return tenant_id"""
-        tenant_id = user.get("tenantId")
+        # Try both tenantId and tenant_id keys
+        tenant_id = user.get("tenantId") or user.get("tenant_id")
         if not tenant_id:
-            logger.warning(f"[WORKFLOW] Missing tenant information for user: {user.get('id')}")
+            logger.error(f"[WORKFLOW] Missing tenant information for user. User data: {json.dumps({k: v for k, v in user.items() if k not in ['exp']}, default=str)}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User tenant information missing. Please re-login.",
