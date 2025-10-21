@@ -71,8 +71,6 @@ function ActivityNotifications({ user, activityId, projectId }) {
     if (!dateString) return 'Just now'
     
     try {
-      console.log('[DATE DEBUG] Raw backend string:', dateString)
-      
       // Force treat as UTC regardless of format
       let utcDate
       
@@ -84,15 +82,7 @@ function ActivityNotifications({ user, activityId, projectId }) {
         // Try adding UTC designation
         utcDate = new Date(dateString + ' UTC')
       }
-      
-      console.log('[DATE DEBUG] UTC Date object:', utcDate.toISOString())
-      console.log('[DATE DEBUG] Local Date string:', utcDate.toString())
-      console.log('[DATE DEBUG] Your timezone offset (minutes):', utcDate.getTimezoneOffset())
-      
-      // Get current time for comparison
-      const now = new Date()
-      console.log('[DATE DEBUG] Current local time:', now.toString())
-      
+
       const formatted = utcDate.toLocaleString('en-US', {
         year: 'numeric',
         month: 'short', 
@@ -102,8 +92,6 @@ function ActivityNotifications({ user, activityId, projectId }) {
         hour12: true,
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
       })
-      
-      console.log('[DATE DEBUG] Formatted result:', formatted)
       return formatted
       
     } catch (error) {
