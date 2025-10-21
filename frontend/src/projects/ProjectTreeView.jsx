@@ -178,17 +178,18 @@ function ProjectTreeView({ user }) {
   // Column customization state - load from localStorage with fallbacks
   const [columnDialogOpen, setColumnDialogOpen] = useState(false)
   // Predefined initial columns (common ones shown by default)
+  const DEFAULT_VISIBLE_COLUMNS = {
+    name: true,
+    priority: true,
+    status: true,
+    assignee: true,
+    approver: true,
+    start_date: true,
+    due_date: true,
+    progress: true
+  }
   const [visibleColumns, setVisibleColumns] = useState(() => 
-    loadStateFromStorage(STORAGE_KEYS.VISIBLE_COLUMNS, {
-      name: true,
-      priority: true,
-      status: true,
-      assignee: true,
-      approver: true,
-      start_date: true,
-      due_date: true,
-      progress: true
-    })
+    loadStateFromStorage(STORAGE_KEYS.VISIBLE_COLUMNS, DEFAULT_VISIBLE_COLUMNS)
   )
   
   // Project dialog state
@@ -544,6 +545,10 @@ function ProjectTreeView({ user }) {
 
   const handleCloseColumnDialog = () => {
     setColumnDialogOpen(false)
+  }
+
+  const handleResetColumns = () => {
+    setVisibleColumns(DEFAULT_VISIBLE_COLUMNS)
   }
 
   const openCreate = (parentId = 'root') => {
@@ -1415,6 +1420,7 @@ function ProjectTreeView({ user }) {
           </FormGroup>
         </DialogContent>
         <DialogActions>
+          <Button onClick={handleResetColumns} color="secondary">Reset to Default</Button>
           <Button onClick={handleCloseColumnDialog}>Close</Button>
         </DialogActions>
       </Dialog>

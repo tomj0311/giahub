@@ -124,20 +124,21 @@ function ProjectPlanning({ user, projectId }) {
   // Column customization state - load from localStorage with fallbacks
   const [columnDialogOpen, setColumnDialogOpen] = useState(false)
   // Predefined initial columns (common ones shown by default)
+  const DEFAULT_VISIBLE_COLUMNS = {
+    project_id: true,
+    type: true,
+    subject: true,
+    status: true,
+    start_date: true,
+    due_date: true,
+    assignee: true,
+    approver: true,
+    progress: true,
+    // Others off by default
+    priority: false
+  }
   const [visibleColumns, setVisibleColumns] = useState(() => 
-    loadStateFromStorage(STORAGE_KEYS.VISIBLE_COLUMNS, {
-      project_id: true,
-      type: true,
-      subject: true,
-      status: true,
-      start_date: true,
-      due_date: true,
-      assignee: true,
-      approver: true,
-      progress: true,
-      // Others off by default
-      priority: false
-    })
+    loadStateFromStorage(STORAGE_KEYS.VISIBLE_COLUMNS, DEFAULT_VISIBLE_COLUMNS)
   )
   
   // Tabs removed: show all activity types
@@ -725,6 +726,10 @@ function ProjectPlanning({ user, projectId }) {
     setColumnDialogOpen(false)
   }
 
+  const handleResetColumns = () => {
+    setVisibleColumns(DEFAULT_VISIBLE_COLUMNS)
+  }
+
   const openCreate = (type = 'TASK') => {
     navigate('/dashboard/projects/activity/new', {
       state: {
@@ -1232,6 +1237,7 @@ function ProjectPlanning({ user, projectId }) {
           </FormGroup>
         </DialogContent>
         <DialogActions>
+          <Button onClick={handleResetColumns} color="secondary">Reset to Default</Button>
           <Button onClick={handleCloseColumnDialog}>Close</Button>
         </DialogActions>
       </Dialog>
