@@ -72,15 +72,6 @@ const ProjectChat = ({ user }) => {
     };
   }, []);
 
-  // Auto-start workflow when dialog opens
-  useEffect(() => {
-    if (chatOpen && messages.length === 0 && !loading && !workflowId) {
-      // Start with a default query or prompt
-      const defaultQuery = "Show me project information";
-      startChat(defaultQuery);
-    }
-  }, [chatOpen]);
-
   const startChat = async (question) => {
     try {
       setLoading(true);
