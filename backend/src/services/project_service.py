@@ -415,6 +415,45 @@ class ProjectService:
         return {"fields": fields}
 
     @classmethod
+    async def get_distinct_field_values(cls, field_name: str, user: dict) -> dict:
+        """Get distinct values for a specific field across all projects in tenant"""
+        tenant_id = await cls.validate_tenant_access(user)
+        
+        try:
+            # Get all projects with the specified field
+            projects = await MongoStorageService.find_many(
+                "projects",
+                {field_name: {"$exists": True, "$ne": None, "$ne": ""}},
+                tenant_id=tenant_id
+            )
+            
+            # Extract distinct values
+            distinct_values = set()
+            for project in projects:
+                value = project.get(field_name)
+                if value is not None and value != "":
+                    # Convert to string for consistency
+                    distinct_values.add(str(value))
+            
+            # Convert to sorted list
+            values_list = sorted(list(distinct_values))
+            
+            logger.info(f"[PROJECT] Found {len(values_list)} distinct values for field '{field_name}'")
+            
+            return {
+                "field_name": field_name,
+                "values": values_list,
+                "count": len(values_list)
+            }
+            
+        except Exception as e:
+            logger.error(f"[PROJECT] Error fetching distinct values for '{field_name}': {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to fetch distinct values for field '{field_name}'"
+            )
+
+    @classmethod
     async def _build_filter_query(cls, filters: Optional[str]) -> dict:
         """Build MongoDB filter query from JSON filters"""
         import json
