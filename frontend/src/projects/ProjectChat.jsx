@@ -236,7 +236,7 @@ const ProjectChat = ({ user }) => {
             console.log('[ProjectChat] ✅ Workflow completed!', {
               final_answer: workflowData.final_answer,
               answer: workflowData.answer,
-              project_documents: workflowData.project_documents,
+              _output_docs: workflowData._output_docs,
               project_activities: workflowData.project_activities,
               allWorkflowDataKeys: Object.keys(workflowData)
             });
@@ -249,11 +249,11 @@ const ProjectChat = ({ user }) => {
             const response = workflowData.final_answer || workflowData.answer || 'Analysis completed.';
             
             console.log('[ProjectChat] 📊 Creating response message with documents:', {
-              hasProjectDocuments: !!workflowData.project_documents,
-              projectDocumentsType: typeof workflowData.project_documents,
-              projectDocumentsIsArray: Array.isArray(workflowData.project_documents),
-              projectDocumentsLength: workflowData.project_documents?.length,
-              projectDocumentsContent: workflowData.project_documents
+              hasOutputDocs: !!workflowData._output_docs,
+              outputDocsType: typeof workflowData._output_docs,
+              outputDocsIsArray: Array.isArray(workflowData._output_docs),
+              outputDocsLength: workflowData._output_docs?.length,
+              outputDocsContent: workflowData._output_docs
             });
             
             const responseMessage = {
@@ -262,7 +262,7 @@ const ProjectChat = ({ user }) => {
               content: response,
               timestamp: new Date(),
               status: 'completed',
-              projectDocuments: workflowData.project_documents, // Store documents separately
+              outputDocs: workflowData._output_docs, // Store documents separately using _output_docs
               projectActivities: workflowData.project_activities // Also store activities if available
             };
             
@@ -567,29 +567,29 @@ const ProjectChat = ({ user }) => {
                                 {msg.content}
                               </Typography>
                               
-                              {/* Display project documents as a table if available */}
+                              {/* Display output documents as a table if available */}
                               {(() => {
                                 console.log('[ProjectChat] 🖼️ Rendering message:', {
                                   msgId: msg.id,
-                                  hasProjectDocuments: !!msg.projectDocuments,
-                                  projectDocumentsType: typeof msg.projectDocuments,
-                                  projectDocumentsIsArray: Array.isArray(msg.projectDocuments),
-                                  projectDocumentsLength: msg.projectDocuments?.length,
-                                  projectDocuments: msg.projectDocuments
+                                  hasOutputDocs: !!msg.outputDocs,
+                                  outputDocsType: typeof msg.outputDocs,
+                                  outputDocsIsArray: Array.isArray(msg.outputDocs),
+                                  outputDocsLength: msg.outputDocs?.length,
+                                  outputDocs: msg.outputDocs
                                 });
                                 
-                                if (msg.projectDocuments && Array.isArray(msg.projectDocuments) && msg.projectDocuments.length > 0) {
-                                  console.log('[ProjectChat] ✅ Rendering table for documents:', msg.projectDocuments);
+                                if (msg.outputDocs && Array.isArray(msg.outputDocs) && msg.outputDocs.length > 0) {
+                                  console.log('[ProjectChat] ✅ Rendering table for documents:', msg.outputDocs);
                                   return (
                                     <Box sx={{ mt: 2 }}>
                                       <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                                        📄 Project Documents ({msg.projectDocuments.length})
+                                        📄 Output Documents ({msg.outputDocs.length})
                                       </Typography>
                                       <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
                                         <Table size="small" stickyHeader>
                                           <TableHead>
                                             <TableRow>
-                                              {Object.keys(msg.projectDocuments[0] || {})
+                                              {Object.keys(msg.outputDocs[0] || {})
                                                 .filter(key => !key.toLowerCase().includes('id') && key !== '_id')
                                                 .map((key) => (
                                                 <TableCell key={key} sx={{ fontWeight: 'bold', bgcolor: 'background.default' }}>
@@ -599,7 +599,7 @@ const ProjectChat = ({ user }) => {
                                             </TableRow>
                                           </TableHead>
                                           <TableBody>
-                                            {msg.projectDocuments.map((doc, idx) => (
+                                            {msg.outputDocs.map((doc, idx) => (
                                               <TableRow key={idx} hover>
                                                 {Object.entries(doc)
                                                   .filter(([key]) => !key.toLowerCase().includes('id') && key !== '_id')
@@ -616,24 +616,19 @@ const ProjectChat = ({ user }) => {
                                     </Box>
                                   );
                                 } else if (msg.status === 'completed' && msg.type === 'bot') {
-                                  // Show friendly message when no data found
-                                  console.log('[ProjectChat] ℹ️ No documents found, showing user message');
+                                  // Show configuration message when _output_docs variable is not found
+                                  console.log('[ProjectChat] ℹ️ No _output_docs found, showing configuration message');
                                   return (
-                                    <Box sx={{ mt: 2, p: 2, bgcolor: alpha(theme.palette.info.main, 0.1), borderRadius: 1, border: `1px solid ${alpha(theme.palette.info.main, 0.3)}` }}>
-                                      <Typography variant="body2" color="text.secondary">
-                                        💡 No project data was found for your query. Try rephrasing your question or ask about specific project details like:
+                                    <Box sx={{ mt: 2, p: 2, bgcolor: alpha(theme.palette.warning.main, 0.1), borderRadius: 1, border: `1px solid ${alpha(theme.palette.warning.main, 0.3)}` }}>
+                                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, color: 'warning.dark' }}>
+                                        ⚙️ Workflow Configuration Required
                                       </Typography>
-                                      <Box component="ul" sx={{ mt: 1, mb: 0, pl: 2 }}>
-                                        <Typography component="li" variant="body2" color="text.secondary">
-                                          "Show me all projects"
-                                        </Typography>
-                                        <Typography component="li" variant="body2" color="text.secondary">
-                                          "What are the active projects?"
-                                        </Typography>
-                                        <Typography component="li" variant="body2" color="text.secondary">
-                                          "List project activities"
-                                        </Typography>
-                                      </Box>
+                                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                        The workflow needs to be configured to output data using the <code>_output_docs</code> variable.
+                                      </Typography>
+                                      <Typography variant="body2" color="text.secondary">
+                                        Please ensure your workflow includes a task that sets <code>_output_docs</code> with the query results to display them here as a table.
+                                      </Typography>
                                     </Box>
                                   );
                                 } else {

@@ -246,7 +246,8 @@ class WorkflowServicePersistent:
             logger.info(f"[WORKFLOW] Handling ServiceTask: {bpmn_id}")
             
             response_data = None
-            
+            error_message = None
+
             # Check if task has extension elements with service configuration
             if hasattr(task.task_spec, 'extensions') and task.task_spec.extensions:
                 extension_elements = task.task_spec.extensions.get('extensionElements')
@@ -304,11 +305,17 @@ class WorkflowServicePersistent:
                             logger.error(f"[WORKFLOW] Function execution failed: {e}")
                             raise Exception(f"Function execution failed: {str(e)}")
                     else:
-                        task.data['error'] = "No service config found"
+                        error_message = f"ServiceTask configuration error: No 'function' found in serviceConfiguration for task '{bpmn_id}'"
                 else:
-                    task.data['error'] = "No extension config found"
+                    error_message = f"ServiceTask configuration error: No 'extensionElements' found for task '{bpmn_id}'"
             else:
-                task.data['error'] = "No extension config found"
+                error_message = f"ServiceTask configuration error: No 'extensions' found for task '{bpmn_id}'"
+
+            # If an error was found in config, set task to error and raise
+            if error_message:
+                task.error()
+                task.data['error'] = error_message
+                raise Exception(error_message)
                                     
             # Handle the response
             if response_data:
@@ -322,12 +329,11 @@ class WorkflowServicePersistent:
                 task.data[task.task_spec.bpmn_id] = response
                 task.complete()
             else:
-                # Empty response or missing config - treat as error
-                logger.warning(f"[WORKFLOW] ServiceTask {task.task_spec.bpmn_id} did not produce a response.")
+                # Empty response - treat as error
+                logger.warning(f"[WORKFLOW] ServiceTask {task.task_spec.bpmn_id} received None response")
+                task.data['error'] = f"ServiceTask '{bpmn_id}' returned None response - function execution may have failed"
                 task.error()
-                if 'error' not in task.data:
-                    task.data['error'] = "Empty response from service"
-                raise Exception(f"ServiceTask {task.task_spec.bpmn_id} failed: {task.data['error']}")
+                raise Exception(f"ServiceTask '{bpmn_id}' failed: Function returned None")
             
         except Exception as e:
             logger.error(f"[WORKFLOW] Error handling ServiceTask {task.task_spec.bpmn_id}: {e}")
