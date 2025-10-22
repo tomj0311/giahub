@@ -115,12 +115,26 @@ class WorkflowServicePersistent:
 
                 try:
                     logger.info(f"[TRACE] About to execute workflow.do_engine_steps() - step {step_count}")
+                    
+                    # Get the current event loop to schedule coroutines from worker thread
+                    loop = asyncio.get_running_loop()
+                    
+                    # Create callback with loop captured in closure
                     def did_complete_Task(task):
                         logger.info(f"[TRACE] Completed task: {task.task_spec.bpmn_id} ({type(task.task_spec).__name__})")
-                        # Schedule the async update in the event loop
-                        asyncio.create_task(cls._update_workflow_status(workflow, instance_id, tenant_id, step_count))
+                        # Schedule the async update in the event loop from worker thread
+                        # The loop variable is captured from the enclosing scope
+                        future = asyncio.run_coroutine_threadsafe(
+                            cls._update_workflow_status(workflow, instance_id, tenant_id, step_count),
+                            loop
+                        )
+                        # Optionally wait for completion or handle exceptions
+                        try:
+                            future.result(timeout=10)  # Wait up to 10 seconds
+                        except Exception as e:
+                            logger.error(f"[TRACE] Error updating workflow status in callback: {e}")
                                       
-                    # Run engine steps in a worker thread to allow thread-safe scheduling above
+                    # Run engine steps in a worker thread
                     await asyncio.to_thread(workflow.do_engine_steps, did_complete_Task)
                     logger.info(f"[TRACE] Successfully completed workflow.do_engine_steps() - step {step_count}")
 
@@ -670,29 +684,35 @@ class WorkflowServicePersistent:
     @classmethod
     async def _update_workflow_status(cls, workflow, instance_id, tenant_id, step_count=None, extra_data=None):
         """Update workflow status and save to MongoDB - centralized to avoid redundancy"""
-        # Determine status string
-        workflow_status = cls._determine_workflow_status(workflow)
-        
-        status_data = {
-            "instance_id": instance_id,
-            "status": workflow_status,
-            "needs_user_input": workflow.manual_input_required(),
-            "current_task_id": cls._get_current_task_id(workflow)
-        }
-        
-        workflow.data.update({
-            "workflow_status": status_data,
-            "last_updated": datetime.now(timezone.utc).isoformat()
-        })
-        
-        if step_count is not None:
-            workflow.data["step_count"] = step_count
+        try:
+            # Determine status string
+            workflow_status = cls._determine_workflow_status(workflow)
             
-        if extra_data:
-            workflow.data.update(extra_data)
+            status_data = {
+                "instance_id": instance_id,
+                "status": workflow_status,
+                "needs_user_input": workflow.manual_input_required(),
+                "current_task_id": cls._get_current_task_id(workflow)
+            }
             
-        await cls.update_workflow_instance(workflow, instance_id, tenant_id)
-        return status_data
+            workflow.data.update({
+                "workflow_status": status_data,
+                "last_updated": datetime.now(timezone.utc).isoformat()
+            })
+            
+            if step_count is not None:
+                workflow.data["step_count"] = step_count
+                
+            if extra_data:
+                workflow.data.update(extra_data)
+                
+            await cls.update_workflow_instance(workflow, instance_id, tenant_id)
+            return status_data
+            
+        except Exception as e:
+            logger.error(f"[WORKFLOW] Failed to update workflow status for instance {instance_id}: {e}", exc_info=True)
+            # Re-raise to let caller handle the error
+            raise
 
     @classmethod
     async def get_workflow_status(cls, workflow_id: str, instance_id: str, user: Dict[str, Any]):
