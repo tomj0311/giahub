@@ -79,9 +79,16 @@ const ProjectChat = ({ user }) => {
       setLoading(true);
       setState('running');
       
+      // Clear any existing polling interval
+      if (pollInterval.current) {
+        clearInterval(pollInterval.current);
+        pollInterval.current = null;
+      }
+      
       // Reset refs for new chat
       processedTasksRef.current.clear();
       hasCompletedRef.current = false;
+      setIsPolling(false);
       
       // Add user message to chat
       const userMessage = {
@@ -238,7 +245,15 @@ const ProjectChat = ({ user }) => {
           const isCompleted = instance.serialized_data?.completed === true || 
                              workflowData.workflow_status?.completed === true;
           
-          if (isCompleted && !hasCompletedRef.current) {
+          if (isCompleted) {
+            if (hasCompletedRef.current) {
+              // Already processed completion, stop polling and return
+              console.log('[ProjectChat] ⏭️ Completion already processed, skipping');
+              clearInterval(pollInterval.current);
+              setIsPolling(false);
+              return;
+            }
+            
             console.log('[ProjectChat] ✅ Workflow completed!', {
               final_answer: workflowData.final_answer,
               answer: workflowData.answer,
@@ -247,10 +262,12 @@ const ProjectChat = ({ user }) => {
               allWorkflowDataKeys: Object.keys(workflowData)
             });
             
+            // Mark as completed FIRST to prevent any race conditions
+            hasCompletedRef.current = true;
+            
             clearInterval(pollInterval.current);
             setIsPolling(false);
             setState('completed');
-            hasCompletedRef.current = true; // Mark as completed to prevent duplicate messages
             
             // Add final response
             const response = workflowData.final_answer || workflowData.answer || 'Analysis completed.';
@@ -281,9 +298,6 @@ const ProjectChat = ({ user }) => {
               console.log('[ProjectChat] 📝 Updated messages array:', newMessages);
               return newMessages;
             });
-            return;
-          } else if (isCompleted) {
-            // Already processed completion, just return
             return;
           }
           
