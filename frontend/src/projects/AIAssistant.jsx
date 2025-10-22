@@ -54,6 +54,8 @@ const AIAssistant = ({ user }) => {
   
   const pollInterval = useRef(null);
   const messagesEndRef = useRef(null);
+  const processedTasksRef = useRef(new Set()); // Track processed tasks
+  const hasCompletedRef = useRef(false); // Track if completion message was added
   const token = user?.token || localStorage.getItem('token');
 
   const scrollToBottom = () => {
@@ -137,6 +139,8 @@ const AIAssistant = ({ user }) => {
       setError('');
       if (!keepMessages) {
         setMessages([]);
+        processedTasksRef.current.clear(); // Clear processed tasks when starting fresh
+        hasCompletedRef.current = false; // Reset completion flag
       }
       
       const wfId = selectedWorkflow.id || selectedWorkflow.workflow_id || selectedWorkflow._id;
@@ -255,10 +259,11 @@ const AIAssistant = ({ user }) => {
           const isCompleted = instance.serialized_data?.completed === true || 
                              workflowData.workflow_status?.completed === true;
           
-          if (isCompleted) {
+          if (isCompleted && !hasCompletedRef.current) {
             clearInterval(pollInterval.current);
             setIsPolling(false);
             setState('completed');
+            hasCompletedRef.current = true; // Mark as completed to prevent duplicate messages
                       
             // Extract only _output* variables from workflowData
             const outputData = {};
@@ -292,6 +297,9 @@ const AIAssistant = ({ user }) => {
               const filtered = prev.filter(msg => msg.status !== 'processing');
               return [...filtered, responseMessage];
             });
+            return;
+          } else if (isCompleted) {
+            // Already processed completion, just return
             return;
           }
           
@@ -351,14 +359,15 @@ const AIAssistant = ({ user }) => {
           completedTasks.forEach(([taskId, task]) => {
             const taskData = task.data || {};
             
-            // Check if we already have a message for this task
-            const existingMessage = messages.find(msg => msg.taskId === taskId);
-            if (!existingMessage && taskData.result) {
+            // Check if we already processed this task using the ref
+            if (!processedTasksRef.current.has(taskId) && taskData.result) {
               console.log('[AIAssistant] 💬 Adding task result message:', {
                 taskId,
                 taskName: task.task_spec,
                 result: taskData.result
               });
+              
+              processedTasksRef.current.add(taskId); // Mark as processed
               
               const taskMessage = {
                 id: Date.now() + Math.random(),
@@ -402,6 +411,8 @@ const AIAssistant = ({ user }) => {
     setMessages([]);
     setError('');
     setSelectedWorkflow(null);
+    processedTasksRef.current.clear(); // Clear processed tasks
+    hasCompletedRef.current = false; // Reset completion flag
   };
 
   const formatTimestamp = (timestamp) => {

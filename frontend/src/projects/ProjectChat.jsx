@@ -55,6 +55,8 @@ const ProjectChat = ({ user }) => {
   
   const pollInterval = useRef(null);
   const messagesEndRef = useRef(null);
+  const processedTasksRef = useRef(new Set()); // Track processed tasks
+  const hasCompletedRef = useRef(false); // Track if completion message was added
   const token = user?.token || localStorage.getItem('token');
 
   const scrollToBottom = () => {
@@ -76,6 +78,10 @@ const ProjectChat = ({ user }) => {
     try {
       setLoading(true);
       setState('running');
+      
+      // Reset refs for new chat
+      processedTasksRef.current.clear();
+      hasCompletedRef.current = false;
       
       // Add user message to chat
       const userMessage = {
@@ -232,7 +238,7 @@ const ProjectChat = ({ user }) => {
           const isCompleted = instance.serialized_data?.completed === true || 
                              workflowData.workflow_status?.completed === true;
           
-          if (isCompleted) {
+          if (isCompleted && !hasCompletedRef.current) {
             console.log('[ProjectChat] ✅ Workflow completed!', {
               final_answer: workflowData.final_answer,
               answer: workflowData.answer,
@@ -244,6 +250,7 @@ const ProjectChat = ({ user }) => {
             clearInterval(pollInterval.current);
             setIsPolling(false);
             setState('completed');
+            hasCompletedRef.current = true; // Mark as completed to prevent duplicate messages
             
             // Add final response
             const response = workflowData.final_answer || workflowData.answer || 'Analysis completed.';
@@ -274,6 +281,9 @@ const ProjectChat = ({ user }) => {
               console.log('[ProjectChat] 📝 Updated messages array:', newMessages);
               return newMessages;
             });
+            return;
+          } else if (isCompleted) {
+            // Already processed completion, just return
             return;
           }
           
@@ -337,14 +347,15 @@ const ProjectChat = ({ user }) => {
           completedTasks.forEach(([taskId, task]) => {
             const taskData = task.data || {};
             
-            // Check if we already have a message for this task
-            const existingMessage = messages.find(msg => msg.taskId === taskId);
-            if (!existingMessage && taskData.result) {
+            // Check if we already processed this task using the ref
+            if (!processedTasksRef.current.has(taskId) && taskData.result) {
               console.log('[ProjectChat] 💬 Adding task result message:', {
                 taskId,
                 taskName: task.task_spec,
                 result: taskData.result
               });
+              
+              processedTasksRef.current.add(taskId); // Mark as processed
               
               const taskMessage = {
                 id: Date.now() + Math.random(),
