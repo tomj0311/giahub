@@ -51,7 +51,8 @@ import {
   ArrowDown,
   SortAsc,
   SortDesc,
-  Settings
+  Settings,
+  BarChart3
 } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { useConfirmation } from '../contexts/ConfirmationContext'
@@ -955,12 +956,8 @@ function ProjectTreeView({ user }) {
             '&:hover': {
               bgcolor: 'action.hover'
             },
-            bgcolor: level > 0 ? alpha('#000', 0.01) : 'transparent',
-            cursor: 'pointer'
+            bgcolor: level > 0 ? alpha('#000', 0.01) : 'transparent'
           }}
-          onClick={() => navigate('/dashboard/projects/gantt', { 
-            state: { projectId: node.id, projectName: node.name } 
-          })}
         >
           {orderedFields.map((field) => {
             if (!visibleColumns[field.name]) return null
@@ -1063,8 +1060,22 @@ function ProjectTreeView({ user }) {
             )
           })}
 
-          <TableCell align="right" sx={{ whiteSpace: 'nowrap', minWidth: { xs: 120, sm: 160 } }}>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap', minWidth: { xs: 120, sm: 200 } }}>
             <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+              <Tooltip title="View Gantt Chart">
+                <IconButton 
+                  size="small" 
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    navigate('/dashboard/projects/gantt', { 
+                      state: { projectId: node.id, projectName: node.name } 
+                    })
+                  }}
+                  sx={{ color: 'primary.main' }}
+                >
+                  <BarChart3 size={18} />
+                </IconButton>
+              </Tooltip>
               <IconButton size="small" onClick={(e) => {
                 e.stopPropagation()
                 openCreate(node.id)

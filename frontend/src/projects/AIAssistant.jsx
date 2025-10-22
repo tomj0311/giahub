@@ -130,8 +130,9 @@ const AIAssistant = ({ user }) => {
     }
   };
 
-  const startWorkflow = async (keepMessages = false) => {
-    if (!selectedWorkflow) return;
+  const startWorkflow = async (keepMessages = false, workflow = null) => {
+    const workflowToStart = workflow || selectedWorkflow;
+    if (!workflowToStart) return;
     
     try {
       setLoading(true);
@@ -154,10 +155,10 @@ const AIAssistant = ({ user }) => {
       }
       setIsPolling(false);
       
-      const wfId = selectedWorkflow.id || selectedWorkflow.workflow_id || selectedWorkflow._id;
+      const wfId = workflowToStart.id || workflowToStart.workflow_id || workflowToStart._id;
       
       console.log('[AIAssistant] 🚀 Starting workflow', {
-        name: selectedWorkflow.name,
+        name: workflowToStart.name,
         id: wfId,
         endpoint: `/api/workflow/workflows/${wfId}/start`
       });
@@ -166,7 +167,7 @@ const AIAssistant = ({ user }) => {
       const systemMessage = {
         id: Date.now(),
         type: 'system',
-        content: `Starting ${selectedWorkflow.name}...`,
+        content: `Starting ${workflowToStart.name}...`,
         timestamp: new Date(),
         status: 'processing'
       };
@@ -183,7 +184,7 @@ const AIAssistant = ({ user }) => {
           },
           body: JSON.stringify({
             initial_data: { 
-              workflow_name: selectedWorkflow.name
+              workflow_name: workflowToStart.name
             }
           }),
         },
@@ -521,55 +522,62 @@ const AIAssistant = ({ user }) => {
             ) : (
               <List sx={{ p: 1 }}>
                 {workflows.map((workflow) => (
-                  <ListItemButton
+                  <Card 
                     key={workflow.id || workflow.workflow_id || workflow._id}
-                    selected={selectedWorkflow?.name === workflow.name}
-                    onClick={() => setSelectedWorkflow(workflow)}
-                    disabled={state === 'running' || isPolling}
                     sx={{ 
-                      borderRadius: 1,
-                      mb: 0.5,
-                      '&.Mui-selected': {
-                        bgcolor: alpha(theme.palette.primary.main, 0.1),
-                        borderLeft: `4px solid ${theme.palette.primary.main}`
-                      }
+                      mb: 1,
+                      border: selectedWorkflow?.name === workflow.name ? 
+                        `2px solid ${theme.palette.primary.main}` : 
+                        '1px solid',
+                      borderColor: selectedWorkflow?.name === workflow.name ? 
+                        theme.palette.primary.main : 
+                        'divider',
+                      bgcolor: selectedWorkflow?.name === workflow.name ? 
+                        alpha(theme.palette.primary.main, 0.05) : 
+                        'background.paper'
                     }}
                   >
-                    <ListItemText 
-                      primary={workflow.name}
-                      secondary={workflow.description || 'No description'}
-                      primaryTypographyProps={{ fontWeight: 500 }}
-                    />
-                  </ListItemButton>
+                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                      <Typography variant="subtitle1" fontWeight={500} sx={{ mb: 0.5 }}>
+                        {workflow.name}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        {workflow.description || 'No description'}
+                      </Typography>
+                      
+                      {state === 'idle' || selectedWorkflow?.name !== workflow.name ? (
+                        <Button
+                          variant="contained"
+                          size="medium"
+                          fullWidth
+                          startIcon={loading && selectedWorkflow?.name === workflow.name ? 
+                            <CircularProgress size={20} /> : 
+                            <Play size={20} />
+                          }
+                          onClick={() => {
+                            setSelectedWorkflow(workflow);
+                            startWorkflow(false, workflow);
+                          }}
+                          disabled={(state === 'running' || isPolling || loading) && selectedWorkflow?.name === workflow.name}
+                        >
+                          Start Assistant
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outlined"
+                          size="medium"
+                          fullWidth
+                          startIcon={<RefreshCw size={20} />}
+                          onClick={handleReset}
+                          disabled={isPolling}
+                        >
+                          Reset
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
                 ))}
               </List>
-            )}
-          </Box>
-
-          {/* Action Buttons */}
-          <Box sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-            {state === 'idle' ? (
-              <Button
-                variant="contained"
-                size="large"
-                fullWidth
-                startIcon={loading ? <CircularProgress size={20} /> : <Play size={20} />}
-                onClick={startWorkflow}
-                disabled={!selectedWorkflow || loading}
-              >
-                Start Assistant
-              </Button>
-            ) : (
-              <Button
-                variant="outlined"
-                size="large"
-                fullWidth
-                startIcon={<RefreshCw size={20} />}
-                onClick={handleReset}
-                disabled={isPolling}
-              >
-                Reset
-              </Button>
             )}
           </Box>
         </Box>
@@ -624,7 +632,7 @@ const AIAssistant = ({ user }) => {
           {(state === 'running' || state === 'completed' || state === 'failed' || state === 'task_ready') && (
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               {/* Messages Area */}
-              <Box sx={{ flex: 1, overflowY: 'auto', p: state === 'task_ready' ? 0 : 2 }}>
+              <Box sx={{ flex: 1, overflowY: 'auto', p: state === 'task_ready' ? 0 : 3 }}>
                 <List sx={{ p: 0 }}>
                   {messages.map((msg, index) => (
                     <React.Fragment key={msg.id}>
@@ -632,12 +640,14 @@ const AIAssistant = ({ user }) => {
                         display: 'flex', 
                         alignItems: 'flex-start',
                         gap: 2,
-                        mb: 2
+                        mb: 3,
+                        px: 1
                       }}>
                         <Avatar sx={{ 
                           bgcolor: getMessageColor(msg.type, msg.status),
-                          width: 32,
-                          height: 32
+                          width: 36,
+                          height: 36,
+                          mt: 1
                         }}>
                           {getMessageIcon(msg.type, msg.status)}
                         </Avatar>
@@ -646,13 +656,14 @@ const AIAssistant = ({ user }) => {
                           <Box sx={{ 
                             display: 'flex', 
                             alignItems: 'center', 
-                            gap: 1, 
-                            mb: 0.5 
+                            gap: 1.5, 
+                            mb: 1,
+                            py: 1.5
                           }}>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.95rem' }}>
                               {msg.type === 'error' ? 'Error' : 'Assistant'}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
                               {formatTimestamp(msg.timestamp)}
                             </Typography>
                             {msg.taskName && (
@@ -660,7 +671,7 @@ const AIAssistant = ({ user }) => {
                                 label={msg.taskName} 
                                 size="small" 
                                 variant="outlined"
-                                sx={{ height: 20, fontSize: '0.7rem' }}
+                                sx={{ height: 22, fontSize: '0.7rem' }}
                               />
                             )}
                           </Box>
