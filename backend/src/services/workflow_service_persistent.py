@@ -71,6 +71,10 @@ class WorkflowServicePersistent:
                 
                 # Get tasks that need processing - both READY and STARTED
                 ready_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.READY]
+                
+                if ready_tasks and not ready_tasks[0].data:
+                    ready_tasks[0].data.update(workflow.data)
+
                 started_tasks = [t for t in workflow.get_tasks() if t.state == TaskState.STARTED]
                 all_tasks = ready_tasks + started_tasks
 
@@ -111,9 +115,11 @@ class WorkflowServicePersistent:
 
                 try:
                     logger.info(f"[TRACE] About to execute workflow.do_engine_steps() - step {step_count}")
+                    def did_complete_Task(task):
+                        logger.info(f"[TRACE] Completed task: {task.task_spec.bpmn_id} ({type(task.task_spec).__name__})")
                                       
                     # Run engine steps in a worker thread to allow thread-safe scheduling above
-                    await asyncio.to_thread(workflow.do_engine_steps)
+                    await asyncio.to_thread(workflow.do_engine_steps, did_complete_Task)
                     logger.info(f"[TRACE] Successfully completed workflow.do_engine_steps() - step {step_count}")
 
                 except Exception as engine_error:
