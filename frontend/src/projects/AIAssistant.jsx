@@ -243,11 +243,7 @@ const AIAssistant = ({ user }) => {
           { workflowId: wfId, instanceId: instId, timestamp: Date.now(), bypassCache: true }
         );
 
-        console.log('[AIAssistant] 📦 Poll result received:', {
-          success: result.success,
-          hasData: !!result.data,
-          dataKeys: result.data ? Object.keys(result.data) : [],
-        });
+        console.log('[AIAssistant] 📦 POLL RESULT.DATA:', result.data);
 
         if (result.success) {
           const instance = result.data.data;
@@ -255,45 +251,29 @@ const AIAssistant = ({ user }) => {
           const workflowData = instance.serialized_data?.data || {};
           const taskSpecs = instance.serialized_data?.spec?.task_specs || {};
           
-          console.log('[AIAssistant] 📊 Workflow instance data:', {
-            hasSerializedData: !!instance.serialized_data,
-            taskCount: Object.keys(tasks).length,
-            workflowDataKeys: Object.keys(workflowData),
-            completed: instance.serialized_data?.completed,
-            workflowStatus: workflowData.workflow_status,
-          });
-          
           // CHECK 1: Is workflow complete?
           const isCompleted = instance.serialized_data?.completed === true || 
                              workflowData.workflow_status?.completed === true;
           
           if (isCompleted) {
-            console.log('[AIAssistant] ✅ Workflow completed!', {
-              final_answer: workflowData.final_answer,
-              answer: workflowData.answer,
-              result: workflowData.result,
-              project_documents: workflowData.project_documents,
-              project_activities: workflowData.project_activities,
-              allWorkflowDataKeys: Object.keys(workflowData)
-            });
-            
             clearInterval(pollInterval.current);
             setIsPolling(false);
             setState('completed');
-            
-            // Add final response
+                      
+            // Extract only _output* variables from workflowData
+            const outputData = {};
+            Object.keys(workflowData).forEach(key => {
+              console.log('Checking key:', key, 'starts with _output?', key.startsWith('_output'));
+              if (key.startsWith('_output')) {
+                outputData[key] = workflowData[key];
+                console.log('ADDED:', key, '=', workflowData[key]);
+              }
+            });
+                       
             const response = workflowData.final_answer || 
                            workflowData.answer || 
                            workflowData.result ||
                            'Workflow completed successfully.';
-            
-            console.log('[AIAssistant] 📊 Creating response message with documents:', {
-              hasProjectDocuments: !!workflowData.project_documents,
-              projectDocumentsType: typeof workflowData.project_documents,
-              projectDocumentsIsArray: Array.isArray(workflowData.project_documents),
-              projectDocumentsLength: workflowData.project_documents?.length,
-              projectDocumentsContent: workflowData.project_documents
-            });
             
             const responseMessage = {
               id: Date.now() + 2,
@@ -301,17 +281,16 @@ const AIAssistant = ({ user }) => {
               content: response,
               timestamp: new Date(),
               status: 'completed',
-              projectDocuments: workflowData.project_documents, // Store documents separately
-              projectActivities: workflowData.project_activities // Also store activities if available
+              outputData: Object.keys(outputData).length > 0 ? outputData : null
             };
             
-            console.log('[AIAssistant] 📤 Response message created:', responseMessage);
+            console.log('========== RESPONSE MESSAGE ==========');
+            console.log('responseMessage:', responseMessage);
+            console.log('======================================');
             
             setMessages(prev => {
               const filtered = prev.filter(msg => msg.status !== 'processing');
-              const newMessages = [...filtered, responseMessage];
-              console.log('[AIAssistant] 📝 Updated messages array:', newMessages);
-              return newMessages;
+              return [...filtered, responseMessage];
             });
             return;
           }
@@ -682,80 +661,36 @@ const AIAssistant = ({ user }) => {
                                   {msg.content}
                                 </Typography>
                                 
-                                {/* Display project documents as a table if available */}
-                                {(() => {
-                                  console.log('[AIAssistant] 🖼️ Rendering message:', {
-                                    msgId: msg.id,
-                                    hasProjectDocuments: !!msg.projectDocuments,
-                                    projectDocumentsType: typeof msg.projectDocuments,
-                                    projectDocumentsIsArray: Array.isArray(msg.projectDocuments),
-                                    projectDocumentsLength: msg.projectDocuments?.length,
-                                    projectDocuments: msg.projectDocuments
-                                  });
-                                  
-                                  if (msg.projectDocuments && Array.isArray(msg.projectDocuments) && msg.projectDocuments.length > 0) {
-                                    console.log('[AIAssistant] ✅ Rendering table for documents:', msg.projectDocuments);
-                                    return (
-                                      <Box sx={{ mt: 2 }}>
-                                        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                                          📄 Project Documents ({msg.projectDocuments.length})
+                                {/* Display output data from workflow */}
+                                {msg.outputData && (
+                                  <Box sx={{ mt: 2 }}>
+                                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                                      � Output Data
+                                    </Typography>
+                                    {Object.entries(msg.outputData).map(([key, value]) => (
+                                      <Box key={key} sx={{ mb: 2 }}>
+                                        <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                                          {key}:
                                         </Typography>
-                                        <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
-                                          <Table size="small" stickyHeader>
-                                            <TableHead>
-                                              <TableRow>
-                                                {Object.keys(msg.projectDocuments[0] || {})
-                                                  .filter(key => !key.toLowerCase().includes('id') && key !== '_id')
-                                                  .map((key) => (
-                                                  <TableCell key={key} sx={{ fontWeight: 'bold', bgcolor: 'background.default' }}>
-                                                    {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                                  </TableCell>
-                                                ))}
-                                              </TableRow>
-                                            </TableHead>
-                                            <TableBody>
-                                              {msg.projectDocuments.map((doc, idx) => (
-                                                <TableRow key={idx} hover>
-                                                  {Object.entries(doc)
-                                                    .filter(([key]) => !key.toLowerCase().includes('id') && key !== '_id')
-                                                    .map(([key, value]) => (
-                                                    <TableCell key={key}>
-                                                      {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                                                    </TableCell>
-                                                  ))}
-                                                </TableRow>
-                                              ))}
-                                            </TableBody>
-                                          </Table>
-                                        </TableContainer>
+                                        <Paper sx={{ 
+                                          p: 2, 
+                                          bgcolor: 'grey.900', 
+                                          maxHeight: 400, 
+                                          overflow: 'auto',
+                                          fontFamily: 'monospace',
+                                          fontSize: '0.875rem',
+                                          whiteSpace: 'pre-wrap',
+                                          wordBreak: 'break-word',
+                                          mt: 0.5
+                                        }}>
+                                          <pre style={{ margin: 0, color: '#00ff00' }}>
+                                            {JSON.stringify(value, null, 2)}
+                                          </pre>
+                                        </Paper>
                                       </Box>
-                                    );
-                                  } else if (msg.status === 'completed' && msg.type === 'bot') {
-                                    // Show friendly message when no data found
-                                    console.log('[AIAssistant] ℹ️ No documents found, showing user message');
-                                    return (
-                                      <Box sx={{ mt: 2, p: 2, bgcolor: alpha(theme.palette.info.main, 0.1), borderRadius: 1, border: `1px solid ${alpha(theme.palette.info.main, 0.3)}` }}>
-                                        <Typography variant="body2" color="text.secondary">
-                                          💡 No project data was found for your query. Try rephrasing your question or ask about specific project details like:
-                                        </Typography>
-                                        <Box component="ul" sx={{ mt: 1, mb: 0, pl: 2 }}>
-                                          <Typography component="li" variant="body2" color="text.secondary">
-                                            "Show me all projects"
-                                          </Typography>
-                                          <Typography component="li" variant="body2" color="text.secondary">
-                                            "What are the active projects?"
-                                          </Typography>
-                                          <Typography component="li" variant="body2" color="text.secondary">
-                                            "List project activities"
-                                          </Typography>
-                                        </Box>
-                                      </Box>
-                                    );
-                                  } else {
-                                    console.log('[AIAssistant] ❌ No documents to render');
-                                    return null;
-                                  }
-                                })()}
+                                    ))}
+                                  </Box>
+                                )}
                               </>
                             )}
                           </Paper>
