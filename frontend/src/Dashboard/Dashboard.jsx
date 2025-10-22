@@ -66,6 +66,7 @@ const ProjectPlanning = lazy(() => import('../projects/ProjectPlanning'))
 const ActivityForm = lazy(() => import('../projects/ActivityForm'))
 const ProjectForm = lazy(() => import('../projects/ProjectForm'))
 const GanttChart = lazy(() => import('../projects/GanttChart'))
+const ProjectChat = lazy(() => import('../projects/ProjectChat'))
 const WorkflowConfig = lazy(() => import('../workflows/WorkflowConfig'))
 const WorkflowExecution = lazy(() => import('../workflows/WorkflowExecution'))
 const WorkflowUI = lazy(() => import('../workflows/WorkflowUI'))
@@ -182,6 +183,11 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 					label: 'Planning',
 					to: '/dashboard/projects/planning',
 					icon: 'ListChecks'
+				},
+				{
+					label: 'AI Assistant',
+					to: '/dashboard/projects/ai-assistant',
+					icon: 'Bot'
 				}
 			]
 		},
@@ -1084,6 +1090,7 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="projects" element={<ProjectStatusHome user={user} />} />
 				<Route path="projects/portfolio" element={<ProjectTreeView user={user} />} />
 				<Route path="projects/planning" element={<ProjectPlanning user={user} />} />
+				<Route path="projects/ai-assistant" element={<ProjectChat user={user} standalone={true} />} />
 				<Route path="projects/activity/new" element={<ActivityForm user={user} />} />
 				<Route path="projects/activity/:activityId" element={<ActivityForm user={user} />} />
 				<Route path="projects/project/new" element={<ProjectForm user={user} />} />

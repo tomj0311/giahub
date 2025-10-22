@@ -128,6 +128,25 @@ async def get_workflow_categories(user: dict = Depends(verify_token_middleware))
         raise HTTPException(status_code=500, detail="Failed to get workflow categories")
 
 
+@router.get("/configs/by-category/{category}")
+async def get_workflows_by_category(
+    category: str,
+    user: dict = Depends(verify_token_middleware),
+    active_only: bool = Query(True, description="Return only active configurations")
+):
+    """Get workflow configurations by category"""
+    try:
+        result = await WorkflowConfigService.get_workflows_by_category(
+            category=category,
+            user=user,
+            active_only=active_only
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error getting workflows by category: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get workflows by category")
+
+
 @router.get("/configs/{config_id}/bpmn")
 async def get_bpmn_file(config_id: str, user: dict = Depends(verify_token_middleware)):
     """Get BPMN file content as plain text"""
