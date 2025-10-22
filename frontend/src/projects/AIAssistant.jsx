@@ -128,14 +128,16 @@ const AIAssistant = ({ user }) => {
     }
   };
 
-  const startWorkflow = async () => {
+  const startWorkflow = async (keepMessages = false) => {
     if (!selectedWorkflow) return;
     
     try {
       setLoading(true);
       setState('running');
       setError('');
-      setMessages([]);
+      if (!keepMessages) {
+        setMessages([]);
+      }
       
       const wfId = selectedWorkflow.id || selectedWorkflow.workflow_id || selectedWorkflow._id;
       
@@ -153,7 +155,7 @@ const AIAssistant = ({ user }) => {
         timestamp: new Date(),
         status: 'processing'
       };
-      setMessages([systemMessage]);
+      setMessages(prev => [...prev, systemMessage]);
       
       // Start workflow
       const result = await sharedApiService.makeRequest(
@@ -270,6 +272,9 @@ const AIAssistant = ({ user }) => {
               final_answer: workflowData.final_answer,
               answer: workflowData.answer,
               result: workflowData.result,
+              project_documents: workflowData.project_documents,
+              project_activities: workflowData.project_activities,
+              allWorkflowDataKeys: Object.keys(workflowData)
             });
             
             clearInterval(pollInterval.current);
@@ -282,19 +287,31 @@ const AIAssistant = ({ user }) => {
                            workflowData.result ||
                            'Workflow completed successfully.';
             
+            console.log('[AIAssistant] 📊 Creating response message with documents:', {
+              hasProjectDocuments: !!workflowData.project_documents,
+              projectDocumentsType: typeof workflowData.project_documents,
+              projectDocumentsIsArray: Array.isArray(workflowData.project_documents),
+              projectDocumentsLength: workflowData.project_documents?.length,
+              projectDocumentsContent: workflowData.project_documents
+            });
+            
             const responseMessage = {
               id: Date.now() + 2,
               type: 'bot',
               content: response,
               timestamp: new Date(),
               status: 'completed',
-              // Store any additional data
-              workflowData: workflowData
+              projectDocuments: workflowData.project_documents, // Store documents separately
+              projectActivities: workflowData.project_activities // Also store activities if available
             };
+            
+            console.log('[AIAssistant] 📤 Response message created:', responseMessage);
             
             setMessages(prev => {
               const filtered = prev.filter(msg => msg.status !== 'processing');
-              return [...filtered, responseMessage];
+              const newMessages = [...filtered, responseMessage];
+              console.log('[AIAssistant] 📝 Updated messages array:', newMessages);
+              return newMessages;
             });
             return;
           }
@@ -428,58 +445,7 @@ const AIAssistant = ({ user }) => {
     return theme.palette.secondary.main;
   };
 
-  // Render data tables if available in message
-  const renderDataTable = (data) => {
-    if (!data || typeof data !== 'object') return null;
-    
-    // Check for array data (like project_documents, project_activities, etc.)
-    const arrayKeys = Object.keys(data).filter(key => 
-      Array.isArray(data[key]) && data[key].length > 0
-    );
-    
-    if (arrayKeys.length === 0) return null;
-    
-    return arrayKeys.map(key => {
-      const items = data[key];
-      if (items.length === 0) return null;
-      
-      return (
-        <Box key={key} sx={{ mt: 2 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-            📄 {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} ({items.length})
-          </Typography>
-          <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  {Object.keys(items[0] || {})
-                    .filter(k => !k.toLowerCase().includes('id') && k !== '_id')
-                    .map((k) => (
-                    <TableCell key={k} sx={{ fontWeight: 'bold', bgcolor: 'background.default' }}>
-                      {k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {items.map((item, idx) => (
-                  <TableRow key={idx} hover>
-                    {Object.entries(item)
-                      .filter(([k]) => !k.toLowerCase().includes('id') && k !== '_id')
-                      .map(([k, value]) => (
-                      <TableCell key={k}>
-                        {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Box>
-      );
-    });
-  };
+
 
   return (
     <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -716,8 +682,80 @@ const AIAssistant = ({ user }) => {
                                   {msg.content}
                                 </Typography>
                                 
-                                {/* Render data tables if available */}
-                                {msg.workflowData && renderDataTable(msg.workflowData)}
+                                {/* Display project documents as a table if available */}
+                                {(() => {
+                                  console.log('[AIAssistant] 🖼️ Rendering message:', {
+                                    msgId: msg.id,
+                                    hasProjectDocuments: !!msg.projectDocuments,
+                                    projectDocumentsType: typeof msg.projectDocuments,
+                                    projectDocumentsIsArray: Array.isArray(msg.projectDocuments),
+                                    projectDocumentsLength: msg.projectDocuments?.length,
+                                    projectDocuments: msg.projectDocuments
+                                  });
+                                  
+                                  if (msg.projectDocuments && Array.isArray(msg.projectDocuments) && msg.projectDocuments.length > 0) {
+                                    console.log('[AIAssistant] ✅ Rendering table for documents:', msg.projectDocuments);
+                                    return (
+                                      <Box sx={{ mt: 2 }}>
+                                        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                                          📄 Project Documents ({msg.projectDocuments.length})
+                                        </Typography>
+                                        <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
+                                          <Table size="small" stickyHeader>
+                                            <TableHead>
+                                              <TableRow>
+                                                {Object.keys(msg.projectDocuments[0] || {})
+                                                  .filter(key => !key.toLowerCase().includes('id') && key !== '_id')
+                                                  .map((key) => (
+                                                  <TableCell key={key} sx={{ fontWeight: 'bold', bgcolor: 'background.default' }}>
+                                                    {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                                  </TableCell>
+                                                ))}
+                                              </TableRow>
+                                            </TableHead>
+                                            <TableBody>
+                                              {msg.projectDocuments.map((doc, idx) => (
+                                                <TableRow key={idx} hover>
+                                                  {Object.entries(doc)
+                                                    .filter(([key]) => !key.toLowerCase().includes('id') && key !== '_id')
+                                                    .map(([key, value]) => (
+                                                    <TableCell key={key}>
+                                                      {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                                                    </TableCell>
+                                                  ))}
+                                                </TableRow>
+                                              ))}
+                                            </TableBody>
+                                          </Table>
+                                        </TableContainer>
+                                      </Box>
+                                    );
+                                  } else if (msg.status === 'completed' && msg.type === 'bot') {
+                                    // Show friendly message when no data found
+                                    console.log('[AIAssistant] ℹ️ No documents found, showing user message');
+                                    return (
+                                      <Box sx={{ mt: 2, p: 2, bgcolor: alpha(theme.palette.info.main, 0.1), borderRadius: 1, border: `1px solid ${alpha(theme.palette.info.main, 0.3)}` }}>
+                                        <Typography variant="body2" color="text.secondary">
+                                          💡 No project data was found for your query. Try rephrasing your question or ask about specific project details like:
+                                        </Typography>
+                                        <Box component="ul" sx={{ mt: 1, mb: 0, pl: 2 }}>
+                                          <Typography component="li" variant="body2" color="text.secondary">
+                                            "Show me all projects"
+                                          </Typography>
+                                          <Typography component="li" variant="body2" color="text.secondary">
+                                            "What are the active projects?"
+                                          </Typography>
+                                          <Typography component="li" variant="body2" color="text.secondary">
+                                            "List project activities"
+                                          </Typography>
+                                        </Box>
+                                      </Box>
+                                    );
+                                  } else {
+                                    console.log('[AIAssistant] ❌ No documents to render');
+                                    return null;
+                                  }
+                                })()}
                               </>
                             )}
                           </Paper>
@@ -739,6 +777,38 @@ const AIAssistant = ({ user }) => {
                         isDialog={true}
                         onSuccess={handleTaskSuccess}
                       />
+                    </Box>
+                  )}
+                  
+                  {/* Start Over Button - Shows inline when workflow is completed or failed */}
+                  {(state === 'completed' || state === 'failed') && (
+                    <Box sx={{ 
+                      display: 'flex', 
+                      justifyContent: 'center',
+                      my: 3,
+                      px: 2
+                    }}>
+                      <Button
+                        variant="contained"
+                        size="large"
+                        startIcon={<RefreshCw size={20} />}
+                        onClick={() => {
+                          // Keep existing messages and restart the workflow
+                          setState('running');
+                          setError('');
+                          setReadyTaskData(null);
+                          startWorkflow(true); // Pass true to keep messages
+                        }}
+                        sx={{
+                          minWidth: 200,
+                          bgcolor: theme.palette.primary.main,
+                          '&:hover': {
+                            bgcolor: theme.palette.primary.dark,
+                          }
+                        }}
+                      >
+                        Start Over
+                      </Button>
                     </Box>
                   )}
                   
