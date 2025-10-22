@@ -117,6 +117,8 @@ class WorkflowServicePersistent:
                     logger.info(f"[TRACE] About to execute workflow.do_engine_steps() - step {step_count}")
                     def did_complete_Task(task):
                         logger.info(f"[TRACE] Completed task: {task.task_spec.bpmn_id} ({type(task.task_spec).__name__})")
+                        # Schedule the async update in the event loop
+                        asyncio.create_task(cls._update_workflow_status(workflow, instance_id, tenant_id, step_count))
                                       
                     # Run engine steps in a worker thread to allow thread-safe scheduling above
                     await asyncio.to_thread(workflow.do_engine_steps, did_complete_Task)
