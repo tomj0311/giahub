@@ -137,11 +137,22 @@ const AIAssistant = ({ user }) => {
       setLoading(true);
       setState('running');
       setError('');
+      
+      // Clear any existing polling interval
+      if (pollInterval.current) {
+        clearInterval(pollInterval.current);
+        pollInterval.current = null;
+      }
+      
       if (!keepMessages) {
         setMessages([]);
         processedTasksRef.current.clear(); // Clear processed tasks when starting fresh
         hasCompletedRef.current = false; // Reset completion flag
+      } else {
+        // Even when keeping messages, reset completion flag for new execution
+        hasCompletedRef.current = false;
       }
+      setIsPolling(false);
       
       const wfId = selectedWorkflow.id || selectedWorkflow.workflow_id || selectedWorkflow._id;
       
@@ -259,11 +270,21 @@ const AIAssistant = ({ user }) => {
           const isCompleted = instance.serialized_data?.completed === true || 
                              workflowData.workflow_status?.completed === true;
           
-          if (isCompleted && !hasCompletedRef.current) {
+          if (isCompleted) {
+            if (hasCompletedRef.current) {
+              // Already processed completion, stop polling and return
+              console.log('[AIAssistant] ⏭️ Completion already processed, skipping');
+              clearInterval(pollInterval.current);
+              setIsPolling(false);
+              return;
+            }
+            
+            // Mark as completed FIRST to prevent any race conditions
+            hasCompletedRef.current = true;
+            
             clearInterval(pollInterval.current);
             setIsPolling(false);
             setState('completed');
-            hasCompletedRef.current = true; // Mark as completed to prevent duplicate messages
                       
             // Extract only _output* variables from workflowData
             const outputData = {};
@@ -297,9 +318,6 @@ const AIAssistant = ({ user }) => {
               const filtered = prev.filter(msg => msg.status !== 'processing');
               return [...filtered, responseMessage];
             });
-            return;
-          } else if (isCompleted) {
-            // Already processed completion, just return
             return;
           }
           
