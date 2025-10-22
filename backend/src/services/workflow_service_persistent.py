@@ -247,64 +247,100 @@ class WorkflowServicePersistent:
             
             response_data = None
             
-            # Check if task has extension elements with service configuration
-            if hasattr(task.task_spec, 'extensions') and task.task_spec.extensions:
-                
-                service_config = task.task_spec.extensions.get('extensionElements').get('serviceConfiguration')
-                if service_config and 'function' in service_config:
-                    function_config = service_config['function']
-                    module_name = function_config.get('moduleName')
-                    function_name = function_config.get('functionName')
-                    parameters = function_config.get('parameters', {}).get('parameter', [])
+            # Check if task has extension elements
+            if not hasattr(task.task_spec, 'extensions') or not task.task_spec.extensions:
+                task.data['error'] = f"No extension elements configured for ServiceTask '{bpmn_id}'"
+                task.error()
+                raise Exception(task.data['error'])
+            
+            # Check if extensionElements exists
+            extension_elements = task.task_spec.extensions.get('extensionElements')
+            if not extension_elements:
+                task.data['error'] = f"No extensionElements found for ServiceTask '{bpmn_id}'"
+                task.error()
+                raise Exception(task.data['error'])
+            
+            # Check if serviceConfiguration exists
+            service_config = extension_elements.get('serviceConfiguration')
+            if not service_config:
+                task.data['error'] = f"No serviceConfiguration found for ServiceTask '{bpmn_id}'"
+                task.error()
+                raise Exception(task.data['error'])
+            
+            # Check if function configuration exists
+            if 'function' not in service_config:
+                task.data['error'] = f"No function configuration found for ServiceTask '{bpmn_id}'"
+                task.error()
+                raise Exception(task.data['error'])
+            
+            function_config = service_config['function']
+            module_name = function_config.get('moduleName')
+            function_name = function_config.get('functionName')
+            
+            if not module_name or not function_name:
+                task.data['error'] = f"Missing moduleName or functionName for ServiceTask '{bpmn_id}'"
+                task.error()
+                raise Exception(task.data['error'])
+            
+            parameters = function_config.get('parameters', {}).get('parameter', [])
+            
+            logger.info(f"[WORKFLOW] Executing function: {module_name}.{function_name}")
+            
+            # Normalize parameters to always be a list
+            if isinstance(parameters, dict):
+                parameters = [parameters]
+            
+            # Build function parameters from task data and config
+            function_params = {}
+            for param in parameters:
+                if isinstance(param, dict):
+                    param_name = param.get('name')
+                    param_value = param.get('value')
                     
-                    logger.info(f"[WORKFLOW] Executing function: {module_name}.{function_name}")
-                    
-                    # Normalize parameters to always be a list
-                    if isinstance(parameters, dict):
-                        parameters = [parameters]
-                    
-                    # Build function parameters from task data and config
-                    function_params = {}
-                    for param in parameters:
-                        if isinstance(param, dict):
-                            param_name = param.get('name')
-                            param_value = param.get('value')
-                            
-                            if param_name:
-                                # Check if value is in task data, otherwise use config value
-                                if param_name in task.data:
-                                    function_params[param_name] = task.data[param_name]
-                                    logger.info(f"[WORKFLOW] Using task data for parameter '{param_name}' = {task.data[param_name]}")
-                                else:
-                                    function_params[param_name] = param_value
-                                    logger.info(f"[WORKFLOW] Using config default value for parameter '{param_name}' = {param_value}")
-                    
-                    logger.info(f"[WORKFLOW] Final function parameters: {function_params}")
-                    
-                    # Add user to parameters if not already present
-                    if 'user' in function_params:
-                        function_params['user'] = user
-                    
-                    # Import and execute the function
-                    try:
-                        module_path = f"backend.src.modules.{module_name}"
-                        module = importlib.import_module(module_path)
-                        function = getattr(module, function_name)
-                        
-                        # Execute function
-                        if inspect.iscoroutinefunction(function):
-                            response_data = await function(**function_params)
+                    if param_name:
+                        # Check if value is in task data, otherwise use config value
+                        if param_name in task.data:
+                            function_params[param_name] = task.data[param_name]
+                            logger.info(f"[WORKFLOW] Using task data for parameter '{param_name}' = {task.data[param_name]}")
                         else:
-                            response_data = function(**function_params)
-                        
-                        logger.info(f"[WORKFLOW] Function executed successfully: {module_name}.{function_name}")
-                        
-                    except (ImportError, AttributeError) as e:
-                        logger.error(f"[WORKFLOW] Function execution failed: {e}")
-                        raise Exception(f"Function execution failed: {str(e)}")
+                            function_params[param_name] = param_value
+                            logger.info(f"[WORKFLOW] Using config default value for parameter '{param_name}' = {param_value}")
+            
+            logger.info(f"[WORKFLOW] Final function parameters: {function_params}")
+            
+            # Add user to parameters if not already present
+            if 'user' not in function_params:
+                function_params['user'] = user
+            
+            # Import and execute the function
+            try:
+                module_path = f"backend.src.modules.{module_name}"
+                module = importlib.import_module(module_path)
+                function = getattr(module, function_name)
+                
+                # Execute function
+                if inspect.iscoroutinefunction(function):
+                    response_data = await function(**function_params)
+                else:
+                    response_data = function(**function_params)
+                
+                logger.info(f"[WORKFLOW] Function executed successfully: {module_name}.{function_name}")
+                
+            except ImportError as e:
+                task.data['error'] = f"Module '{module_name}' not found: {str(e)}"
+                task.error()
+                raise Exception(task.data['error'])
+            except AttributeError as e:
+                task.data['error'] = f"Function '{function_name}' not found in module '{module_name}': {str(e)}"
+                task.error()
+                raise Exception(task.data['error'])
+            except Exception as e:
+                task.data['error'] = f"Function execution failed for '{module_name}.{function_name}': {str(e)}"
+                task.error()
+                raise Exception(task.data['error'])
                                     
             # Handle the response
-            if response_data:
+            if response_data is not None:
                 # Serialize response data before updating task.data with timestamp
                 response = {
                     f'response': response_data, 
@@ -316,14 +352,16 @@ class WorkflowServicePersistent:
                 task.complete()
             else:
                 # Empty response - treat as error
-                logger.warning(f"[WORKFLOW] ServiceTask {task.task_spec.bpmn_id} received empty response")
+                task.data['error'] = f"Function '{module_name}.{function_name}' returned None/empty response"
+                logger.warning(f"[WORKFLOW] {task.data['error']}")
                 task.error()
-                task.data['error'] = f"Empty response from service"
-                raise Exception(f"ServiceTask {task.task_spec.bpmn_id} failed: Empty response from service")
+                raise Exception(task.data['error'])
             
         except Exception as e:
             logger.error(f"[WORKFLOW] Error handling ServiceTask {task.task_spec.bpmn_id}: {e}")
-            bpmn_id = task.task_spec.bpmn_id
+            # Ensure error is set if not already
+            if 'error' not in task.data:
+                task.data['error'] = str(e)
             raise
 
     @classmethod
