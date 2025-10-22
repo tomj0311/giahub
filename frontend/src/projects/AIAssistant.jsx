@@ -669,12 +669,11 @@ const AIAssistant = ({ user }) => {
                                     </Typography>
                                     {Object.entries(msg.outputData).map(([key, value]) => (
                                       <Box key={key} sx={{ mb: 2 }}>
-                                        <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                                        <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
                                           {key}:
                                         </Typography>
                                         <Paper sx={{ 
                                           p: 2, 
-                                          bgcolor: 'grey.900', 
                                           maxHeight: 400, 
                                           overflow: 'auto',
                                           fontFamily: 'monospace',
@@ -683,7 +682,7 @@ const AIAssistant = ({ user }) => {
                                           wordBreak: 'break-word',
                                           mt: 0.5
                                         }}>
-                                          <pre style={{ margin: 0, color: '#00ff00' }}>
+                                          <pre style={{ margin: 0 }}>
                                             {JSON.stringify(value, null, 2)}
                                           </pre>
                                         </Paper>
