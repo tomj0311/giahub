@@ -90,7 +90,9 @@ const ProjectChat = ({ user }) => {
       console.log('[ProjectChat] 🚀 Starting workflow by name "_project_chat"', {
         endpoint: '/api/workflow/workflows/by-name/_project_chat/start',
         payload: { 
-          initial_data: { question, user_query: question }
+          initial_data: { 
+            prompt: question
+          }
         }
       });
       
@@ -104,8 +106,7 @@ const ProjectChat = ({ user }) => {
           },
           body: JSON.stringify({
             initial_data: { 
-              question: question,
-              user_query: question
+              prompt: question
             }
           }),
         },
