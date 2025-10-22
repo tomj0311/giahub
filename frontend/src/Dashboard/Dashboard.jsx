@@ -67,6 +67,7 @@ const ActivityForm = lazy(() => import('../projects/ActivityForm'))
 const ProjectForm = lazy(() => import('../projects/ProjectForm'))
 const GanttChart = lazy(() => import('../projects/GanttChart'))
 const ProjectChat = lazy(() => import('../projects/ProjectChat'))
+const AIAssistant = lazy(() => import('../projects/AIAssistant'))
 const WorkflowConfig = lazy(() => import('../workflows/WorkflowConfig'))
 const WorkflowExecution = lazy(() => import('../workflows/WorkflowExecution'))
 const WorkflowUI = lazy(() => import('../workflows/WorkflowUI'))
@@ -986,8 +987,8 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 					width: '100%',
 					minWidth: 0, // Allow shrinking
 					overflow: 'auto', // Allow scrolling within content area only
-					// Conditional styling for BPMN, workflow-execution, workflow-ui, projects, portfolio, planning, gantt, and project form routes
-					...(location.pathname === '/dashboard/bpmn' || location.pathname === '/dashboard/workflow-execution' || location.pathname === '/dashboard/workflow-ui' || location.pathname === '/dashboard/projects' || location.pathname === '/dashboard/projects/portfolio' || location.pathname === '/dashboard/projects/planning' || location.pathname === '/dashboard/projects/gantt' || location.pathname.startsWith('/dashboard/projects/project/') ? {
+					// Conditional styling for BPMN, workflow-execution, workflow-ui, projects, portfolio, planning, gantt, ai-assistant, and project form routes
+					...(location.pathname === '/dashboard/bpmn' || location.pathname === '/dashboard/workflow-execution' || location.pathname === '/dashboard/workflow-ui' || location.pathname === '/dashboard/projects' || location.pathname === '/dashboard/projects/portfolio' || location.pathname === '/dashboard/projects/planning' || location.pathname === '/dashboard/projects/gantt' || location.pathname === '/dashboard/projects/ai-assistant' || location.pathname.startsWith('/dashboard/projects/project/') ? {
 						// Full width with minimal padding
 						maxWidth: 'none',
 						mx: 0,
@@ -1090,7 +1091,7 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="projects" element={<ProjectStatusHome user={user} />} />
 				<Route path="projects/portfolio" element={<ProjectTreeView user={user} />} />
 				<Route path="projects/planning" element={<ProjectPlanning user={user} />} />
-				<Route path="projects/ai-assistant" element={<ProjectChat user={user} standalone={true} />} />
+				<Route path="projects/ai-assistant" element={<AIAssistant user={user} />} />
 				<Route path="projects/activity/new" element={<ActivityForm user={user} />} />
 				<Route path="projects/activity/:activityId" element={<ActivityForm user={user} />} />
 				<Route path="projects/project/new" element={<ProjectForm user={user} />} />
