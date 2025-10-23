@@ -213,12 +213,10 @@ async def get_workflow_instance(
 ):
     """Get specific workflow instance data"""
     try:
-        logger.info(f"[WORKFLOW][GET instance] workflow_id={workflow_id} instance_id={instance_id} user_tenant={user.get('tenantId') or user.get('tenant_id')}")
         tenant_id = await WorkflowServicePersistent.validate_tenant_access(user)
         instance = await WorkflowServicePersistent.get_workflow_instance(
             workflow_id, instance_id, tenant_id
         )
-        logger.debug(f"[WORKFLOW][GET instance] found keys: serialized={list(instance.get('serialized_data', {}).keys())} created_at={instance.get('created_at')}")
         return {"success": True, "data": instance}
     except Exception as e:
         error_msg = f"Failed to get workflow instance: {str(e)}"
