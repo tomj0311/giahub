@@ -51,8 +51,6 @@ import {
   SortDesc,
   Settings,
   BarChart3,
-  ChevronDown,
-  ChevronRight
 } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { useConfirmation } from '../contexts/ConfirmationContext'
@@ -180,6 +178,8 @@ function ProjectTreeView({ user }) {
   const [columnDialogOpen, setColumnDialogOpen] = useState(false)
   // Predefined initial columns (common ones shown by default)
   const DEFAULT_VISIBLE_COLUMNS = {
+    district: true,
+    assembly: true,
     name: true,
     priority: true,
     status: true,
@@ -193,11 +193,8 @@ function ProjectTreeView({ user }) {
     loadStateFromStorage(STORAGE_KEYS.VISIBLE_COLUMNS, DEFAULT_VISIBLE_COLUMNS)
   )
   
-  // Collapsed groups state
-  const [collapsedGroups, setCollapsedGroups] = useState({})
-
   // Preferred column order
-  const PREFERRED_ORDER = ['name', 'priority', 'status', 'assignee', 'approver', 'start_date', 'due_date', 'progress']
+  const PREFERRED_ORDER = ['district', 'assembly', 'name', 'priority', 'status', 'assignee', 'approver', 'start_date', 'due_date', 'progress']
 
   const orderedFields = React.useMemo(() => {
     const orderIndex = (name) => {
@@ -618,7 +615,9 @@ function ProjectTreeView({ user }) {
   // Get column label mapping
   const getColumnLabel = (columnName) => {
     const labels = {
-      name: 'District/Assembly',
+      district: 'DISTRICT',
+      assembly: 'ASSEMBLY',
+      name: 'Project Name',
       priority: 'Priority',
       status: 'Status',
       assignee: 'Assignee',
@@ -633,6 +632,22 @@ function ProjectTreeView({ user }) {
   // Render cell value based on column type
   const renderCellValue = (node, columnName) => {
     const value = node[columnName]
+    
+    if (columnName === 'district') {
+      return (
+        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+          {value || '-'}
+        </Typography>
+      )
+    }
+    
+    if (columnName === 'assembly') {
+      return (
+        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+          {value || '-'}
+        </Typography>
+      )
+    }
     
     if (columnName === 'name') {
       return (
@@ -808,29 +823,7 @@ function ProjectTreeView({ user }) {
     )
   }
 
-  // Toggle group collapse
-  const toggleGroup = (groupKey) => {
-    setCollapsedGroups(prev => ({
-      ...prev,
-      [groupKey]: !prev[groupKey]
-    }))
-  }
 
-  // Group projects by District and Assembly
-  const groupedProjects = React.useMemo(() => {
-    const groups = {}
-    projectTree.forEach(project => {
-      const district = project.district || 'No District'
-      const assembly = project.assembly || 'No Assembly'
-      const groupKey = `${district} - ${assembly}`
-      
-      if (!groups[groupKey]) {
-        groups[groupKey] = []
-      }
-      groups[groupKey].push(project)
-    })
-    return groups
-  }, [projectTree])
 
   const renderProjectRow = (project) => {
     return (
@@ -845,13 +838,34 @@ function ProjectTreeView({ user }) {
         {orderedFields.map((field) => {
           if (!visibleColumns[field.name]) return null
 
-          // Special handling for 'name' column - simplified without tree structure
+          // Special handling for 'district' column
+          if (field.name === 'district') {
+            return (
+              <TableCell key={field.name}>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  {project.district || '-'}
+                </Typography>
+              </TableCell>
+            )
+          }
+
+          // Special handling for 'assembly' column
+          if (field.name === 'assembly') {
+            return (
+              <TableCell key={field.name}>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  {project.assembly || '-'}
+                </Typography>
+              </TableCell>
+            )
+          }
+
+          // Special handling for 'name' column
           if (field.name === 'name') {
             return (
               <TableCell 
                 key={field.name} 
                 sx={{ 
-                  pl: 6,
                   borderLeft: '3px solid', 
                   borderLeftColor: `${getStatusColor(project.status)}.main`
                 }}
@@ -1157,43 +1171,7 @@ function ProjectTreeView({ user }) {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      Object.entries(groupedProjects).map(([groupName, projects]) => (
-                        <React.Fragment key={groupName}>
-                          <TableRow 
-                            onClick={() => toggleGroup(groupName)}
-                            sx={{ 
-                              cursor: 'pointer',
-                              '&:hover': { bgcolor: 'action.selected' },
-                              bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)',
-                            }}
-                          >
-                            <TableCell 
-                              colSpan={Object.values(visibleColumns).filter(Boolean).length + 1}
-                              sx={{ 
-                                fontWeight: 600,
-                                py: 1.5,
-                                pl: 2,
-                                borderBottom: (theme) => `2px solid ${theme.palette.divider}`,
-                                borderLeft: '3px solid',
-                                borderLeftColor: 'primary.main'
-                              }}
-                            >
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Box sx={{ color: 'text.secondary', display: 'flex', alignItems: 'center' }}>
-                                  {collapsedGroups[groupName] ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
-                                </Box>
-                                <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                                  {groupName} 
-                                  <Typography component="span" sx={{ color: 'text.secondary', ml: 1, fontWeight: 500 }}>
-                                    ({projects.length})
-                                  </Typography>
-                                </Typography>
-                              </Box>
-                            </TableCell>
-                          </TableRow>
-                          {!collapsedGroups[groupName] && projects.map(project => renderProjectRow(project))}
-                        </React.Fragment>
-                      ))
+                      projectTree.map(project => renderProjectRow(project))
                     )}
                   </TableBody>
                 </Table>
