@@ -56,6 +56,8 @@ const AIAssistant = ({ user }) => {
   const messagesEndRef = useRef(null);
   const processedTasksRef = useRef(new Set()); // Track processed tasks
   const hasCompletedRef = useRef(false); // Track if completion message was added
+  // Track last seen values for keys starting with _output*
+  const lastOutputRef = useRef(new Map()); // Map<key, stableString>
   const token = user?.token || localStorage.getItem('token');
 
   const scrollToBottom = () => {
@@ -130,6 +132,42 @@ const AIAssistant = ({ user }) => {
     }
   };
 
+  // Stable stringify to compare deep object equality deterministically
+  const stableStringify = (value) => {
+    const sortDeep = (v) => {
+      if (v === null || typeof v !== 'object') return v;
+      if (Array.isArray(v)) return v.map(sortDeep);
+      const sorted = {};
+      Object.keys(v).sort().forEach((k) => {
+        sorted[k] = sortDeep(v[k]);
+      });
+      return sorted;
+    };
+    try {
+      return JSON.stringify(sortDeep(value));
+    } catch (_) {
+      // Fallback to normal stringify if something odd occurs
+      try { return JSON.stringify(value); } catch { return String(value); }
+    }
+  };
+
+  // Given an object of { _output*: any }, return only changed/new entries vs lastOutputRef
+  const getChangedOutputEntries = (outputObj) => {
+    const changed = {};
+    if (!outputObj) return changed;
+    Object.entries(outputObj).forEach(([key, val]) => {
+      if (!key.startsWith('_output')) return; // guard
+      const serialized = stableStringify(val);
+      const prev = lastOutputRef.current.get(key);
+      if (prev !== serialized) {
+        changed[key] = val;
+        // Update snapshot immediately so subsequent polls compare correctly
+        lastOutputRef.current.set(key, serialized);
+      }
+    });
+    return changed;
+  };
+
   const startWorkflow = async (keepMessages = false, workflow = null) => {
     const workflowToStart = workflow || selectedWorkflow;
     if (!workflowToStart) return;
@@ -149,9 +187,12 @@ const AIAssistant = ({ user }) => {
         setMessages([]);
         processedTasksRef.current.clear(); // Clear processed tasks when starting fresh
         hasCompletedRef.current = false; // Reset completion flag
+        lastOutputRef.current.clear(); // Clear last seen outputs
       } else {
         // Even when keeping messages, reset completion flag for new execution
         hasCompletedRef.current = false;
+        // For a new execution, also reset output snapshots to avoid cross-run suppression
+        lastOutputRef.current.clear();
       }
       setIsPolling(false);
       
@@ -259,17 +300,61 @@ const AIAssistant = ({ user }) => {
           { workflowId: wfId, instanceId: instId, timestamp: Date.now(), bypassCache: true }
         );
 
-        console.log('[AIAssistant] 📦 POLL RESULT.DATA:', result.data);
-
         if (result.success) {
-          const instance = result.data.data;
+          // Handle double-nested response structure from apiService
+          const instance = result.data.data || result.data;
+          console.log(instance);
+          
           const tasks = instance.serialized_data?.tasks || {};
           const workflowData = instance.serialized_data?.data || {};
           const taskSpecs = instance.serialized_data?.spec?.task_specs || {};
-          
-          // CHECK 1: Is workflow complete?
+                   
+          // CHECK 1: Is workflow complete or failed?
+          const workflowStatus = workflowData.workflow_status?.status;
           const isCompleted = instance.serialized_data?.completed === true || 
-                             workflowData.workflow_status?.completed === true;
+                             workflowData.workflow_status?.completed === true ||
+                             workflowStatus === 'completed' ||
+                             workflowStatus === 'success';
+          
+          const isFailed = workflowStatus === 'error' || 
+                          workflowStatus === 'failed' ||
+                          workflowStatus === 'cancelled';
+          
+          console.log('[AIAssistant] 🔍 Workflow status check:', {
+            workflowStatus,
+            isCompleted,
+            isFailed,
+            serialized_completed: instance.serialized_data?.completed,
+            status_completed: workflowData.workflow_status?.completed
+          });
+          
+          if (isFailed) {
+            if (hasCompletedRef.current) {
+              console.log('[AIAssistant] ⏭️ Failure already processed, skipping');
+              clearInterval(pollInterval.current);
+              setIsPolling(false);
+              return;
+            }
+            
+            hasCompletedRef.current = true;
+            clearInterval(pollInterval.current);
+            setIsPolling(false);
+            setState('failed');
+            
+            const errorMessage = {
+              id: Date.now() + 2,
+              type: 'error',
+              content: workflowData.error || 'Workflow failed',
+              timestamp: new Date(),
+              status: 'failed'
+            };
+            
+            setMessages(prev => {
+              const filtered = prev.filter(msg => msg.status !== 'processing');
+              return [...filtered, errorMessage];
+            });
+            return;
+          }
           
           if (isCompleted) {
             if (hasCompletedRef.current) {
@@ -290,12 +375,11 @@ const AIAssistant = ({ user }) => {
             // Extract only _output* variables from workflowData
             const outputData = {};
             Object.keys(workflowData).forEach(key => {
-              console.log('Checking key:', key, 'starts with _output?', key.startsWith('_output'));
               if (key.startsWith('_output')) {
                 outputData[key] = workflowData[key];
-                console.log('ADDED:', key, '=', workflowData[key]);
               }
             });
+            const changedOutput = getChangedOutputEntries(outputData);
                        
             const response = workflowData.final_answer || 
                            workflowData.answer || 
@@ -308,7 +392,8 @@ const AIAssistant = ({ user }) => {
               content: response,
               timestamp: new Date(),
               status: 'completed',
-              outputData: Object.keys(outputData).length > 0 ? outputData : null
+              // Only include changed/new outputs; omit if none changed
+              outputData: Object.keys(changedOutput).length > 0 ? changedOutput : null
             };
             
             console.log('========== RESPONSE MESSAGE ==========');
@@ -349,58 +434,91 @@ const AIAssistant = ({ user }) => {
             return;
           }
           
-          // CHECK 3: Check for ready tasks (UserTask or ManualTask)
-          const readyTask = Object.entries(tasks).find(([taskId, task]) => {
-            if (task.state === 16) { // READY state
-              const taskSpecName = task.task_spec;
-              const taskSpec = taskSpecs[taskSpecName];
-              const typename = taskSpec?.typename;
-              return typename === 'UserTask' || typename === 'ManualTask';
-            }
-            return false;
-          });
-          
-          if (readyTask) {
-            const [taskId, task] = readyTask;
-            const taskSpecName = task.task_spec;
-            console.log('[AIAssistant] 🔔 READY TASK FOUND!', { taskId, taskSpecName });
-            
-            clearInterval(pollInterval.current);
-            setIsPolling(false);
-            setState('task_ready');
-            setReadyTaskData({ taskSpec: taskSpecName });
-            return;
-          }
-          
-          // Show intermediate task results
+          // CHECK 3: Show intermediate task results FIRST before checking for ready tasks
           const completedTasks = Object.entries(tasks).filter(([taskId, task]) => task.state === 64);
           
           completedTasks.forEach(([taskId, task]) => {
             const taskData = task.data || {};
             
-            // Check if we already processed this task using the ref
-            if (!processedTasksRef.current.has(taskId) && taskData.result) {
+            // Check if we already processed this task
+            if (processedTasksRef.current.has(taskId)) {
+              return;
+            }
+            
+            // Extract _output* variables from task data
+            const outputData = {};
+            Object.keys(taskData).forEach(key => {
+              if (key.startsWith('_output')) {
+                outputData[key] = taskData[key];
+              }
+            });
+            const changedOutput = getChangedOutputEntries(outputData);
+            
+            // Show message if there's a result or output data
+            const hasResult = taskData.result || taskData.output || Object.keys(changedOutput).length > 0;
+            
+            if (hasResult) {
               console.log('[AIAssistant] 💬 Adding task result message:', {
                 taskId,
                 taskName: task.task_spec,
-                result: taskData.result
+                result: taskData.result,
+                output: taskData.output,
+                outputData: changedOutput
               });
               
               processedTasksRef.current.add(taskId); // Mark as processed
               
+              // Determine content to display
+              let content = taskData.result || taskData.output || 'Task completed';
+              
               const taskMessage = {
                 id: Date.now() + Math.random(),
                 type: 'bot',
-                content: taskData.result || taskData.output || 'Task completed',
+                content: content,
                 timestamp: new Date(),
                 taskId: taskId,
                 taskName: task.task_spec,
-                status: 'completed'
+                status: 'completed',
+                outputData: Object.keys(changedOutput).length > 0 ? changedOutput : null
               };
               
               setMessages(prev => [...prev, taskMessage]);
             }
           });
+          
+          // CHECK 4: Check for ready tasks - ONLY by state 16 (READY) - DO THIS LAST
+          const readyTask = Object.entries(tasks).find(([taskId, task]) => {
+            // ONLY check state - ignore already completed tasks
+            if (task.state !== 16) return false;
+            
+            const taskSpecName = task.task_spec;
+            const taskSpec = taskSpecs[taskSpecName];
+            const typename = taskSpec?.typename;
+            const isUserTask = typename === 'UserTask' || typename === 'ManualTask';
+            
+            // Skip if already processed
+            if (processedTasksRef.current.has(taskId)) {
+              console.log('[AIAssistant] ⏭️ Skipping already processed task:', taskId);
+              return false;
+            }
+            
+            return isUserTask;
+          });
+          
+          if (readyTask) {
+            const [taskId, task] = readyTask;
+            const taskSpecName = task.task_spec;
+            console.log('[AIAssistant] 🔔 READY TASK FOUND!', { taskId, taskSpecName, state: task.state });
+            
+            // Mark as processed to avoid showing again
+            processedTasksRef.current.add(taskId);
+            
+            clearInterval(pollInterval.current);
+            setIsPolling(false);
+            setState('task_ready');
+            setReadyTaskData({ taskSpec: taskSpecName, taskId: taskId });
+            return;
+          }
         } else {
           console.warn('[AIAssistant] ⚠️ Poll result not successful:', result);
         }

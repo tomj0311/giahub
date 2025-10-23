@@ -214,10 +214,12 @@ function WorkflowExecution({ user }) {
 
   // Load all workflows with pagination
   const loadAllWorkflows = useCallback(
-    async (page = 1) => {
+    async (page = 1, silent = false) => {
       if (!workflowId) return;
       
-      setLoadingWorkflows(true);
+      if (!silent) {
+        setLoadingWorkflows(true);
+      }
       try {
         // Invalidate cache to ensure fresh data
         const cacheKey = `/api/workflow/workflows/${workflowId}/instances?page=${page || 1}&size=${pageSize || 8}`;
@@ -236,7 +238,6 @@ function WorkflowExecution({ user }) {
         const workflows = result.data?.data || [];
         setAllWorkflows(workflows);
         setTotalPages(result.data?.total_pages || 1);
-        setRefreshKey((k) => k + 1);
         
         // Initialize the last known instance ID if we don't have one yet
         if (!lastKnownInstanceId && workflows.length > 0) {
@@ -245,13 +246,24 @@ function WorkflowExecution({ user }) {
             setLastKnownInstanceId(newestInstanceId);
           }
         }
+        
+        // Stop polling if selected instance is completed
+        if (selectedInstanceForBpmn && pollingInterval) {
+          const selectedWf = workflows.find(w => w.instance_id === selectedInstanceForBpmn);
+          if (selectedWf?.status === 'completed') {
+            clearInterval(pollingInterval);
+            setPollingInterval(null);
+          }
+        }
       } catch (err) {
         // Error handled silently
       } finally {
-        setLoadingWorkflows(false);
+        if (!silent) {
+          setLoadingWorkflows(false);
+        }
       }
     },
-    [workflowId, headers, pageSize, lastKnownInstanceId]
+    [workflowId, headers, pageSize, lastKnownInstanceId, selectedInstanceForBpmn, pollingInterval]
   );
 
   const startWorkflowByConfigId = useCallback(
@@ -726,7 +738,7 @@ function WorkflowExecution({ user }) {
                 <CircularProgress size={20} />
               </Box>
             ) : allWorkflows.length > 0 ? (
-              <TableContainer key={refreshKey}>
+              <TableContainer>
                 <Table 
                   size="small" 
                   sx={{ 
@@ -797,12 +809,8 @@ function WorkflowExecution({ user }) {
                             const interval = setInterval(async () => {
                               // Refresh the instance status periodically for incomplete workflows
                               await handleInstanceClick(wf.instance_id, false);
-                              // Check if workflow is now completed
-                              const updatedWorkflow = allWorkflows.find(w => w.instance_id === wf.instance_id);
-                              if (updatedWorkflow?.status === 'completed') {
-                                clearInterval(interval);
-                                setPollingInterval(null);
-                              }
+                              // Reload the full list to get updated status (silent mode to avoid flicker)
+                              await loadAllWorkflows(currentPage, true);
                             }, 3000);
                             setPollingInterval(interval);
                           }

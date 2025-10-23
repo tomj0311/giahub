@@ -97,7 +97,7 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
           method: 'GET',
           headers,
         },
-        { workflowId, instanceId, action: 'get_instance_for_task' }
+        { workflowId, instanceId, action: 'get_instance_for_task', bypassCache: true }
       );
 
       if (result.success) {
@@ -346,7 +346,8 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
       const result = await sharedApiService.makeRequest(
         `/api/workflow/workflows/${workflowId}/instances/${instanceId}/submit-task`,
         requestOptions,
-        { workflowId, instanceId, action: 'submit_task' }
+        // Always bypass cache/deduplication for submissions so a fresh POST is sent every time
+        { workflowId, instanceId, action: 'submit_task', bypassCache: true, nonce: Date.now() }
       );
 
       console.log('📬 API Response:', result);

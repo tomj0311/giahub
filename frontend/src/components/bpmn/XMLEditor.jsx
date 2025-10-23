@@ -881,24 +881,27 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
         <Box sx={{ height: '80vh', display: 'flex', flexDirection: 'column' }}>
           {/* Accordion headers */}
           <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', flexShrink: 0 }}>
-            <button
-              onClick={() => {
-                console.log('XML PROPERTIES BUTTON CLICKED');
-                console.log('Current tab:', accordionOpen, 'Switching to:', TAB_XML_PROPERTIES);
-                toggleAccordion(TAB_XML_PROPERTIES);
-              }}
-              style={{
-                flex: 1,
-                background: accordionOpen === TAB_XML_PROPERTIES ? 'var(--bg-secondary)' : 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                border: 'none',
-                borderBottom: accordionOpen === TAB_XML_PROPERTIES ? `2px solid ${theme.palette.primary.main}` : 'none',
-                padding: '10px',
-                fontWeight: accordionOpen === TAB_XML_PROPERTIES ? 'bold' : 'normal',
-                cursor: 'pointer',
-                borderRadius: '8px 8px 0 0'
-              }}
-            >XML Properties</button>
+            {/* Hide XML Properties tab for scriptTask */}
+            {(selectedNode?.data?.taskType !== 'scriptTask' && elementType !== 'scriptTask') && (
+              <button
+                onClick={() => {
+                  console.log('XML PROPERTIES BUTTON CLICKED');
+                  console.log('Current tab:', accordionOpen, 'Switching to:', TAB_XML_PROPERTIES);
+                  toggleAccordion(TAB_XML_PROPERTIES);
+                }}
+                style={{
+                  flex: 1,
+                  background: accordionOpen === TAB_XML_PROPERTIES ? 'var(--bg-secondary)' : 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  border: 'none',
+                  borderBottom: accordionOpen === TAB_XML_PROPERTIES ? `2px solid ${theme.palette.primary.main}` : 'none',
+                  padding: '10px',
+                  fontWeight: accordionOpen === TAB_XML_PROPERTIES ? 'bold' : 'normal',
+                  cursor: 'pointer',
+                  borderRadius: '8px 8px 0 0'
+                }}
+              >XML Properties</button>
+            )}
             {/* Only show Code Generator for userTask, scriptTask, and manualTask */}
             {((selectedNode?.data?.taskType === 'userTask' || selectedNode?.data?.taskType === 'scriptTask' || selectedNode?.data?.taskType === 'manualTask') || 
               (elementType === 'userTask' || elementType === 'scriptTask' || elementType === 'manualTask')) && (
