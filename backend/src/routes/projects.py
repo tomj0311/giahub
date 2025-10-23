@@ -90,19 +90,25 @@ async def get_projects(
     page_size: int = Query(20, ge=1, le=1100, description="Items per page"),
     search: Optional[str] = Query(None, description="Search in name and description"),
     status: Optional[str] = Query(None, description="Filter by status"),
-    sort_by: str = Query("name", description="Sort field"),
+    filters: Optional[str] = Query(None, description="JSON-encoded filters array"),
+    sort_field: Optional[str] = Query(None, description="Field name to sort by"),
+    sort_by: str = Query("name", description="Sort field (legacy)"),
     sort_order: str = Query("asc", description="Sort order")
 ):
     """List projects with pagination and filtering"""
     try:
-        result = await ProjectService.get_projects(
+        # Use sort_field if provided, otherwise fall back to sort_by
+        actual_sort_field = sort_field or sort_by
+        
+        result = await ProjectService.get_projects_with_filters(
             user=user,
             parent_id=parent_id,
             page=page,
             page_size=page_size,
             search=search,
             status=status,
-            sort_by=sort_by,
+            filters=filters,
+            sort_field=actual_sort_field,
             sort_order=sort_order
         )
         return result

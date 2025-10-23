@@ -216,6 +216,98 @@ class ProjectService:
             )
 
     @classmethod
+    async def get_projects_with_filters(
+        cls, 
+        user: dict, 
+        parent_id: Optional[str] = None,
+        page: int = 1, 
+        page_size: int = 20,
+        search: Optional[str] = None,
+        status: Optional[str] = None,
+        filters: Optional[str] = None,
+        sort_field: Optional[str] = None,
+        sort_order: str = "asc"
+    ) -> Dict[str, Any]:
+        """Get projects with advanced filtering support"""
+        tenant_id = await cls.validate_tenant_access(user)
+        
+        try:
+            # Build filter query starting with dynamic filters
+            filter_query = await cls._build_filter_query(filters)
+            
+            # Add parent filter if specified
+            if parent_id is not None:
+                filter_query["parent_id"] = parent_id
+            
+            # Add legacy search filter
+            if search:
+                filter_query["$or"] = [
+                    {"name": {"$regex": search, "$options": "i"}},
+                    {"description": {"$regex": search, "$options": "i"}}
+                ]
+            
+            # Add legacy status filter
+            if status:
+                filter_query["status"] = status
+            
+            # Calculate pagination
+            skip = (page - 1) * page_size
+            
+            # Get total count
+            total_count = await MongoStorageService.count_documents("projects", filter_query, tenant_id=tenant_id)
+            
+            # Calculate pagination info
+            total_pages = (total_count + page_size - 1) // page_size
+            has_next = page < total_pages
+            has_prev = page > 1
+            
+            # Determine sort order
+            sort_field_name = sort_field or "name"
+            sort_direction = 1 if sort_order == "asc" else -1
+            
+            # Get paginated results
+            projects_list = await MongoStorageService.find_many(
+                "projects", 
+                filter_query, 
+                tenant_id=tenant_id,
+                skip=skip,
+                limit=page_size,
+                sort_field=sort_field_name,
+                sort_order=sort_direction
+            )
+            
+            # Convert _id to id
+            projects = []
+            for project in projects_list:
+                project_dict = dict(project)
+                project_dict["id"] = str(project_dict.pop("_id"))
+                projects.append(project_dict)
+            
+            # Populate user names for assignee and approver
+            projects = await cls.populate_user_names(projects, tenant_id)
+            
+            logger.info(f"[PROJECT] Found {len(projects)}/{total_count} projects with filters")
+            
+            return {
+                "projects": projects,
+                "pagination": {
+                    "page": page,
+                    "page_size": page_size,
+                    "total": total_count,
+                    "total_pages": total_pages,
+                    "has_next": has_next,
+                    "has_prev": has_prev
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"[PROJECT] Error fetching projects with filters: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to fetch projects"
+            )
+
+    @classmethod
     async def get_project_by_id(cls, project_id: str, user: dict) -> dict:
         """Get project by ID - returns everything as-is"""
         from bson import ObjectId

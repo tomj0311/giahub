@@ -526,13 +526,38 @@ function ProjectTreeView({ user }) {
     setVisibleColumns(DEFAULT_VISIBLE_COLUMNS)
   }
 
+  const handleResetView = () => {
+    // Reset all state to defaults
+    setPage(0)
+    setRowsPerPage(8)
+    setFilters([])
+    setSortField(null)
+    setSortOrder('asc')
+    setVisibleColumns(DEFAULT_VISIBLE_COLUMNS)
+    // Clear localStorage
+    clearStoredState()
+    // Show success message
+    showSuccess('View reset to defaults')
+  }
+
   const openCreate = (parentId = 'root') => {
-    navigate('/dashboard/projects/project/new', {
-      state: {
-        parentId: parentId || 'root',
-        returnTo: '/dashboard/projects'
-      }
+    setIsEditMode(false)
+    setFormErrors({})
+    setForm({
+      id: null,
+      name: '',
+      description: '',
+      parent_id: parentId,
+      status: 'ON_TRACK',
+      priority: 'Normal',
+      assignee: '',
+      approver: '',
+      due_date: '',
+      start_date: '',
+      progress: 0,
+      is_public: false
     })
+    setDialogOpen(true)
   }
 
   const openEdit = (projectId) => {
@@ -1165,7 +1190,7 @@ function ProjectTreeView({ user }) {
                 </Button>
               </Tooltip>
 
-              {/* Customize Columns Button */}
+              {/* Column customization button */}
               <Tooltip title="Customize Columns">
                 <Button
                   variant="outlined"
@@ -1181,6 +1206,24 @@ function ProjectTreeView({ user }) {
                   }}
                 >
                   Columns
+                </Button>
+              </Tooltip>
+
+              {/* Reset view button */}
+              <Tooltip title="Reset to first page and clear filters">
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleResetView}
+                  sx={{ 
+                    textTransform: 'none',
+                    fontWeight: 500,
+                    minWidth: '100px',
+                    borderColor: 'divider',
+                    color: 'text.secondary'
+                  }}
+                >
+                  Reset View
                 </Button>
               </Tooltip>
             </Box>
