@@ -729,3 +729,88 @@ class ProjectService:
         tree = await cls.populate_user_names_in_tree(tree, tenant_id)
         
         return tree
+
+    @classmethod
+    async def get_projects_status_summary(cls, user: dict) -> dict:
+        """Get all projects as flat list grouped by district for status dashboard"""
+        tenant_id = await cls.validate_tenant_access(user)
+        
+        # Fetch ALL projects (no hierarchy, no pagination)
+        all_projects = await MongoStorageService.find_many(
+            "projects",
+            {},  # Empty filter to get all projects
+            tenant_id=tenant_id,
+            sort_field="name",
+            sort_order=1
+        )
+        
+        # Convert to dict and add id field
+        projects_list = []
+        for project in all_projects:
+            project_dict = dict(project)
+            project_dict["id"] = str(project_dict.pop("_id"))
+            projects_list.append(project_dict)
+        
+        # Populate user names
+        projects_list = await cls.populate_user_names(projects_list, tenant_id)
+        
+        # Calculate summary statistics
+        total = len(projects_list)
+        on_track = len([p for p in projects_list if p.get("status") == "ON_TRACK"])
+        at_risk = len([p for p in projects_list if p.get("status") == "AT_RISK"])
+        off_track = len([p for p in projects_list if p.get("status") == "OFF_TRACK"])
+        on_hold = len([p for p in projects_list if p.get("status") == "ON_HOLD"])
+        completed = len([p for p in projects_list if p.get("status") == "COMPLETED"])
+        
+        # Group by district
+        district_groups = {}
+        for project in projects_list:
+            district = project.get("district") or "No District"
+            
+            if district not in district_groups:
+                district_groups[district] = {
+                    "name": district,
+                    "id": project["id"],  # Use first project's ID
+                    "projects": []
+                }
+            district_groups[district]["projects"].append(project)
+        
+        # Calculate stats for each district
+        districts = []
+        for district_name, group in district_groups.items():
+            projects = group["projects"]
+            district_total = len(projects)
+            district_on_track = len([p for p in projects if p.get("status") == "ON_TRACK"])
+            district_at_risk = len([p for p in projects if p.get("status") == "AT_RISK"])
+            district_off_track = len([p for p in projects if p.get("status") == "OFF_TRACK"])
+            district_on_hold = len([p for p in projects if p.get("status") == "ON_HOLD"])
+            district_completed = len([p for p in projects if p.get("status") == "COMPLETED"])
+            
+            districts.append({
+                "id": group["id"],
+                "name": district_name,
+                "total": district_total,
+                "onTrack": district_on_track,
+                "atRisk": district_at_risk,
+                "offTrack": district_off_track,
+                "onHold": district_on_hold,
+                "completed": district_completed,
+                "onTrackPercent": round((district_on_track / district_total) * 100) if district_total > 0 else 0,
+                "atRiskPercent": round((district_at_risk / district_total) * 100) if district_total > 0 else 0,
+                "offTrackPercent": round((district_off_track / district_total) * 100) if district_total > 0 else 0,
+                "onHoldPercent": round((district_on_hold / district_total) * 100) if district_total > 0 else 0,
+                "completedPercent": round((district_completed / district_total) * 100) if district_total > 0 else 0
+            })
+        
+        return {
+            "summary": {
+                "total": total,
+                "onTrack": on_track,
+                "atRisk": at_risk,
+                "offTrack": off_track,
+                "onHold": on_hold,
+                "completed": completed
+            },
+            "districts": districts,
+            "allProjects": projects_list
+        }

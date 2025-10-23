@@ -119,6 +119,21 @@ async def get_projects(
         raise HTTPException(status_code=500, detail="Failed to fetch projects")
 
 
+@router.get("/projects/status-summary")
+async def get_projects_status_summary(
+    user: dict = Depends(verify_token_middleware)
+):
+    """Get all projects flat list grouped by district for status dashboard"""
+    try:
+        result = await ProjectService.get_projects_status_summary(user)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching projects status summary: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch projects status summary")
+
+
 @router.get("/projects/tree")
 async def get_project_tree(
     user: dict = Depends(verify_token_middleware),
