@@ -56,6 +56,8 @@ const AIAssistant = ({ user }) => {
   const messagesEndRef = useRef(null);
   const processedTasksRef = useRef(new Set()); // Track processed tasks
   const hasCompletedRef = useRef(false); // Track if completion message was added
+  // Track last seen values for keys starting with _output*
+  const lastOutputRef = useRef(new Map()); // Map<key, stableString>
   const token = user?.token || localStorage.getItem('token');
 
   const scrollToBottom = () => {
@@ -130,6 +132,42 @@ const AIAssistant = ({ user }) => {
     }
   };
 
+  // Stable stringify to compare deep object equality deterministically
+  const stableStringify = (value) => {
+    const sortDeep = (v) => {
+      if (v === null || typeof v !== 'object') return v;
+      if (Array.isArray(v)) return v.map(sortDeep);
+      const sorted = {};
+      Object.keys(v).sort().forEach((k) => {
+        sorted[k] = sortDeep(v[k]);
+      });
+      return sorted;
+    };
+    try {
+      return JSON.stringify(sortDeep(value));
+    } catch (_) {
+      // Fallback to normal stringify if something odd occurs
+      try { return JSON.stringify(value); } catch { return String(value); }
+    }
+  };
+
+  // Given an object of { _output*: any }, return only changed/new entries vs lastOutputRef
+  const getChangedOutputEntries = (outputObj) => {
+    const changed = {};
+    if (!outputObj) return changed;
+    Object.entries(outputObj).forEach(([key, val]) => {
+      if (!key.startsWith('_output')) return; // guard
+      const serialized = stableStringify(val);
+      const prev = lastOutputRef.current.get(key);
+      if (prev !== serialized) {
+        changed[key] = val;
+        // Update snapshot immediately so subsequent polls compare correctly
+        lastOutputRef.current.set(key, serialized);
+      }
+    });
+    return changed;
+  };
+
   const startWorkflow = async (keepMessages = false, workflow = null) => {
     const workflowToStart = workflow || selectedWorkflow;
     if (!workflowToStart) return;
@@ -149,9 +187,12 @@ const AIAssistant = ({ user }) => {
         setMessages([]);
         processedTasksRef.current.clear(); // Clear processed tasks when starting fresh
         hasCompletedRef.current = false; // Reset completion flag
+        lastOutputRef.current.clear(); // Clear last seen outputs
       } else {
         // Even when keeping messages, reset completion flag for new execution
         hasCompletedRef.current = false;
+        // For a new execution, also reset output snapshots to avoid cross-run suppression
+        lastOutputRef.current.clear();
       }
       setIsPolling(false);
       
@@ -259,13 +300,6 @@ const AIAssistant = ({ user }) => {
           { workflowId: wfId, instanceId: instId, timestamp: Date.now(), bypassCache: true }
         );
 
-        // LOG THE COMPLETE FUCKING RAW DATA
-        console.log('═══════════════════════════════════════════════════════════');
-        console.log('[AIAssistant] � FULL RAW API RESPONSE - EVERYTHING:');
-        console.log('═══════════════════════════════════════════════════════════');
-        console.log(JSON.stringify(result, null, 2));
-        console.log('═══════════════════════════════════════════════════════════');
-
         if (result.success) {
           // Handle double-nested response structure from apiService
           const instance = result.data.data || result.data;
@@ -274,19 +308,7 @@ const AIAssistant = ({ user }) => {
           const tasks = instance.serialized_data?.tasks || {};
           const workflowData = instance.serialized_data?.data || {};
           const taskSpecs = instance.serialized_data?.spec?.task_specs || {};
-          
-          console.log('═══════════════════════════════════════════════════════════');
-          console.log('[AIAssistant] � ALL TASKS COMPLETE DATA:');
-          console.log('═══════════════════════════════════════════════════════════');
-          console.log(JSON.stringify(tasks, null, 2));
-          console.log('═══════════════════════════════════════════════════════════');
-          
-          console.log('═══════════════════════════════════════════════════════════');
-          console.log('[AIAssistant] 🔥 ALL WORKFLOW DATA:');
-          console.log('═══════════════════════════════════════════════════════════');
-          console.log(JSON.stringify(workflowData, null, 2));
-          console.log('═══════════════════════════════════════════════════════════');
-          
+                   
           // CHECK 1: Is workflow complete or failed?
           const workflowStatus = workflowData.workflow_status?.status;
           const isCompleted = instance.serialized_data?.completed === true || 
@@ -353,12 +375,11 @@ const AIAssistant = ({ user }) => {
             // Extract only _output* variables from workflowData
             const outputData = {};
             Object.keys(workflowData).forEach(key => {
-              console.log('Checking key:', key, 'starts with _output?', key.startsWith('_output'));
               if (key.startsWith('_output')) {
                 outputData[key] = workflowData[key];
-                console.log('ADDED:', key, '=', workflowData[key]);
               }
             });
+            const changedOutput = getChangedOutputEntries(outputData);
                        
             const response = workflowData.final_answer || 
                            workflowData.answer || 
@@ -371,7 +392,8 @@ const AIAssistant = ({ user }) => {
               content: response,
               timestamp: new Date(),
               status: 'completed',
-              outputData: Object.keys(outputData).length > 0 ? outputData : null
+              // Only include changed/new outputs; omit if none changed
+              outputData: Object.keys(changedOutput).length > 0 ? changedOutput : null
             };
             
             console.log('========== RESPONSE MESSAGE ==========');
@@ -430,9 +452,10 @@ const AIAssistant = ({ user }) => {
                 outputData[key] = taskData[key];
               }
             });
+            const changedOutput = getChangedOutputEntries(outputData);
             
             // Show message if there's a result or output data
-            const hasResult = taskData.result || taskData.output || Object.keys(outputData).length > 0;
+            const hasResult = taskData.result || taskData.output || Object.keys(changedOutput).length > 0;
             
             if (hasResult) {
               console.log('[AIAssistant] 💬 Adding task result message:', {
@@ -440,7 +463,7 @@ const AIAssistant = ({ user }) => {
                 taskName: task.task_spec,
                 result: taskData.result,
                 output: taskData.output,
-                outputData: outputData
+                outputData: changedOutput
               });
               
               processedTasksRef.current.add(taskId); // Mark as processed
@@ -456,7 +479,7 @@ const AIAssistant = ({ user }) => {
                 taskId: taskId,
                 taskName: task.task_spec,
                 status: 'completed',
-                outputData: Object.keys(outputData).length > 0 ? outputData : null
+                outputData: Object.keys(changedOutput).length > 0 ? changedOutput : null
               };
               
               setMessages(prev => [...prev, taskMessage]);
