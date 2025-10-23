@@ -195,25 +195,6 @@ function ProjectTreeView({ user }) {
   
   // Collapsed groups state
   const [collapsedGroups, setCollapsedGroups] = useState({})
-  
-  // Project dialog state
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [isEditMode, setIsEditMode] = useState(false)
-  const [formErrors, setFormErrors] = useState({})
-  const [form, setForm] = useState({
-    id: null,
-    name: '',
-    description: '',
-    parent_id: 'root',
-    status: 'ON_TRACK',
-    priority: 'Normal',
-    assignee: '',
-    approver: '',
-    due_date: '',
-    start_date: '',
-    progress: 0,
-    is_public: false
-  })
 
   // Preferred column order
   const PREFERRED_ORDER = ['name', 'priority', 'status', 'assignee', 'approver', 'start_date', 'due_date', 'progress']
@@ -547,23 +528,12 @@ function ProjectTreeView({ user }) {
   }
 
   const openCreate = (parentId = 'root') => {
-    setIsEditMode(false)
-    setFormErrors({})
-    setForm({
-      id: null,
-      name: '',
-      description: '',
-      parent_id: parentId,
-      status: 'ON_TRACK',
-      priority: 'Normal',
-      assignee: '',
-      approver: '',
-      due_date: '',
-      start_date: '',
-      progress: 0,
-      is_public: false
+    navigate('/dashboard/projects/create', {
+      state: {
+        parentId: parentId,
+        returnTo: '/dashboard/projects'
+      }
     })
-    setDialogOpen(true)
   }
 
   const openEdit = (projectId) => {
@@ -572,118 +542,6 @@ function ProjectTreeView({ user }) {
         returnTo: '/dashboard/projects'
       }
     })
-  }
-
-  const saveProject = async () => {
-    const errors = {}
-    
-    if (!form.name.trim()) {
-      errors.name = 'Project name is required'
-    }
-
-    if (!form.assignee?.trim()) {
-      errors.assignee = 'Assignee is required'
-    }
-
-    if (!form.approver?.trim()) {
-      errors.approver = 'Approver is required'
-    }
-
-    if (form.assignee && form.approver && form.assignee === form.approver) {
-      errors.approver = 'Approver must be different from Assignee'
-    }
-
-    if (!form.start_date) {
-      errors.start_date = 'Start date is required'
-    } else if (!isValidISODateString(form.start_date)) {
-      errors.start_date = 'Invalid date. Use YYYY-MM-DD (1900-01-01 to 2100-12-31)'
-    }
-
-    if (!form.due_date) {
-      errors.due_date = 'Due date is required'
-    } else if (!isValidISODateString(form.due_date)) {
-      errors.due_date = 'Invalid date. Use YYYY-MM-DD (1900-01-01 to 2100-12-31)'
-    }
-
-    if (!errors.start_date && !errors.due_date && form.start_date && form.due_date) {
-      if (!isISOAfter(form.due_date, form.start_date)) {
-        errors.due_date = 'Due date must be after start date'
-      }
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors)
-      return
-    }
-
-    setFormErrors({})
-
-    try {
-      const payload = { ...form }
-      delete payload.id
-
-      if (isEditMode) {
-        const res = await apiCall(`/api/projects/projects/${form.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify(payload)
-        })
-        if (!res.ok) {
-          const error = await res.json()
-          throw new Error(error.detail || 'Failed to update project')
-        }
-        showSuccess('Project updated successfully')
-        setDialogOpen(false)
-        loadProjects()
-      } else {
-        const res = await apiCall('/api/projects/projects', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify(payload)
-        })
-        if (!res.ok) {
-          const error = await res.json()
-          throw new Error(error.detail || 'Failed to create project')
-        }
-        showSuccess('Project created successfully')
-        setDialogOpen(false)
-        loadProjects()
-      }
-    } catch (error) {
-      console.error('Failed to save project:', error)
-      showError(error.message || 'Failed to save project')
-    }
-  }
-
-  const deleteProject = async (projectId, projectName) => {
-    const confirmed = await showDeleteConfirmation(
-      `Are you sure you want to delete the project "${projectName}"?`,
-      'This action cannot be undone. Child projects must be deleted first.'
-    )
-
-    if (!confirmed) return
-
-    try {
-      const res = await apiCall(`/api/projects/projects/${projectId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.detail || 'Failed to delete project')
-      }
-      showSuccess('Project deleted successfully')
-      loadProjects()
-    } catch (error) {
-      console.error('Failed to delete project:', error)
-      showError(error.message || 'Failed to delete project')
-    }
   }
 
   const getStatusColor = (status) => {

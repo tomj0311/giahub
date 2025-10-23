@@ -1094,6 +1094,7 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="projects/ai-assistant" element={<AIAssistant user={user} />} />
 				<Route path="projects/activity/new" element={<ActivityForm user={user} />} />
 				<Route path="projects/activity/:activityId" element={<ActivityForm user={user} />} />
+				<Route path="projects/create" element={<ProjectForm user={user} />} />
 				<Route path="projects/project/new" element={<ProjectForm user={user} />} />
 				<Route path="projects/project/:id" element={<ProjectForm user={user} />} />
 				<Route path="projects/gantt" element={<GanttChart user={user} />} />
