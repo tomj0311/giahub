@@ -17,11 +17,23 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 # 02110-1301  USA
 
+
 import copy
+import os
 import re
+import sys
 import textwrap
 import types
 import json
+
+# Add project root to path to import logger
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.abspath(os.path.join(_current_dir, "..", ".."))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
+from logger.logger import get_logger
+logger = get_logger("spiffworkflow.python_environment")
 
 
 class BasePythonScriptEngineEnvironment:
@@ -131,7 +143,7 @@ class TaskDataEnvironment(BasePythonScriptEngineEnvironment):
             else:
                 # Check if object is safe for deepcopy (generic approach)
                 if not self._is_safe_for_deepcopy(obj):
-                    print(f"[SPIFF] Removing non-serializable object '{k}' (type: {type(obj).__name__}) from context")
+                    logger.debug(f"[SPIFF] Removing non-serializable object '{k}' (type: {type(obj).__name__}) from context")
                     context.pop(k)
                     continue
                 
@@ -156,8 +168,9 @@ class TaskDataEnvironment(BasePythonScriptEngineEnvironment):
                         elif hasattr(obj, 'item'):
                             context[k] = obj.item()
                         else:
-                            context[k] = str(obj)
-                
+                            context[k] = str(obj)    
+        
+        logger.debug(f"[SPIFF] script execution context {context}")
         return context
     
     def check_for_overwrite(self, context, external_context):
