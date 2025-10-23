@@ -287,6 +287,8 @@ const ProjectChat = ({ user }) => {
               timestamp: new Date(),
               status: 'completed',
               outputDocs: workflowData._output_docs, // Store documents separately using _output_docs
+              // Track presence of the key to distinguish between "missing config" and "present but empty"
+              hasOutputDocs: Object.prototype.hasOwnProperty.call(workflowData || {}, '_output_docs'),
               projectActivities: workflowData.project_activities // Also store activities if available
             };
             
@@ -594,27 +596,31 @@ const ProjectChat = ({ user }) => {
                               
                               {/* Display output documents as a table if available */}
                               {(() => {
+                                const hasDocsKey = msg.hasOutputDocs === true;
+                                const docsArray = Array.isArray(msg.outputDocs) ? msg.outputDocs : [];
+
                                 console.log('[ProjectChat] 🖼️ Rendering message:', {
                                   msgId: msg.id,
-                                  hasOutputDocs: !!msg.outputDocs,
+                                  hasDocsKey,
                                   outputDocsType: typeof msg.outputDocs,
                                   outputDocsIsArray: Array.isArray(msg.outputDocs),
-                                  outputDocsLength: msg.outputDocs?.length,
+                                  outputDocsLength: docsArray.length,
                                   outputDocs: msg.outputDocs
                                 });
-                                
-                                if (msg.outputDocs && Array.isArray(msg.outputDocs) && msg.outputDocs.length > 0) {
-                                  console.log('[ProjectChat] ✅ Rendering table for documents:', msg.outputDocs);
+
+                                // Case 1: Non-empty documents -> render table
+                                if (hasDocsKey && docsArray.length > 0) {
+                                  console.log('[ProjectChat] ✅ Rendering table for documents:', docsArray);
                                   return (
                                     <Box sx={{ mt: 2 }}>
                                       <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                                        📄 Output Documents ({msg.outputDocs.length})
+                                        📄 Output Documents ({docsArray.length})
                                       </Typography>
                                       <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
                                         <Table size="small" stickyHeader>
                                           <TableHead>
                                             <TableRow>
-                                              {Object.keys(msg.outputDocs[0] || {})
+                                              {Object.keys(docsArray[0] || {})
                                                 .filter(key => !key.toLowerCase().includes('id') && key !== '_id')
                                                 .map((key) => (
                                                 <TableCell key={key} sx={{ fontWeight: 'bold', bgcolor: 'background.default' }}>
@@ -624,7 +630,7 @@ const ProjectChat = ({ user }) => {
                                             </TableRow>
                                           </TableHead>
                                           <TableBody>
-                                            {msg.outputDocs.map((doc, idx) => (
+                                            {docsArray.map((doc, idx) => (
                                               <TableRow key={idx} hover>
                                                 {Object.entries(doc)
                                                   .filter(([key]) => !key.toLowerCase().includes('id') && key !== '_id')
@@ -640,9 +646,26 @@ const ProjectChat = ({ user }) => {
                                       </TableContainer>
                                     </Box>
                                   );
-                                } else if (msg.status === 'completed' && msg.type === 'bot') {
-                                  // Show configuration message when _output_docs variable is not found
-                                  console.log('[ProjectChat] ℹ️ No _output_docs found, showing configuration message');
+                                }
+
+                                // Case 2: _output_docs exists but is empty -> show "No results" info (not a config warning)
+                                if (hasDocsKey && docsArray.length === 0 && msg.status === 'completed' && msg.type === 'bot') {
+                                  console.log('[ProjectChat] ℹ️ _output_docs present but empty, showing no-results message');
+                                  return (
+                                    <Box sx={{ mt: 2, p: 2, bgcolor: alpha(theme.palette.info.main, 0.06), borderRadius: 1, border: `1px solid ${alpha(theme.palette.info.main, 0.2)}` }}>
+                                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, color: 'info.dark' }}>
+                                        No matching documents found
+                                      </Typography>
+                                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                                        Try refining your question, adding specific project names, time ranges, or criteria.
+                                      </Typography>
+                                    </Box>
+                                  );
+                                }
+
+                                // Case 3: _output_docs missing entirely -> configuration guidance
+                                if (!hasDocsKey && msg.status === 'completed' && msg.type === 'bot') {
+                                  console.log('[ProjectChat] ⚙️ No _output_docs found, showing configuration message');
                                   return (
                                     <Box sx={{ mt: 2, p: 2, bgcolor: alpha(theme.palette.warning.main, 0.1), borderRadius: 1, border: `1px solid ${alpha(theme.palette.warning.main, 0.3)}` }}>
                                       <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, color: 'warning.dark' }}>
@@ -656,10 +679,10 @@ const ProjectChat = ({ user }) => {
                                       </Typography>
                                     </Box>
                                   );
-                                } else {
-                                  console.log('[ProjectChat] ❌ No documents to render');
-                                  return null;
                                 }
+
+                                console.log('[ProjectChat] ❌ No documents to render');
+                                return null;
                               })()}
                             </>
                           )}
