@@ -48,7 +48,6 @@ function ProjectForm({ user }) {
   // Loading states
   const [isFetching, setIsFetching] = useState(false) // initial data load for edit mode
   const [isSaving, setIsSaving] = useState(false) // form save state (avoid full-page spinner flicker)
-  const [allProjects, setAllProjects] = useState([])
   const [tenantUsers, setTenantUsers] = useState([])
   const [formErrors, setFormErrors] = useState({})
   const [form, setForm] = useState({
@@ -115,27 +114,6 @@ function ProjectForm({ user }) {
     if (!a || !b) return false
     return a > b
   }, [])
-
-  // Load all projects for parent selection
-  const loadAllProjects = useCallback(async () => {
-    try {
-      const res = await apiCall('/api/projects/projects?page=1&page_size=1000', {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` }
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        const projects = data.projects || []
-        setAllProjects(projects.map(p => ({
-          id: p.id,
-          displayName: p.name
-        })))
-      }
-    } catch (error) {
-      console.error('Failed to load projects:', error)
-    }
-  }, [token])
 
   // Load tenant users
   const loadTenantUsers = useCallback(async () => {
@@ -286,7 +264,6 @@ function ProjectForm({ user }) {
   // Initialize data
   useEffect(() => {
     isMountedRef.current = true
-    loadAllProjects()
     loadTenantUsers()
     loadDistinctValues()
     loadProjectDetails()
@@ -294,7 +271,7 @@ function ProjectForm({ user }) {
     return () => {
       isMountedRef.current = false
     }
-  }, [loadAllProjects, loadTenantUsers, loadDistinctValues, loadProjectDetails])
+  }, [loadTenantUsers, loadDistinctValues, loadProjectDetails])
 
   // Handle form submission
   const handleSave = async () => {
@@ -316,9 +293,12 @@ function ProjectForm({ user }) {
       errors.approver = 'Approver must be different from Assignee'
     }
 
-    // Prevent project from being its own parent
-    if (isEditMode && form.parent_id === form.id) {
-      errors.parent_id = 'Project cannot be its own parent'
+    if (!form.district?.trim()) {
+      errors.district = 'District is required'
+    }
+
+    if (!form.assembly?.trim()) {
+      errors.assembly = 'Assembly is required'
     }
 
     if (!form.start_date) {
@@ -458,9 +438,66 @@ function ProjectForm({ user }) {
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 fullWidth
                 multiline
-                rows={8}
+                rows={7}
                 placeholder="Enter detailed description of the project..."
               />
+
+              {/* District and Assembly on same line */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                {/* District */}
+                <Autocomplete
+                  freeSolo
+                  options={distinctValues.district || []}
+                  value={form.district || ''}
+                  onChange={(event, newValue) => {
+                    setForm({ ...form, district: newValue || '' })
+                    setFormErrors({ ...formErrors, district: undefined })
+                  }}
+                  onInputChange={(event, newInputValue) => {
+                    if (event && event.type === 'change') {
+                      setForm({ ...form, district: newInputValue || '' })
+                    }
+                  }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="District"
+                      placeholder="Select or type district"
+                      required
+                      error={!!formErrors.district}
+                      helperText={formErrors.district || 'Required'}
+                    />
+                  )}
+                  fullWidth
+                />
+
+                {/* Assembly */}
+                <Autocomplete
+                  freeSolo
+                  options={distinctValues.assembly || []}
+                  value={form.assembly || ''}
+                  onChange={(event, newValue) => {
+                    setForm({ ...form, assembly: newValue || '' })
+                    setFormErrors({ ...formErrors, assembly: undefined })
+                  }}
+                  onInputChange={(event, newInputValue) => {
+                    if (event && event.type === 'change') {
+                      setForm({ ...form, assembly: newInputValue || '' })
+                    }
+                  }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Assembly"
+                      placeholder="Select or type assembly"
+                      required
+                      error={!!formErrors.assembly}
+                      helperText={formErrors.assembly || 'Required'}
+                    />
+                  )}
+                  fullWidth
+                />
+              </Box>
             </Box>
 
             {/* Right column: All other fields (2-column grid on md+) */}
@@ -496,33 +533,6 @@ function ProjectForm({ user }) {
                   ))}
                 </Select>
               </FormControl>
-
-              {/* Parent Project */}
-              <Autocomplete
-                options={[
-                  { id: 'root', displayName: 'Root (No Parent)' },
-                  ...allProjects.filter(p => !isEditMode || p.id !== form.id)
-                ]}
-                getOptionLabel={(option) => option.displayName}
-                value={
-                  form.parent_id === 'root'
-                    ? { id: 'root', displayName: 'Root (No Parent)' }
-                    : allProjects.find(p => p.id === form.parent_id) || null
-                }
-                onChange={(event, newValue) => {
-                  setForm({ ...form, parent_id: newValue ? newValue.id : 'root' })
-                  setFormErrors({ ...formErrors, parent_id: undefined })
-                }}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Parent Project"
-                    error={!!formErrors.parent_id}
-                    helperText={formErrors.parent_id}
-                  />
-                )}
-                fullWidth
-              />
 
               {/* Progress */}
               <TextField
@@ -646,29 +656,6 @@ function ProjectForm({ user }) {
               </AccordionSummary>
               <AccordionDetails>
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
-                  {/* District */}
-                  <Autocomplete
-                    freeSolo
-                    options={distinctValues.district || []}
-                    value={form.district || ''}
-                    onChange={(event, newValue) => {
-                      setForm({ ...form, district: newValue || '' })
-                    }}
-                    onInputChange={(event, newInputValue) => {
-                      if (event && event.type === 'change') {
-                        setForm({ ...form, district: newInputValue || '' })
-                      }
-                    }}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        label="District"
-                        placeholder="Select or type district"
-                      />
-                    )}
-                    fullWidth
-                  />
-
                   {/* Location */}
                   <Autocomplete
                     freeSolo
@@ -687,29 +674,6 @@ function ProjectForm({ user }) {
                         {...params}
                         label="Location"
                         placeholder="Select or type location"
-                      />
-                    )}
-                    fullWidth
-                  />
-
-                  {/* Assembly */}
-                  <Autocomplete
-                    freeSolo
-                    options={distinctValues.assembly || []}
-                    value={form.assembly || ''}
-                    onChange={(event, newValue) => {
-                      setForm({ ...form, assembly: newValue || '' })
-                    }}
-                    onInputChange={(event, newInputValue) => {
-                      if (event && event.type === 'change') {
-                        setForm({ ...form, assembly: newInputValue || '' })
-                      }
-                    }}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        label="Assembly"
-                        placeholder="Select or type assembly"
                       />
                     )}
                     fullWidth

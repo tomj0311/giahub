@@ -42,8 +42,6 @@ import {
 import {
   Plus,
   Edit,
-  ChevronRight,
-  ChevronDown,
   Filter,
   X,
   ArrowUpDown,
@@ -153,7 +151,6 @@ function ProjectTreeView({ user }) {
   const [tenantUsers, setTenantUsers] = useState([])
   const [fieldMetadata, setFieldMetadata] = useState([]) // DYNAMIC - from API
   const [loading, setLoading] = useState(true)
-  const [expanded, setExpanded] = useState({})
   
   // Pagination state - load from localStorage with fallbacks
   const [page, setPage] = useState(() => loadStateFromStorage(STORAGE_KEYS.PAGE, 0))
@@ -255,17 +252,16 @@ function ProjectTreeView({ user }) {
     }
   }, [])
 
-  const loadProjectTree = useCallback(async () => {
+  const loadProjects = useCallback(async () => {
     if (isLoadingTreeRef.current || !isMountedRef.current) return
     
     try {
       isLoadingTreeRef.current = true
       setLoading(true)
 
-      // Invalidate cached tree results to avoid stale data and bypass cache for fresh fetch
-      sharedApiService.invalidateCache('/api/projects/projects/tree')
+      // Load flat list of projects instead of tree
+      sharedApiService.invalidateCache('/api/projects/projects')
       const params = new URLSearchParams({
-        root_id: 'root',
         page: (page + 1).toString(), // Backend uses 1-based
         page_size: rowsPerPage.toString()
       })
@@ -280,12 +276,11 @@ function ProjectTreeView({ user }) {
       }
 
       const result = await sharedApiService.makeRequest(
-        `/api/projects/projects/tree?${params.toString()}`,
+        `/api/projects/projects?${params.toString()}`,
         {
           headers: { Authorization: `Bearer ${tokenRef.current}` }
         },
         { 
-          root_id: 'root',
           page: page + 1,
           page_size: rowsPerPage,
           filters: filters.length,
@@ -298,11 +293,9 @@ function ProjectTreeView({ user }) {
       if (!isMountedRef.current) return
 
       if (result.success) {
-        setProjectTree(result.data.tree || [])
+        setProjectTree(result.data.projects || [])
         setTotalCount(result.data.pagination?.total || 0)
-        
-        const flatList = flattenTree(result.data.tree || [])
-        setAllProjects(flatList)
+        setAllProjects(result.data.projects || [])
       } else {
         showError(result.error || 'Failed to load projects')
       }
@@ -357,21 +350,7 @@ function ProjectTreeView({ user }) {
     }
   }, [])
 
-  const flattenTree = (tree, level = 0) => {
-    let result = []
-    tree.forEach(node => {
-      result.push({
-        id: node.id,
-        name: node.name,
-        level: level,
-        displayName: '  '.repeat(level) + (level > 0 ? '└─ ' : '') + node.name
-      })
-      if (node.children && node.children.length > 0) {
-        result = result.concat(flattenTree(node.children, level + 1))
-      }
-    })
-    return result
-  }
+
 
   // Cleanup on unmount
   useEffect(() => {
@@ -391,8 +370,8 @@ function ProjectTreeView({ user }) {
   }, [])
 
   useEffect(() => {
-    loadProjectTree()
-  }, [loadProjectTree])
+    loadProjects()
+  }, [loadProjects])
 
   // Save state to localStorage when pagination changes
   useEffect(() => {
@@ -526,12 +505,7 @@ function ProjectTreeView({ user }) {
     setPage(0) // Reset to first page when sorting
   }
 
-  const toggleExpand = (projectId) => {
-    setExpanded(prev => ({
-      ...prev,
-      [projectId]: !prev[projectId]
-    }))
-  }
+
 
   const handleColumnToggle = (columnName) => {
     setVisibleColumns(prev => ({
@@ -632,7 +606,7 @@ function ProjectTreeView({ user }) {
         }
         showSuccess('Project updated successfully')
         setDialogOpen(false)
-        loadProjectTree()
+        loadProjects()
       } else {
         const res = await apiCall('/api/projects/projects', {
           method: 'POST',
@@ -648,7 +622,7 @@ function ProjectTreeView({ user }) {
         }
         showSuccess('Project created successfully')
         setDialogOpen(false)
-        loadProjectTree()
+        loadProjects()
       }
     } catch (error) {
       console.error('Failed to save project:', error)
@@ -674,7 +648,7 @@ function ProjectTreeView({ user }) {
         throw new Error(error.detail || 'Failed to delete project')
       }
       showSuccess('Project deleted successfully')
-      loadProjectTree()
+      loadProjects()
     } catch (error) {
       console.error('Failed to delete project:', error)
       showError(error.message || 'Failed to delete project')
@@ -945,156 +919,128 @@ function ProjectTreeView({ user }) {
     )
   }
 
-  const renderTreeNode = (node, level = 0) => {
-    const hasChildren = node.children && node.children.length > 0
-    const isExpanded = expanded[node.id]
-
+  const renderProjectRow = (project) => {
     return (
-      <React.Fragment key={node.id}>
-        <TableRow
-          sx={{
-            '&:hover': {
-              bgcolor: 'action.hover'
-            },
-            bgcolor: level > 0 ? alpha('#000', 0.01) : 'transparent'
-          }}
-        >
-          {orderedFields.map((field) => {
-            if (!visibleColumns[field.name]) return null
+      <TableRow
+        key={project.id}
+        sx={{
+          '&:hover': {
+            bgcolor: 'action.hover'
+          }
+        }}
+      >
+        {orderedFields.map((field) => {
+          if (!visibleColumns[field.name]) return null
 
-            // Special handling for 'name' column with tree structure
-            if (field.name === 'name') {
-              return (
-                <TableCell key={field.name} sx={{ pl: 2 + level * 4, borderLeft: '3px solid', borderLeftColor: `${getStatusColor(node.status)}.main` }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    {hasChildren ? (
-                      <IconButton
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          toggleExpand(node.id)
-                        }}
-                        sx={{ 
-                          p: 1.5,
-                          '&:hover': {
-                            bgcolor: 'action.hover'
-                          }
-                        }}
-                      >
-                        {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-                      </IconButton>
-                    ) : (
-                      <Box sx={{ width: 40 }} />
-                    )}
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {node.name}
-                    </Typography>
-                  </Box>
-                </TableCell>
-              )
-            }
-
-            // Special handling for 'status' column with Chip
-            if (field.name === 'status') {
-              return (
-                <TableCell key={field.name}>
-                  <Chip
-                    label={getStatusLabel(node.status)}
-                    color={getStatusColor(node.status)}
-                    size="small"
-                  />
-                </TableCell>
-              )
-            }
-
-            // Special handling for 'due_date' with styling
-            if (field.name === 'due_date') {
-              return (
-                <TableCell key={field.name} sx={getDueDateStyle(node.due_date, node.status)}>
-                  {formatDate(node.due_date)}
-                </TableCell>
-              )
-            }
-
-            // Special handling for 'start_date'
-            if (field.name === 'start_date') {
-              return (
-                <TableCell key={field.name}>
-                  {formatDate(node.start_date)}
-                </TableCell>
-              )
-            }
-
-            // Special handling for 'assignee'
-            if (field.name === 'assignee') {
-              return (
-                <TableCell key={field.name}>
-                  {node.assignee_name || node.assignee || '-'}
-                </TableCell>
-              )
-            }
-
-            // Special handling for 'approver'
-            if (field.name === 'approver') {
-              return (
-                <TableCell key={field.name}>
-                  {node.approver_name || node.approver || '-'}
-                </TableCell>
-              )
-            }
-
-            // Special handling for 'progress'
-            if (field.name === 'progress') {
-              return (
-                <TableCell key={field.name}>
-                  {node.progress}%
-                </TableCell>
-              )
-            }
-
-            // Default rendering for other columns
+          // Special handling for 'name' column - simplified without tree structure
+          if (field.name === 'name') {
             return (
-              <TableCell key={field.name}>
-                {renderCellValue(node, field.name)}
+              <TableCell key={field.name} sx={{ borderLeft: '3px solid', borderLeftColor: `${getStatusColor(project.status)}.main` }}>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  {project.name}
+                </Typography>
               </TableCell>
             )
-          })}
+          }
 
-          <TableCell align="right" sx={{ whiteSpace: 'nowrap', minWidth: { xs: 120, sm: 200 } }}>
-            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
-              <Tooltip title="View Gantt Chart">
-                <IconButton 
-                  size="small" 
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    navigate('/dashboard/projects/gantt', { 
-                      state: { projectId: node.id, projectName: node.name } 
-                    })
-                  }}
-                  sx={{ color: 'primary.main' }}
-                >
-                  <BarChart3 size={18} />
-                </IconButton>
-              </Tooltip>
-              <IconButton size="small" onClick={(e) => {
-                e.stopPropagation()
-                openCreate(node.id)
-              }}>
-                <Plus size={18} />
-              </IconButton>
-              <IconButton size="small" onClick={(e) => {
-                e.stopPropagation()
-                openEdit(node.id)
-              }}>
-                <Edit size={18} />
-              </IconButton>
-              {/* Delete button removed per requirements */}
-            </Box>
-          </TableCell>
-        </TableRow>
+          // Special handling for 'status' column with Chip
+          if (field.name === 'status') {
+            return (
+              <TableCell key={field.name}>
+                <Chip
+                  label={getStatusLabel(project.status)}
+                  color={getStatusColor(project.status)}
+                  size="small"
+                />
+              </TableCell>
+            )
+          }
 
-        {hasChildren && isExpanded && node.children.map(child => renderTreeNode(child, level + 1))}
-      </React.Fragment>
+          // Special handling for 'due_date' with styling
+          if (field.name === 'due_date') {
+            return (
+              <TableCell key={field.name} sx={getDueDateStyle(project.due_date, project.status)}>
+                {formatDate(project.due_date)}
+              </TableCell>
+            )
+          }
+
+          // Special handling for 'start_date'
+          if (field.name === 'start_date') {
+            return (
+              <TableCell key={field.name}>
+                {formatDate(project.start_date)}
+              </TableCell>
+            )
+          }
+
+          // Special handling for 'assignee'
+          if (field.name === 'assignee') {
+            return (
+              <TableCell key={field.name}>
+                {project.assignee_name || project.assignee || '-'}
+              </TableCell>
+            )
+          }
+
+          // Special handling for 'approver'
+          if (field.name === 'approver') {
+            return (
+              <TableCell key={field.name}>
+                {project.approver_name || project.approver || '-'}
+              </TableCell>
+            )
+          }
+
+          // Special handling for 'progress'
+          if (field.name === 'progress') {
+            return (
+              <TableCell key={field.name}>
+                {project.progress}%
+              </TableCell>
+            )
+          }
+
+          // Default rendering for other columns
+          return (
+            <TableCell key={field.name}>
+              {renderCellValue(project, field.name)}
+            </TableCell>
+          )
+        })}
+
+        <TableCell align="right" sx={{ whiteSpace: 'nowrap', minWidth: { xs: 120, sm: 200 } }}>
+          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+            <Tooltip title="View Gantt Chart">
+              <IconButton 
+                size="small" 
+                onClick={(e) => {
+                  e.stopPropagation()
+                  navigate('/dashboard/projects/gantt', { 
+                    state: { projectId: project.id, projectName: project.name } 
+                  })
+                }}
+                sx={{ color: 'primary.main' }}
+              >
+                <BarChart3 size={18} />
+              </IconButton>
+            </Tooltip>
+            <IconButton size="small" onClick={(e) => {
+              e.stopPropagation()
+              openCreate('root')
+            }}>
+              <Plus size={18} />
+            </IconButton>
+            <IconButton size="small" onClick={(e) => {
+              e.stopPropagation()
+              openEdit(project.id)
+            }}>
+              <Edit size={18} />
+            </IconButton>
+            {/* Delete button removed per requirements */}
+          </Box>
+        </TableCell>
+      </TableRow>
     )
   }
 
@@ -1273,7 +1219,7 @@ function ProjectTreeView({ user }) {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      projectTree.map(node => renderTreeNode(node, 0))
+                      projectTree.map(project => renderProjectRow(project))
                     )}
                   </TableBody>
                 </Table>
