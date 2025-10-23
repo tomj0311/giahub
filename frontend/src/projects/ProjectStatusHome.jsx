@@ -397,11 +397,13 @@ export default function ProjectStatusHome({ user }) {
   }, []); // EMPTY DEPENDENCIES - NO BULLSHIT
 
   const handleViewReport = (district) => {
-    // Navigate to Gantt chart page with the selected district project
+    // Navigate to Gantt chart page with the selected district
     navigate('/dashboard/projects/gantt', {
       state: {
-        projectId: district.id,
-        projectName: district.name
+        projectId: district.id, // Keep for compatibility but not used when fromDistrictView is true
+        projectName: district.name,
+        districtName: district.name, // The actual district name for filtering
+        fromDistrictView: true // Flag to indicate coming from district view
       }
     })
   }
