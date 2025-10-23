@@ -349,26 +349,37 @@ const AIAssistant = ({ user }) => {
             return;
           }
           
-          // CHECK 3: Check for ready tasks (UserTask or ManualTask)
+          // CHECK 3: Check for ready tasks - ONLY by state 16 (READY)
           const readyTask = Object.entries(tasks).find(([taskId, task]) => {
-            if (task.state === 16) { // READY state
-              const taskSpecName = task.task_spec;
-              const taskSpec = taskSpecs[taskSpecName];
-              const typename = taskSpec?.typename;
-              return typename === 'UserTask' || typename === 'ManualTask';
+            // ONLY check state - ignore already completed tasks
+            if (task.state !== 16) return false;
+            
+            const taskSpecName = task.task_spec;
+            const taskSpec = taskSpecs[taskSpecName];
+            const typename = taskSpec?.typename;
+            const isUserTask = typename === 'UserTask' || typename === 'ManualTask';
+            
+            // Skip if already processed
+            if (processedTasksRef.current.has(taskId)) {
+              console.log('[AIAssistant] ⏭️ Skipping already processed task:', taskId);
+              return false;
             }
-            return false;
+            
+            return isUserTask;
           });
           
           if (readyTask) {
             const [taskId, task] = readyTask;
             const taskSpecName = task.task_spec;
-            console.log('[AIAssistant] 🔔 READY TASK FOUND!', { taskId, taskSpecName });
+            console.log('[AIAssistant] 🔔 READY TASK FOUND!', { taskId, taskSpecName, state: task.state });
+            
+            // Mark as processed to avoid showing again
+            processedTasksRef.current.add(taskId);
             
             clearInterval(pollInterval.current);
             setIsPolling(false);
             setState('task_ready');
-            setReadyTaskData({ taskSpec: taskSpecName });
+            setReadyTaskData({ taskSpec: taskSpecName, taskId: taskId });
             return;
           }
           

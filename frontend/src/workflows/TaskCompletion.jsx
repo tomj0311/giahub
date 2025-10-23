@@ -97,7 +97,7 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
           method: 'GET',
           headers,
         },
-        { workflowId, instanceId, action: 'get_instance_for_task' }
+        { workflowId, instanceId, action: 'get_instance_for_task', bypassCache: true }
       );
 
       if (result.success) {
