@@ -118,17 +118,16 @@ function GanttChart({ user, projectId: propProjectId }) {
     loadStateFromStorage(STORAGE_KEYS.VISIBLE_COLUMNS, DEFAULT_VISIBLE_COLUMNS)
   )
 
-  // Preferred column order (excluding district and assembly)
-  const PREFERRED_ORDER = ['name', 'priority', 'status', 'assignee', 'approver', 'start_date', 'due_date', 'progress']
+  // Preferred column order (district and assembly available but hidden by default)
+  const PREFERRED_ORDER = ['name', 'priority', 'status', 'assignee', 'approver', 'start_date', 'due_date', 'progress', 'district', 'assembly']
 
   const orderedFields = React.useMemo(() => {
     const orderIndex = (name) => {
       const idx = PREFERRED_ORDER.indexOf(name)
       return idx === -1 ? Number.MAX_SAFE_INTEGER : idx
     }
-    // Filter out district and assembly completely
+    // Include all fields, district and assembly will be available for selection
     return [...fieldMetadata]
-      .filter(field => field.name !== 'district' && field.name !== 'assembly')
       .sort((a, b) => orderIndex(a.name) - orderIndex(b.name))
   }, [fieldMetadata])
 
@@ -1024,15 +1023,11 @@ function GanttChart({ user, projectId: propProjectId }) {
     
     if (columnName === 'district' || columnName === 'assembly') {
       if (isActivity) {
+        // Activities should not show district/assembly values - always blank
         return (
-          <Box sx={{ pl: 8 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Box sx={{ width: 24 }} />
-              <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
-                {node.subject || node.name}
-              </Typography>
-            </Box>
-          </Box>
+          <Typography variant="body2" sx={{ color: 'text.disabled' }}>
+            -
+          </Typography>
         )
       }
       return (
