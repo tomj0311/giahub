@@ -19,9 +19,16 @@ import {
   Button,
   ToggleButtonGroup,
   ToggleButton,
-  Tooltip
+  Tooltip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Checkbox,
+  FormControlLabel,
+  FormGroup
 } from '@mui/material'
-import { ChevronRight, ChevronDown, ArrowLeft, ZoomIn, ZoomOut, Calendar, CalendarDays } from 'lucide-react'
+import { ChevronRight, ChevronDown, ArrowLeft, ZoomIn, ZoomOut, Calendar, CalendarDays, Settings } from 'lucide-react'
 import { apiCall } from '../config/api'
 import sharedApiService from '../utils/apiService'
 import { useSnackbar } from '../contexts/SnackbarContext'
@@ -63,6 +70,59 @@ function GanttChart({ user, projectId: propProjectId }) {
   const MIN_ZOOM = 0.1
   const MAX_ZOOM = 3
   const ganttRef = useRef(null)
+
+  // localStorage keys for state persistence
+  const STORAGE_KEYS = {
+    VISIBLE_COLUMNS: 'ganttChart_visibleColumns'
+  }
+
+  // Helper functions for localStorage state persistence
+  const saveStateToStorage = (key, value) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value))
+    } catch (error) {
+      console.warn('Failed to save state to localStorage:', error)
+    }
+  }
+
+  const loadStateFromStorage = (key, defaultValue) => {
+    try {
+      const saved = localStorage.getItem(key)
+      return saved ? JSON.parse(saved) : defaultValue
+    } catch (error) {
+      console.warn('Failed to load state from localStorage:', error)
+      return defaultValue
+    }
+  }
+
+  // Column customization state
+  const [columnDialogOpen, setColumnDialogOpen] = useState(false)
+  
+  // Predefined initial columns (common ones shown by default)
+  const DEFAULT_VISIBLE_COLUMNS = {
+    district_assembly: true,
+    status: true,
+    assignee: true,
+    approver: true,
+    start_date: true,
+    due_date: true,
+    progress: true
+  }
+  
+  const [visibleColumns, setVisibleColumns] = useState(() => 
+    loadStateFromStorage(STORAGE_KEYS.VISIBLE_COLUMNS, DEFAULT_VISIBLE_COLUMNS)
+  )
+
+  // Available columns configuration
+  const AVAILABLE_COLUMNS = [
+    { key: 'district_assembly', label: 'District/Assembly' },
+    { key: 'status', label: 'Status' },
+    { key: 'assignee', label: 'Assignee' },
+    { key: 'approver', label: 'Approver' },
+    { key: 'start_date', label: 'Start Date' },
+    { key: 'due_date', label: 'Due Date' },
+    { key: 'progress', label: 'Progress' }
+  ]
 
   // Format date as dd/mm/yyyy
   const formatDate = (dateStr) => {
@@ -856,6 +916,107 @@ function GanttChart({ user, projectId: propProjectId }) {
     }))
   }
 
+  // Column customization handlers
+  const handleColumnToggle = (columnKey) => {
+    setVisibleColumns(prev => ({
+      ...prev,
+      [columnKey]: !prev[columnKey]
+    }))
+  }
+
+  const handleOpenColumnDialog = () => {
+    setColumnDialogOpen(true)
+  }
+
+  const handleCloseColumnDialog = () => {
+    setColumnDialogOpen(false)
+  }
+
+  const handleResetColumns = () => {
+    setVisibleColumns(DEFAULT_VISIBLE_COLUMNS)
+  }
+
+  // Save visible columns to localStorage when they change
+  useEffect(() => {
+    saveStateToStorage(STORAGE_KEYS.VISIBLE_COLUMNS, visibleColumns)
+  }, [visibleColumns])
+
+  // Helper function to render cell content based on column type
+  const renderCellContent = (proj, columnKey, isActivity = false) => {
+    const value = proj[columnKey] || proj[columnKey.replace('_', '')] // Handle different naming conventions
+    
+    switch (columnKey) {
+      case 'district_assembly':
+        if (isActivity) {
+          return (
+            <Box sx={{ pl: 8 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box sx={{ width: 24 }} />
+                <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+                  {proj.subject || proj.name}
+                </Typography>
+              </Box>
+            </Box>
+          )
+        }
+        const statusColor = getStatusColor(proj.status || 'New')
+        const safeStatusColor = theme.palette[statusColor] ? statusColor : 'primary'
+        return (
+          <Box sx={{ pl: 6, borderLeft: '3px solid', borderLeftColor: theme.palette[safeStatusColor].main }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {!isActivity && activitiesByProject[proj.id] && activitiesByProject[proj.id].length > 0 ? (
+                <IconButton
+                  size="small"
+                  onClick={() => toggleProjectExpand(proj.id)}
+                  sx={{ p: 0.5 }}
+                >
+                  {projectExpanded[proj.id] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                </IconButton>
+              ) : (
+                <Box sx={{ width: 24 }} />
+              )}
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                {proj.name || `${proj.district} - ${proj.assembly}`}
+              </Typography>
+            </Box>
+          </Box>
+        )
+      
+      case 'status':
+        const statusColorForChip = getStatusColor(proj.status || 'New')
+        return (
+          <Chip
+            label={getStatusLabel(proj.status)}
+            color={statusColorForChip}
+            size="small"
+            variant={isActivity ? "outlined" : "filled"}
+          />
+        )
+      
+      case 'assignee':
+        return proj.assignee_name || proj.assignee || '-'
+      
+      case 'approver':
+        return proj.approver_name || proj.approver || '-'
+      
+      case 'start_date':
+        return formatDate(proj.start_date)
+      
+      case 'due_date':
+        return (
+          <Box sx={getDueDateStyle(proj.due_date, proj.status)}>
+            {formatDate(proj.due_date)}
+          </Box>
+        )
+      
+      case 'progress':
+        return `${proj.progress || 0}%`
+      
+      default:
+        return value || '-'
+    }
+  }
+
   const getStatusColor = (status) => {
     // Add debug logging and handle null/undefined status
     console.log(`[GanttChart] Getting status color for status: "${status}" (type: ${typeof status})`)
@@ -952,9 +1113,6 @@ function GanttChart({ user, projectId: propProjectId }) {
       console.warn(`[GanttChart] Project is null/undefined in renderProjectRow`)
       return null
     }
-    
-    const statusColor = getStatusColor(proj.status || 'New')
-    const safeStatusColor = theme.palette[statusColor] ? statusColor : 'primary'
 
     return (
       <React.Fragment key={proj.id}>
@@ -965,46 +1123,13 @@ function GanttChart({ user, projectId: propProjectId }) {
             }
           }}
         >
-          <TableCell sx={{ pl: 6, borderLeft: '3px solid', borderLeftColor: theme.palette[safeStatusColor].main }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              {hasActivities ? (
-                <IconButton
-                  size="small"
-                  onClick={() => toggleProjectExpand(proj.id)}
-                  sx={{ p: 0.5 }}
-                >
-                  {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                </IconButton>
-              ) : (
-                <Box sx={{ width: 24 }} />
-              )}
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                {proj.name}
-              </Typography>
-            </Box>
-          </TableCell>
-
-          <TableCell>
-            <Chip
-              label={getStatusLabel(proj.status)}
-              color={safeStatusColor}
-              size="small"
-            />
-          </TableCell>
-
-          <TableCell>{proj.assignee_name || proj.assignee || '-'}</TableCell>
-
-          <TableCell>{proj.approver_name || proj.approver || '-'}</TableCell>
-
-          <TableCell>
-            {formatDate(proj.start_date)}
-          </TableCell>
-
-          <TableCell sx={getDueDateStyle(proj.due_date, proj.status)}>
-            {formatDate(proj.due_date)}
-          </TableCell>
-
-          <TableCell>{proj.progress}%</TableCell>
+          {AVAILABLE_COLUMNS.map((column) => (
+            visibleColumns[column.key] && (
+              <TableCell key={column.key}>
+                {renderCellContent(proj, column.key, false)}
+              </TableCell>
+            )
+          ))}
         </TableRow>
 
         {/* Render activities if expanded and has activities */}
@@ -1036,29 +1161,13 @@ function GanttChart({ user, projectId: propProjectId }) {
                 bgcolor: alpha('#000', 0.02)
               }}
             >
-              <TableCell sx={{ pl: 10 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Box sx={{ width: 24 }} />
-                  <Typography variant="body2">{activity.subject}</Typography>
-                </Box>
-              </TableCell>
-              <TableCell>
-                <Chip
-                  label={activity.status || 'New'}
-                  color={safeActivityStatusColor}
-                  size="small"
-                  variant="outlined"
-                />
-              </TableCell>
-              <TableCell>{activity.assignee_name || activity.assignee || '-'}</TableCell>
-              <TableCell>{activity.approver_name || activity.approver || '-'}</TableCell>
-              <TableCell>
-                {formatDate(activity.start_date)}
-              </TableCell>
-              <TableCell sx={getDueDateStyle(activity.due_date, activity.status)}>
-                {formatDate(activity.due_date)}
-              </TableCell>
-              <TableCell>{activity.progress || 0}%</TableCell>
+              {AVAILABLE_COLUMNS.map((column) => (
+                visibleColumns[column.key] && (
+                  <TableCell key={column.key}>
+                    {renderCellContent(activity, column.key, true)}
+                  </TableCell>
+                )
+              ))}
             </TableRow>
           )
         })}
@@ -1292,6 +1401,25 @@ function GanttChart({ user, projectId: propProjectId }) {
             }
           </Typography>
         </Box>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          <Tooltip title="Customize Columns">
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<Settings size={18} />}
+              onClick={handleOpenColumnDialog}
+              sx={{ 
+                textTransform: 'none',
+                fontWeight: 500,
+                minWidth: '100px',
+                borderColor: 'divider',
+                color: 'text.secondary'
+              }}
+            >
+              Columns
+            </Button>
+          </Tooltip>
+        </Box>
       </Box>
 
       {/* Project/Activity List */}
@@ -1301,13 +1429,13 @@ function GanttChart({ user, projectId: propProjectId }) {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>District/Assembly</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Assignee</TableCell>
-                  <TableCell>Approver</TableCell>
-                  <TableCell>Start Date</TableCell>
-                  <TableCell>Due Date</TableCell>
-                  <TableCell>Progress</TableCell>
+                  {AVAILABLE_COLUMNS.map((column) => (
+                    visibleColumns[column.key] && (
+                      <TableCell key={column.key}>
+                        {column.label}
+                      </TableCell>
+                    )
+                  ))}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1325,7 +1453,7 @@ function GanttChart({ user, projectId: propProjectId }) {
                           }
                         }}
                       >
-                        <TableCell colSpan={7} sx={{ py: 1 }}>
+                        <TableCell colSpan={Object.values(visibleColumns).filter(Boolean).length} sx={{ py: 1 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <IconButton
                               size="small"
@@ -1822,6 +1950,34 @@ function GanttChart({ user, projectId: propProjectId }) {
         </Box>
         </CardContent>
       </Card>
+
+      {/* Column Customization Dialog */}
+      <Dialog open={columnDialogOpen} onClose={handleCloseColumnDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Customize Columns</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Select which columns to display in the table
+          </Typography>
+          <FormGroup>
+            {AVAILABLE_COLUMNS.map((column) => (
+              <FormControlLabel
+                key={column.key}
+                control={
+                  <Checkbox
+                    checked={visibleColumns[column.key] || false}
+                    onChange={() => handleColumnToggle(column.key)}
+                  />
+                }
+                label={column.label}
+              />
+            ))}
+          </FormGroup>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleResetColumns} color="secondary">Reset to Default</Button>
+          <Button onClick={handleCloseColumnDialog}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </>
   )
 }
