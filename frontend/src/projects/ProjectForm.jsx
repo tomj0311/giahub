@@ -78,7 +78,9 @@ function ProjectForm({ user }) {
     expenditure: 0,
     inaugurated: false,
     operation_started: false,
-    remarks: ''
+    remarks: '',
+    project_coordinator: '',
+    coordinator_contact: ''
   })
 
   // State for distinct values
@@ -251,7 +253,9 @@ function ProjectForm({ user }) {
         expenditure: response.expenditure || 0,
         inaugurated: response.inaugurated || false,
         operation_started: response.operation_started || false,
-        remarks: response.remarks || ''
+        remarks: response.remarks || '',
+        project_coordinator: response.project_coordinator || '',
+        coordinator_contact: response.coordinator_contact || ''
       })
     } catch (error) {
       showError('Failed to load project details')
@@ -331,6 +335,14 @@ function ProjectForm({ user }) {
     if (form.date_of_sanction_from && form.date_of_sanction_to && !errors.date_of_sanction_from && !errors.date_of_sanction_to) {
       if (!isISOAfter(form.date_of_sanction_to, form.date_of_sanction_from)) {
         errors.date_of_sanction_to = 'Date of sanction to must be after date of sanction from'
+      }
+    }
+
+    // Validate coordinator contact number format (if provided)
+    if (form.coordinator_contact && form.coordinator_contact.trim()) {
+      const contactPattern = /^[0-9+\-\s()]+$/
+      if (!contactPattern.test(form.coordinator_contact.trim())) {
+        errors.coordinator_contact = 'Contact number can only contain numbers, +, -, spaces, and parentheses'
       }
     }
 
@@ -852,6 +864,30 @@ function ProjectForm({ user }) {
                       />
                     }
                     label="Operation Started"
+                  />
+
+                  {/* Project Coordinator */}
+                  <TextField
+                    label="Project Coordinator"
+                    value={form.project_coordinator}
+                    onChange={(e) => setForm({ ...form, project_coordinator: e.target.value })}
+                    fullWidth
+                    placeholder="Enter project coordinator name"
+                  />
+
+                  {/* Coordinator Contact Number */}
+                  <TextField
+                    label="Coordinator Contact"
+                    value={form.coordinator_contact}
+                    onChange={(e) => {
+                      setForm({ ...form, coordinator_contact: e.target.value })
+                      setFormErrors({ ...formErrors, coordinator_contact: undefined })
+                    }}
+                    fullWidth
+                    placeholder="Enter contact number"
+                    error={!!formErrors.coordinator_contact}
+                    helperText={formErrors.coordinator_contact}
+                    inputProps={{ pattern: '[0-9+\\-\\s()]*' }}
                   />
 
                   {/* Remarks - Full Width */}
