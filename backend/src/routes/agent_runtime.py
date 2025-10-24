@@ -36,7 +36,11 @@ async def stream_agent_response(
     user_id: str | None = None,
     tenant_id: str | None = None
 ) -> AsyncGenerator[str, None]:
-    """Stream agent response using Server-Sent Events format."""
+    """Stream agent response using Server-Sent Events format.
+    
+    Designed for non-blocking concurrent execution across multiple users.
+    Uses asyncio.sleep(0) to yield control back to the event loop.
+    """
     
     correlation_id = str(uuid.uuid4())
     
@@ -44,6 +48,9 @@ async def stream_agent_response(
         user = {"id": user_id, "userId": user_id, "tenantId": tenant_id}
         
         yield f"data: {json.dumps({'type': 'agent_run_started', 'correlation_id': correlation_id, 'payload': {'file': agent_name}})}\n\n"
+        
+        # Yield control to allow other requests to be processed
+        await asyncio.sleep(0)
         
         async for response in AgentRuntimeService.execute_agent(
             agent_name=agent_name,
@@ -54,6 +61,9 @@ async def stream_agent_response(
             response['correlation_id'] = correlation_id
             
             yield f"data: {json.dumps(response)}\n\n"
+            
+            # Critical: yield control after each chunk to prevent blocking
+            await asyncio.sleep(0)
             
     except Exception as e:
         logger.error(f"Error in agent response stream: {e}")
@@ -69,6 +79,8 @@ async def run_agent(
     user: dict = Depends(verify_token_middleware)
 ):
     """Stream agent responses using Server-Sent Events with optional file uploads.
+    
+    This endpoint is designed for concurrent multi-user access with non-blocking async execution.
 
     Form data:
     - agent_name: Name of the agent to run
@@ -94,6 +106,8 @@ async def run_agent(
     
     user_id = user.get("id") or user.get("userId")
     
+    logger.info(f"[AGENT_RUN] Starting agent '{agent_name}' for user {user_id} (tenant: {tenant_id})")
+    
     # Handle file uploads if provided (completely optional)
     uploaded_file_names = []
     if files:
@@ -109,40 +123,45 @@ async def run_agent(
                 conv_id = collection_name
             
             try:
-                for file in valid_files:
-                    file_info = await FileService.upload_file_to_storage(
-                        file=file,
-                        tenant_id=tenant_id,
-                        user_id=user_id,
-                        collection=collection_name
-                    )
-                    uploaded_file_names.append(file_info["filename"])
-                
-                try:
-                    model_id = None
+                # Process file uploads asynchronously without blocking
+                async def process_file_upload():
+                    for file in valid_files:
+                        file_info = await FileService.upload_file_to_storage(
+                            file=file,
+                            tenant_id=tenant_id,
+                            user_id=user_id,
+                            collection=collection_name
+                        )
+                        uploaded_file_names.append(file_info["filename"])
+                    
                     try:
-                        agent_doc = await AgentService.get_agent_by_name(agent_name, user)
-                        if agent_doc and "model" in agent_doc and isinstance(agent_doc["model"], dict):
-                            model_id = agent_doc["model"].get("id")
-                    except Exception as e:
-                        logger.error(f"Failed to get agent config: {str(e)}")
-                    
-                    vector_payload = {
-                        "collection": collection_name,
-                    }
-                    
-                    if model_id:
-                        vector_payload["model_id"] = model_id
-                    
-                    await VectorService.index_knowledge_files(
-                        user=user,
-                        collection=collection_name,
-                        payload=vector_payload
-                    )
+                        model_id = None
+                        try:
+                            agent_doc = await AgentService.get_agent_by_name(agent_name, user)
+                            if agent_doc and "model" in agent_doc and isinstance(agent_doc["model"], dict):
+                                model_id = agent_doc["model"].get("id")
+                        except Exception as e:
+                            logger.error(f"Failed to get agent config: {str(e)}")
                         
-                except Exception as e:
-                    logger.error(f"Vector indexing failed: {str(e)}")
+                        vector_payload = {
+                            "collection": collection_name,
+                        }
+                        
+                        if model_id:
+                            vector_payload["model_id"] = model_id
+                        
+                        await VectorService.index_knowledge_files(
+                            user=user,
+                            collection=collection_name,
+                            payload=vector_payload
+                        )
+                            
+                    except Exception as e:
+                        logger.error(f"Vector indexing failed: {str(e)}")
                 
+                # Wait for file processing to complete before streaming
+                await process_file_upload()
+                    
             except Exception as e:
                 logger.error(f"File upload failed: {str(e)}")
                 raise HTTPException(
@@ -150,6 +169,7 @@ async def run_agent(
                     detail=f"File upload failed: {str(e)}"
                 )
     
+    # Return streaming response immediately - this allows concurrent requests
     return StreamingResponse(
         stream_agent_response(
             agent_name=agent_name,
@@ -163,6 +183,7 @@ async def run_agent(
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering for SSE
         }
     )
 

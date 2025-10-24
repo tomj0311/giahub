@@ -320,6 +320,7 @@ class AgentRuntimeService:
 
     @classmethod
     async def run_agent_stream(cls, agent: Any, prompt: str, user: Dict[str, Any], conv_id: Optional[str] = None, cancel_event: Optional[asyncio.Event] = None, stream: bool = True) -> AsyncGenerator[Dict[str, Any], None]:
+        """Stream agent responses with proper async yielding for concurrent multi-user support."""
         try:
             # Search for images to include with the agent run
             agent_images = await cls._search_images_for_agent(user, conv_id)
@@ -370,6 +371,9 @@ class AgentRuntimeService:
                             iteration_started = True
                             
                         response_count += 1
+                        
+                        # Yield control to event loop every chunk for multi-user support
+                        await asyncio.sleep(0)
                         
                         if cancel_event and cancel_event.is_set():
                             logger.info("Streaming cancelled by user.")
