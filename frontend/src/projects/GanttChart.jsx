@@ -1813,13 +1813,6 @@ function GanttChart({ user, projectId: propProjectId }) {
               
               return (
                 <React.Fragment key={`timeline-${groupKey}`}>
-                  {/* Group Header Row - empty timeline */}
-                  <Box sx={{ 
-                    height: 41, 
-                    position: 'relative',
-                    bgcolor: alpha(theme.palette.primary.main, 0.08)
-                  }} />
-                  
                   {/* Render project timelines in this group if expanded */}
                   {isGroupExpanded && projects.map(proj => renderTimelineForProject(proj))}
                 </React.Fragment>

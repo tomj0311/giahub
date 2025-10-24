@@ -53,7 +53,7 @@ const STORAGE_KEYS = {
 function ProjectPlanning({ user, projectId }) {
   const token = user?.token
   const navigate = useNavigate()
-  const { showError } = useSnackbar()
+  const { showError, showSuccess } = useSnackbar()
 
   const isMountedRef = useRef(true)
   const isLoadingRef = useRef(false)
@@ -730,6 +730,19 @@ function ProjectPlanning({ user, projectId }) {
     setVisibleColumns(DEFAULT_VISIBLE_COLUMNS)
   }
 
+  const handleResetView = () => {
+    // Reset all state to defaults
+    setPagination(prev => ({ ...prev, page: 0, rowsPerPage: 8 }))
+    setFilters([])
+    setSortField(null)
+    setSortOrder('asc')
+    setVisibleColumns(DEFAULT_VISIBLE_COLUMNS)
+    // Clear localStorage
+    clearStoredState()
+    // Show success message
+    showSuccess('View reset to defaults')
+  }
+
   const openCreate = (type = 'TASK') => {
     navigate('/dashboard/projects/activity/new', {
       state: {
@@ -1026,6 +1039,24 @@ function ProjectPlanning({ user, projectId }) {
                   }}
                 >
                   Columns
+                </Button>
+              </Tooltip>
+
+              {/* Reset view button */}
+              <Tooltip title="Reset to first page and clear filters">
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleResetView}
+                  sx={{ 
+                    textTransform: 'none',
+                    fontWeight: 500,
+                    minWidth: '100px',
+                    borderColor: 'divider',
+                    color: 'text.secondary'
+                  }}
+                >
+                  Reset View
                 </Button>
               </Tooltip>
             </Box>
