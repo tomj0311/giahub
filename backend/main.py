@@ -142,10 +142,16 @@ if __name__ == "__main__":
     # Get port from environment variable
     port = int(os.getenv('PORT', 4000))
     host = os.getenv('HOST', '0.0.0.0')
+    workers = int(os.getenv('WORKERS', 4))  # Multiple workers for concurrent requests
+    
     uvicorn.run(
-        app,
+        "main:app",  # Use string import for workers to work
         host=host,
         port=port,
+        workers=workers,  # Enable multiple worker processes
         reload=False,
-        access_log=False
+        access_log=False,
+        timeout_keep_alive=75,  # Keep connections alive for SSE streaming
+        limit_concurrency=1000,  # Allow many concurrent connections
+        backlog=2048  # Queue size for pending connections
     )

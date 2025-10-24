@@ -19,9 +19,16 @@ import {
   Button,
   ToggleButtonGroup,
   ToggleButton,
-  Tooltip
+  Tooltip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Checkbox,
+  FormControlLabel,
+  FormGroup
 } from '@mui/material'
-import { ChevronRight, ChevronDown, ArrowLeft, ZoomIn, ZoomOut, Calendar, CalendarDays } from 'lucide-react'
+import { ChevronRight, ChevronDown, ArrowLeft, ZoomIn, ZoomOut, Calendar, CalendarDays, Settings } from 'lucide-react'
 import { apiCall } from '../config/api'
 import sharedApiService from '../utils/apiService'
 import { useSnackbar } from '../contexts/SnackbarContext'
@@ -39,16 +46,21 @@ function GanttChart({ user, projectId: propProjectId }) {
   const isLoadingProjectRef = useRef(false)
   const isLoadingTreeRef = useRef(false)
   const isLoadingActivitiesRef = useRef(false)
+  const isLoadingMetadataRef = useRef(false)
 
-  // Get project ID from props or location state
+  // Get project ID or district info from props or location state
   const projectId = propProjectId || location.state?.projectId
   const projectName = location.state?.projectName
+  const districtName = location.state?.districtName // From ProjectStatusHome
+  const fromDistrictView = location.state?.fromDistrictView // Flag to indicate source
 
   const [project, setProject] = useState(null)
-  const [projectTree, setProjectTree] = useState([]) // Store project and all children
+  const [allProjects, setAllProjects] = useState([]) // Store all projects (flat list)
   const [activitiesByProject, setActivitiesByProject] = useState({})
-  const [ganttExpanded, setGanttExpanded] = useState({})
+  const [groupExpanded, setGroupExpanded] = useState({}) // Track group expansion
+  const [projectExpanded, setProjectExpanded] = useState({}) // Track project expansion for activities
   const [loading, setLoading] = useState(true)
+  const [fieldMetadata, setFieldMetadata] = useState([]) // DYNAMIC - from API
   const [timelineStart, setTimelineStart] = useState(null)
   const [timelineEnd, setTimelineEnd] = useState(null)
   const [timelineMonths, setTimelineMonths] = useState([])
@@ -61,15 +73,76 @@ function GanttChart({ user, projectId: propProjectId }) {
   const MAX_ZOOM = 3
   const ganttRef = useRef(null)
 
-  // Format date as dd/mm/yyyy
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '-'
-    const date = new Date(dateStr)
-    const day = String(date.getDate()).padStart(2, '0')
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const year = date.getFullYear()
-    return `${day}/${month}/${year}`
+  // localStorage keys for state persistence
+  const STORAGE_KEYS = {
+    VISIBLE_COLUMNS: 'ganttChart_visibleColumns'
   }
+
+  // Helper functions for localStorage state persistence
+  const saveStateToStorage = (key, value) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value))
+    } catch (error) {
+      console.warn('Failed to save state to localStorage:', error)
+    }
+  }
+
+  const loadStateFromStorage = (key, defaultValue) => {
+    try {
+      const saved = localStorage.getItem(key)
+      return saved ? JSON.parse(saved) : defaultValue
+    } catch (error) {
+      console.warn('Failed to load state from localStorage:', error)
+      return defaultValue
+    }
+  }
+
+  // Column customization state
+  const [columnDialogOpen, setColumnDialogOpen] = useState(false)
+  
+  // Predefined initial columns (common ones shown by default)
+  const DEFAULT_VISIBLE_COLUMNS = {
+    district: false,
+    assembly: false,
+    name: true,
+    priority: true,
+    status: true,
+    assignee: true,
+    approver: true,
+    start_date: true,
+    due_date: true,
+    progress: true
+  }
+  
+  const [visibleColumns, setVisibleColumns] = useState(() => 
+    loadStateFromStorage(STORAGE_KEYS.VISIBLE_COLUMNS, DEFAULT_VISIBLE_COLUMNS)
+  )
+
+  // Preferred column order (district and assembly available but hidden by default)
+  const PREFERRED_ORDER = ['name', 'priority', 'status', 'assignee', 'approver', 'start_date', 'due_date', 'progress', 'district', 'assembly']
+
+  const orderedFields = React.useMemo(() => {
+    const orderIndex = (name) => {
+      const idx = PREFERRED_ORDER.indexOf(name)
+      return idx === -1 ? Number.MAX_SAFE_INTEGER : idx
+    }
+    // Include all fields, district and assembly will be available for selection
+    return [...fieldMetadata]
+      .sort((a, b) => orderIndex(a.name) - orderIndex(b.name))
+  }, [fieldMetadata])
+
+  // Consistent date formatter: returns dd/mm/yyyy or '-'
+  const formatDate = React.useCallback((dateStr) => {
+    if (!dateStr) return '-'
+    try {
+      const d = new Date(dateStr)
+      if (Number.isNaN(d.getTime())) return '-'
+      // Use en-GB locale and UTC timezone to avoid TZ drift and ensure dd/mm/yyyy
+      return d.toLocaleDateString('en-GB', { timeZone: 'UTC' })
+    } catch {
+      return '-'
+    }
+  }, [])
 
   // Create tooltip content for projects and activities
   const createTooltipContent = (item, type = 'project') => {
@@ -335,15 +408,24 @@ function GanttChart({ user, projectId: propProjectId }) {
         ganttElement.removeEventListener('wheel', handleWheel)
       }
     }
-  }, [loading, projectTree]) // Re-attach after loading completes and tree is set
+  }, [loading, allProjects]) // Re-attach after loading completes and projects are set
 
+  // Load metadata on mount
   useEffect(() => {
     isMountedRef.current = true
-    if (projectId) {
-      loadProjectData()
-    }
+    // Clear old localStorage settings to force reset
+    localStorage.removeItem(STORAGE_KEYS.VISIBLE_COLUMNS)
+    loadFieldMetadata()
+
     return () => {
       isMountedRef.current = false
+    }
+  }, [])
+
+  // Load project data when projectId changes
+  useEffect(() => {
+    if (projectId) {
+      loadProjectData()
     }
   }, [projectId])
 
@@ -354,91 +436,106 @@ function GanttChart({ user, projectId: propProjectId }) {
       isLoadingProjectRef.current = true
       setLoading(true)
 
-      // First, load the single project details using sharedApiService
-      const projectResult = await sharedApiService.makeRequest(
-        `/api/projects/projects/${projectId}`,
-        {
-          headers: { Authorization: `Bearer ${tokenRef.current}` }
-        },
-        { 
-          projectId,
-          token: tokenRef.current?.substring(0, 10)
-        }
-      )
+      let projectsToShow = []
 
-      if (!isMountedRef.current) return
-      
-      if (!projectResult.success) {
-        throw new Error(projectResult.error || 'Failed to load project')
-      }
-
-      const projectData = projectResult.data
-      console.log('[GanttChart] Loaded project:', projectData)
-      setProject(projectData)
-
-      // Now load project tree (project + all children)
-      const params = new URLSearchParams({
-        root_id: projectId,
-        page: '1',
-        page_size: '1000' // Load all children
-      })
-
-      let tree = []
-      
-      const treeResult = await sharedApiService.makeRequest(
-        `/api/projects/projects/tree?${params.toString()}`,
-        {
-          headers: { Authorization: `Bearer ${tokenRef.current}` }
-        },
-        { 
-          root_id: projectId,
-          page: 1,
-          page_size: 1000,
-          token: tokenRef.current?.substring(0, 10)
-        }
-      )
-
-      if (!treeResult.success) {
-        console.warn('[GanttChart] Failed to load project tree, will show single project only')
-        tree = [projectData]
-      } else {
-        console.log('[GanttChart] Loaded tree:', treeResult.data)
-        tree = treeResult.data.tree || []
-        if (tree.length === 0) {
-          tree = [projectData]
-        }
-      }
-      
-      if (!isMountedRef.current) return
-      setProjectTree(tree)
-      
-      console.log('[GanttChart] Tree structure:', JSON.stringify(tree, null, 2))
-      
-      // Auto-expand ALL projects and their children recursively
-      const expandedState = {}
-      const flattenProjects = (nodes) => {
-        nodes.forEach(node => {
-          expandedState[node.id] = true // Always expand
-          console.log(`[GanttChart] Expanding project: ${node.name} (${node.id})`)
-          if (node.children && node.children.length > 0) {
-            console.log(`[GanttChart] Project ${node.name} has ${node.children.length} children`)
-            flattenProjects(node.children)
-          }
+      if (fromDistrictView) {
+        // Coming from ProjectStatusHome - load all projects for the district
+        console.log('[GanttChart] Loading all projects for district:', districtName)
+        
+        const params = new URLSearchParams({
+          page: '1',
+          page_size: '1000'
         })
+
+        const result = await sharedApiService.makeRequest(
+          `/api/projects/projects?${params.toString()}`,
+          {
+            headers: { Authorization: `Bearer ${tokenRef.current}` }
+          },
+          { 
+            page: 1,
+            page_size: 1000,
+            token: tokenRef.current?.substring(0, 10)
+          }
+        )
+
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to load projects')
+        }
+
+        const allProjectsData = result.data.projects || []
+        
+        // Filter projects by district - match the clicked district
+        const districtProjects = allProjectsData.filter(p => {
+          const projectDistrict = p.district || 'No District'
+          return projectDistrict === districtName
+        })
+
+        console.log('[GanttChart] Found', districtProjects.length, 'projects for district', districtName)
+        projectsToShow = districtProjects
+        
+        // Set the first project as the main project for display purposes
+        if (projectsToShow.length > 0) {
+          setProject({
+            name: `${districtName} - All Projects`,
+            district: districtName
+          })
+        }
+      } else {
+        // Coming from ProjectTreeView - load specific project only
+        console.log('[GanttChart] Loading specific project:', projectId)
+        
+        const projectResult = await sharedApiService.makeRequest(
+          `/api/projects/projects/${projectId}`,
+          {
+            headers: { Authorization: `Bearer ${tokenRef.current}` }
+          },
+          { 
+            projectId,
+            token: tokenRef.current?.substring(0, 10)
+          }
+        )
+
+        if (!isMountedRef.current) return
+        
+        if (!projectResult.success) {
+          throw new Error(projectResult.error || 'Failed to load project')
+        }
+
+        const projectData = projectResult.data
+        console.log('[GanttChart] Loaded project:', projectData)
+        setProject(projectData)
+        projectsToShow = [projectData]
       }
       
-      flattenProjects(tree)
-      console.log('[GanttChart] Expanded state:', expandedState)
-      setGanttExpanded(expandedState)
+      if (!isMountedRef.current) return
+      setAllProjects(projectsToShow)
+      
+      console.log('[GanttChart] Projects to show:', projectsToShow.length)
+      
+      // Auto-expand all groups and projects
+      const groupExpandState = {}
+      const projectExpandState = {}
+      
+      projectsToShow.forEach(proj => {
+        const district = proj.district || 'No District'
+        const assembly = proj.assembly || 'No Assembly'
+        const groupKey = `${district} - ${assembly}`
+        groupExpandState[groupKey] = true
+        projectExpandState[proj.id] = true
+      })
+      
+      setGroupExpanded(groupExpandState)
+      setProjectExpanded(projectExpandState)
 
       // Load activities for all projects
-      await loadActivitiesForAllProjects(tree)
+      await loadActivitiesForAllProjects(projectsToShow)
 
     } catch (error) {
       console.error('[GanttChart] Error:', error)
       if (isMountedRef.current) {
         showError(error.message || 'Failed to load project data')
-        setProject(null) // Ensure project is null to show error state
+        setProject(null)
       }
     } finally {
       isLoadingProjectRef.current = false
@@ -498,24 +595,12 @@ function GanttChart({ user, projectId: propProjectId }) {
     }
   }
 
-  // Load activities for all projects in the tree
-  const loadActivitiesForAllProjects = async (tree) => {
+  // Load activities for all projects in the list
+  const loadActivitiesForAllProjects = async (projectsList) => {
     const allActivities = {}
-    const allProjects = []
-
-    // Flatten tree to get all project IDs
-    const collectProjects = (nodes) => {
-      nodes.forEach(node => {
-        allProjects.push(node)
-        if (node.children && node.children.length > 0) {
-          collectProjects(node.children)
-        }
-      })
-    }
-    collectProjects(tree)
 
     // Load activities for each project using sharedApiService
-    for (const proj of allProjects) {
+    for (const proj of projectsList) {
       try {
         const params = new URLSearchParams({
           page: '1',
@@ -550,7 +635,7 @@ function GanttChart({ user, projectId: propProjectId }) {
       
       // Collect all activities for timeline calculation
       const allActivityList = Object.values(allActivities).flat()
-      calculateTimeline(allProjects, allActivityList)
+      calculateTimeline(projectsList, allActivityList)
     }
   }
 
@@ -591,11 +676,12 @@ function GanttChart({ user, projectId: propProjectId }) {
     const minDate = new Date(Math.min(...allDates))
     const maxDate = new Date(Math.max(...allDates))
     
+    // Use the actual min date as start - no buffer
     const start = new Date(minDate)
-    start.setDate(start.getDate() - 10)
     
     const end = new Date(maxDate)
-    end.setDate(end.getDate() + 10)
+    // Add small buffer at the end
+    end.setDate(end.getDate() + 7)
 
     setTimelineStart(start)
     setTimelineEnd(end)
@@ -634,25 +720,20 @@ function GanttChart({ user, projectId: propProjectId }) {
     current = new Date(start)
     current.setHours(0, 0, 0, 0)
     
-    // Adjust to start of week (Monday)
+    // Adjust to the Monday of the week containing the start date
     const dayOfWeek = current.getDay()
     const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
     current.setDate(current.getDate() + diff)
     
     // Ensure we include weeks that cover the entire timeline
     const endDate = new Date(end)
-    endDate.setDate(endDate.getDate() + 7) // Add buffer to ensure we cover the end
+    endDate.setDate(endDate.getDate() + 14) // Add 2 weeks buffer to ensure we cover the end
     
     while (current <= endDate) {
-      const weekEnd = new Date(current)
-      weekEnd.setDate(weekEnd.getDate() + 6)
+      weeks.push(new Date(current))
       
-      // Only include weeks that overlap with our timeline
-      if (weekEnd >= start) {
-        weeks.push(new Date(current))
-      }
-      
-      current = new Date(current.getFullYear(), current.getMonth(), current.getDate() + 7)
+      // Increment by 7 days properly
+      current.setDate(current.getDate() + 7)
     }
 
     setTimelineMonths(months)
@@ -708,49 +789,55 @@ function GanttChart({ user, projectId: propProjectId }) {
       widthPx = Math.max(unitWidth * 0.3, duration * unitWidth)
       
     } else if (viewMode === 'weekly') {
-      // Calculate position based on weeks array
+      // Calculate position based on time from timeline start
       const unitWidth = 80 * zoomLevel
-      
-      // Find which week the start and due dates fall into
-      let startWeekIndex = -1
-      
-      for (let i = 0; i < timelineWeeks.length; i++) {
-        const weekStart = timelineWeeks[i]
-        const weekEnd = new Date(weekStart)
-        weekEnd.setDate(weekEnd.getDate() + 6)
-        weekEnd.setHours(23, 59, 59, 999)
-        
-        if (start >= weekStart && start <= weekEnd) {
-          startWeekIndex = i
-          // Calculate fractional position within the week
-          const msPerDay = 1000 * 60 * 60 * 24
-          const normalizedStart = new Date(start)
-          normalizedStart.setHours(0, 0, 0, 0)
-          const normalizedWeekStart = new Date(weekStart)
-          normalizedWeekStart.setHours(0, 0, 0, 0)
-          const dayInWeek = Math.floor((normalizedStart - normalizedWeekStart) / msPerDay)
-          leftPx = (i * unitWidth) + ((dayInWeek / 7) * unitWidth) + 10 // Add 10px offset
-          break
-        }
-      }
-      
-      // If start is before first week or not found, position at beginning
-      if (startWeekIndex === -1) {
-        if (timelineWeeks.length > 0 && start < timelineWeeks[0]) {
-          leftPx = 10 // Add 10px offset
-        } else {
-          leftPx = (timelineWeeks.length - 1) * unitWidth + 10 // Add 10px offset
-        }
-      }
-      
-      // Calculate width
       const msPerDay = 1000 * 60 * 60 * 24
-      const normalizedStart = new Date(start)
-      normalizedStart.setHours(0, 0, 0, 0)
-      const normalizedDue = new Date(due)
-      normalizedDue.setHours(23, 59, 59, 999)
-      const totalDays = Math.max(1, Math.ceil((normalizedDue - normalizedStart) / msPerDay) + 1)
-      widthPx = Math.max(unitWidth * 0.6, (totalDays / 7) * unitWidth)
+      
+      // Get the first week start (this is our reference point)
+      if (timelineWeeks.length === 0) {
+        leftPx = 10
+        widthPx = unitWidth
+      } else {
+        const firstWeekStart = new Date(timelineWeeks[0])
+        firstWeekStart.setHours(0, 0, 0, 0)
+        
+        const normalizedStart = new Date(start)
+        normalizedStart.setHours(0, 0, 0, 0)
+        const normalizedDue = new Date(due)
+        normalizedDue.setHours(23, 59, 59, 999)
+        
+        // Find which week index the start date falls into
+        let weekIndex = 0
+        for (let i = 0; i < timelineWeeks.length; i++) {
+          const weekStart = new Date(timelineWeeks[i])
+          weekStart.setHours(0, 0, 0, 0)
+          const weekEnd = new Date(weekStart)
+          weekEnd.setDate(weekEnd.getDate() + 6)
+          weekEnd.setHours(23, 59, 59, 999)
+          
+          if (normalizedStart >= weekStart && normalizedStart <= weekEnd) {
+            weekIndex = i
+            // Calculate position within this week
+            const dayInWeek = (normalizedStart - weekStart) / msPerDay
+            leftPx = (weekIndex * unitWidth) + ((dayInWeek / 7) * unitWidth) + 10
+            break
+          } else if (normalizedStart < weekStart && i === 0) {
+            // Start is before first week
+            const daysBeforeFirst = (weekStart - normalizedStart) / msPerDay
+            leftPx = 10 - ((daysBeforeFirst / 7) * unitWidth)
+            break
+          } else if (i === timelineWeeks.length - 1 && normalizedStart > weekEnd) {
+            // Start is after last week
+            const daysAfterLast = (normalizedStart - weekEnd) / msPerDay
+            leftPx = ((i + 1) * unitWidth) + ((daysAfterLast / 7) * unitWidth) + 10
+            break
+          }
+        }
+        
+        // Calculate width based on duration
+        const totalDays = Math.ceil((normalizedDue - normalizedStart) / msPerDay) + 1
+        widthPx = Math.max(unitWidth * 0.6, (totalDays / 7) * unitWidth)
+      }
       
     } else if (viewMode === 'yearly') {
       // Calculate position based on years array
@@ -836,11 +923,198 @@ function GanttChart({ user, projectId: propProjectId }) {
     }
   }
 
-  const toggleGanttExpand = (projId) => {
-    setGanttExpanded(prev => ({
+  const toggleGroupExpand = (groupKey) => {
+    setGroupExpanded(prev => ({
+      ...prev,
+      [groupKey]: !prev[groupKey]
+    }))
+  }
+
+  const toggleProjectExpand = (projId) => {
+    setProjectExpanded(prev => ({
       ...prev,
       [projId]: !prev[projId]
     }))
+  }
+
+  // Column customization handlers
+  const handleColumnToggle = (columnKey) => {
+    setVisibleColumns(prev => ({
+      ...prev,
+      [columnKey]: !prev[columnKey]
+    }))
+  }
+
+  const handleOpenColumnDialog = () => {
+    setColumnDialogOpen(true)
+  }
+
+  const handleCloseColumnDialog = () => {
+    setColumnDialogOpen(false)
+  }
+
+  const handleResetColumns = () => {
+    setVisibleColumns(DEFAULT_VISIBLE_COLUMNS)
+  }
+
+  // Save visible columns to localStorage when they change
+  useEffect(() => {
+    saveStateToStorage(STORAGE_KEYS.VISIBLE_COLUMNS, visibleColumns)
+  }, [visibleColumns])
+
+  // Load field metadata from API - NO HARDCODING!
+  const loadFieldMetadata = React.useCallback(async () => {
+    if (!isMountedRef.current || isLoadingMetadataRef.current) return
+    
+    try {
+      isLoadingMetadataRef.current = true
+      
+      const result = await sharedApiService.makeRequest(
+        '/api/projects/projects/fields-metadata',
+        {
+          headers: { Authorization: `Bearer ${tokenRef.current}` }
+        },
+        { token: tokenRef.current?.substring(0, 10) }
+      )
+
+      if (!isMountedRef.current) return
+
+      if (result.success) {
+        setFieldMetadata(result.data.fields || [])
+      } else {
+        console.warn('Failed to load field metadata, using fallback')
+        // Provide fallback metadata so component doesn't break
+        setFieldMetadata([
+          { name: 'name', label: 'Project Name' },
+          { name: 'priority', label: 'Priority' },
+          { name: 'status', label: 'Status' },
+          { name: 'assignee', label: 'Assignee' },
+          { name: 'approver', label: 'Approver' },
+          { name: 'start_date', label: 'Start Date' },
+          { name: 'due_date', label: 'Due Date' },
+          { name: 'progress', label: 'Progress' },
+          { name: 'district', label: 'District' },
+          { name: 'assembly', label: 'Assembly' }
+        ])
+      }
+    } catch (error) {
+      console.error('Failed to load field metadata:', error)
+      if (isMountedRef.current) {
+        // Provide fallback metadata so component doesn't break
+        setFieldMetadata([
+          { name: 'name', label: 'Project Name' },
+          { name: 'priority', label: 'Priority' },
+          { name: 'status', label: 'Status' },
+          { name: 'assignee', label: 'Assignee' },
+          { name: 'approver', label: 'Approver' },
+          { name: 'start_date', label: 'Start Date' },
+          { name: 'due_date', label: 'Due Date' },
+          { name: 'progress', label: 'Progress' },
+          { name: 'district', label: 'District' },
+          { name: 'assembly', label: 'Assembly' }
+        ])
+      }
+    } finally {
+      isLoadingMetadataRef.current = false
+    }
+  }, [])
+
+  // Helper function to render cell content based on column type
+  const renderCellContent = (node, columnName, isActivity = false) => {
+    const value = node[columnName]
+    
+    if (columnName === 'district' || columnName === 'assembly') {
+      if (isActivity) {
+        // Activities should not show district/assembly values - always blank
+        return (
+          <Typography variant="body2" sx={{ color: 'text.disabled' }}>
+            -
+          </Typography>
+        )
+      }
+      return (
+        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+          {value || '-'}
+        </Typography>
+      )
+    }
+    
+    if (columnName === 'name') {
+      if (isActivity) {
+        return (
+          <Box sx={{ pl: 8 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ width: 24 }} />
+              <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+                {node.subject || node.name}
+              </Typography>
+            </Box>
+          </Box>
+        )
+      }
+      const statusColor = getStatusColor(node.status || 'New')
+      const safeStatusColor = theme.palette[statusColor] ? statusColor : 'primary'
+      return (
+        <Box sx={{ pl: 6, borderLeft: '3px solid', borderLeftColor: theme.palette[safeStatusColor].main }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {!isActivity && activitiesByProject[node.id] && activitiesByProject[node.id].length > 0 ? (
+              <IconButton
+                size="small"
+                onClick={() => toggleProjectExpand(node.id)}
+                sx={{ p: 0.5 }}
+              >
+                {projectExpanded[node.id] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              </IconButton>
+            ) : (
+              <Box sx={{ width: 24 }} />
+            )}
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              {value}
+            </Typography>
+          </Box>
+        </Box>
+      )
+    }
+    
+    if (columnName === 'status') {
+      const statusColorForChip = getStatusColor(node.status || 'New')
+      return (
+        <Chip
+          label={getStatusLabel(value)}
+          color={statusColorForChip}
+          size="small"
+          variant={isActivity ? "outlined" : "filled"}
+        />
+      )
+    }
+    
+    if (columnName === 'start_date') {
+      return formatDate(value)
+    }
+    
+    if (columnName === 'due_date') {
+      return (
+        <Typography variant="body2" sx={getDueDateStyle(value, node.status)}>
+          {formatDate(value)}
+        </Typography>
+      )
+    }
+    
+    if (columnName === 'progress') {
+      return `${value || 0}%`
+    }
+    
+    if (columnName === 'assignee') {
+      // Use assignee_name from API if available, otherwise fall back to email
+      return node.assignee_name || value || '-'
+    }
+    
+    if (columnName === 'approver') {
+      // Use approver_name from API if available, otherwise fall back to email
+      return node.approver_name || value || '-'
+    }
+    
+    return value || '-'
   }
 
   const getStatusColor = (status) => {
@@ -914,21 +1188,31 @@ function GanttChart({ user, projectId: propProjectId }) {
     return { color: 'inherit', fontWeight: 'normal' }
   }
 
-  const renderGanttProjectNode = (proj, level = 0) => {
+  // Group projects by District - Assembly
+  const groupedProjects = React.useMemo(() => {
+    const groups = {}
+    allProjects.forEach(project => {
+      const district = project.district || 'No District'
+      const assembly = project.assembly || 'No Assembly'
+      const groupKey = `${district} - ${assembly}`
+      
+      if (!groups[groupKey]) {
+        groups[groupKey] = []
+      }
+      groups[groupKey].push(project)
+    })
+    return groups
+  }, [allProjects])
+
+  const renderProjectRow = (proj) => {
     const hasActivities = activitiesByProject[proj.id] && activitiesByProject[proj.id].length > 0
-    const hasChildren = proj.children && proj.children.length > 0
-    const isExpanded = ganttExpanded[proj.id]
+    const isExpanded = projectExpanded[proj.id]
     
     // Safety check for project data
     if (!proj) {
-      console.warn(`[GanttChart] Project is null/undefined in renderGanttProjectNode`)
+      console.warn(`[GanttChart] Project is null/undefined in renderProjectRow`)
       return null
     }
-    
-    const statusColor = getStatusColor(proj.status || 'New')
-    const safeStatusColor = theme.palette[statusColor] ? statusColor : 'primary'
-
-    console.log(`[Render] Project: ${proj.name}, Level: ${level}, HasChildren: ${hasChildren}, Children Count: ${proj.children?.length || 0}, IsExpanded: ${isExpanded}`)
 
     return (
       <React.Fragment key={proj.id}>
@@ -936,50 +1220,16 @@ function GanttChart({ user, projectId: propProjectId }) {
           sx={{
             '&:hover': {
               bgcolor: 'action.hover'
-            },
-            bgcolor: level > 0 ? alpha('#000', 0.01 * level) : 'transparent'
+            }
           }}
         >
-          <TableCell sx={{ pl: 2 + level * 4, borderLeft: '3px solid', borderLeftColor: theme.palette[safeStatusColor].main }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              {hasActivities || hasChildren ? (
-                <IconButton
-                  size="small"
-                  onClick={() => toggleGanttExpand(proj.id)}
-                  sx={{ p: 0.5 }}
-                >
-                  {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                </IconButton>
-              ) : (
-                <Box sx={{ width: 24 }} />
-              )}
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                {proj.name}
-              </Typography>
-            </Box>
-          </TableCell>
-
-          <TableCell>
-            <Chip
-              label={getStatusLabel(proj.status)}
-              color={safeStatusColor}
-              size="small"
-            />
-          </TableCell>
-
-          <TableCell>{proj.assignee_name || proj.assignee || '-'}</TableCell>
-
-          <TableCell>{proj.approver_name || proj.approver || '-'}</TableCell>
-
-          <TableCell>
-            {formatDate(proj.start_date)}
-          </TableCell>
-
-          <TableCell sx={getDueDateStyle(proj.due_date, proj.status)}>
-            {formatDate(proj.due_date)}
-          </TableCell>
-
-          <TableCell>{proj.progress}%</TableCell>
+          {orderedFields.map((field) => (
+            visibleColumns[field.name] && (
+              <TableCell key={field.name}>
+                {renderCellContent(proj, field.name, false)}
+              </TableCell>
+            )
+          ))}
         </TableRow>
 
         {/* Render activities if expanded and has activities */}
@@ -1008,69 +1258,41 @@ function GanttChart({ user, projectId: propProjectId }) {
                   bgcolor: 'action.hover',
                   cursor: 'pointer'
                 },
-                bgcolor: alpha('#000', 0.02 + 0.01 * level)
+                bgcolor: alpha('#000', 0.02)
               }}
             >
-              <TableCell sx={{ pl: 6 + level * 4 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Box sx={{ width: 24 }} />
-                  <Typography variant="body2">{activity.subject}</Typography>
-                </Box>
-              </TableCell>
-              <TableCell>
-                <Chip
-                  label={activity.status || 'New'}
-                  color={safeActivityStatusColor}
-                  size="small"
-                  variant="outlined"
-                />
-              </TableCell>
-              <TableCell>{activity.assignee_name || activity.assignee || '-'}</TableCell>
-              <TableCell>{activity.approver_name || activity.approver || '-'}</TableCell>
-              <TableCell>
-                {formatDate(activity.start_date)}
-              </TableCell>
-              <TableCell sx={getDueDateStyle(activity.due_date, activity.status)}>
-                {formatDate(activity.due_date)}
-              </TableCell>
-              <TableCell>{activity.progress || 0}%</TableCell>
+              {orderedFields.map((field) => (
+                visibleColumns[field.name] && (
+                  <TableCell key={field.name}>
+                    {renderCellContent(activity, field.name, true)}
+                  </TableCell>
+                )
+              ))}
             </TableRow>
           )
         })}
-
-        {/* Render child projects if expanded and has children */}
-        {isExpanded && hasChildren && (
-          <>
-            {console.log(`[Render] Rendering ${proj.children.length} children for ${proj.name}`)}
-            {proj.children.map(child => renderGanttProjectNode(child, level + 1))}
-          </>
-        )}
       </React.Fragment>
     )
   }
 
-  const renderTimelineNode = (proj, level = 0) => {
+  const renderTimelineForProject = (proj) => {
     const hasActivities = activitiesByProject[proj.id] && activitiesByProject[proj.id].length > 0
-    const hasChildren = proj.children && proj.children.length > 0
-    const isExpanded = ganttExpanded[proj.id]
+    const isExpanded = projectExpanded[proj.id]
     
     // Safety check for project data
     if (!proj) {
-      console.warn(`[GanttChart] Project is null/undefined in renderTimelineNode`)
+      console.warn(`[GanttChart] Project is null/undefined in renderTimelineForProject`)
       return null
     }
     
     const statusColor = getStatusColor(proj.status || 'New')
     const safeStatusColor = theme.palette[statusColor] ? statusColor : 'primary'
 
-    console.log(`[Timeline Render] Project: ${proj.name}, Level: ${level}, HasChildren: ${hasChildren}, IsExpanded: ${isExpanded}`)
-
     return (
       <React.Fragment key={proj.id}>
         <Box sx={{ 
           height: 41, 
-          position: 'relative',
-          bgcolor: level > 0 ? alpha('#000', 0.01 * level) : 'transparent'
+          position: 'relative'
         }}>
           {proj.start_date && proj.due_date && (
             <Tooltip 
@@ -1097,7 +1319,7 @@ function GanttChart({ user, projectId: propProjectId }) {
                 transform: 'translateY(-50%)',
                 height: 20,
                 backgroundColor: theme.palette[safeStatusColor].main,
-                opacity: 0.85 - (level * 0.05),
+                opacity: 0.85,
                 borderRadius: 2,
                 cursor: 'pointer',
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -1135,7 +1357,7 @@ function GanttChart({ user, projectId: propProjectId }) {
             <Box key={`timeline-activity-${activity.id}`} sx={{ 
               height: 41, 
               position: 'relative',
-              bgcolor: alpha('#000', 0.02 + 0.01 * level)
+              bgcolor: alpha('#000', 0.02)
             }}>
               {activity.start_date && activity.due_date && (
                 <Tooltip 
@@ -1195,14 +1417,6 @@ function GanttChart({ user, projectId: propProjectId }) {
             </Box>
           )
         })}
-
-        {/* Render child project timelines if expanded and has children */}
-        {isExpanded && hasChildren && (
-          <>
-            {console.log(`[Timeline Render] Rendering ${proj.children.length} children timelines for ${proj.name}`)}
-            {proj.children.map(child => renderTimelineNode(child, level + 1))}
-          </>
-        )}
       </React.Fragment>
     )
   }
@@ -1278,11 +1492,33 @@ function GanttChart({ user, projectId: propProjectId }) {
               overflowWrap: 'break-word'
             }}
           >
-            Gantt Chart: {project.name}
+            Gantt Chart: {fromDistrictView ? `${districtName} District` : project.name}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Visual timeline of project and activities
+            {fromDistrictView 
+              ? `Visual timeline of all projects and activities in ${districtName} district`
+              : 'Visual timeline of project and activities'
+            }
           </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          <Tooltip title="Customize Columns">
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<Settings size={18} />}
+              onClick={handleOpenColumnDialog}
+              sx={{ 
+                textTransform: 'none',
+                fontWeight: 500,
+                minWidth: '100px',
+                borderColor: 'divider',
+                color: 'text.secondary'
+              }}
+            >
+              Columns
+            </Button>
+          </Tooltip>
         </Box>
       </Box>
 
@@ -1293,17 +1529,51 @@ function GanttChart({ user, projectId: propProjectId }) {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>District/Assembly</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Assignee</TableCell>
-                  <TableCell>Approver</TableCell>
-                  <TableCell>Start Date</TableCell>
-                  <TableCell>Due Date</TableCell>
-                  <TableCell>Progress</TableCell>
+                  {orderedFields.map((field) => (
+                    visibleColumns[field.name] && (
+                      <TableCell key={field.name}>
+                        {field.label}
+                      </TableCell>
+                    )
+                  ))}
                 </TableRow>
               </TableHead>
               <TableBody>
-                {projectTree.map(proj => renderGanttProjectNode(proj, 0))}
+                {Object.entries(groupedProjects).map(([groupKey, projects]) => {
+                  const isGroupExpanded = groupExpanded[groupKey]
+                  
+                  return (
+                    <React.Fragment key={groupKey}>
+                      {/* Group Header Row */}
+                      <TableRow
+                        sx={{
+                          bgcolor: alpha(theme.palette.primary.main, 0.08),
+                          '&:hover': {
+                            bgcolor: alpha(theme.palette.primary.main, 0.12)
+                          }
+                        }}
+                      >
+                        <TableCell colSpan={Object.values(visibleColumns).filter(Boolean).length} sx={{ py: 1 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <IconButton
+                              size="small"
+                              onClick={() => toggleGroupExpand(groupKey)}
+                              sx={{ p: 0.5 }}
+                            >
+                              {isGroupExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                            </IconButton>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                              {groupKey} ({projects.length} {projects.length === 1 ? 'project' : 'projects'})
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                      
+                      {/* Render projects in this group if expanded */}
+                      {isGroupExpanded && projects.map(proj => renderProjectRow(proj))}
+                    </React.Fragment>
+                  )
+                })}
               </TableBody>
             </Table>
           </TableContainer>
@@ -1496,10 +1766,10 @@ function GanttChart({ user, projectId: propProjectId }) {
                   width: `${zoomLevel * 100}%`
                 }}>
                   {timelineMonths.map((month, index) => {
+                    // Count weeks where the week START date is in this month
                     const weeksInMonth = timelineWeeks.filter(week => {
-                      const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0)
-                      return week.getMonth() === month.getMonth() || 
-                             (week <= monthEnd && week >= month)
+                      return week.getFullYear() === month.getFullYear() && 
+                             week.getMonth() === month.getMonth()
                     }).length
                     
                     if (weeksInMonth === 0) return null
@@ -1713,25 +1983,22 @@ function GanttChart({ user, projectId: propProjectId }) {
                   />
                 )
               })}
-              {viewMode === 'weekly' && timelineWeeks.map((week, index) => {
-                const isFirstOfMonth = week.getDate() <= 7
-                if (!isFirstOfMonth) return null
-                
-                return (
-                  <Box 
-                    key={index}
-                    sx={{
-                      position: 'absolute',
-                      left: `${index * 80 * zoomLevel}px`,
-                      top: 0,
-                      bottom: 0,
-                      width: '1px',
-                      backgroundColor: 'divider',
-                      opacity: 0.5
-                    }}
-                  />
-                )
-              })}
+              {viewMode === 'weekly' && timelineWeeks.map((week, index) => (
+                <Box 
+                  key={index}
+                  sx={{
+                    position: 'absolute',
+                    left: `${index * 80 * zoomLevel}px`,
+                    top: 0,
+                    bottom: 0,
+                    width: '1px',
+                    backgroundColor: week.getDate() <= 7 ? 'divider' : 'transparent',
+                    opacity: week.getDate() <= 7 ? 0.8 : 0.3,
+                    borderLeft: week.getDate() <= 7 ? 'none' : '1px dashed',
+                    borderColor: 'divider'
+                  }}
+                />
+              ))}
               {viewMode === 'monthly' && timelineMonths.map((month, index) => {
                 return (
                   <Box 
@@ -1766,11 +2033,48 @@ function GanttChart({ user, projectId: propProjectId }) {
               })}
             </Box>
             
-            {projectTree.map(proj => renderTimelineNode(proj, 0))}
+            {Object.entries(groupedProjects).map(([groupKey, projects]) => {
+              const isGroupExpanded = groupExpanded[groupKey]
+              
+              return (
+                <React.Fragment key={`timeline-${groupKey}`}>
+                  {/* Render project timelines in this group if expanded */}
+                  {isGroupExpanded && projects.map(proj => renderTimelineForProject(proj))}
+                </React.Fragment>
+              )
+            })}
           </Box>
         </Box>
         </CardContent>
       </Card>
+
+      {/* Column Customization Dialog */}
+      <Dialog open={columnDialogOpen} onClose={handleCloseColumnDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Customize Columns</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Select which columns to display in the table
+          </Typography>
+          <FormGroup>
+            {orderedFields.map((field) => (
+              <FormControlLabel
+                key={field.name}
+                control={
+                  <Checkbox
+                    checked={visibleColumns[field.name] || false}
+                    onChange={() => handleColumnToggle(field.name)}
+                  />
+                }
+                label={field.label || field.name}
+              />
+            ))}
+          </FormGroup>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleResetColumns} color="secondary">Reset to Default</Button>
+          <Button onClick={handleCloseColumnDialog}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </>
   )
 }

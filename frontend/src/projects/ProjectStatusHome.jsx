@@ -312,82 +312,50 @@ export default function ProjectStatusHome({ user }) {
       isLoadingRef.current = true
       setLoading(true)
 
-      // Use sharedApiService like ModelConfig
+      // Use NEW API endpoint that returns flat list grouped by district
       const result = await sharedApiService.makeRequest(
-        '/api/projects/projects/tree?root_id=root',
+        '/api/projects/projects/status-summary',
         {
           method: 'GET',
           headers: tokenRef.current ? { Authorization: `Bearer ${tokenRef.current}` } : {}
         },
-        { root_id: 'root', token: tokenRef.current?.substring(0, 10) }
+        { token: tokenRef.current?.substring(0, 10) }
       )
 
       if (!isMountedRef.current) return
 
       if (result.success) {
-        const tree = result.data.tree || []
-        setProjectTree(tree)
-
-        // Calculate summary from tree data (excluding district nodes themselves)
-        const allProjects = tree.reduce((acc, district) => {
-          if (district.children) {
-            return acc.concat(flattenTree(district.children))
-          }
-          return acc
-        }, [])
+        const data = result.data
         
-        // Debug: Log project statuses to verify calculations
-        const statusCounts = allProjects.reduce((acc, project) => {
-          acc[project.status] = (acc[project.status] || 0) + 1
-          return acc
-        }, {})
-        console.log('Project status breakdown:', statusCounts)
-        
-        const summaryData = {
-          total: allProjects.length,
-          onTrack: allProjects.filter(p => p.status === 'ON_TRACK').length,
-          atRisk: allProjects.filter(p => p.status === 'AT_RISK').length,
-          offTrack: allProjects.filter(p => p.status === 'OFF_TRACK').length,
-          onHold: allProjects.filter(p => p.status === 'ON_HOLD').length,
-          completed: allProjects.filter(p => p.status === 'COMPLETED').length
-        }
-        
-        // Debug: Verify totals add up
-        const calculatedTotal = summaryData.onTrack + summaryData.atRisk + summaryData.offTrack + summaryData.onHold + summaryData.completed
-        console.log('Summary totals - Total:', summaryData.total, 'Calculated:', calculatedTotal, 'Match:', summaryData.total === calculatedTotal)
-
-        setSummary(summaryData)
-
-        // Process first-level projects as districts
-        const districts = tree.map(district => {
-          // Get only children projects, not the district itself
-          const allChildren = district.children ? flattenTree(district.children) : []
-          const total = allChildren.length
-          const onTrack = allChildren.filter(p => p.status === 'ON_TRACK').length
-          const atRisk = allChildren.filter(p => p.status === 'AT_RISK').length
-          const offTrack = allChildren.filter(p => p.status === 'OFF_TRACK').length
-          const onHoldOnly = allChildren.filter(p => p.status === 'ON_HOLD').length
-          const completed = allChildren.filter(p => p.status === 'COMPLETED').length
-
-          return {
-            id: district.id,
-            name: district.name,
-            total,
-            onTrack,
-            atRisk,
-            offTrack,
-            onHoldOnly,
-            completed,
-            // Calculate percentages for trend display
-            onTrackPercent: total > 0 ? ((onTrack / total) * 100).toFixed(1) : '0',
-            atRiskPercent: total > 0 ? ((atRisk / total) * 100).toFixed(1) : '0',
-            offTrackPercent: total > 0 ? ((offTrack / total) * 100).toFixed(1) : '0',
-            onHoldPercent: total > 0 ? ((onHoldOnly / total) * 100).toFixed(1) : '0',
-            completedPercent: total > 0 ? ((completed / total) * 100).toFixed(1) : '0'
-          }
+        // Set summary data directly from API
+        setSummary({
+          total: data.summary?.total || 0,
+          onTrack: data.summary?.onTrack || 0,
+          atRisk: data.summary?.atRisk || 0,
+          offTrack: data.summary?.offTrack || 0,
+          onHold: data.summary?.onHold || 0,
+          completed: data.summary?.completed || 0
         })
 
+        // Set district data directly from API (already grouped and calculated)
+        const districts = (data.districts || []).map(district => ({
+          id: district.id,
+          name: district.name,
+          total: district.total,
+          onTrack: district.onTrack,
+          atRisk: district.atRisk,
+          offTrack: district.offTrack,
+          onHoldOnly: district.onHold,
+          completed: district.completed,
+          onTrackPercent: district.onTrackPercent,
+          atRiskPercent: district.atRiskPercent,
+          offTrackPercent: district.offTrackPercent,
+          onHoldPercent: district.onHoldPercent,
+          completedPercent: district.completedPercent
+        }))
+
         setDistrictData(districts)
+        setProjectTree(data.allProjects || [])
       } else {
         showError(result.error || 'Failed to load project data')
       }
@@ -428,24 +396,14 @@ export default function ProjectStatusHome({ user }) {
     }
   }, []); // EMPTY DEPENDENCIES - NO BULLSHIT
 
-  // Helper to flatten tree structure
-  const flattenTree = (tree) => {
-    let result = []
-    tree.forEach(node => {
-      result.push(node)
-      if (node.children && node.children.length > 0) {
-        result = result.concat(flattenTree(node.children))
-      }
-    })
-    return result
-  }
-
   const handleViewReport = (district) => {
-    // Navigate to Gantt chart page with the selected district project
+    // Navigate to Gantt chart page with the selected district
     navigate('/dashboard/projects/gantt', {
       state: {
-        projectId: district.id,
-        projectName: district.name
+        projectId: district.id, // Keep for compatibility but not used when fromDistrictView is true
+        projectName: district.name,
+        districtName: district.name, // The actual district name for filtering
+        fromDistrictView: true // Flag to indicate coming from district view
       }
     })
   }

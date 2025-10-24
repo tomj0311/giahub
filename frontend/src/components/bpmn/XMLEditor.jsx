@@ -563,12 +563,12 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
     }
   }, [xmlContent, elementType, selectedNode]);
 
-  // New useEffect to populate code editor with existing code when XML properties change
+  // New useEffect to populate code editor with existing code when XML properties change or dialog opens
   useEffect(() => {
     const taskType = selectedNode?.data?.taskType || elementType;
     
-    // Only populate if cgResponse is empty and we have existing code
-    if (!cgResponse) {
+    // Populate with existing code when dialog is open and we have existing code
+    if (isOpen) {
       if (taskType === 'userTask' && xmlProperties.userTask.formData.jsxCode) {
         // Set existing JSX code in the code editor for userTask
         console.log('🔄 Populating code editor with existing JSX code:', xmlProperties.userTask.formData.jsxCode);
@@ -579,15 +579,36 @@ ${xmlProperties.scriptTask.scriptCode || '// Script code will be generated here'
         setCgResponse(xmlProperties.scriptTask.scriptCode);
       }
     }
-  }, [xmlProperties.userTask.formData.jsxCode, xmlProperties.scriptTask.scriptCode, selectedNode, elementType]);
+  }, [isOpen, xmlProperties.userTask.formData.jsxCode, xmlProperties.scriptTask.scriptCode, selectedNode, elementType]);
 
-  // Clear code editor when dialog opens
+  // Clear code editor when dialog opens (but only clear prompt, not response if there's existing code)
   useEffect(() => {
     if (isOpen) {
-      setCgResponse('');
       setCgPrompt('');
+      // Only clear response if there's no existing code to show
+      const taskType = selectedNode?.data?.taskType || elementType;
+      const hasExistingCode = (taskType === 'userTask' && xmlProperties.userTask.formData.jsxCode) ||
+                             (taskType === 'scriptTask' && xmlProperties.scriptTask.scriptCode);
+      if (!hasExistingCode) {
+        setCgResponse('');
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, xmlProperties.userTask.formData.jsxCode, xmlProperties.scriptTask.scriptCode, selectedNode, elementType]);
+
+  // Set default accordion tab based on task type when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      const taskType = selectedNode?.data?.taskType || elementType;
+      
+      // For scriptTask, open Code Generator tab by default
+      if (taskType === 'scriptTask') {
+        setAccordionOpen(TAB_CODE_GENERATOR);
+      } else {
+        // For all other tasks, open XML Properties tab by default
+        setAccordionOpen(TAB_XML_PROPERTIES);
+      }
+    }
+  }, [isOpen, selectedNode, elementType]);
 
   const formatXML = (xml) => {
     if (!xml) return '';

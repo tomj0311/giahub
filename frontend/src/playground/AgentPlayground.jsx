@@ -1553,6 +1553,23 @@ export default function AgentPlayground({ user }) {
               handleEditBPMN={handleEditBPMN}
             />
           ))}
+          
+          {/* Show progress indicator while chat is in progress */}
+          {running && (
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 1.5, 
+              py: 2,
+              justifyContent: 'flex-start'
+            }}>
+              <CircularProgress size={20} thickness={4} />
+              <Typography variant="body2" sx={{ opacity: 0.7, fontStyle: 'italic' }}>
+                Agent is thinking...
+              </Typography>
+            </Box>
+          )}
+          
           {!autoScroll && !atBottom && messages.length > 0 && (
             <Box sx={{ position: 'sticky', bottom: 4, alignSelf: 'center' }}>
               <Tooltip title="Jump to latest" arrow placement="top" disableInteractive>

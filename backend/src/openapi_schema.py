@@ -610,6 +610,47 @@ def get_openapi_schema():
                     "responses": {"201": {"description": "Project created successfully"}}
                 }
             },
+            "/api/projects/status-summary": {
+                "get": {
+                    "tags": ["Projects"],
+                    "summary": "Get projects status summary",
+                    "description": "Get all projects as flat list grouped by district for status dashboard",
+                    "security": [{"BearerAuth": []}],
+                    "responses": {
+                        "200": {
+                            "description": "Projects status summary with district grouping",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "summary": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "total": {"type": "integer"},
+                                                    "onTrack": {"type": "integer"},
+                                                    "atRisk": {"type": "integer"},
+                                                    "offTrack": {"type": "integer"},
+                                                    "onHold": {"type": "integer"},
+                                                    "completed": {"type": "integer"}
+                                                }
+                                            },
+                                            "districts": {
+                                                "type": "array",
+                                                "items": {"type": "object"}
+                                            },
+                                            "allProjects": {
+                                                "type": "array",
+                                                "items": {"type": "object"}
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/projects/tree": {
                 "get": {
                     "tags": ["Projects"],

@@ -90,19 +90,25 @@ async def get_projects(
     page_size: int = Query(20, ge=1, le=1100, description="Items per page"),
     search: Optional[str] = Query(None, description="Search in name and description"),
     status: Optional[str] = Query(None, description="Filter by status"),
-    sort_by: str = Query("name", description="Sort field"),
+    filters: Optional[str] = Query(None, description="JSON-encoded filters array"),
+    sort_field: Optional[str] = Query(None, description="Field name to sort by"),
+    sort_by: str = Query("name", description="Sort field (legacy)"),
     sort_order: str = Query("asc", description="Sort order")
 ):
     """List projects with pagination and filtering"""
     try:
-        result = await ProjectService.get_projects(
+        # Use sort_field if provided, otherwise fall back to sort_by
+        actual_sort_field = sort_field or sort_by
+        
+        result = await ProjectService.get_projects_with_filters(
             user=user,
             parent_id=parent_id,
             page=page,
             page_size=page_size,
             search=search,
             status=status,
-            sort_by=sort_by,
+            filters=filters,
+            sort_field=actual_sort_field,
             sort_order=sort_order
         )
         return result
@@ -111,6 +117,21 @@ async def get_projects(
     except Exception as e:
         logger.error(f"Error fetching projects: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch projects")
+
+
+@router.get("/projects/status-summary")
+async def get_projects_status_summary(
+    user: dict = Depends(verify_token_middleware)
+):
+    """Get all projects flat list grouped by district for status dashboard"""
+    try:
+        result = await ProjectService.get_projects_status_summary(user)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching projects status summary: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch projects status summary")
 
 
 @router.get("/projects/tree")
