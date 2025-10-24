@@ -46,6 +46,7 @@ function GanttChart({ user, projectId: propProjectId }) {
   const isLoadingProjectRef = useRef(false)
   const isLoadingTreeRef = useRef(false)
   const isLoadingActivitiesRef = useRef(false)
+  const isLoadingMetadataRef = useRef(false)
 
   // Get project ID or district info from props or location state
   const projectId = propProjectId || location.state?.projectId
@@ -59,6 +60,7 @@ function GanttChart({ user, projectId: propProjectId }) {
   const [groupExpanded, setGroupExpanded] = useState({}) // Track group expansion
   const [projectExpanded, setProjectExpanded] = useState({}) // Track project expansion for activities
   const [loading, setLoading] = useState(true)
+  const [fieldMetadata, setFieldMetadata] = useState([]) // DYNAMIC - from API
   const [timelineStart, setTimelineStart] = useState(null)
   const [timelineEnd, setTimelineEnd] = useState(null)
   const [timelineMonths, setTimelineMonths] = useState([])
@@ -100,7 +102,10 @@ function GanttChart({ user, projectId: propProjectId }) {
   
   // Predefined initial columns (common ones shown by default)
   const DEFAULT_VISIBLE_COLUMNS = {
-    district_assembly: true,
+    district: false,
+    assembly: false,
+    name: true,
+    priority: true,
     status: true,
     assignee: true,
     approver: true,
@@ -113,26 +118,32 @@ function GanttChart({ user, projectId: propProjectId }) {
     loadStateFromStorage(STORAGE_KEYS.VISIBLE_COLUMNS, DEFAULT_VISIBLE_COLUMNS)
   )
 
-  // Available columns configuration
-  const AVAILABLE_COLUMNS = [
-    { key: 'district_assembly', label: 'District/Assembly' },
-    { key: 'status', label: 'Status' },
-    { key: 'assignee', label: 'Assignee' },
-    { key: 'approver', label: 'Approver' },
-    { key: 'start_date', label: 'Start Date' },
-    { key: 'due_date', label: 'Due Date' },
-    { key: 'progress', label: 'Progress' }
-  ]
+  // Preferred column order (excluding district and assembly)
+  const PREFERRED_ORDER = ['name', 'priority', 'status', 'assignee', 'approver', 'start_date', 'due_date', 'progress']
 
-  // Format date as dd/mm/yyyy
-  const formatDate = (dateStr) => {
+  const orderedFields = React.useMemo(() => {
+    const orderIndex = (name) => {
+      const idx = PREFERRED_ORDER.indexOf(name)
+      return idx === -1 ? Number.MAX_SAFE_INTEGER : idx
+    }
+    // Filter out district and assembly completely
+    return [...fieldMetadata]
+      .filter(field => field.name !== 'district' && field.name !== 'assembly')
+      .sort((a, b) => orderIndex(a.name) - orderIndex(b.name))
+  }, [fieldMetadata])
+
+  // Consistent date formatter: returns dd/mm/yyyy or '-'
+  const formatDate = React.useCallback((dateStr) => {
     if (!dateStr) return '-'
-    const date = new Date(dateStr)
-    const day = String(date.getDate()).padStart(2, '0')
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const year = date.getFullYear()
-    return `${day}/${month}/${year}`
-  }
+    try {
+      const d = new Date(dateStr)
+      if (Number.isNaN(d.getTime())) return '-'
+      // Use en-GB locale and UTC timezone to avoid TZ drift and ensure dd/mm/yyyy
+      return d.toLocaleDateString('en-GB', { timeZone: 'UTC' })
+    } catch {
+      return '-'
+    }
+  }, [])
 
   // Create tooltip content for projects and activities
   const createTooltipContent = (item, type = 'project') => {
@@ -400,13 +411,22 @@ function GanttChart({ user, projectId: propProjectId }) {
     }
   }, [loading, allProjects]) // Re-attach after loading completes and projects are set
 
+  // Load metadata on mount
   useEffect(() => {
     isMountedRef.current = true
-    if (projectId) {
-      loadProjectData()
-    }
+    // Clear old localStorage settings to force reset
+    localStorage.removeItem(STORAGE_KEYS.VISIBLE_COLUMNS)
+    loadFieldMetadata()
+
     return () => {
       isMountedRef.current = false
+    }
+  }, [])
+
+  // Load project data when projectId changes
+  useEffect(() => {
+    if (projectId) {
+      loadProjectData()
     }
   }, [projectId])
 
@@ -941,80 +961,163 @@ function GanttChart({ user, projectId: propProjectId }) {
     saveStateToStorage(STORAGE_KEYS.VISIBLE_COLUMNS, visibleColumns)
   }, [visibleColumns])
 
-  // Helper function to render cell content based on column type
-  const renderCellContent = (proj, columnKey, isActivity = false) => {
-    const value = proj[columnKey] || proj[columnKey.replace('_', '')] // Handle different naming conventions
+  // Load field metadata from API - NO HARDCODING!
+  const loadFieldMetadata = React.useCallback(async () => {
+    if (!isMountedRef.current || isLoadingMetadataRef.current) return
     
-    switch (columnKey) {
-      case 'district_assembly':
-        if (isActivity) {
-          return (
-            <Box sx={{ pl: 8 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Box sx={{ width: 24 }} />
-                <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
-                  {proj.subject || proj.name}
-                </Typography>
-              </Box>
-            </Box>
-          )
-        }
-        const statusColor = getStatusColor(proj.status || 'New')
-        const safeStatusColor = theme.palette[statusColor] ? statusColor : 'primary'
+    try {
+      isLoadingMetadataRef.current = true
+      
+      const result = await sharedApiService.makeRequest(
+        '/api/projects/projects/fields-metadata',
+        {
+          headers: { Authorization: `Bearer ${tokenRef.current}` }
+        },
+        { token: tokenRef.current?.substring(0, 10) }
+      )
+
+      if (!isMountedRef.current) return
+
+      if (result.success) {
+        setFieldMetadata(result.data.fields || [])
+      } else {
+        console.warn('Failed to load field metadata, using fallback')
+        // Provide fallback metadata so component doesn't break
+        setFieldMetadata([
+          { name: 'name', label: 'Project Name' },
+          { name: 'priority', label: 'Priority' },
+          { name: 'status', label: 'Status' },
+          { name: 'assignee', label: 'Assignee' },
+          { name: 'approver', label: 'Approver' },
+          { name: 'start_date', label: 'Start Date' },
+          { name: 'due_date', label: 'Due Date' },
+          { name: 'progress', label: 'Progress' },
+          { name: 'district', label: 'District' },
+          { name: 'assembly', label: 'Assembly' }
+        ])
+      }
+    } catch (error) {
+      console.error('Failed to load field metadata:', error)
+      if (isMountedRef.current) {
+        // Provide fallback metadata so component doesn't break
+        setFieldMetadata([
+          { name: 'name', label: 'Project Name' },
+          { name: 'priority', label: 'Priority' },
+          { name: 'status', label: 'Status' },
+          { name: 'assignee', label: 'Assignee' },
+          { name: 'approver', label: 'Approver' },
+          { name: 'start_date', label: 'Start Date' },
+          { name: 'due_date', label: 'Due Date' },
+          { name: 'progress', label: 'Progress' },
+          { name: 'district', label: 'District' },
+          { name: 'assembly', label: 'Assembly' }
+        ])
+      }
+    } finally {
+      isLoadingMetadataRef.current = false
+    }
+  }, [])
+
+  // Helper function to render cell content based on column type
+  const renderCellContent = (node, columnName, isActivity = false) => {
+    const value = node[columnName]
+    
+    if (columnName === 'district' || columnName === 'assembly') {
+      if (isActivity) {
         return (
-          <Box sx={{ pl: 6, borderLeft: '3px solid', borderLeftColor: theme.palette[safeStatusColor].main }}>
+          <Box sx={{ pl: 8 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              {!isActivity && activitiesByProject[proj.id] && activitiesByProject[proj.id].length > 0 ? (
-                <IconButton
-                  size="small"
-                  onClick={() => toggleProjectExpand(proj.id)}
-                  sx={{ p: 0.5 }}
-                >
-                  {projectExpanded[proj.id] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                </IconButton>
-              ) : (
-                <Box sx={{ width: 24 }} />
-              )}
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                {proj.name || `${proj.district} - ${proj.assembly}`}
+              <Box sx={{ width: 24 }} />
+              <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+                {node.subject || node.name}
               </Typography>
             </Box>
           </Box>
         )
-      
-      case 'status':
-        const statusColorForChip = getStatusColor(proj.status || 'New')
+      }
+      return (
+        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+          {value || '-'}
+        </Typography>
+      )
+    }
+    
+    if (columnName === 'name') {
+      if (isActivity) {
         return (
-          <Chip
-            label={getStatusLabel(proj.status)}
-            color={statusColorForChip}
-            size="small"
-            variant={isActivity ? "outlined" : "filled"}
-          />
-        )
-      
-      case 'assignee':
-        return proj.assignee_name || proj.assignee || '-'
-      
-      case 'approver':
-        return proj.approver_name || proj.approver || '-'
-      
-      case 'start_date':
-        return formatDate(proj.start_date)
-      
-      case 'due_date':
-        return (
-          <Box sx={getDueDateStyle(proj.due_date, proj.status)}>
-            {formatDate(proj.due_date)}
+          <Box sx={{ pl: 8 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ width: 24 }} />
+              <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+                {node.subject || node.name}
+              </Typography>
+            </Box>
           </Box>
         )
-      
-      case 'progress':
-        return `${proj.progress || 0}%`
-      
-      default:
-        return value || '-'
+      }
+      const statusColor = getStatusColor(node.status || 'New')
+      const safeStatusColor = theme.palette[statusColor] ? statusColor : 'primary'
+      return (
+        <Box sx={{ pl: 6, borderLeft: '3px solid', borderLeftColor: theme.palette[safeStatusColor].main }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {!isActivity && activitiesByProject[node.id] && activitiesByProject[node.id].length > 0 ? (
+              <IconButton
+                size="small"
+                onClick={() => toggleProjectExpand(node.id)}
+                sx={{ p: 0.5 }}
+              >
+                {projectExpanded[node.id] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              </IconButton>
+            ) : (
+              <Box sx={{ width: 24 }} />
+            )}
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              {value}
+            </Typography>
+          </Box>
+        </Box>
+      )
     }
+    
+    if (columnName === 'status') {
+      const statusColorForChip = getStatusColor(node.status || 'New')
+      return (
+        <Chip
+          label={getStatusLabel(value)}
+          color={statusColorForChip}
+          size="small"
+          variant={isActivity ? "outlined" : "filled"}
+        />
+      )
+    }
+    
+    if (columnName === 'start_date') {
+      return formatDate(value)
+    }
+    
+    if (columnName === 'due_date') {
+      return (
+        <Typography variant="body2" sx={getDueDateStyle(value, node.status)}>
+          {formatDate(value)}
+        </Typography>
+      )
+    }
+    
+    if (columnName === 'progress') {
+      return `${value || 0}%`
+    }
+    
+    if (columnName === 'assignee') {
+      // Use assignee_name from API if available, otherwise fall back to email
+      return node.assignee_name || value || '-'
+    }
+    
+    if (columnName === 'approver') {
+      // Use approver_name from API if available, otherwise fall back to email
+      return node.approver_name || value || '-'
+    }
+    
+    return value || '-'
   }
 
   const getStatusColor = (status) => {
@@ -1123,10 +1226,10 @@ function GanttChart({ user, projectId: propProjectId }) {
             }
           }}
         >
-          {AVAILABLE_COLUMNS.map((column) => (
-            visibleColumns[column.key] && (
-              <TableCell key={column.key}>
-                {renderCellContent(proj, column.key, false)}
+          {orderedFields.map((field) => (
+            visibleColumns[field.name] && (
+              <TableCell key={field.name}>
+                {renderCellContent(proj, field.name, false)}
               </TableCell>
             )
           ))}
@@ -1161,10 +1264,10 @@ function GanttChart({ user, projectId: propProjectId }) {
                 bgcolor: alpha('#000', 0.02)
               }}
             >
-              {AVAILABLE_COLUMNS.map((column) => (
-                visibleColumns[column.key] && (
-                  <TableCell key={column.key}>
-                    {renderCellContent(activity, column.key, true)}
+              {orderedFields.map((field) => (
+                visibleColumns[field.name] && (
+                  <TableCell key={field.name}>
+                    {renderCellContent(activity, field.name, true)}
                   </TableCell>
                 )
               ))}
@@ -1429,10 +1532,10 @@ function GanttChart({ user, projectId: propProjectId }) {
             <Table>
               <TableHead>
                 <TableRow>
-                  {AVAILABLE_COLUMNS.map((column) => (
-                    visibleColumns[column.key] && (
-                      <TableCell key={column.key}>
-                        {column.label}
+                  {orderedFields.map((field) => (
+                    visibleColumns[field.name] && (
+                      <TableCell key={field.name}>
+                        {field.label}
                       </TableCell>
                     )
                   ))}
@@ -1959,16 +2062,16 @@ function GanttChart({ user, projectId: propProjectId }) {
             Select which columns to display in the table
           </Typography>
           <FormGroup>
-            {AVAILABLE_COLUMNS.map((column) => (
+            {orderedFields.map((field) => (
               <FormControlLabel
-                key={column.key}
+                key={field.name}
                 control={
                   <Checkbox
-                    checked={visibleColumns[column.key] || false}
-                    onChange={() => handleColumnToggle(column.key)}
+                    checked={visibleColumns[field.name] || false}
+                    onChange={() => handleColumnToggle(field.name)}
                   />
                 }
-                label={column.label}
+                label={field.label || field.name}
               />
             ))}
           </FormGroup>
