@@ -187,13 +187,20 @@ function ProjectPlanning({ user, projectId }) {
       if (!isMountedRef.current) return
 
       if (result.success) {
-        setFieldMetadata(result.data.fields || [])
+        // Customize the project_id field label to show "Project Name"
+        const fields = (result.data.fields || []).map(field => {
+          if (field.name === 'project_id') {
+            return { ...field, label: 'Project Name' }
+          }
+          return field
+        })
+        setFieldMetadata(fields)
         
         // Update visible columns to include any new fields from backend that aren't in the predefined list
         // This ensures all backend fields are available, but keeps the predefined initial visibility
         setVisibleColumns(prev => {
           const updated = { ...prev }
-          result.data.fields?.forEach(field => {
+          fields?.forEach(field => {
             // If field is not in predefined list, set it to false (hidden by default)
             if (!(field.name in updated)) {
               updated[field.name] = false
@@ -552,6 +559,29 @@ function ProjectPlanning({ user, projectId }) {
     return labels[operator] || operator
   }
 
+  // Get display value for filter (show project name instead of ID)
+  const getFilterDisplayValue = (filter) => {
+    if (filter.field === 'project_id') {
+      if (Array.isArray(filter.value)) {
+        // Handle 'in' or 'between' operators with arrays
+        return filter.value.map(val => {
+          const project = projects.find(p => p.id === val)
+          return project ? project.name : val
+        }).join(', ')
+      } else {
+        // Handle single value
+        const project = projects.find(p => p.id === filter.value)
+        return project ? project.name : filter.value
+      }
+    }
+    
+    // For non-project fields, return the value as-is
+    if (Array.isArray(filter.value)) {
+      return filter.value.join(', ')
+    }
+    return filter.value
+  }
+
   // Render filter value input based on type
   const renderFilterValueInput = () => {
     const fieldDef = getFieldDef(currentFilter.field)
@@ -606,6 +636,42 @@ function ProjectPlanning({ user, projectId }) {
           />
         </Box>
       )
+    }
+
+    // Special handling for project_id field - show project names but use IDs as values
+    if (currentFilter.field === 'project_id') {
+      if (operator === 'in') {
+        return (
+          <FormControl fullWidth>
+            <InputLabel>Projects</InputLabel>
+            <Select
+              multiple
+              value={Array.isArray(currentFilter.value) ? currentFilter.value : (currentFilter.value ? [currentFilter.value] : [])}
+              label="Projects"
+              onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
+            >
+              {projects.map(project => (
+                <MenuItem key={project.id} value={project.id}>{project.name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )
+      } else {
+        return (
+          <FormControl fullWidth>
+            <InputLabel>Project</InputLabel>
+            <Select
+              value={currentFilter.value ?? ''}
+              label="Project"
+              onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
+            >
+              {projects.map(project => (
+                <MenuItem key={project.id} value={project.id}>{project.name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )
+      }
     }
 
     // "In" operator for select fields
@@ -944,7 +1010,7 @@ function ProjectPlanning({ user, projectId }) {
               {filters.map((filter, index) => (
                 <Chip
                   key={index}
-                  label={`${getFieldDef(filter.field)?.label || filter.field}: ${getOperatorLabel(filter.operator)} ${filter.value}`}
+                  label={`${getFieldDef(filter.field)?.label || filter.field}: ${getOperatorLabel(filter.operator)} ${getFilterDisplayValue(filter)}`}
                   onDelete={() => handleRemoveFilter(index)}
                   size="small"
                   color="primary"
