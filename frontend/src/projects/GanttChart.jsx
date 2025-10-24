@@ -676,11 +676,12 @@ function GanttChart({ user, projectId: propProjectId }) {
     const minDate = new Date(Math.min(...allDates))
     const maxDate = new Date(Math.max(...allDates))
     
+    // Use the actual min date as start - no buffer
     const start = new Date(minDate)
-    start.setDate(start.getDate() - 10)
     
     const end = new Date(maxDate)
-    end.setDate(end.getDate() + 10)
+    // Add small buffer at the end
+    end.setDate(end.getDate() + 7)
 
     setTimelineStart(start)
     setTimelineEnd(end)
@@ -719,25 +720,20 @@ function GanttChart({ user, projectId: propProjectId }) {
     current = new Date(start)
     current.setHours(0, 0, 0, 0)
     
-    // Adjust to start of week (Monday)
+    // Adjust to the Monday of the week containing the start date
     const dayOfWeek = current.getDay()
     const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
     current.setDate(current.getDate() + diff)
     
     // Ensure we include weeks that cover the entire timeline
     const endDate = new Date(end)
-    endDate.setDate(endDate.getDate() + 7) // Add buffer to ensure we cover the end
+    endDate.setDate(endDate.getDate() + 14) // Add 2 weeks buffer to ensure we cover the end
     
     while (current <= endDate) {
-      const weekEnd = new Date(current)
-      weekEnd.setDate(weekEnd.getDate() + 6)
+      weeks.push(new Date(current))
       
-      // Only include weeks that overlap with our timeline
-      if (weekEnd >= start) {
-        weeks.push(new Date(current))
-      }
-      
-      current = new Date(current.getFullYear(), current.getMonth(), current.getDate() + 7)
+      // Increment by 7 days properly
+      current.setDate(current.getDate() + 7)
     }
 
     setTimelineMonths(months)
@@ -793,49 +789,55 @@ function GanttChart({ user, projectId: propProjectId }) {
       widthPx = Math.max(unitWidth * 0.3, duration * unitWidth)
       
     } else if (viewMode === 'weekly') {
-      // Calculate position based on weeks array
+      // Calculate position based on time from timeline start
       const unitWidth = 80 * zoomLevel
-      
-      // Find which week the start and due dates fall into
-      let startWeekIndex = -1
-      
-      for (let i = 0; i < timelineWeeks.length; i++) {
-        const weekStart = timelineWeeks[i]
-        const weekEnd = new Date(weekStart)
-        weekEnd.setDate(weekEnd.getDate() + 6)
-        weekEnd.setHours(23, 59, 59, 999)
-        
-        if (start >= weekStart && start <= weekEnd) {
-          startWeekIndex = i
-          // Calculate fractional position within the week
-          const msPerDay = 1000 * 60 * 60 * 24
-          const normalizedStart = new Date(start)
-          normalizedStart.setHours(0, 0, 0, 0)
-          const normalizedWeekStart = new Date(weekStart)
-          normalizedWeekStart.setHours(0, 0, 0, 0)
-          const dayInWeek = Math.floor((normalizedStart - normalizedWeekStart) / msPerDay)
-          leftPx = (i * unitWidth) + ((dayInWeek / 7) * unitWidth) + 10 // Add 10px offset
-          break
-        }
-      }
-      
-      // If start is before first week or not found, position at beginning
-      if (startWeekIndex === -1) {
-        if (timelineWeeks.length > 0 && start < timelineWeeks[0]) {
-          leftPx = 10 // Add 10px offset
-        } else {
-          leftPx = (timelineWeeks.length - 1) * unitWidth + 10 // Add 10px offset
-        }
-      }
-      
-      // Calculate width
       const msPerDay = 1000 * 60 * 60 * 24
-      const normalizedStart = new Date(start)
-      normalizedStart.setHours(0, 0, 0, 0)
-      const normalizedDue = new Date(due)
-      normalizedDue.setHours(23, 59, 59, 999)
-      const totalDays = Math.max(1, Math.ceil((normalizedDue - normalizedStart) / msPerDay) + 1)
-      widthPx = Math.max(unitWidth * 0.6, (totalDays / 7) * unitWidth)
+      
+      // Get the first week start (this is our reference point)
+      if (timelineWeeks.length === 0) {
+        leftPx = 10
+        widthPx = unitWidth
+      } else {
+        const firstWeekStart = new Date(timelineWeeks[0])
+        firstWeekStart.setHours(0, 0, 0, 0)
+        
+        const normalizedStart = new Date(start)
+        normalizedStart.setHours(0, 0, 0, 0)
+        const normalizedDue = new Date(due)
+        normalizedDue.setHours(23, 59, 59, 999)
+        
+        // Find which week index the start date falls into
+        let weekIndex = 0
+        for (let i = 0; i < timelineWeeks.length; i++) {
+          const weekStart = new Date(timelineWeeks[i])
+          weekStart.setHours(0, 0, 0, 0)
+          const weekEnd = new Date(weekStart)
+          weekEnd.setDate(weekEnd.getDate() + 6)
+          weekEnd.setHours(23, 59, 59, 999)
+          
+          if (normalizedStart >= weekStart && normalizedStart <= weekEnd) {
+            weekIndex = i
+            // Calculate position within this week
+            const dayInWeek = (normalizedStart - weekStart) / msPerDay
+            leftPx = (weekIndex * unitWidth) + ((dayInWeek / 7) * unitWidth) + 10
+            break
+          } else if (normalizedStart < weekStart && i === 0) {
+            // Start is before first week
+            const daysBeforeFirst = (weekStart - normalizedStart) / msPerDay
+            leftPx = 10 - ((daysBeforeFirst / 7) * unitWidth)
+            break
+          } else if (i === timelineWeeks.length - 1 && normalizedStart > weekEnd) {
+            // Start is after last week
+            const daysAfterLast = (normalizedStart - weekEnd) / msPerDay
+            leftPx = ((i + 1) * unitWidth) + ((daysAfterLast / 7) * unitWidth) + 10
+            break
+          }
+        }
+        
+        // Calculate width based on duration
+        const totalDays = Math.ceil((normalizedDue - normalizedStart) / msPerDay) + 1
+        widthPx = Math.max(unitWidth * 0.6, (totalDays / 7) * unitWidth)
+      }
       
     } else if (viewMode === 'yearly') {
       // Calculate position based on years array
@@ -1764,10 +1766,10 @@ function GanttChart({ user, projectId: propProjectId }) {
                   width: `${zoomLevel * 100}%`
                 }}>
                   {timelineMonths.map((month, index) => {
+                    // Count weeks where the week START date is in this month
                     const weeksInMonth = timelineWeeks.filter(week => {
-                      const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0)
-                      return week.getMonth() === month.getMonth() || 
-                             (week <= monthEnd && week >= month)
+                      return week.getFullYear() === month.getFullYear() && 
+                             week.getMonth() === month.getMonth()
                     }).length
                     
                     if (weeksInMonth === 0) return null
@@ -1981,25 +1983,22 @@ function GanttChart({ user, projectId: propProjectId }) {
                   />
                 )
               })}
-              {viewMode === 'weekly' && timelineWeeks.map((week, index) => {
-                const isFirstOfMonth = week.getDate() <= 7
-                if (!isFirstOfMonth) return null
-                
-                return (
-                  <Box 
-                    key={index}
-                    sx={{
-                      position: 'absolute',
-                      left: `${index * 80 * zoomLevel}px`,
-                      top: 0,
-                      bottom: 0,
-                      width: '1px',
-                      backgroundColor: 'divider',
-                      opacity: 0.5
-                    }}
-                  />
-                )
-              })}
+              {viewMode === 'weekly' && timelineWeeks.map((week, index) => (
+                <Box 
+                  key={index}
+                  sx={{
+                    position: 'absolute',
+                    left: `${index * 80 * zoomLevel}px`,
+                    top: 0,
+                    bottom: 0,
+                    width: '1px',
+                    backgroundColor: week.getDate() <= 7 ? 'divider' : 'transparent',
+                    opacity: week.getDate() <= 7 ? 0.8 : 0.3,
+                    borderLeft: week.getDate() <= 7 ? 'none' : '1px dashed',
+                    borderColor: 'divider'
+                  }}
+                />
+              ))}
               {viewMode === 'monthly' && timelineMonths.map((month, index) => {
                 return (
                   <Box 
