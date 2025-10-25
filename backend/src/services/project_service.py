@@ -756,10 +756,10 @@ class ProjectService:
         
         # Calculate summary statistics
         total = len(projects_list)
-        on_track = len([p for p in projects_list if p.get("status") == "ON_TRACK"])
+        in_progress = len([p for p in projects_list if p.get("status") == "IN_PROGRESS"])
         at_risk = len([p for p in projects_list if p.get("status") == "AT_RISK"])
         off_track = len([p for p in projects_list if p.get("status") == "OFF_TRACK"])
-        on_hold = len([p for p in projects_list if p.get("status") == "ON_HOLD"])
+        planning = len([p for p in projects_list if p.get("status") == "PLANNING"])
         completed = len([p for p in projects_list if p.get("status") == "COMPLETED"])
         
         # Group by district
@@ -780,35 +780,35 @@ class ProjectService:
         for district_name, group in district_groups.items():
             projects = group["projects"]
             district_total = len(projects)
-            district_on_track = len([p for p in projects if p.get("status") == "ON_TRACK"])
+            district_in_progress = len([p for p in projects if p.get("status") == "IN_PROGRESS"])
             district_at_risk = len([p for p in projects if p.get("status") == "AT_RISK"])
             district_off_track = len([p for p in projects if p.get("status") == "OFF_TRACK"])
-            district_on_hold = len([p for p in projects if p.get("status") == "ON_HOLD"])
+            district_planning = len([p for p in projects if p.get("status") == "PLANNING"])
             district_completed = len([p for p in projects if p.get("status") == "COMPLETED"])
             
             districts.append({
                 "id": group["id"],
                 "name": district_name,
                 "total": district_total,
-                "onTrack": district_on_track,
+                "inProgress": district_in_progress,
                 "atRisk": district_at_risk,
                 "offTrack": district_off_track,
-                "onHold": district_on_hold,
+                "planning": district_planning,
                 "completed": district_completed,
-                "onTrackPercent": round((district_on_track / district_total) * 100) if district_total > 0 else 0,
+                "inProgressPercent": round((district_in_progress / district_total) * 100) if district_total > 0 else 0,
                 "atRiskPercent": round((district_at_risk / district_total) * 100) if district_total > 0 else 0,
                 "offTrackPercent": round((district_off_track / district_total) * 100) if district_total > 0 else 0,
-                "onHoldPercent": round((district_on_hold / district_total) * 100) if district_total > 0 else 0,
+                "planningPercent": round((district_planning / district_total) * 100) if district_total > 0 else 0,
                 "completedPercent": round((district_completed / district_total) * 100) if district_total > 0 else 0
             })
         
         return {
             "summary": {
                 "total": total,
-                "onTrack": on_track,
+                "inProgress": in_progress,
                 "atRisk": at_risk,
                 "offTrack": off_track,
-                "onHold": on_hold,
+                "planning": planning,
                 "completed": completed
             },
             "districts": districts,

@@ -414,9 +414,10 @@ function ProjectDashboard({ user }) {
 
   const getStatusColor = (status) => {
     const colors = {
-      ON_TRACK: 'success',
+      IN_PROGRESS: 'success',
       AT_RISK: 'warning',
       OFF_TRACK: 'error',
+      PLANNING: 'secondary',
       COMPLETED: 'info',
       // Activity statuses
       'New': 'info',
@@ -430,9 +431,10 @@ function ProjectDashboard({ user }) {
 
   const getStatusLabel = (status) => {
     const labels = {
-      ON_TRACK: 'On Track',
+      IN_PROGRESS: 'In Progress',
       AT_RISK: 'At Risk',
       OFF_TRACK: 'Off Track',
+      PLANNING: 'Planning',
       COMPLETED: 'Completed'
     }
     return labels[status] || status

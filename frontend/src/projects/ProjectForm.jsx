@@ -26,7 +26,7 @@ import { ArrowLeft, Save, ChevronDown } from 'lucide-react'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import { apiCall } from '../config/api'
 
-const STATUS_OPTIONS = ['IN_PROGRESS', 'AT_RISK', 'OFF_TRACK', 'ON_HOLD', 'COMPLETED']
+const STATUS_OPTIONS = ['IN_PROGRESS', 'AT_RISK', 'OFF_TRACK', 'PLANNING', 'COMPLETED']
 const PRIORITY_OPTIONS = ['Low', 'Normal', 'High', 'Urgent']
 
 function ProjectForm({ user }) {

@@ -159,7 +159,7 @@ export default function ProjectStatusHome({ user }) {
     inProgress: 0,
     atRisk: 0,
     offTrack: 0,
-    onHold: 0,
+    planning: 0,
     completed: 0
   })
   const [districtData, setDistrictData] = useState([])
@@ -333,7 +333,7 @@ export default function ProjectStatusHome({ user }) {
           inProgress: data.summary?.inProgress || 0,
           atRisk: data.summary?.atRisk || 0,
           offTrack: data.summary?.offTrack || 0,
-          onHold: data.summary?.onHold || 0,
+          planning: data.summary?.planning || 0,
           completed: data.summary?.completed || 0
         })
 
@@ -345,12 +345,12 @@ export default function ProjectStatusHome({ user }) {
           inProgress: district.inProgress,
           atRisk: district.atRisk,
           offTrack: district.offTrack,
-          onHoldOnly: district.onHold,
+          planningOnly: district.planning,
           completed: district.completed,
           inProgressPercent: district.inProgressPercent,
           atRiskPercent: district.atRiskPercent,
           offTrackPercent: district.offTrackPercent,
-          onHoldPercent: district.onHoldPercent,
+          planningPercent: district.planningPercent,
           completedPercent: district.completedPercent
         }))
 
@@ -488,8 +488,8 @@ export default function ProjectStatusHome({ user }) {
         </Grid>
         <Grid item xs={12} sm={6} md={2}>
           <SummaryCard
-            title="On Hold"
-            value={summary.onHold}
+            title="Planning"
+            value={summary.planning}
             subtitle="+2.46%"
             icon={PauseCircle}
             gradient="linear-gradient(135deg, #AB47BC 0%, #9C27B0 100%)"
@@ -612,11 +612,11 @@ export default function ProjectStatusHome({ user }) {
                     </Box>
                   </TableCell>
                   <TableCell align="center" sx={{ fontWeight: 'bold' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', justifyContent: 'center' }} onClick={() => handleSort('onHoldOnly')}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', justifyContent: 'center' }} onClick={() => handleSort('planningOnly')}>
                       <Typography variant="body2" color="text.secondary">
-                        On Hold
+                        Planning
                       </Typography>
-                      {sortField === 'onHoldOnly' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                      {sortField === 'planningOnly' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
                     </Box>
                   </TableCell>
                   <TableCell align="center" sx={{ fontWeight: 'bold' }}>
@@ -737,11 +737,11 @@ export default function ProjectStatusHome({ user }) {
                       <TableCell align="center">
                         <Box>
                           <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                            {district.onHoldOnly}
+                            {district.planningOnly}
                           </Typography>
                           {district.total > 0 && (
                             <Chip
-                              label={`${district.onHoldPercent}%`}
+                              label={`${district.planningPercent}%`}
                               size="small"
                               sx={{
                                 mt: 0.5,
@@ -821,7 +821,7 @@ export default function ProjectStatusHome({ user }) {
           { key: 'inProgress', label: 'In Progress' },
           { key: 'atRisk', label: 'At Risk' },
           { key: 'offTrack', label: 'Off Track' },
-          { key: 'onHoldOnly', label: 'On Hold' },
+          { key: 'planningOnly', label: 'Planning' },
           { key: 'completed', label: 'Completed' }
         ].map((field) => (
           <MenuItem
@@ -885,7 +885,7 @@ export default function ProjectStatusHome({ user }) {
                 <MenuItem value="inProgress">In Progress</MenuItem>
                 <MenuItem value="atRisk">At Risk</MenuItem>
                 <MenuItem value="offTrack">Off Track</MenuItem>
-                <MenuItem value="onHoldOnly">On Hold</MenuItem>
+                <MenuItem value="planningOnly">Planning</MenuItem>
                 <MenuItem value="completed">Completed</MenuItem>
               </Select>
             </FormControl>

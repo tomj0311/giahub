@@ -57,7 +57,7 @@ import { useConfirmation } from '../contexts/ConfirmationContext'
 import { apiCall } from '../config/api'
 import sharedApiService from '../utils/apiService'
 
-const STATUS_OPTIONS = ['ON_TRACK', 'AT_RISK', 'OFF_TRACK', 'ON_HOLD', 'COMPLETED']
+const STATUS_OPTIONS = ['IN_PROGRESS', 'AT_RISK', 'OFF_TRACK', 'PLANNING', 'COMPLETED']
 const PRIORITY_OPTIONS = ['Low', 'Normal', 'High', 'Urgent']
 
 // localStorage keys for state persistence
@@ -543,19 +543,21 @@ function ProjectTreeView({ user }) {
 
   const getStatusColor = (status) => {
     const colors = {
-      ON_TRACK: 'success',
+      IN_PROGRESS: 'primary',
       AT_RISK: 'warning',
       OFF_TRACK: 'error',
-      COMPLETED: 'info'
+      PLANNING: 'secondary',
+      COMPLETED: 'success'
     }
     return colors[status] || 'default'
   }
 
   const getStatusLabel = (status) => {
     const labels = {
-      ON_TRACK: 'On Track',
+      IN_PROGRESS: 'In Progress',
       AT_RISK: 'At Risk',
       OFF_TRACK: 'Off Track',
+      PLANNING: 'Planning',
       COMPLETED: 'Completed'
     }
     return labels[status] || status
