@@ -270,15 +270,63 @@ class ProjectActivityService:
             
             sort_direction = 1 if sort_order == "asc" else -1
             
-            activities_list = await MongoStorageService.find_many(
-                "projectActivities", 
-                filter_query, 
-                tenant_id=tenant_id,
-                skip=skip,
-                limit=page_size,
-                sort_field=sort_by,
-                sort_order=sort_direction
-            )
+            # Special handling for sorting by project_id - sort by project name instead
+            if sort_by == "project_id":
+                # Use aggregation pipeline to lookup project name and sort by it
+                from bson import ObjectId
+                from ..db import get_db
+                
+                pipeline = [
+                    {"$match": filter_query},
+                    {
+                        "$addFields": {
+                            "project_oid": {
+                                "$cond": {
+                                    "if": {"$regexMatch": {"input": "$project_id", "regex": "^[0-9a-fA-F]{24}$"}},
+                                    "then": {"$toObjectId": "$project_id"},
+                                    "else": None
+                                }
+                            }
+                        }
+                    },
+                    {
+                        "$lookup": {
+                            "from": "projects",
+                            "localField": "project_oid",
+                            "foreignField": "_id",
+                            "as": "project_info"
+                        }
+                    },
+                    {
+                        "$addFields": {
+                            "project_name": {
+                                "$ifNull": [
+                                    {"$arrayElemAt": ["$project_info.name", 0]},
+                                    ""
+                                ]
+                            }
+                        }
+                    },
+                    {"$sort": {"project_name": sort_direction}},
+                    {"$skip": skip},
+                    {"$limit": page_size},
+                    {"$project": {"project_info": 0, "project_oid": 0, "project_name": 0}}
+                ]
+                
+                # Get the MongoDB collection directly for aggregation
+                db = get_db()
+                collection = db["projectActivities"]
+                activities_list = await collection.aggregate(pipeline).to_list(page_size)
+            else:
+                activities_list = await MongoStorageService.find_many(
+                    "projectActivities", 
+                    filter_query, 
+                    tenant_id=tenant_id,
+                    skip=skip,
+                    limit=page_size,
+                    sort_field=sort_by,
+                    sort_order=sort_direction
+                )
             
             activities = []
             for activity in activities_list:
