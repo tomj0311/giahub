@@ -459,21 +459,25 @@ const AIAssistant = ({ user }) => {
               
               processedTasksRef.current.add(taskId); // Mark as processed
               
-              // Determine content to display
-              let content = taskData.result || taskData.output || 'Task completed';
+              // Determine content to display - only show if there's actual content
+              let content = taskData.result || taskData.output || null;
               
-              const taskMessage = {
-                id: Date.now() + Math.random(),
-                type: 'bot',
-                content: content,
-                timestamp: new Date(),
-                taskId: taskId,
-                taskName: task.task_spec,
-                status: 'completed',
-                outputData: Object.keys(changedOutput).length > 0 ? changedOutput : null
-              };
-              
-              setMessages(prev => [...prev, taskMessage]);
+              // Only create message if there's meaningful content OR outputData
+              const hasOutputData = Object.keys(changedOutput).length > 0;
+              if (content || hasOutputData) {
+                const taskMessage = {
+                  id: Date.now() + Math.random(),
+                  type: 'bot',
+                  content: content,
+                  timestamp: new Date(),
+                  taskId: taskId,
+                  taskName: task.task_spec,
+                  status: 'completed',
+                  outputData: hasOutputData ? changedOutput : null
+                };
+                
+                setMessages(prev => [...prev, taskMessage]);
+              }
             }
           });
           
@@ -626,7 +630,7 @@ const AIAssistant = ({ user }) => {
           width: 320,
           minWidth: 320,
           maxWidth: 320,
-          borderRight: '1px solid',
+          border: '1px solid',
           borderColor: 'divider',
           display: 'flex',
           flexDirection: 'column',
@@ -796,7 +800,10 @@ const AIAssistant = ({ user }) => {
               {/* Messages Area */}
               <Box sx={{ flex: 1, overflowY: 'auto', p: state === 'task_ready' ? 0 : 3 }}>
                 <List sx={{ p: 0 }}>
-                  {messages.map((msg, index) => (
+                  {messages.filter(msg => {
+                    // Filter out messages with no content and no outputData
+                    return msg.content || (msg.outputData && Object.keys(msg.outputData).length > 0);
+                  }).map((msg, index, filteredMessages) => (
                     <React.Fragment key={msg.id}>
                       <Box sx={{ 
                         display: 'flex', 
@@ -893,7 +900,7 @@ const AIAssistant = ({ user }) => {
                           </Paper>
                         </Box>
                       </Box>
-                      {index < messages.length - 1 && <Divider sx={{ my: 2 }} />}
+                      {index < filteredMessages.length - 1 && <Divider sx={{ my: 2 }} />}
                     </React.Fragment>
                   ))}
                   
