@@ -205,17 +205,7 @@ const AIAssistant = ({ user }) => {
         endpoint: `/api/workflow/workflows/${wfId}/start`
       });
       
-      // Add system message
-      const systemMessage = {
-        id: Date.now(),
-        type: 'system',
-        content: `Starting ${workflowToStart.name}...`,
-        timestamp: new Date(),
-        status: 'processing'
-      };
-      setMessages(prev => [...prev, systemMessage]);
-      
-      // Start workflow
+      // Start workflow (removed system message display)
       const result = await sharedApiService.makeRequest(
         `/api/workflow/workflows/${wfId}/start`,
         {
@@ -776,6 +766,33 @@ const AIAssistant = ({ user }) => {
 
           {(state === 'running' || state === 'completed' || state === 'failed' || state === 'task_ready') && (
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              {/* Fixed Assistant Avatar */}
+              <Box sx={{ 
+                p: 2, 
+                borderBottom: '1px solid', 
+                borderColor: 'divider',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                bgcolor: 'background.paper'
+              }}>
+                <Avatar sx={{ 
+                  bgcolor: theme.palette.secondary.main,
+                  width: 40,
+                  height: 40
+                }}>
+                  <Bot size={24} />
+                </Avatar>
+                <Box>
+                  <Typography variant="subtitle1" fontWeight="bold">
+                    {selectedWorkflow?.name || 'AI Assistant'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {isPolling ? 'Processing...' : 'Ready'}
+                  </Typography>
+                </Box>
+              </Box>
+              
               {/* Messages Area */}
               <Box sx={{ flex: 1, overflowY: 'auto', p: state === 'task_ready' ? 0 : 3 }}>
                 <List sx={{ p: 0 }}>
