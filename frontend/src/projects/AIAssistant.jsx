@@ -375,7 +375,7 @@ const AIAssistant = ({ user }) => {
             const response = workflowData.final_answer || 
                            workflowData.answer || 
                            workflowData.result ||
-                           'Workflow completed successfully.';
+                           null;
             
             const responseMessage = {
               id: Date.now() + 2,
