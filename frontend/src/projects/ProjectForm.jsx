@@ -323,16 +323,29 @@ function ProjectForm({ user }) {
       }
     }
 
-    // Validate additional date fields
-    if (form.date_of_sanction_from && !isValidISODateString(form.date_of_sanction_from)) {
-      errors.date_of_sanction_from = 'Invalid date. Use YYYY-MM-DD (1900-01-01 to 2100-12-31)'
+    // Validate additional date fields - Date of Sanction From
+    if (form.date_of_sanction_from) {
+      if (!form.date_of_sanction_from.trim()) {
+        // Empty string after trimming
+        errors.date_of_sanction_from = 'Invalid date format'
+      } else if (!isValidISODateString(form.date_of_sanction_from)) {
+        errors.date_of_sanction_from = 'Invalid date. Use YYYY-MM-DD (1900-01-01 to 2100-12-31)'
+      }
     }
 
-    if (form.date_of_sanction_to && !isValidISODateString(form.date_of_sanction_to)) {
-      errors.date_of_sanction_to = 'Invalid date. Use YYYY-MM-DD (1900-01-01 to 2100-12-31)'
+    // Validate additional date fields - Date of Sanction To
+    if (form.date_of_sanction_to) {
+      if (!form.date_of_sanction_to.trim()) {
+        // Empty string after trimming
+        errors.date_of_sanction_to = 'Invalid date format'
+      } else if (!isValidISODateString(form.date_of_sanction_to)) {
+        errors.date_of_sanction_to = 'Invalid date. Use YYYY-MM-DD (1900-01-01 to 2100-12-31)'
+      }
     }
 
-    if (form.date_of_sanction_from && form.date_of_sanction_to && !errors.date_of_sanction_from && !errors.date_of_sanction_to) {
+    // Validate date range: date_of_sanction_to must be after date_of_sanction_from
+    if (form.date_of_sanction_from && form.date_of_sanction_to && 
+        !errors.date_of_sanction_from && !errors.date_of_sanction_to) {
       if (!isISOAfter(form.date_of_sanction_to, form.date_of_sanction_from)) {
         errors.date_of_sanction_to = 'Date of sanction to must be after date of sanction from'
       }
