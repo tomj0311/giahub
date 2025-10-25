@@ -1131,10 +1131,11 @@ function GanttChart({ user, projectId: propProjectId }) {
     }
     
     const colors = {
-      ON_TRACK: 'success',
+      IN_PROGRESS: 'primary',
       AT_RISK: 'warning',
       OFF_TRACK: 'error',
-      COMPLETED: 'info',
+      PLANNING: 'secondary',
+      COMPLETED: 'success',
       'New': 'info',
       'In Progress': 'primary',
       'On Hold': 'warning',
@@ -1155,9 +1156,10 @@ function GanttChart({ user, projectId: propProjectId }) {
 
   const getStatusLabel = (status) => {
     const labels = {
-      ON_TRACK: 'On Track',
+      IN_PROGRESS: 'In Progress',
       AT_RISK: 'At Risk',
       OFF_TRACK: 'Off Track',
+      PLANNING: 'Planning',
       COMPLETED: 'Completed'
     }
     return labels[status] || status
@@ -1432,7 +1434,7 @@ function GanttChart({ user, projectId: propProjectId }) {
                       position: 'absolute',
                       top: '50%',
                       fontSize: '0.65rem',
-                      color: theme.palette[safeActivityStatusColor].contrastText,
+                      color: theme.palette[safeActivityStatusColor].main,
                       fontWeight: 600,
                       opacity: 1,
                       pointerEvents: 'none',

@@ -628,10 +628,10 @@ def get_openapi_schema():
                                                 "type": "object",
                                                 "properties": {
                                                     "total": {"type": "integer"},
-                                                    "onTrack": {"type": "integer"},
+                                                    "inProgress": {"type": "integer"},
                                                     "atRisk": {"type": "integer"},
                                                     "offTrack": {"type": "integer"},
-                                                    "onHold": {"type": "integer"},
+                                                    "planning": {"type": "integer"},
                                                     "completed": {"type": "integer"}
                                                 }
                                             },
