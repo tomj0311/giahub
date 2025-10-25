@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
+import ReactDOM from 'react-dom'
 import {
   Box,
   Card,
@@ -34,7 +35,8 @@ import {
   TextField,
   FormControl,
   InputLabel,
-  Select
+  Select,
+  Fab
 } from '@mui/material'
 import {
   FolderKanban,
@@ -61,7 +63,12 @@ import { useNavigate } from 'react-router-dom'
 import { apiCall } from '../config/api'
 import sharedApiService from '../utils/apiService'
 import { useSnackbar } from '../contexts/SnackbarContext'
-import ProjectChat from './ProjectChat'
+
+// localStorage keys for state persistence
+const STORAGE_KEYS = {
+  SORT_FIELD: 'projectStatusHome_sortField',
+  SORT_ORDER: 'projectStatusHome_sortOrder'
+}
 
 // Summary Card Component
 const SummaryCard = ({ title, value, subtitle, icon: Icon, gradient, delay = 0 }) => {
@@ -153,6 +160,33 @@ export default function ProjectStatusHome({ user }) {
   const tokenRef = useRef(user?.token)
   tokenRef.current = user?.token
 
+  // Helper functions for localStorage state persistence
+  const saveStateToStorage = useCallback((key, value) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value))
+    } catch (error) {
+      console.warn('Failed to save state to localStorage:', error)
+    }
+  }, [])
+
+  const loadStateFromStorage = useCallback((key, defaultValue) => {
+    try {
+      const saved = localStorage.getItem(key)
+      return saved ? JSON.parse(saved) : defaultValue
+    } catch (error) {
+      console.warn('Failed to load state from localStorage:', error)
+      return defaultValue
+    }
+  }, [])
+
+  const clearStoredState = useCallback(() => {
+    try {
+      Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key))
+    } catch (error) {
+      console.warn('Failed to clear stored state:', error)
+    }
+  }, [])
+
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState({
     total: 0,
@@ -165,10 +199,10 @@ export default function ProjectStatusHome({ user }) {
   const [districtData, setDistrictData] = useState([])
   const [projectTree, setProjectTree] = useState([])
   
-  // Filter and sort state
+  // Filter and sort state - load from localStorage with fallbacks
   const [filters, setFilters] = useState([])
-  const [sortField, setSortField] = useState(null)
-  const [sortOrder, setSortOrder] = useState('asc')
+  const [sortField, setSortField] = useState(() => loadStateFromStorage(STORAGE_KEYS.SORT_FIELD, null))
+  const [sortOrder, setSortOrder] = useState(() => loadStateFromStorage(STORAGE_KEYS.SORT_ORDER, 'asc'))
   const [filteredAndSortedData, setFilteredAndSortedData] = useState([])
   
   // Filter dialog state
@@ -247,6 +281,15 @@ export default function ProjectStatusHome({ user }) {
     const result = applyFiltersAndSort(districtData)
     setFilteredAndSortedData(result)
   }, [districtData, applyFiltersAndSort])
+
+  // Save state to localStorage when sort changes
+  useEffect(() => {
+    saveStateToStorage(STORAGE_KEYS.SORT_FIELD, sortField)
+  }, [sortField, saveStateToStorage])
+
+  useEffect(() => {
+    saveStateToStorage(STORAGE_KEYS.SORT_ORDER, sortOrder)
+  }, [sortOrder, saveStateToStorage])
 
   // Filter handlers
   const handleOpenFilterDialog = () => {
@@ -429,6 +472,7 @@ export default function ProjectStatusHome({ user }) {
   }
 
   return (
+    <>
     <Box>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
@@ -938,9 +982,34 @@ export default function ProjectStatusHome({ user }) {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Project Chat Component */}
-      <ProjectChat user={user} />
     </Box>
+
+    {/* Floating AI Assistant Button - Rendered via Portal to escape overflow container */}
+    {ReactDOM.createPortal(
+      <Fab
+        color="primary"
+        aria-label="ai assistant"
+        size="large"
+        sx={{
+          position: 'fixed',
+          bottom: 32,
+          right: 32,
+          zIndex: 9999,
+          width: 80,
+          height: 80,
+          boxShadow: 6,
+          '&:hover': {
+            transform: 'scale(1.1)',
+            transition: 'transform 0.2s ease-in-out',
+            boxShadow: 8,
+          },
+        }}
+        onClick={() => navigate('/dashboard/projects/ai-assistant')}
+      >
+        <Bot size={40} />
+      </Fab>,
+      document.body
+    )}
+    </>
   )
 }
