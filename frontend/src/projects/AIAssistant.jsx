@@ -531,7 +531,20 @@ const AIAssistant = ({ user }) => {
     pollInterval.current = setInterval(checkStatus, POLL_INTERVAL);
   };
 
-  const handleTaskSuccess = () => {
+  const handleTaskSuccess = (submittedData) => {
+    // Add user input message to chat
+    if (submittedData) {
+      const userMessage = {
+        id: Date.now(),
+        type: 'user',
+        content: 'Task submitted',
+        timestamp: new Date(),
+        status: 'completed',
+        submittedData: submittedData
+      };
+      setMessages(prev => [...prev, userMessage]);
+    }
+    
     setReadyTaskData(null);
     setState('running');
     setIsPolling(true);
@@ -759,15 +772,16 @@ const AIAssistant = ({ user }) => {
                         alignItems: 'flex-start',
                         gap: 2,
                         mb: 3,
-                        px: 1
+                        px: 1,
+                        flexDirection: msg.type === 'user' ? 'row-reverse' : 'row'
                       }}>
                         <Avatar sx={{ 
-                          bgcolor: getMessageColor(msg.type, msg.status),
+                          bgcolor: msg.type === 'user' ? theme.palette.primary.main : getMessageColor(msg.type, msg.status),
                           width: 36,
                           height: 36,
                           mt: 1
                         }}>
-                          {getMessageIcon(msg.type, msg.status)}
+                          {msg.type === 'user' ? 'U' : getMessageIcon(msg.type, msg.status)}
                         </Avatar>
                         
                         <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -776,10 +790,11 @@ const AIAssistant = ({ user }) => {
                             alignItems: 'center', 
                             gap: 1.5, 
                             mb: 1,
-                            py: 1.5
+                            py: 1.5,
+                            flexDirection: msg.type === 'user' ? 'row-reverse' : 'row'
                           }}>
                             <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.95rem' }}>
-                              {msg.type === 'error' ? 'Error' : 'Assistant'}
+                              {msg.type === 'error' ? 'Error' : msg.type === 'user' ? 'You' : 'Assistant'}
                             </Typography>
                             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
                               {formatTimestamp(msg.timestamp)}
@@ -796,11 +811,16 @@ const AIAssistant = ({ user }) => {
                           
                           <Paper sx={{ 
                             p: 2, 
-                            bgcolor: msg.type === 'error' ? 
+                            bgcolor: msg.type === 'user' ? 
+                              alpha(theme.palette.primary.main, 0.1) :
+                              msg.type === 'error' ? 
                               alpha(theme.palette.error.main, 0.1) : 
                               alpha(theme.palette.grey[500], 0.1),
                             border: msg.type === 'error' ? 
-                              `1px solid ${theme.palette.error.main}` : 'none'
+                              `1px solid ${theme.palette.error.main}` : 'none',
+                            ml: msg.type === 'user' ? 'auto' : 0,
+                            mr: msg.type === 'user' ? 0 : 'auto',
+                            maxWidth: msg.type === 'user' ? '80%' : '100%'
                           }}>
                             {msg.status === 'processing' ? (
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -819,11 +839,47 @@ const AIAssistant = ({ user }) => {
                                   {msg.content}
                                 </Typography>
                                 
+                                {/* Display submitted data from user input */}
+                                {msg.submittedData && (
+                                  <Box sx={{ mt: 2 }}>
+                                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                                      📝 Submitted Data
+                                    </Typography>
+                                    {Object.entries(msg.submittedData).map(([key, value]) => (
+                                      <Box key={key} sx={{ mb: 1 }}>
+                                        <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+                                          {key}:
+                                        </Typography>
+                                        <Paper sx={{ 
+                                          p: 1.5, 
+                                          mt: 0.5,
+                                          bgcolor: alpha(theme.palette.background.paper, 0.5),
+                                          fontSize: '0.875rem',
+                                          whiteSpace: 'pre-wrap',
+                                          wordBreak: 'break-word'
+                                        }}>
+                                          {value instanceof File ? (
+                                            <Typography variant="body2">
+                                              📎 {value.name} ({(value.size / 1024).toFixed(2)} KB)
+                                            </Typography>
+                                          ) : typeof value === 'object' ? (
+                                            <pre style={{ margin: 0 }}>
+                                              {JSON.stringify(value, null, 2)}
+                                            </pre>
+                                          ) : (
+                                            String(value)
+                                          )}
+                                        </Paper>
+                                      </Box>
+                                    ))}
+                                  </Box>
+                                )}
+                                
                                 {/* Display output data from workflow */}
                                 {msg.outputData && (
                                   <Box sx={{ mt: 2 }}>
                                     <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                                      � Output Data
+                                      📊 Output Data
                                     </Typography>
                                     {Object.entries(msg.outputData).map(([key, value]) => (
                                       <Box key={key} sx={{ mb: 2 }}>
