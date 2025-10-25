@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import sharedApiService from '../utils/apiService';
 import TaskCompletion from '../workflows/TaskCompletion';
+import IntelligentJsonRenderer from '../components/IntelligentJsonRenderer';
 
 const POLL_INTERVAL = 1000;
 
@@ -532,12 +533,25 @@ const AIAssistant = ({ user }) => {
   };
 
   const handleTaskSuccess = (submittedData) => {
-    // Add user input message to chat
+    // Add user input message to chat - show submitted data in heading
     if (submittedData) {
+      // Create a readable summary of submitted data
+      const contentSummary = Object.entries(submittedData)
+        .map(([key, value]) => {
+          if (value instanceof File) {
+            return `${key}: ${value.name}`;
+          } else if (typeof value === 'object') {
+            return `${key}: [data]`;
+          } else {
+            return `${key}: ${String(value)}`;
+          }
+        })
+        .join(', ');
+      
       const userMessage = {
         id: Date.now(),
         type: 'user',
-        content: 'Task submitted',
+        content: contentSummary,
         timestamp: new Date(),
         status: 'completed',
         submittedData: submittedData
@@ -820,7 +834,8 @@ const AIAssistant = ({ user }) => {
                               `1px solid ${theme.palette.error.main}` : 'none',
                             ml: msg.type === 'user' ? 'auto' : 0,
                             mr: msg.type === 'user' ? 0 : 'auto',
-                            maxWidth: msg.type === 'user' ? '80%' : '100%'
+                            maxWidth: msg.type === 'user' ? '80%' : '100%',
+                            textAlign: msg.type === 'user' ? 'right' : 'left'
                           }}>
                             {msg.status === 'processing' ? (
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -829,77 +844,29 @@ const AIAssistant = ({ user }) => {
                               </Box>
                             ) : (
                               <>
-                                <Typography 
-                                  variant="body2" 
-                                  sx={{ 
-                                    whiteSpace: 'pre-wrap',
-                                    wordBreak: 'break-word'
-                                  }}
-                                >
-                                  {msg.content}
-                                </Typography>
-                                
-                                {/* Display submitted data from user input */}
-                                {msg.submittedData && (
-                                  <Box sx={{ mt: 2 }}>
-                                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                                      📝 Submitted Data
-                                    </Typography>
-                                    {Object.entries(msg.submittedData).map(([key, value]) => (
-                                      <Box key={key} sx={{ mb: 1 }}>
-                                        <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
-                                          {key}:
-                                        </Typography>
-                                        <Paper sx={{ 
-                                          p: 1.5, 
-                                          mt: 0.5,
-                                          bgcolor: alpha(theme.palette.background.paper, 0.5),
-                                          fontSize: '0.875rem',
-                                          whiteSpace: 'pre-wrap',
-                                          wordBreak: 'break-word'
-                                        }}>
-                                          {value instanceof File ? (
-                                            <Typography variant="body2">
-                                              📎 {value.name} ({(value.size / 1024).toFixed(2)} KB)
-                                            </Typography>
-                                          ) : typeof value === 'object' ? (
-                                            <pre style={{ margin: 0 }}>
-                                              {JSON.stringify(value, null, 2)}
-                                            </pre>
-                                          ) : (
-                                            String(value)
-                                          )}
-                                        </Paper>
-                                      </Box>
-                                    ))}
-                                  </Box>
+                                {msg.content && (
+                                  <Typography 
+                                    variant="body2" 
+                                    sx={{ 
+                                      whiteSpace: 'pre-wrap',
+                                      wordBreak: 'break-word'
+                                    }}
+                                  >
+                                    {msg.content}
+                                  </Typography>
                                 )}
                                 
-                                {/* Display output data from workflow */}
+                                {/* Display output data from workflow - simplified */}
                                 {msg.outputData && (
-                                  <Box sx={{ mt: 2 }}>
-                                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                                      📊 Output Data
-                                    </Typography>
+                                  <Box sx={{ mt: msg.content ? 2 : 0 }}>
                                     {Object.entries(msg.outputData).map(([key, value]) => (
                                       <Box key={key} sx={{ mb: 2 }}>
-                                        <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
-                                          {key}:
-                                        </Typography>
-                                        <Paper sx={{ 
-                                          p: 2, 
-                                          maxHeight: 400, 
-                                          overflow: 'auto',
-                                          fontFamily: 'monospace',
-                                          fontSize: '0.875rem',
-                                          whiteSpace: 'pre-wrap',
-                                          wordBreak: 'break-word',
-                                          mt: 0.5
+                                        <Box sx={{ 
+                                          maxHeight: 600, 
+                                          overflow: 'auto'
                                         }}>
-                                          <pre style={{ margin: 0 }}>
-                                            {JSON.stringify(value, null, 2)}
-                                          </pre>
-                                        </Paper>
+                                          <IntelligentJsonRenderer data={value} keyName={null} />
+                                        </Box>
                                       </Box>
                                     ))}
                                   </Box>
