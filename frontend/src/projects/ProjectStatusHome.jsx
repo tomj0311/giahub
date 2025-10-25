@@ -156,7 +156,7 @@ export default function ProjectStatusHome({ user }) {
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState({
     total: 0,
-    onTrack: 0,
+    inProgress: 0,
     atRisk: 0,
     offTrack: 0,
     onHold: 0,
@@ -330,7 +330,7 @@ export default function ProjectStatusHome({ user }) {
         // Set summary data directly from API
         setSummary({
           total: data.summary?.total || 0,
-          onTrack: data.summary?.onTrack || 0,
+          inProgress: data.summary?.inProgress || 0,
           atRisk: data.summary?.atRisk || 0,
           offTrack: data.summary?.offTrack || 0,
           onHold: data.summary?.onHold || 0,
@@ -342,12 +342,12 @@ export default function ProjectStatusHome({ user }) {
           id: district.id,
           name: district.name,
           total: district.total,
-          onTrack: district.onTrack,
+          inProgress: district.inProgress,
           atRisk: district.atRisk,
           offTrack: district.offTrack,
           onHoldOnly: district.onHold,
           completed: district.completed,
-          onTrackPercent: district.onTrackPercent,
+          inProgressPercent: district.inProgressPercent,
           atRiskPercent: district.atRiskPercent,
           offTrackPercent: district.offTrackPercent,
           onHoldPercent: district.onHoldPercent,
@@ -458,8 +458,8 @@ export default function ProjectStatusHome({ user }) {
         </Grid>
         <Grid item xs={12} sm={6} md={2}>
           <SummaryCard
-            title="On Track"
-            value={summary.onTrack}
+            title="In Progress"
+            value={summary.inProgress}
             subtitle="+1.25%"
             icon={Activity}
             gradient="linear-gradient(135deg, #66BB6A 0%, #4CAF50 100%)"
@@ -588,11 +588,11 @@ export default function ProjectStatusHome({ user }) {
                     </Box>
                   </TableCell>
                   <TableCell align="center" sx={{ fontWeight: 'bold' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', justifyContent: 'center' }} onClick={() => handleSort('onTrack')}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', justifyContent: 'center' }} onClick={() => handleSort('inProgress')}>
                       <Typography variant="body2" color="text.secondary">
-                        On Track
+                        In Progress
                       </Typography>
-                      {sortField === 'onTrack' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                      {sortField === 'inProgress' && (sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
                     </Box>
                   </TableCell>
                   <TableCell align="center" sx={{ fontWeight: 'bold' }}>
@@ -674,11 +674,11 @@ export default function ProjectStatusHome({ user }) {
                       <TableCell align="center">
                         <Box>
                           <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                            {district.onTrack}
+                            {district.inProgress}
                           </Typography>
                           {district.total > 0 && (
                             <Chip
-                              label={`${district.onTrackPercent}%`}
+                              label={`${district.inProgressPercent}%`}
                               size="small"
                               sx={{
                                 mt: 0.5,
@@ -818,7 +818,7 @@ export default function ProjectStatusHome({ user }) {
         {[
           { key: 'name', label: 'District Name' },
           { key: 'total', label: 'Total Projects' },
-          { key: 'onTrack', label: 'On Track' },
+          { key: 'inProgress', label: 'In Progress' },
           { key: 'atRisk', label: 'At Risk' },
           { key: 'offTrack', label: 'Off Track' },
           { key: 'onHoldOnly', label: 'On Hold' },
@@ -882,7 +882,7 @@ export default function ProjectStatusHome({ user }) {
               >
                 <MenuItem value="name">District Name</MenuItem>
                 <MenuItem value="total">Total Projects</MenuItem>
-                <MenuItem value="onTrack">On Track</MenuItem>
+                <MenuItem value="inProgress">In Progress</MenuItem>
                 <MenuItem value="atRisk">At Risk</MenuItem>
                 <MenuItem value="offTrack">Off Track</MenuItem>
                 <MenuItem value="onHoldOnly">On Hold</MenuItem>
