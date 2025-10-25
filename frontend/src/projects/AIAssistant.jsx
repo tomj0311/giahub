@@ -619,7 +619,7 @@ const AIAssistant = ({ user }) => {
           )}
         </Box>
         <Typography variant="body2" color="text.secondary">
-          Select an AI assistant workflow to execute automated tasks and get intelligent responses
+          Select an AI Assistant to execute automated tasks and get intelligent responses
         </Typography>
       </Box>
 
@@ -644,7 +644,7 @@ const AIAssistant = ({ user }) => {
               Available Assistants
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              {workflows.length} workflow{workflows.length !== 1 ? 's' : ''} available
+              {workflows.length} assistant{workflows.length !== 1 ? 's' : ''} available
             </Typography>
           </Box>
 
@@ -737,7 +737,7 @@ const AIAssistant = ({ user }) => {
               <Bot size={48} />
               <Typography variant="h6">Select an AI Assistant to Get Started</Typography>
               <Typography variant="body2" sx={{ textAlign: 'center', maxWidth: 400 }}>
-                Choose from the available assistant workflows on the left panel
+                Choose from the available assistants on the left panel
               </Typography>
             </Box>
           )}
@@ -763,7 +763,7 @@ const AIAssistant = ({ user }) => {
                 {selectedWorkflow.name}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', maxWidth: 500 }}>
-                {selectedWorkflow.description || 'Click "Start Assistant" to begin the workflow'}
+                {selectedWorkflow.description || 'Click "Start Assistant" to begin'}
               </Typography>
             </Box>
           )}
