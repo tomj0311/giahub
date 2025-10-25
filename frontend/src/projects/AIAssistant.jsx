@@ -851,7 +851,7 @@ const AIAssistant = ({ user }) => {
                               `1px solid ${theme.palette.error.main}` : 'none',
                             ml: msg.type === 'user' ? 'auto' : 0,
                             mr: msg.type === 'user' ? 0 : 'auto',
-                            maxWidth: msg.type === 'user' ? '80%' : '100%',
+                            maxWidth: msg.type === 'user' ? '60%' : '100%',
                             textAlign: msg.type === 'user' ? 'right' : 'left'
                           }}>
                             {msg.status === 'processing' ? (
