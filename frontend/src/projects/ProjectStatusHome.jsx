@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
+import ReactDOM from 'react-dom'
 import {
   Box,
   Card,
@@ -34,7 +35,8 @@ import {
   TextField,
   FormControl,
   InputLabel,
-  Select
+  Select,
+  Fab
 } from '@mui/material'
 import {
   FolderKanban,
@@ -61,7 +63,6 @@ import { useNavigate } from 'react-router-dom'
 import { apiCall } from '../config/api'
 import sharedApiService from '../utils/apiService'
 import { useSnackbar } from '../contexts/SnackbarContext'
-import ProjectChat from './ProjectChat'
 
 // localStorage keys for state persistence
 const STORAGE_KEYS = {
@@ -471,6 +472,7 @@ export default function ProjectStatusHome({ user }) {
   }
 
   return (
+    <>
     <Box>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
@@ -980,9 +982,34 @@ export default function ProjectStatusHome({ user }) {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Project Chat Component */}
-      <ProjectChat user={user} />
     </Box>
+
+    {/* Floating AI Assistant Button - Rendered via Portal to escape overflow container */}
+    {ReactDOM.createPortal(
+      <Fab
+        color="primary"
+        aria-label="ai assistant"
+        size="large"
+        sx={{
+          position: 'fixed',
+          bottom: 32,
+          right: 32,
+          zIndex: 9999,
+          width: 80,
+          height: 80,
+          boxShadow: 6,
+          '&:hover': {
+            transform: 'scale(1.1)',
+            transition: 'transform 0.2s ease-in-out',
+            boxShadow: 8,
+          },
+        }}
+        onClick={() => navigate('/dashboard/projects/ai-assistant')}
+      >
+        <Bot size={40} />
+      </Fab>,
+      document.body
+    )}
+    </>
   )
 }
