@@ -513,7 +513,7 @@ function GanttChart({ user, projectId: propProjectId }) {
       
       console.log('[GanttChart] Projects to show:', projectsToShow.length)
       
-      // Auto-expand all groups and projects
+      // Auto-expand groups but keep projects collapsed
       const groupExpandState = {}
       const projectExpandState = {}
       
@@ -522,7 +522,7 @@ function GanttChart({ user, projectId: propProjectId }) {
         const assembly = proj.assembly || 'No Assembly'
         const groupKey = `${district} - ${assembly}`
         groupExpandState[groupKey] = true
-        projectExpandState[proj.id] = true
+        projectExpandState[proj.id] = false // Keep activities collapsed by default
       })
       
       setGroupExpanded(groupExpandState)
@@ -1060,7 +1060,10 @@ function GanttChart({ user, projectId: propProjectId }) {
             {!isActivity && activitiesByProject[node.id] && activitiesByProject[node.id].length > 0 ? (
               <IconButton
                 size="small"
-                onClick={() => toggleProjectExpand(node.id)}
+                onClick={(e) => {
+                  e.stopPropagation() // Prevent triggering row click
+                  toggleProjectExpand(node.id)
+                }}
                 sx={{ p: 0.5 }}
               >
                 {projectExpanded[node.id] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -1217,9 +1220,16 @@ function GanttChart({ user, projectId: propProjectId }) {
     return (
       <React.Fragment key={proj.id}>
         <TableRow
+          onClick={() => {
+            // Toggle project expansion when clicking anywhere on the project row
+            if (hasActivities) {
+              toggleProjectExpand(proj.id)
+            }
+          }}
           sx={{
+            cursor: hasActivities ? 'pointer' : 'default',
             '&:hover': {
-              bgcolor: 'action.hover'
+              bgcolor: hasActivities ? 'action.hover' : 'action.selected'
             }
           }}
         >

@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import sharedApiService from '../utils/apiService';
 import TaskCompletion from '../workflows/TaskCompletion';
+import IntelligentJsonRenderer from '../components/IntelligentJsonRenderer';
 
 const POLL_INTERVAL = 1000;
 
@@ -204,17 +205,7 @@ const AIAssistant = ({ user }) => {
         endpoint: `/api/workflow/workflows/${wfId}/start`
       });
       
-      // Add system message
-      const systemMessage = {
-        id: Date.now(),
-        type: 'system',
-        content: `Starting ${workflowToStart.name}...`,
-        timestamp: new Date(),
-        status: 'processing'
-      };
-      setMessages(prev => [...prev, systemMessage]);
-      
-      // Start workflow
+      // Start workflow (removed system message display)
       const result = await sharedApiService.makeRequest(
         `/api/workflow/workflows/${wfId}/start`,
         {
@@ -384,7 +375,7 @@ const AIAssistant = ({ user }) => {
             const response = workflowData.final_answer || 
                            workflowData.answer || 
                            workflowData.result ||
-                           'Workflow completed successfully.';
+                           null;
             
             const responseMessage = {
               id: Date.now() + 2,
@@ -531,7 +522,33 @@ const AIAssistant = ({ user }) => {
     pollInterval.current = setInterval(checkStatus, POLL_INTERVAL);
   };
 
-  const handleTaskSuccess = () => {
+  const handleTaskSuccess = (submittedData) => {
+    // Add user input message to chat - show submitted data in heading
+    if (submittedData) {
+      // Create a readable summary of submitted data
+      const contentSummary = Object.entries(submittedData)
+        .map(([key, value]) => {
+          if (value instanceof File) {
+            return `${key}: ${value.name}`;
+          } else if (typeof value === 'object') {
+            return `${key}: [data]`;
+          } else {
+            return `${key}: ${String(value)}`;
+          }
+        })
+        .join(', ');
+      
+      const userMessage = {
+        id: Date.now(),
+        type: 'user',
+        content: contentSummary,
+        timestamp: new Date(),
+        status: 'completed',
+        submittedData: submittedData
+      };
+      setMessages(prev => [...prev, userMessage]);
+    }
+    
     setReadyTaskData(null);
     setState('running');
     setIsPolling(true);
@@ -749,6 +766,33 @@ const AIAssistant = ({ user }) => {
 
           {(state === 'running' || state === 'completed' || state === 'failed' || state === 'task_ready') && (
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              {/* Fixed Assistant Avatar */}
+              <Box sx={{ 
+                p: 2, 
+                borderBottom: '1px solid', 
+                borderColor: 'divider',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                bgcolor: 'background.paper'
+              }}>
+                <Avatar sx={{ 
+                  bgcolor: theme.palette.secondary.main,
+                  width: 40,
+                  height: 40
+                }}>
+                  <Bot size={24} />
+                </Avatar>
+                <Box>
+                  <Typography variant="subtitle1" fontWeight="bold">
+                    {selectedWorkflow?.name || 'AI Assistant'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {isPolling ? 'Processing...' : 'Ready'}
+                  </Typography>
+                </Box>
+              </Box>
+              
               {/* Messages Area */}
               <Box sx={{ flex: 1, overflowY: 'auto', p: state === 'task_ready' ? 0 : 3 }}>
                 <List sx={{ p: 0 }}>
@@ -759,15 +803,16 @@ const AIAssistant = ({ user }) => {
                         alignItems: 'flex-start',
                         gap: 2,
                         mb: 3,
-                        px: 1
+                        px: 1,
+                        flexDirection: msg.type === 'user' ? 'row-reverse' : 'row'
                       }}>
                         <Avatar sx={{ 
-                          bgcolor: getMessageColor(msg.type, msg.status),
+                          bgcolor: msg.type === 'user' ? theme.palette.primary.main : getMessageColor(msg.type, msg.status),
                           width: 36,
                           height: 36,
                           mt: 1
                         }}>
-                          {getMessageIcon(msg.type, msg.status)}
+                          {msg.type === 'user' ? 'U' : getMessageIcon(msg.type, msg.status)}
                         </Avatar>
                         
                         <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -776,10 +821,11 @@ const AIAssistant = ({ user }) => {
                             alignItems: 'center', 
                             gap: 1.5, 
                             mb: 1,
-                            py: 1.5
+                            py: 1.5,
+                            flexDirection: msg.type === 'user' ? 'row-reverse' : 'row'
                           }}>
                             <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.95rem' }}>
-                              {msg.type === 'error' ? 'Error' : 'Assistant'}
+                              {msg.type === 'error' ? 'Error' : msg.type === 'user' ? 'You' : 'Assistant'}
                             </Typography>
                             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
                               {formatTimestamp(msg.timestamp)}
@@ -796,11 +842,17 @@ const AIAssistant = ({ user }) => {
                           
                           <Paper sx={{ 
                             p: 2, 
-                            bgcolor: msg.type === 'error' ? 
+                            bgcolor: msg.type === 'user' ? 
+                              alpha(theme.palette.primary.main, 0.1) :
+                              msg.type === 'error' ? 
                               alpha(theme.palette.error.main, 0.1) : 
                               alpha(theme.palette.grey[500], 0.1),
                             border: msg.type === 'error' ? 
-                              `1px solid ${theme.palette.error.main}` : 'none'
+                              `1px solid ${theme.palette.error.main}` : 'none',
+                            ml: msg.type === 'user' ? 'auto' : 0,
+                            mr: msg.type === 'user' ? 0 : 'auto',
+                            maxWidth: msg.type === 'user' ? '60%' : '100%',
+                            textAlign: msg.type === 'user' ? 'right' : 'left'
                           }}>
                             {msg.status === 'processing' ? (
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -809,41 +861,29 @@ const AIAssistant = ({ user }) => {
                               </Box>
                             ) : (
                               <>
-                                <Typography 
-                                  variant="body2" 
-                                  sx={{ 
-                                    whiteSpace: 'pre-wrap',
-                                    wordBreak: 'break-word'
-                                  }}
-                                >
-                                  {msg.content}
-                                </Typography>
+                                {msg.content && (
+                                  <Typography 
+                                    variant="body2" 
+                                    sx={{ 
+                                      whiteSpace: 'pre-wrap',
+                                      wordBreak: 'break-word'
+                                    }}
+                                  >
+                                    {msg.content}
+                                  </Typography>
+                                )}
                                 
-                                {/* Display output data from workflow */}
+                                {/* Display output data from workflow - simplified */}
                                 {msg.outputData && (
-                                  <Box sx={{ mt: 2 }}>
-                                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                                      � Output Data
-                                    </Typography>
+                                  <Box sx={{ mt: msg.content ? 2 : 0 }}>
                                     {Object.entries(msg.outputData).map(([key, value]) => (
                                       <Box key={key} sx={{ mb: 2 }}>
-                                        <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
-                                          {key}:
-                                        </Typography>
-                                        <Paper sx={{ 
-                                          p: 2, 
-                                          maxHeight: 400, 
-                                          overflow: 'auto',
-                                          fontFamily: 'monospace',
-                                          fontSize: '0.875rem',
-                                          whiteSpace: 'pre-wrap',
-                                          wordBreak: 'break-word',
-                                          mt: 0.5
+                                        <Box sx={{ 
+                                          maxHeight: 600, 
+                                          overflow: 'auto'
                                         }}>
-                                          <pre style={{ margin: 0 }}>
-                                            {JSON.stringify(value, null, 2)}
-                                          </pre>
-                                        </Paper>
+                                          <IntelligentJsonRenderer data={value} keyName={null} />
+                                        </Box>
                                       </Box>
                                     ))}
                                   </Box>

@@ -28,7 +28,7 @@ let globalUserCache = null
 let globalUserCacheLoading = false
 
 const ACTIVITY_TYPES = ['MILESTONE', 'PHASE', 'TASK']
-const STATUS_OPTIONS = ['New', 'In Progress', 'On Hold', 'Completed', 'Cancelled']
+const STATUS_OPTIONS = ['New', 'Planning', 'In Progress', 'On Hold', 'Completed', 'Cancelled']
 const PRIORITY_OPTIONS = ['Low', 'Normal', 'High', 'Urgent']
 
 function ActivityForm({ user, projectId: propProjectId }) {

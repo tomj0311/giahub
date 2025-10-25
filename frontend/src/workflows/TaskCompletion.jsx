@@ -356,9 +356,10 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
         console.log('✨ Task submitted successfully!');
         
         // ALWAYS call onSuccess to notify parent (WorkflowUI) to hide TaskCompletion and poll
+        // Pass the submitted data back to the parent so it can be displayed in the chat
         if (onSuccess) {
           console.log('📢 Calling onSuccess callback to notify WorkflowUI');
-          onSuccess();
+          onSuccess(dataToSubmit);
         } else if (!isDialog) {
           // If not in dialog mode and no callback, navigate back
           navigate(-1);
