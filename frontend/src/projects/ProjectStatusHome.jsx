@@ -462,7 +462,7 @@ export default function ProjectStatusHome({ user }) {
             value={summary.inProgress}
             subtitle="+1.25%"
             icon={Activity}
-            gradient="linear-gradient(135deg, #66BB6A 0%, #4CAF50 100%)"
+            gradient="linear-gradient(135deg, #42A5F5 0%, #1E88E5 100%)"
             delay={100}
           />
         </Grid>
@@ -502,7 +502,7 @@ export default function ProjectStatusHome({ user }) {
             value={summary.completed}
             subtitle="+3.36%"
             icon={CheckCircle}
-            gradient="linear-gradient(135deg, #5C6BC0 0%, #3F51B5 100%)"
+            gradient="linear-gradient(135deg, #66BB6A 0%, #4CAF50 100%)"
             delay={500}
           />
         </Grid>
@@ -684,8 +684,8 @@ export default function ProjectStatusHome({ user }) {
                                 mt: 0.5,
                                 height: 20,
                                 fontSize: '0.7rem',
-                                bgcolor: alpha(theme.palette.success.main, 0.1),
-                                color: theme.palette.success.main,
+                                bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                color: theme.palette.primary.main,
                                 fontWeight: 'bold'
                               }}
                             />
@@ -768,8 +768,8 @@ export default function ProjectStatusHome({ user }) {
                                 mt: 0.5,
                                 height: 20,
                                 fontSize: '0.7rem',
-                                bgcolor: alpha(theme.palette.primary.main, 0.1),
-                                color: theme.palette.primary.main,
+                                bgcolor: alpha(theme.palette.success.main, 0.1),
+                                color: theme.palette.success.main,
                                 fontWeight: 'bold'
                               }}
                             />
