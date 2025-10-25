@@ -28,7 +28,7 @@ import {
   FormControlLabel,
   FormGroup
 } from '@mui/material'
-import { ChevronRight, ChevronDown, ArrowLeft, ZoomIn, ZoomOut, Calendar, CalendarDays, Settings } from 'lucide-react'
+import { ChevronRight, ChevronDown, ArrowLeft, ZoomIn, ZoomOut, Calendar, CalendarDays, Settings, Edit } from 'lucide-react'
 import { apiCall } from '../config/api'
 import sharedApiService from '../utils/apiService'
 import { useSnackbar } from '../contexts/SnackbarContext'
@@ -1055,7 +1055,7 @@ function GanttChart({ user, projectId: propProjectId }) {
       const statusColor = getStatusColor(node.status || 'New')
       const safeStatusColor = theme.palette[statusColor] ? statusColor : 'primary'
       return (
-        <Box sx={{ pl: 6, borderLeft: '3px solid', borderLeftColor: theme.palette[safeStatusColor].main }}>
+        <Box sx={{ pl: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             {!isActivity && activitiesByProject[node.id] && activitiesByProject[node.id].length > 0 ? (
               <IconButton
@@ -1222,12 +1222,6 @@ function GanttChart({ user, projectId: propProjectId }) {
     return (
       <React.Fragment key={proj.id}>
         <TableRow
-          onClick={() => {
-            // Toggle project expansion when clicking anywhere on the project row
-            if (hasActivities) {
-              toggleProjectExpand(proj.id)
-            }
-          }}
           sx={{
             cursor: hasActivities ? 'pointer' : 'default',
             '&:hover': {
@@ -1237,11 +1231,30 @@ function GanttChart({ user, projectId: propProjectId }) {
         >
           {orderedFields.map((field) => (
             visibleColumns[field.name] && (
-              <TableCell key={field.name}>
+              <TableCell 
+                key={field.name}
+                onClick={() => {
+                  if (hasActivities) {
+                    toggleProjectExpand(proj.id)
+                  }
+                }}
+              >
                 {renderCellContent(proj, field.name, false)}
               </TableCell>
             )
           ))}
+          <TableCell sx={{ textAlign: 'center' }}>
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation()
+                navigate(`/dashboard/projects/project/${proj.id}`)
+              }}
+              sx={{ color: 'primary.main' }}
+            >
+              <Edit size={18} />
+            </IconButton>
+          </TableCell>
         </TableRow>
 
         {/* Render activities if expanded and has activities */}
@@ -1258,28 +1271,42 @@ function GanttChart({ user, projectId: propProjectId }) {
           return (
             <TableRow
               key={`activity-${activity.id}`}
-              onClick={() => navigate(`/dashboard/projects/activity/${activity.id}`, {
-                state: {
-                  returnTo: '/dashboard/projects/gantt',
-                  projectId: projectId,
-                  projectName: projectName
-                }
-              })}
               sx={{
                 '&:hover': {
-                  bgcolor: 'action.hover',
-                  cursor: 'pointer'
+                  bgcolor: 'action.hover'
                 },
                 bgcolor: alpha('#000', 0.02)
               }}
             >
               {orderedFields.map((field) => (
                 visibleColumns[field.name] && (
-                  <TableCell key={field.name}>
+                  <TableCell 
+                    key={field.name}
+                    onClick={() => navigate(`/dashboard/projects/activity/${activity.id}`, {
+                      state: {
+                        returnTo: '/dashboard/projects/gantt',
+                        projectId: projectId,
+                        projectName: projectName
+                      }
+                    })}
+                    sx={{ cursor: 'pointer' }}
+                  >
                     {renderCellContent(activity, field.name, true)}
                   </TableCell>
                 )
               ))}
+              <TableCell sx={{ textAlign: 'center' }}>
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    navigate(`/dashboard/projects/activity/${activity.id}`)
+                  }}
+                  sx={{ color: 'primary.main' }}
+                >
+                  <Edit size={18} />
+                </IconButton>
+              </TableCell>
             </TableRow>
           )
         })}
@@ -1552,7 +1579,7 @@ function GanttChart({ user, projectId: propProjectId }) {
               sx={{ 
                 textTransform: 'none',
                 fontWeight: 500,
-                minWidth: '100px',
+                minWidth: '200px',
                 borderColor: 'divider',
                 color: 'text.secondary'
               }}
@@ -1572,11 +1599,15 @@ function GanttChart({ user, projectId: propProjectId }) {
                 <TableRow>
                   {orderedFields.map((field) => (
                     visibleColumns[field.name] && (
-                      <TableCell key={field.name}>
+                      <TableCell 
+                        key={field.name}
+                        sx={field.name === 'name' ? { width: '550px' } : {}}
+                      >
                         {field.label}
                       </TableCell>
                     )
                   ))}
+                  <TableCell sx={{ width: '80px', textAlign: 'center' }}>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1594,7 +1625,7 @@ function GanttChart({ user, projectId: propProjectId }) {
                           }
                         }}
                       >
-                        <TableCell colSpan={Object.values(visibleColumns).filter(Boolean).length} sx={{ py: 1 }}>
+                        <TableCell colSpan={Object.values(visibleColumns).filter(Boolean).length + 1} sx={{ py: 1 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <IconButton
                               size="small"

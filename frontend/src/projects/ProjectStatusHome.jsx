@@ -63,6 +63,12 @@ import sharedApiService from '../utils/apiService'
 import { useSnackbar } from '../contexts/SnackbarContext'
 import ProjectChat from './ProjectChat'
 
+// localStorage keys for state persistence
+const STORAGE_KEYS = {
+  SORT_FIELD: 'projectStatusHome_sortField',
+  SORT_ORDER: 'projectStatusHome_sortOrder'
+}
+
 // Summary Card Component
 const SummaryCard = ({ title, value, subtitle, icon: Icon, gradient, delay = 0 }) => {
   const theme = useTheme()
@@ -153,6 +159,33 @@ export default function ProjectStatusHome({ user }) {
   const tokenRef = useRef(user?.token)
   tokenRef.current = user?.token
 
+  // Helper functions for localStorage state persistence
+  const saveStateToStorage = useCallback((key, value) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value))
+    } catch (error) {
+      console.warn('Failed to save state to localStorage:', error)
+    }
+  }, [])
+
+  const loadStateFromStorage = useCallback((key, defaultValue) => {
+    try {
+      const saved = localStorage.getItem(key)
+      return saved ? JSON.parse(saved) : defaultValue
+    } catch (error) {
+      console.warn('Failed to load state from localStorage:', error)
+      return defaultValue
+    }
+  }, [])
+
+  const clearStoredState = useCallback(() => {
+    try {
+      Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key))
+    } catch (error) {
+      console.warn('Failed to clear stored state:', error)
+    }
+  }, [])
+
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState({
     total: 0,
@@ -165,10 +198,10 @@ export default function ProjectStatusHome({ user }) {
   const [districtData, setDistrictData] = useState([])
   const [projectTree, setProjectTree] = useState([])
   
-  // Filter and sort state
+  // Filter and sort state - load from localStorage with fallbacks
   const [filters, setFilters] = useState([])
-  const [sortField, setSortField] = useState(null)
-  const [sortOrder, setSortOrder] = useState('asc')
+  const [sortField, setSortField] = useState(() => loadStateFromStorage(STORAGE_KEYS.SORT_FIELD, null))
+  const [sortOrder, setSortOrder] = useState(() => loadStateFromStorage(STORAGE_KEYS.SORT_ORDER, 'asc'))
   const [filteredAndSortedData, setFilteredAndSortedData] = useState([])
   
   // Filter dialog state
@@ -247,6 +280,15 @@ export default function ProjectStatusHome({ user }) {
     const result = applyFiltersAndSort(districtData)
     setFilteredAndSortedData(result)
   }, [districtData, applyFiltersAndSort])
+
+  // Save state to localStorage when sort changes
+  useEffect(() => {
+    saveStateToStorage(STORAGE_KEYS.SORT_FIELD, sortField)
+  }, [sortField, saveStateToStorage])
+
+  useEffect(() => {
+    saveStateToStorage(STORAGE_KEYS.SORT_ORDER, sortOrder)
+  }, [sortOrder, saveStateToStorage])
 
   // Filter handlers
   const handleOpenFilterDialog = () => {
