@@ -1370,59 +1370,88 @@ function GanttChart({ user, projectId: propProjectId }) {
               bgcolor: alpha('#000', 0.02)
             }}>
               {activity.start_date && activity.due_date && (
-                <Tooltip 
-                  title={createTooltipContent(activity, 'activity')}
-                  arrow
-                  placement="top"
-                  enterDelay={200}
-                  leaveDelay={300}
-                  enterNextDelay={100}
-                  componentsProps={{
-                    tooltip: {
-                      sx: {
-                        bgcolor: 'transparent',
-                        '& .MuiTooltip-arrow': {
-                          color: theme.palette[safeActivityStatusColor].main,
+                <>
+                  <Tooltip 
+                    title={createTooltipContent(activity, 'activity')}
+                    arrow
+                    placement="top"
+                    enterDelay={200}
+                    leaveDelay={300}
+                    enterNextDelay={100}
+                    componentsProps={{
+                      tooltip: {
+                        sx: {
+                          bgcolor: 'transparent',
+                          '& .MuiTooltip-arrow': {
+                            color: theme.palette[safeActivityStatusColor].main,
+                          },
                         },
                       },
-                    },
-                  }}
-                >
-                  <Box 
-                    onClick={() => navigate(`/dashboard/projects/activity/${activity.id}`, {
-                      state: {
-                        returnTo: '/dashboard/projects/gantt',
-                        projectId: projectId,
-                        projectName: projectName
-                      }
-                    })}
+                    }}
+                  >
+                    <Box 
+                      onClick={() => navigate(`/dashboard/projects/activity/${activity.id}`, {
+                        state: {
+                          returnTo: '/dashboard/projects/gantt',
+                          projectId: projectId,
+                          projectName: projectName
+                        }
+                      })}
+                      sx={{
+                        position: 'absolute',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        height: 16,
+                        backgroundColor: 'transparent', // Hollow - no fill
+                        opacity: 1,
+                        borderRadius: 2,
+                        cursor: 'pointer',
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                        border: `2px solid ${theme.palette[safeActivityStatusColor].main}`, // Solid border with color
+                        boxShadow: 'none',
+                        '&:hover': {
+                          height: 20,
+                          backgroundColor: alpha(theme.palette[safeActivityStatusColor].main, 0.1), // Slight fill on hover
+                          transform: 'translateY(-50%) scale(1.05)',
+                          border: `2px solid ${theme.palette[safeActivityStatusColor].dark}`,
+                          boxShadow: `0 2px 6px ${alpha(theme.palette[safeActivityStatusColor].main, 0.3)}`,
+                          zIndex: 10,
+                        },
+                        '&:active': {
+                          transform: 'translateY(-50%) scale(0.98)',
+                        },
+                        ...calculateBarPosition(activity.start_date, activity.due_date)
+                      }} 
+                    />
+                  </Tooltip>
+                  
+                  {/* Status label on top of the timeline bar */}
+                  <Typography
+                    variant="caption"
                     sx={{
                       position: 'absolute',
                       top: '50%',
-                      transform: 'translateY(-50%)',
-                      height: 16,
-                      backgroundColor: theme.palette[safeActivityStatusColor].main,
-                      opacity: 0.75,
-                      borderRadius: 2,
-                      cursor: 'pointer',
-                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                      border: `1px solid ${alpha(theme.palette[safeActivityStatusColor].main, 0.3)}`,
-                      boxShadow: `0 1px 3px ${alpha(theme.palette[safeActivityStatusColor].main, 0.2)}`,
-                      '&:hover': {
-                        opacity: 1,
-                        height: 20,
-                        backgroundColor: theme.palette[safeActivityStatusColor].dark,
-                        transform: 'translateY(-50%) scale(1.05)',
-                        boxShadow: `0 3px 8px ${alpha(theme.palette[safeActivityStatusColor].main, 0.4)}`,
-                        zIndex: 10,
-                      },
-                      '&:active': {
-                        transform: 'translateY(-50%) scale(0.98)',
-                      },
-                      ...calculateBarPosition(activity.start_date, activity.due_date)
-                    }} 
-                  />
-                </Tooltip>
+                      fontSize: '0.65rem',
+                      color: theme.palette[safeActivityStatusColor].contrastText,
+                      fontWeight: 600,
+                      opacity: 1,
+                      pointerEvents: 'none',
+                      whiteSpace: 'nowrap',
+                      lineHeight: '16px',
+                      textAlign: 'center',
+                      ...(() => {
+                        const barPos = calculateBarPosition(activity.start_date, activity.due_date)
+                        return {
+                          left: barPos.left,
+                          width: barPos.width,
+                          transform: 'translateY(-50%)',
+                        }
+                      })()
+                    }}
+                  >
+                    {getStatusLabel(activity.status)}
+                  </Typography>
+                </>
               )}
             </Box>
           )
