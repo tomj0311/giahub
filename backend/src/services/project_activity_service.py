@@ -232,37 +232,58 @@ class ProjectActivityService:
                         operator = f.get("operator")
                         value = f.get("value")
                         
+                        if not field or not operator:
+                            continue
+                        
                         if operator == "equals":
                             filter_query[field] = value
                         elif operator == "not_equals":
                             filter_query[field] = {"$ne": value}
                         elif operator == "contains":
-                            filter_query[field] = {"$regex": value, "$options": "i"}
+                            filter_query[field] = {"$regex": str(value), "$options": "i"}
                         elif operator == "starts_with":
                             filter_query[field] = {"$regex": f"^{value}", "$options": "i"}
                         elif operator == "ends_with":
                             filter_query[field] = {"$regex": f"{value}$", "$options": "i"}
                         elif operator == "greater_than":
-                            filter_query[field] = {"$gt": float(value) if isinstance(value, str) else value}
+                            # Handle numeric conversions
+                            try:
+                                numeric_value = float(value) if isinstance(value, str) else value
+                                filter_query[field] = {"$gt": numeric_value}
+                            except (ValueError, TypeError):
+                                filter_query[field] = {"$gt": value}
                         elif operator == "less_than":
-                            filter_query[field] = {"$lt": float(value) if isinstance(value, str) else value}
+                            # Handle numeric conversions
+                            try:
+                                numeric_value = float(value) if isinstance(value, str) else value
+                                filter_query[field] = {"$lt": numeric_value}
+                            except (ValueError, TypeError):
+                                filter_query[field] = {"$lt": value}
                         elif operator == "between":
-                            if isinstance(value, str):
-                                parts = value.split(',')
-                                filter_query[field] = {"$gte": parts[0], "$lte": parts[1]}
-                            elif isinstance(value, list) and len(value) == 2:
+                            # Value should be an array [start, end]
+                            if isinstance(value, list) and len(value) == 2:
                                 filter_query[field] = {"$gte": value[0], "$lte": value[1]}
+                            elif isinstance(value, str):
+                                # Fallback for comma-separated string
+                                parts = value.split(',')
+                                if len(parts) == 2:
+                                    filter_query[field] = {"$gte": parts[0].strip(), "$lte": parts[1].strip()}
                         elif operator == "before":
                             filter_query[field] = {"$lt": value}
                         elif operator == "after":
                             filter_query[field] = {"$gt": value}
                         elif operator == "in":
-                            if isinstance(value, str):
-                                filter_query[field] = {"$in": value.split(',')}
-                            elif isinstance(value, list):
+                            # Value should be an array
+                            if isinstance(value, list):
                                 filter_query[field] = {"$in": value}
+                            elif isinstance(value, str):
+                                # Fallback for comma-separated string
+                                filter_query[field] = {"$in": [v.strip() for v in value.split(',')]}
                 except json.JSONDecodeError:
                     logger.warning(f"[ACTIVITY] Invalid filters JSON: {filters}")
+                except Exception as e:
+                    logger.error(f"[ACTIVITY] Error processing filters: {e}")
+            
             
             skip = (page - 1) * page_size
             total_count = await MongoStorageService.count_documents("projectActivities", filter_query, tenant_id=tenant_id)

@@ -459,9 +459,24 @@ function ProjectPlanning({ user, projectId }) {
   }
 
   const handleAddFilter = () => {
-    if (!currentFilter.field || !currentFilter.operator || !currentFilter.value) {
-      showError('Please fill all filter fields')
+    if (!currentFilter.field || !currentFilter.operator) {
+      showError('Please select field and operator')
       return
+    }
+
+    // For 'between' operator, check if we have both start and end values
+    if (currentFilter.operator === 'between') {
+      const parts = Array.isArray(currentFilter.value) ? currentFilter.value : String(currentFilter.value || ',').split(',')
+      if (!parts[0] || !parts[1]) {
+        showError('Please provide both start and end values for "Between" filter')
+        return
+      }
+    } else {
+      // For other operators, check if value is provided
+      if (!currentFilter.value && currentFilter.value !== 0 && currentFilter.value !== false) {
+        showError('Please provide a filter value')
+        return
+      }
     }
 
     // Coerce value types based on field metadata so backend comparisons (especially equals) work
@@ -478,23 +493,26 @@ function ProjectPlanning({ user, projectId }) {
           : String(coercedValue).split(',')
 
         if (fieldDef.type === 'number') {
-          coercedValue = parts.map(p => (p === '' || p === null || p === undefined) ? undefined : Number(p))
-        } else if (fieldDef.type === 'boolean') {
-          coercedValue = parts.map(p => (p === true || p === 'true'))
+          coercedValue = parts.map(p => {
+            const val = p === '' || p === null || p === undefined ? null : Number(p)
+            return val
+          }).filter(v => v !== null)
+          
+          if (coercedValue.length !== 2) {
+            showError('Please provide valid numeric values for both start and end')
+            return
+          }
+        } else if (fieldDef.type === 'date') {
+          // Keep as strings for dates
+          coercedValue = parts.filter(p => p !== '' && p !== null && p !== undefined)
+          
+          if (coercedValue.length !== 2) {
+            showError('Please provide both start and end dates')
+            return
+          }
         } else {
-          // date/text/select -> keep as strings
-          coercedValue = parts
-        }
-      }
-      // Normalize 'in' to an array of values
-      else if (op === 'in') {
-        const parts = Array.isArray(coercedValue) ? coercedValue : String(coercedValue).split(',')
-        if (fieldDef.type === 'number') {
-          coercedValue = parts.map(p => Number(p))
-        } else if (fieldDef.type === 'boolean') {
-          coercedValue = parts.map(p => (p === true || p === 'true'))
-        } else {
-          coercedValue = parts
+          // text/select -> keep as strings
+          coercedValue = parts.filter(p => p !== '' && p !== null && p !== undefined)
         }
       }
       // For direct comparisons, coerce primitives
@@ -582,6 +600,38 @@ function ProjectPlanning({ user, projectId }) {
     return filter.value
   }
 
+  // Get available operators based on field type
+  const getOperatorsForFieldType = (fieldType) => {
+    switch (fieldType) {
+      case 'number':
+        return [
+          { value: 'equals', label: 'Equals' },
+          { value: 'not_equals', label: 'Not Equals' },
+          { value: 'greater_than', label: 'Greater Than' },
+          { value: 'less_than', label: 'Less Than' },
+          { value: 'between', label: 'Between' }
+        ]
+      case 'date':
+        return [
+          { value: 'equals', label: 'Equals' },
+          { value: 'not_equals', label: 'Not Equals' },
+          { value: 'before', label: 'Before' },
+          { value: 'after', label: 'After' },
+          { value: 'between', label: 'Between' }
+        ]
+      case 'text':
+      case 'select':
+      default:
+        return [
+          { value: 'equals', label: 'Equals' },
+          { value: 'not_equals', label: 'Not Equals' },
+          { value: 'contains', label: 'Contains' },
+          { value: 'starts_with', label: 'Starts With' },
+          { value: 'ends_with', label: 'Ends With' }
+        ]
+    }
+  }
+
   // Render filter value input based on type
   const renderFilterValueInput = () => {
     const fieldDef = getFieldDef(currentFilter.field)
@@ -599,14 +649,12 @@ function ProjectPlanning({ user, projectId }) {
           <TextField
             label="Start"
             type={fieldDef.type === 'date' ? 'date' : fieldDef.type === 'number' ? 'number' : 'text'}
-            value={start}
+            value={start || ''}
             onChange={(e) => {
               const newStart = e.target.value
               let newPair
               if (fieldDef.type === 'number') {
                 newPair = [newStart === '' ? '' : Number(newStart), end === '' ? '' : Number(end)]
-              } else if (fieldDef.type === 'boolean') {
-                newPair = [newStart === 'true', end === 'true']
               } else {
                 newPair = [newStart, end]
               }
@@ -618,14 +666,12 @@ function ProjectPlanning({ user, projectId }) {
           <TextField
             label="End"
             type={fieldDef.type === 'date' ? 'date' : fieldDef.type === 'number' ? 'number' : 'text'}
-            value={end}
+            value={end || ''}
             onChange={(e) => {
               const newEnd = e.target.value
               let newPair
               if (fieldDef.type === 'number') {
                 newPair = [start === '' ? '' : Number(start), newEnd === '' ? '' : Number(newEnd)]
-              } else if (fieldDef.type === 'boolean') {
-                newPair = [start === 'true', newEnd === 'true']
               } else {
                 newPair = [start, newEnd]
               }
@@ -638,103 +684,13 @@ function ProjectPlanning({ user, projectId }) {
       )
     }
 
-    // Special handling for project_id field - show project names but use IDs as values
-    if (currentFilter.field === 'project_id') {
-      if (operator === 'in') {
-        return (
-          <FormControl fullWidth>
-            <InputLabel>Projects</InputLabel>
-            <Select
-              multiple
-              value={Array.isArray(currentFilter.value) ? currentFilter.value : (currentFilter.value ? [currentFilter.value] : [])}
-              label="Projects"
-              onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
-            >
-              {projects.map(project => (
-                <MenuItem key={project.id} value={project.id}>{project.name}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        )
-      } else {
-        return (
-          <FormControl fullWidth>
-            <InputLabel>Project</InputLabel>
-            <Select
-              value={currentFilter.value ?? ''}
-              label="Project"
-              onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
-            >
-              {projects.map(project => (
-                <MenuItem key={project.id} value={project.id}>{project.name}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        )
-      }
-    }
-
-    // "In" operator for select fields
-    if (operator === 'in' && fieldDef.type === 'select') {
-      return (
-        <FormControl fullWidth>
-          <InputLabel>Values</InputLabel>
-          <Select
-            multiple
-            value={Array.isArray(currentFilter.value) ? currentFilter.value : (currentFilter.value ? String(currentFilter.value).split(',') : [])}
-            label="Values"
-            onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
-          >
-            {(fieldDef.options || []).map(opt => (
-              <MenuItem key={opt} value={opt}>{opt}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      )
-    }
-
-    // Select type with options
-    if (fieldDef.type === 'select' && fieldDef.options) {
-      return (
-        <FormControl fullWidth>
-          <InputLabel>Value</InputLabel>
-          <Select
-            value={currentFilter.value ?? ''}
-            label="Value"
-            onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
-          >
-            {fieldDef.options.map(opt => (
-              <MenuItem key={opt} value={opt}>{opt}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      )
-    }
-
-    // Boolean type
-    if (fieldDef.type === 'boolean') {
-      return (
-        <FormControl fullWidth>
-          <InputLabel>Value</InputLabel>
-          <Select
-            value={currentFilter.value === true || currentFilter.value === false ? currentFilter.value : ''}
-            label="Value"
-            onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value === 'true' ? true : e.target.value === 'false' ? false : e.target.value })}
-          >
-            <MenuItem value={true}>True</MenuItem>
-            <MenuItem value={false}>False</MenuItem>
-          </Select>
-        </FormControl>
-      )
-    }
-
     // Date type
     if (fieldDef.type === 'date') {
       return (
         <TextField
           label="Value"
           type="date"
-          value={currentFilter.value}
+          value={currentFilter.value || ''}
           onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
           InputLabelProps={{ shrink: true }}
           fullWidth
@@ -748,19 +704,21 @@ function ProjectPlanning({ user, projectId }) {
         <TextField
           label="Value"
           type="number"
-          value={currentFilter.value}
+          value={currentFilter.value || ''}
           onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
           fullWidth
         />
       )
     }
 
-    // Default text input
+    // Default text input for all other types (text, select, etc.)
     return (
       <TextField
         label="Value"
-        value={currentFilter.value}
+        type="text"
+        value={currentFilter.value || ''}
         onChange={(e) => setCurrentFilter({ ...currentFilter, value: e.target.value })}
+        placeholder="Enter value..."
         fullWidth
       />
     )
@@ -1290,9 +1248,9 @@ function ProjectPlanning({ user, projectId }) {
                   label="Operator"
                   onChange={(e) => setCurrentFilter({ ...currentFilter, operator: e.target.value, value: '' })}
                 >
-                  {(getFieldDef(currentFilter.field)?.operators || []).map(op => (
-                    <MenuItem key={op} value={op}>
-                      {getOperatorLabel(op)}
+                  {getOperatorsForFieldType(getFieldDef(currentFilter.field)?.type).map(op => (
+                    <MenuItem key={op.value} value={op.value}>
+                      {op.label}
                     </MenuItem>
                   ))}
                 </Select>

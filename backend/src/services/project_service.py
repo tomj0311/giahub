@@ -568,35 +568,50 @@ class ProjectService:
                 if not field or not operator:
                     continue
                 
-                # Text operators
-                if operator == "contains":
-                    query[field] = {"$regex": str(value), "$options": "i"}
-                elif operator == "equals":
+                if operator == "equals":
                     query[field] = value
                 elif operator == "not_equals":
                     query[field] = {"$ne": value}
+                elif operator == "contains":
+                    query[field] = {"$regex": str(value), "$options": "i"}
                 elif operator == "starts_with":
                     query[field] = {"$regex": f"^{value}", "$options": "i"}
                 elif operator == "ends_with":
                     query[field] = {"$regex": f"{value}$", "$options": "i"}
-                
-                # Number operators
                 elif operator == "greater_than":
-                    query[field] = {"$gt": float(value)}
+                    # Handle numeric conversions
+                    try:
+                        numeric_value = float(value) if isinstance(value, str) else value
+                        query[field] = {"$gt": numeric_value}
+                    except (ValueError, TypeError):
+                        query[field] = {"$gt": value}
                 elif operator == "less_than":
-                    query[field] = {"$lt": float(value)}
-                elif operator == "between" and isinstance(value, list) and len(value) == 2:
-                    query[field] = {"$gte": float(value[0]), "$lte": float(value[1])}
-                
-                # Date operators
+                    # Handle numeric conversions
+                    try:
+                        numeric_value = float(value) if isinstance(value, str) else value
+                        query[field] = {"$lt": numeric_value}
+                    except (ValueError, TypeError):
+                        query[field] = {"$lt": value}
+                elif operator == "between":
+                    # Value should be an array [start, end]
+                    if isinstance(value, list) and len(value) == 2:
+                        query[field] = {"$gte": value[0], "$lte": value[1]}
+                    elif isinstance(value, str):
+                        # Fallback for comma-separated string
+                        parts = value.split(',')
+                        if len(parts) == 2:
+                            query[field] = {"$gte": parts[0].strip(), "$lte": parts[1].strip()}
                 elif operator == "before":
                     query[field] = {"$lt": value}
                 elif operator == "after":
                     query[field] = {"$gt": value}
-                
-                # Array operators
-                elif operator == "in" and isinstance(value, list):
-                    query[field] = {"$in": value}
+                elif operator == "in":
+                    # Value should be an array
+                    if isinstance(value, list):
+                        query[field] = {"$in": value}
+                    elif isinstance(value, str):
+                        # Fallback for comma-separated string
+                        query[field] = {"$in": [v.strip() for v in value.split(',')]}
             
             return query
             
