@@ -342,17 +342,13 @@ export default function Agent({ user }) {
         stream: form.stream,
       }
       
-      // Include ID only if editing an existing agent
+      // Include ID if editing an existing agent (for backend to identify update vs create)
       if (form.id) {
         payload.id = form.id
       }
       
-      // Use PUT method for updates, POST for creates
-      const method = form.id ? 'PUT' : 'POST'
-      const endpoint = form.id ? `/api/agents/id/${form.id}` : `/api/agents`
-      
-      const resp = await apiCall(endpoint, {
-        method: method,
+      const resp = await apiCall(`/api/agents`, {
+        method: 'POST',
         headers: authHeaders,
         body: JSON.stringify(payload),
       })
