@@ -479,7 +479,7 @@ class ProjectService:
                 sample = samples[0]
                 
                 # Check if it's a date
-                if 'date' in field_name.lower() or 'at' in field_name.lower():
+                if 'date' in field_name.lower():
                     field_meta["type"] = "date"
                     field_meta["operators"] = ["equals", "before", "after", "between"]
                 # Check if it's a number

@@ -203,7 +203,18 @@ function GanttChart({ user, projectId: propProjectId }) {
             label={getStatusLabel(item.status)} 
             color={safeStatusColor} 
             size="small" 
-            sx={{ fontSize: '0.7rem' }}
+            sx={(chipTheme) => ({ 
+              fontSize: '0.7rem',
+              fontWeight: 600,
+              color: chipTheme.palette.getContrastText(
+                chipTheme.palette[safeStatusColor]?.main || chipTheme.palette.grey[500]
+              ),
+              '& .MuiChip-label': {
+                color: chipTheme.palette.getContrastText(
+                  chipTheme.palette[safeStatusColor]?.main || chipTheme.palette.grey[500]
+                )
+              }
+            })}
           />
         </Box>
         
@@ -1087,6 +1098,17 @@ function GanttChart({ user, projectId: propProjectId }) {
           color={statusColorForChip}
           size="small"
           variant={isActivity ? "outlined" : "filled"}
+          sx={(theme) => ({
+            fontWeight: 600,
+            color: isActivity ? undefined : theme.palette.getContrastText(
+              theme.palette[statusColorForChip]?.main || theme.palette.grey[500]
+            ),
+            '& .MuiChip-label': {
+              color: isActivity ? undefined : theme.palette.getContrastText(
+                theme.palette[statusColorForChip]?.main || theme.palette.grey[500]
+              )
+            }
+          })}
         />
       )
     }
@@ -1131,16 +1153,18 @@ function GanttChart({ user, projectId: propProjectId }) {
     }
     
     const colors = {
+      // Project statuses
       IN_PROGRESS: 'primary',
       AT_RISK: 'warning',
       OFF_TRACK: 'error',
       PLANNING: 'secondary',
       COMPLETED: 'success',
-      'New': 'info',
-      'In Progress': 'primary',
-      'On Hold': 'warning',
-      'Completed': 'success',
-      'Cancelled': 'error'
+      // Activity statuses
+      'NEW': 'info',
+      'IN_PROGRESS': 'primary',
+      'ON_HOLD': 'warning',
+      'COMPLETED': 'success',
+      'CANCELLED': 'error'
     }
     const color = colors[status] || 'primary'
     
@@ -1156,11 +1180,18 @@ function GanttChart({ user, projectId: propProjectId }) {
 
   const getStatusLabel = (status) => {
     const labels = {
+      // Project statuses
       IN_PROGRESS: 'In Progress',
       AT_RISK: 'At Risk',
       OFF_TRACK: 'Off Track',
       PLANNING: 'Planning',
-      COMPLETED: 'Completed'
+      COMPLETED: 'Completed',
+      // Activity statuses
+      'NEW': 'New',
+      'IN_PROGRESS': 'In Progress',
+      'ON_HOLD': 'On Hold',
+      'COMPLETED': 'Completed',
+      'CANCELLED': 'Cancelled'
     }
     return labels[status] || status
   }

@@ -789,13 +789,26 @@ function ProjectPlanning({ user, projectId }) {
 
   const getStatusColor = (status) => {
     const colors = {
-      'New': 'info',
-      'In Progress': 'primary',
-      'On Hold': 'warning',
-      'Completed': 'success',
-      'Cancelled': 'error'
+      'NEW': 'info',
+      'PLANNING': 'secondary',
+      'IN_PROGRESS': 'primary',
+      'ON_HOLD': 'warning',
+      'COMPLETED': 'success',
+      'CANCELLED': 'error'
     }
     return colors[status] || 'default'
+  }
+
+  const getStatusLabel = (status) => {
+    const labels = {
+      'NEW': 'New',
+      'PLANNING': 'Planning',
+      'IN_PROGRESS': 'In Progress',
+      'ON_HOLD': 'On Hold',
+      'COMPLETED': 'Completed',
+      'CANCELLED': 'Cancelled'
+    }
+    return labels[status] || status
   }
 
   const getTypeIcon = (type) => {
@@ -879,11 +892,23 @@ function ProjectPlanning({ user, projectId }) {
     }
     
     if (fieldName === 'status') {
+      const statusColorForChip = getStatusColor(value)
       return (
         <Chip
-          label={value}
-          color={getStatusColor(value)}
+          label={getStatusLabel(value)}
+          color={statusColorForChip}
           size="small"
+          sx={(theme) => ({
+            fontWeight: 600,
+            color: theme.palette.getContrastText(
+              theme.palette[statusColorForChip]?.main || theme.palette.grey[500]
+            ),
+            '& .MuiChip-label': {
+              color: theme.palette.getContrastText(
+                theme.palette[statusColorForChip]?.main || theme.palette.grey[500]
+              )
+            }
+          })}
         />
       )
     }

@@ -414,28 +414,36 @@ function ProjectDashboard({ user }) {
 
   const getStatusColor = (status) => {
     const colors = {
+      // Project statuses
       IN_PROGRESS: 'success',
       AT_RISK: 'warning',
       OFF_TRACK: 'error',
       PLANNING: 'secondary',
       COMPLETED: 'info',
       // Activity statuses
-      'New': 'info',
-      'In Progress': 'primary',
-      'On Hold': 'warning',
-      'Completed': 'success',
-      'Cancelled': 'error'
+      'NEW': 'info',
+      'IN_PROGRESS': 'primary',
+      'ON_HOLD': 'warning',
+      'COMPLETED': 'success',
+      'CANCELLED': 'error'
     }
     return colors[status] || 'default'
   }
 
   const getStatusLabel = (status) => {
     const labels = {
+      // Project statuses
       IN_PROGRESS: 'In Progress',
       AT_RISK: 'At Risk',
       OFF_TRACK: 'Off Track',
       PLANNING: 'Planning',
-      COMPLETED: 'Completed'
+      COMPLETED: 'Completed',
+      // Activity statuses
+      'NEW': 'New',
+      'IN_PROGRESS': 'In Progress',
+      'ON_HOLD': 'On Hold',
+      'COMPLETED': 'Completed',
+      'CANCELLED': 'Cancelled'
     }
     return labels[status] || status
   }
