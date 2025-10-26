@@ -123,7 +123,6 @@ class WorkflowServicePersistent:
                     def did_complete_Task(task):
                         logger.info(f"[TRACE] Completed task: {task.task_spec.bpmn_id} ({type(task.task_spec).__name__})")
                         # Schedule the async update in the event loop from worker thread
-                        # The loop variable is captured from the enclosing scope
                         future = asyncio.run_coroutine_threadsafe(
                             cls._update_workflow_status(workflow, instance_id, tenant_id, step_count),
                             loop

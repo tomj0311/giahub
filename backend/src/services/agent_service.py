@@ -379,6 +379,9 @@ class AgentService:
     @classmethod
     async def upsert_agent(cls, payload: dict, user: dict) -> Dict[str, str]:
         """Create or update agent by name (unique per tenant)"""
+        from bson import ObjectId
+        from bson.errors import InvalidId
+        
         name = (payload.get("name") or "").strip()
         if not name:
             logger.warning("[AGENTS] Upsert agent failed - name is required")
@@ -399,21 +402,45 @@ class AgentService:
             # Normalize name (trim whitespace) before saving to enforce consistency
             record["name"] = name
 
-            # Try exact match first
-            existing = await MongoStorageService.find_one("agents", {"name": name}, tenant_id=tenant_id)
-            # If not found, try whitespace-insensitive match to catch names stored with extra spaces
+            existing = None
+            agent_id = payload.get("id")
+            
+            # If ID is provided, this is an update - find by ID first
+            if agent_id:
+                try:
+                    object_id = ObjectId(agent_id)
+                    existing = await MongoStorageService.find_one("agents", {"_id": object_id}, tenant_id=tenant_id)
+                    if existing:
+                        logger.info(f"[AGENTS] Found existing agent by ID '{agent_id}' for update")
+                        # Remove the 'id' field from record as it should not be stored (we use _id)
+                        record.pop("id", None)
+                except (InvalidId, Exception) as e:
+                    logger.warning(f"[AGENTS] Invalid or not found agent ID '{agent_id}': {e}")
+            
+            # If not found by ID, try to find by name (for backward compatibility)
             if not existing:
-                import re
-                pattern = f"^\\s*{re.escape(name)}\\s*$"
-                existing = await MongoStorageService.find_one(
-                    "agents",
-                    {"name": {"$regex": pattern}},
-                    tenant_id=tenant_id,
-                )
+                # Try exact match first
+                existing = await MongoStorageService.find_one("agents", {"name": name}, tenant_id=tenant_id)
+                # If not found, try whitespace-insensitive match to catch names stored with extra spaces
+                if not existing:
+                    import re
+                    pattern = f"^\\s*{re.escape(name)}\\s*$"
+                    existing = await MongoStorageService.find_one(
+                        "agents",
+                        {"name": {"$regex": pattern}},
+                        tenant_id=tenant_id,
+                    )
+            
             if existing:
+                # Update existing agent
+                # Remove the 'id' field from record as it should not be stored (we use _id)
+                record.pop("id", None)
                 await MongoStorageService.update_one("agents", {"_id": existing["_id"]}, {"$set": record}, tenant_id=tenant_id)
                 action = "updated"
             else:
+                # Create new agent
+                # Remove the 'id' field from record as MongoDB will generate _id
+                record.pop("id", None)
                 record["created_at"] = datetime.utcnow()
                 await MongoStorageService.insert_one("agents", record, tenant_id=tenant_id)
                 action = "created"

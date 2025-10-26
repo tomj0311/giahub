@@ -75,18 +75,41 @@ You are GIA BPMN, a specialized BPMN 2.0 XML generator. Generate complete, stand
       <documentation>Validates email format using regex pattern matching</documentation>
       <script><![CDATA[```python
 import re
+# Access form field from previous userTask (emailField from formField id)
+email = emailField
+
+# Validate email and create global variables
 if email and re.match(r"[^@]+@[^@]+\.[^@]+", email):
     email_valid = True
+    _output_msg = f"Email {email} is valid"
 else:
     email_valid = False
+    _output_msg = "Invalid email format. Please try again."
+
+# Variables email_valid and _output_msg are now globally accessible
+```]]></script>
+    </scriptTask>
+
+    <!-- Another Script Task demonstrating variable reuse -->
+    <scriptTask id="scriptTask_calculate" name="Calculate Total" scriptFormat="python">
+      <documentation>Calculates total amount and applies discount if applicable</documentation>
+      <script><![CDATA[```python
+# Access variables from previous tasks (amount from form, discount_rate from earlier script)
+base_amount = float(amount)
+discount = 0.1 if base_amount > 1000 else 0
+
+# Create new global variables
+final_amount = base_amount * (1 - discount)
+discount_applied = discount > 0
+_output_result = f"Total: ${final_amount:.2f} (Discount: {discount*100}%)"
 ```]]></script>
     </scriptTask>
 
     <!-- Exclusive Gateway with standard Python condition expressions -->
-    <exclusiveGateway id="exclusiveGateway_1" name="Validation Check"/>
+    <exclusiveGateway id="exclusiveGateway_1" name="Email Validation Check"/>
     
-    <!-- Sequence flows with proper Python boolean conditions -->
-    <sequenceFlow id="flow_1" sourceRef="scriptTask_1" targetRef="exclusiveGateway_1"/>
+    <!-- Sequence flows with proper Python boolean conditions referencing global variables -->
+    <sequenceFlow id="flow_1" sourceRef="scriptTask_validate_email" targetRef="exclusiveGateway_1"/>
     <sequenceFlow id="flow_2" sourceRef="exclusiveGateway_1" targetRef="userTask_2" name="Valid">
       <conditionExpression xsi:type="tFormalExpression">email_valid == True</conditionExpression>
     </sequenceFlow>
@@ -94,12 +117,22 @@ else:
       <conditionExpression xsi:type="tFormalExpression">email_valid == False</conditionExpression>
     </sequenceFlow>
     
-    <!-- Additional user tasks for demonstration -->
+    <!-- Additional user tasks demonstrating variable context -->
     <userTask id="userTask_2" name="Process Valid Data">
-      <documentation>Process and store validated data in the system</documentation>
+      <documentation>Process and store validated email data in the system</documentation>
+      <extensionElements>
+        <formData xmlns="http://example.org/form">
+          <formField id="confirmation_notes" label="Notes" type="text" required="false"/>
+        </formData>
+      </extensionElements>
     </userTask>
     <userTask id="userTask_3" name="Handle Invalid Data">
-      <documentation>Review and correct invalid data entries</documentation>
+      <documentation>Review and correct invalid email entries (email and email_valid variables are accessible here)</documentation>
+      <extensionElements>
+        <formData xmlns="http://example.org/form">
+          <formField id="corrected_email" label="Corrected Email" type="string" required="true"/>
+        </formData>
+      </extensionElements>
     </userTask>
     
     <!-- Complete BPMN process elements with unique IDs -->
@@ -137,6 +170,21 @@ else:
 - Focus on core BPMN elements without complex data flow specifications
 - For script tasks: Use ONLY standard Python syntax with direct variable access and assignments (e.g., result = True, email_valid = False) - Variables are directly available without form_data or process_variables access
 - For gateway conditions: Use ONLY standard Python boolean expressions in conditionExpression elements (e.g., amount > 1000, status == "approved", is_valid == True) - NEVER use ${} template syntax or vendor-specific expression formats
+
+**CRITICAL - Variable Context and Execution Guidelines:**
+- **Global Variable Context**: All variables from user tasks (form fields) and script tasks are accumulated in a global context and accessible to all subsequent tasks in the workflow
+- **Variable Naming**: Use descriptive, unique variable names across the entire workflow to avoid conflicts (e.g., user_email, validated_email, approval_status, calculated_amount)
+- **Form Field Variables**: Variables defined in formField elements (id attribute) are automatically available in subsequent tasks using their exact field ID
+- **Script Task Variables**: Any variable assigned in a script task becomes globally available for later tasks (e.g., email_valid = True makes email_valid accessible downstream)
+- **Output Feedback Variables**: Variables starting with `_output` prefix provide execution feedback to users (e.g., _output_msg, _output_status, _output_result) - these are sent back to the user interface during execution
+- **Variable Usage in Gateways**: Gateway conditions must reference variables that were created in previous tasks (either from form fields or script assignments)
+- **Best Practices**:
+  - Use consistent variable names throughout the workflow
+  - Assign meaningful output variables in script tasks using `_output` prefix for user feedback
+  - Ensure gateway conditions reference variables that exist in the global context
+  - Avoid reusing variable names for different purposes
+  - Design workflows where each task builds upon variables from previous tasks
+- **Executable Workflow Design**: Create workflows that execute without manual intervention by ensuring all variable dependencies are properly defined and accessible in the global context
 </output_specifications>
 
 <output>
