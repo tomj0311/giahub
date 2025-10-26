@@ -331,7 +331,6 @@ export default function Agent({ user }) {
     setSaving(true)
     try {
       const payload = {
-        id: form.id,
         name: form.name,
         category: form.category,
         description: form.description,
@@ -342,14 +341,24 @@ export default function Agent({ user }) {
         memory: form.memory,
         stream: form.stream,
       }
-      const resp = await apiCall(`/api/agents`, {
-        method: 'POST',
+      
+      // Include ID only if editing an existing agent
+      if (form.id) {
+        payload.id = form.id
+      }
+      
+      // Use PUT method for updates, POST for creates
+      const method = form.id ? 'PUT' : 'POST'
+      const endpoint = form.id ? `/api/agents/id/${form.id}` : `/api/agents`
+      
+      const resp = await apiCall(endpoint, {
+        method: method,
         headers: authHeaders,
         body: JSON.stringify(payload),
       })
       const data = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(data.detail || `Save failed (${resp.status})`)
-      showSuccess(`Agent ${data.name} saved`)
+      showSuccess(`Agent ${data.name} ${form.id ? 'updated' : 'created'} successfully`)
       
       // Invalidate cache after successful save
       sharedApiService.invalidateCache('/api/agents');
@@ -628,21 +637,28 @@ export default function Agent({ user }) {
                     if (errors.name) {
                       setErrors(prev => ({ ...prev, name: '' }))
                     }
-                    // If selecting from dropdown, load immediately; otherwise just update name
+                    // If selecting from dropdown and it's different from current agent, load it
                     if (v && existingAgents.some(a => a.name === v)) {
                       const agent = existingAgents.find(a => a.name === v)
-                      if (agent) loadAgent(agent)
+                      // Only load if it's a different agent (different ID) or we're creating new
+                      if (agent && (!form.id || agent.id !== form.id)) {
+                        loadAgent(agent)
+                      }
                     } else {
+                      // Just update the name, keep the existing agent data
                       setForm(f => ({ ...f, name: v || '' }))
                     }
                   }}
-                  onInputChange={(_, v) => {
+                  onInputChange={(_, v, reason) => {
                     // Clear error when user types
                     if (errors.name) {
                       setErrors(prev => ({ ...prev, name: '' }))
                     }
                     // Only update the form name while typing, don't load agent
-                    setForm(f => ({ ...f, name: v || '' }))
+                    // This allows renaming without triggering agent load
+                    if (reason === 'input') {
+                      setForm(f => ({ ...f, name: v || '' }))
+                    }
                   }}
                   renderInput={(p) => 
                     <TextField 
@@ -652,14 +668,6 @@ export default function Agent({ user }) {
                       required 
                       error={!!errors.name}
                       helperText={errors.name}
-                      onBlur={(e) => {
-                        // Load existing agent only when user stops typing (on blur)
-                        const inputValue = e.target.value;
-                        if (inputValue && existingAgents.some(a => a.name === inputValue)) {
-                          const agent = existingAgents.find(a => a.name === inputValue)
-                          if (agent) loadAgent(agent)
-                        }
-                      }}
                     />
                   }
                 />
