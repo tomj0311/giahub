@@ -28,8 +28,21 @@ let globalUserCache = null
 let globalUserCacheLoading = false
 
 const ACTIVITY_TYPES = ['MILESTONE', 'PHASE', 'TASK']
-const STATUS_OPTIONS = ['New', 'Planning', 'In Progress', 'On Hold', 'Completed', 'Cancelled']
+const STATUS_OPTIONS = ['NEW', 'PLANNING', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CANCELLED']
 const PRIORITY_OPTIONS = ['Low', 'Normal', 'High', 'Urgent']
+
+// Helper to display status with proper formatting
+const getStatusLabel = (status) => {
+  const labels = {
+    'NEW': 'New',
+    'PLANNING': 'Planning',
+    'IN_PROGRESS': 'In Progress',
+    'ON_HOLD': 'On Hold',
+    'COMPLETED': 'Completed',
+    'CANCELLED': 'Cancelled'
+  }
+  return labels[status] || status
+}
 
 function ActivityForm({ user, projectId: propProjectId }) {
   const token = user?.token
@@ -62,7 +75,7 @@ function ActivityForm({ user, projectId: propProjectId }) {
     subject: '',
     type: defaultType,
     description: '',
-    status: 'New',
+    status: 'NEW',
     priority: 'Normal',
     assignee: '',
     approver: '',
@@ -463,7 +476,7 @@ function ActivityForm({ user, projectId: propProjectId }) {
                   </Box>
                   <Box>
                     <Typography variant="caption" color="text.secondary">Status</Typography>
-                    <Typography variant="body1">{form.status}</Typography>
+                    <Typography variant="body1">{getStatusLabel(form.status)}</Typography>
                   </Box>
                   <Box>
                     <Typography variant="caption" color="text.secondary">Priority</Typography>
@@ -619,7 +632,7 @@ function ActivityForm({ user, projectId: propProjectId }) {
                 >
                   {STATUS_OPTIONS.map((status) => (
                     <MenuItem key={status} value={status}>
-                      {status}
+                      {getStatusLabel(status)}
                     </MenuItem>
                   ))}
                 </Select>

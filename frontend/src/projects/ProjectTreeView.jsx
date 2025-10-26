@@ -897,6 +897,17 @@ function ProjectTreeView({ user }) {
                   label={getStatusLabel(project.status)}
                   color={getStatusColor(project.status)}
                   size="small"
+                  sx={(theme) => ({
+                    fontWeight: 600,
+                    color: theme.palette.getContrastText(
+                      theme.palette[getStatusColor(project.status)]?.main || theme.palette.grey[500]
+                    ),
+                    '& .MuiChip-label': {
+                      color: theme.palette.getContrastText(
+                        theme.palette[getStatusColor(project.status)]?.main || theme.palette.grey[500]
+                      )
+                    }
+                  })}
                 />
               </TableCell>
             )
