@@ -304,7 +304,7 @@ class WorkflowServicePersistent:
                                 if param_name:
                                     # Check if value is in task data, otherwise use config value
                                     if param_name in task.data:
-                                        function_params[param_name] = task.data[param_name]
+                                        function_params[param_name] = task.data[param_value]
                                         logger.info(f"[WORKFLOW] Using task data for parameter '{param_name}' = {task.data[param_name]}")
                                     else:
                                         function_params[param_name] = param_value
