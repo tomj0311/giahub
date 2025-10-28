@@ -789,24 +789,22 @@ function ProjectPlanning({ user, projectId }) {
 
   const getStatusColor = (status) => {
     const colors = {
-      'NEW': 'info',
-      'PLANNING': 'secondary',
-      'IN_PROGRESS': 'primary',
-      'ON_HOLD': 'warning',
-      'COMPLETED': 'success',
-      'CANCELLED': 'error'
+      IN_PROGRESS: 'primary',
+      AT_RISK: 'warning',
+      OFF_TRACK: 'error',
+      PLANNING: 'secondary',
+      COMPLETED: 'success'
     }
     return colors[status] || 'default'
   }
 
   const getStatusLabel = (status) => {
     const labels = {
-      'NEW': 'New',
-      'PLANNING': 'Planning',
-      'IN_PROGRESS': 'In Progress',
-      'ON_HOLD': 'On Hold',
-      'COMPLETED': 'Completed',
-      'CANCELLED': 'Cancelled'
+      IN_PROGRESS: 'In Progress',
+      AT_RISK: 'At Risk',
+      OFF_TRACK: 'Off Track',
+      PLANNING: 'Planning',
+      COMPLETED: 'Completed'
     }
     return labels[status] || status
   }
@@ -823,7 +821,7 @@ function ProjectPlanning({ user, projectId }) {
   // Calculate due date styling based on days remaining
   const getDueDateStyle = useCallback((dueDate, status) => {
     // If status is Completed, use normal styling
-    if (status === 'Completed') {
+    if (status === 'COMPLETED') {
       return { color: 'inherit', fontWeight: 'normal' }
     }
 

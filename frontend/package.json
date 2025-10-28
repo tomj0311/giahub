@@ -9,6 +9,7 @@
     "preview": "vite preview --port 5173"
   },
   "dependencies": {
+    "@babel/standalone": "^7.28.5",
     "@emotion/react": "^11.13.3",
     "@emotion/styled": "^11.13.0",
     "@monaco-editor/react": "^4.7.0",

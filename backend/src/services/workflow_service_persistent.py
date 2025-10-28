@@ -80,8 +80,10 @@ class WorkflowServicePersistent:
 
                 custom_tasks_handled = False
 
-                # Collect all STARTED ServiceTasks for parallel execution
+                # Collect all STARTED ServiceTasks and check if they're in parallel
                 service_tasks_to_handle = []
+                are_parallel_tasks = False
+                
                 for task in all_tasks:
                     task_type = type(task.task_spec).__name__
                     if task_type == "NoneTask":
@@ -90,23 +92,35 @@ class WorkflowServicePersistent:
                         continue
                     elif task_type == "ServiceTask" and task.state == TaskState.STARTED:
                         service_tasks_to_handle.append(task)
+                        
+                        # Check if this task is part of a parallel gateway
+                        if task.parent and type(task.parent.task_spec).__name__ in ["ParallelGateway", "_ParallelGateway"]:
+                            are_parallel_tasks = True
                 
-                # Handle all ServiceTasks in parallel
+                # Handle ServiceTasks - parallel if they're part of a ParallelGateway, sequential otherwise
                 if service_tasks_to_handle:
-                    logger.info(f"[WORKFLOW] Handling {len(service_tasks_to_handle)} ServiceTask(s) in parallel: {[t.task_spec.bpmn_id for t in service_tasks_to_handle]}")
-                    try:
-                        # Execute all service tasks in parallel using asyncio.gather
-                        await asyncio.gather(*[
-                            cls.handle_service_task(task, user) 
-                            for task in service_tasks_to_handle
-                        ])
-                        await cls._update_workflow_status(workflow, instance_id, tenant_id)
-                        custom_tasks_handled = True
-                    except Exception as service_error:
-                        logger.error(f"[WORKFLOW] ServiceTask(s) failed: {service_error}")
-                        # Find which task failed (first one in the list for now)
-                        await cls._update_workflow_status(workflow, instance_id, tenant_id, step_count)
-                        raise HTTPException(status_code=500, detail=f"ServiceTask failed: {str(service_error)}")
+                    if are_parallel_tasks and len(service_tasks_to_handle) > 1:
+                        logger.info(f"[WORKFLOW] Handling {len(service_tasks_to_handle)} ServiceTask(s) in PARALLEL: {[t.task_spec.bpmn_id for t in service_tasks_to_handle]}")
+                        try:
+                            # Execute all service tasks in parallel using asyncio.gather
+                            await asyncio.gather(*[
+                                cls.handle_service_task(task, user, workflow, instance_id, tenant_id) 
+                                for task in service_tasks_to_handle
+                            ])
+                            custom_tasks_handled = True
+                        except Exception as service_error:
+                            logger.error(f"[WORKFLOW] Parallel ServiceTask(s) failed: {service_error}")
+                            raise HTTPException(status_code=500, detail=f"ServiceTask failed: {str(service_error)}")
+                    else:
+                        logger.info(f"[WORKFLOW] Handling {len(service_tasks_to_handle)} ServiceTask(s) SEQUENTIALLY: {[t.task_spec.bpmn_id for t in service_tasks_to_handle]}")
+                        try:
+                            # Execute service tasks sequentially
+                            for task in service_tasks_to_handle:
+                                await cls.handle_service_task(task, user, workflow, instance_id, tenant_id)
+                            custom_tasks_handled = True
+                        except Exception as service_error:
+                            logger.error(f"[WORKFLOW] Sequential ServiceTask failed: {service_error}")
+                            raise HTTPException(status_code=500, detail=f"ServiceTask failed: {str(service_error)}")
 
                 # If we handled custom tasks, continue to next iteration
                 if custom_tasks_handled:
@@ -254,7 +268,7 @@ class WorkflowServicePersistent:
         })
 
     @classmethod
-    async def handle_service_task(cls, task, user):
+    async def handle_service_task(cls, task, user, workflow=None, instance_id=None, tenant_id=None):
         """Handle ServiceTask by reading extensionElements for function calls or fallback to external API"""
         try:
             bpmn_id = task.task_spec.bpmn_id
@@ -318,7 +332,7 @@ class WorkflowServicePersistent:
                             
                         except (ImportError, AttributeError) as e:
                             logger.error(f"[WORKFLOW] Function execution failed: {e}")
-                            raise Exception(f"Function execution failed: {str(e)}")
+                            error_message = f"Function execution error: {str(e)}"
                     else:
                         error_message = f"ServiceTask configuration error: No 'function' found in serviceConfiguration for task '{bpmn_id}'"
                 else:
@@ -330,6 +344,8 @@ class WorkflowServicePersistent:
             if error_message:
                 task.error()
                 task.data['error'] = error_message
+                # Update workflow status for error case
+                await cls._update_workflow_status(workflow, instance_id, tenant_id)
                 raise Exception(error_message)
                                     
             # Handle the response
@@ -343,16 +359,22 @@ class WorkflowServicePersistent:
                 # Update task data with structured response
                 task.data[task.task_spec.bpmn_id] = response
                 task.complete()
+                # Update workflow status after successful completion
+                await cls._update_workflow_status(workflow, instance_id, tenant_id)
             else:
                 # Empty response - treat as error
                 logger.warning(f"[WORKFLOW] ServiceTask {task.task_spec.bpmn_id} received None response")
                 task.data['error'] = f"ServiceTask '{bpmn_id}' returned None response - function execution may have failed"
                 task.error()
+                # Update workflow status for error case
+                await cls._update_workflow_status(workflow, instance_id, tenant_id)
                 raise Exception(f"ServiceTask '{bpmn_id}' failed: Function returned None")
             
         except Exception as e:
             logger.error(f"[WORKFLOW] Error handling ServiceTask {task.task_spec.bpmn_id}: {e}")
             bpmn_id = task.task_spec.bpmn_id
+            # Update workflow status for exception case
+            await cls._update_workflow_status(workflow, instance_id, tenant_id)
             raise
 
     @classmethod
@@ -396,11 +418,7 @@ class WorkflowServicePersistent:
                 
             except Exception as task_error:
                 logger.error(f"[WORKFLOW] Error completing task {task_id}: {task_error}")
-                
-                # Structure error response
-                cls._handle_task_error(workflow, instance_id, tenant_id, current_task, task_error, "UserTask")
-
-                raise HTTPException(status_code=500, detail=f"Task completion failed: {str(task_error)}")
+                current_task.error()
             
             # Update status after completing task
             await cls._update_workflow_status(workflow, instance_id, tenant_id)

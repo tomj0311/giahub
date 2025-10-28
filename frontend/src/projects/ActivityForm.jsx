@@ -28,18 +28,17 @@ let globalUserCache = null
 let globalUserCacheLoading = false
 
 const ACTIVITY_TYPES = ['MILESTONE', 'PHASE', 'TASK']
-const STATUS_OPTIONS = ['NEW', 'PLANNING', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CANCELLED']
+const STATUS_OPTIONS = ['IN_PROGRESS', 'AT_RISK', 'OFF_TRACK', 'PLANNING', 'COMPLETED']
 const PRIORITY_OPTIONS = ['Low', 'Normal', 'High', 'Urgent']
 
 // Helper to display status with proper formatting
 const getStatusLabel = (status) => {
   const labels = {
-    'NEW': 'New',
-    'PLANNING': 'Planning',
     'IN_PROGRESS': 'In Progress',
-    'ON_HOLD': 'On Hold',
-    'COMPLETED': 'Completed',
-    'CANCELLED': 'Cancelled'
+    'AT_RISK': 'At Risk',
+    'OFF_TRACK': 'Off Track',
+    'PLANNING': 'Planning',
+    'COMPLETED': 'Completed'
   }
   return labels[status] || status
 }
@@ -75,7 +74,7 @@ function ActivityForm({ user, projectId: propProjectId }) {
     subject: '',
     type: defaultType,
     description: '',
-    status: 'NEW',
+    status: 'PLANNING',
     priority: 'Normal',
     assignee: '',
     approver: '',
