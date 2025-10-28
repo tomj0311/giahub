@@ -414,14 +414,14 @@ class WorkflowServicePersistent:
                 }                
                 current_task.data[current_task.task_spec.bpmn_id] = task_data_with_timestamp
                 current_task.complete()
+                await cls._update_workflow_status(workflow, instance_id, tenant_id)
                 logger.info(f"[WORKFLOW] Task {task_id} completed successfully")
                 
             except Exception as task_error:
                 logger.error(f"[WORKFLOW] Error completing task {task_id}: {task_error}")
                 current_task.error()
-            
-            # Update status after completing task
-            await cls._update_workflow_status(workflow, instance_id, tenant_id)
+                await cls._update_workflow_status(workflow, instance_id, tenant_id)
+                raise HTTPException(status_code=500, detail=f"Failed to complete task: {str(task_error)}")
             
             # Continue workflow execution
             result = await cls.execute_workflow_steps(workflow, workflow_id, user, instance_id)

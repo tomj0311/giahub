@@ -150,8 +150,22 @@ const DynamicComponent = ({ componentCode, onSubmit, submitting, children }) => 
           // Helper function to submit form data
           submitWorkflowForm: (data) => {
             console.log('📤 Form submit called with:', data);
+            console.log('📤 Data type:', data?.constructor?.name);
+            console.log('📤 Is FormData?', data instanceof FormData);
+            
+            // If data is a plain object, check for File objects
+            if (data && typeof data === 'object' && !(data instanceof FormData)) {
+              console.log('📤 Plain object keys:', Object.keys(data));
+              Object.entries(data).forEach(([key, value]) => {
+                console.log(`📤 ${key}:`, value?.constructor?.name, value instanceof File ? `File: ${value.name}` : value);
+              });
+            }
+            
+            // Store the actual data (including Files) in a temporary variable
+            // that can be accessed by reference, not through event serialization
+            window.__workflowFormData = data;
             const event = new CustomEvent('workflowFormSubmit', {
-              detail: data,
+              detail: { hasData: true },
               bubbles: true,
               composed: true
             });
