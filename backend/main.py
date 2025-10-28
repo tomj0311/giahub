@@ -138,17 +138,48 @@ def health_check():
 # No WebSocket routes needed - only HTTP
 
 
+def is_debugger_active():
+    """Detect if debugger is active"""
+    # Check for debugpy (VS Code Python debugger)
+    if 'debugpy' in sys.modules:
+        return True
+    
+    # Check for pydevd (PyCharm/other debuggers)
+    if 'pydevd' in sys.modules:
+        return True
+    
+    # Check sys.gettrace() as fallback
+    if sys.gettrace() is not None:
+        return True
+    
+    # Check command line arguments for debugger
+    if any('debugpy' in arg or 'pydevd' in arg for arg in sys.argv):
+        return True
+    
+    return False
+
+
 if __name__ == "__main__":
     # Get port from environment variable
     port = int(os.getenv('PORT', 4000))
     host = os.getenv('HOST', '0.0.0.0')
-    workers = int(os.getenv('WORKERS', 4))  # Multiple workers for concurrent requests
+    
+    # Detect if running under debugger
+    is_debugging = is_debugger_active()
+    
+    # Use 1 worker when debugging, otherwise from env or default to 4
+    if is_debugging:
+        workers = 1
+        logger.info("🐛 Debugger detected - using single worker mode")
+    else:
+        workers = int(os.getenv('WORKERS', 4))
+        logger.info(f"🚀 Production mode - using {workers} workers")
     
     uvicorn.run(
         "main:app",  # Use string import for workers to work
         host=host,
         port=port,
-        workers=workers,  # Enable multiple worker processes
+        workers=workers,
         reload=False,
         access_log=False,
         timeout_keep_alive=75,  # Keep connections alive for SSE streaming
