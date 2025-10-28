@@ -1,6 +1,7 @@
 import React from 'react';
 import { Alert, Box } from '@mui/material';
 import { MUIComponents } from './imports.js';
+import * as Babel from '@babel/standalone';
 
 // Error Boundary Component
 class ComponentErrorBoundary extends React.Component {
@@ -37,56 +38,6 @@ class ComponentErrorBoundary extends React.Component {
     return this.props.children;
   }
 }
-
-// Load Babel standalone for JSX compilation
-const loadBabel = () => {
-  return new Promise((resolve, reject) => {
-    // Check if Babel is already loaded and fully initialized
-    if (window.Babel && window.Babel.transform) {
-      resolve(window.Babel);
-      return;
-    }
-
-    // Check if script is already being loaded
-    const existingScript = document.querySelector('script[src*="babel"]');
-    if (existingScript) {
-      // Wait for existing script to load
-      const checkBabel = setInterval(() => {
-        if (window.Babel && window.Babel.transform) {
-          clearInterval(checkBabel);
-          resolve(window.Babel);
-        }
-      }, 50);
-      
-      // Timeout after 10 seconds
-      setTimeout(() => {
-        clearInterval(checkBabel);
-        reject(new Error('Babel loading timeout'));
-      }, 10000);
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/@babel/standalone/babel.min.js';
-    script.onload = () => {
-      // Wait for Babel to be fully available
-      const checkBabel = setInterval(() => {
-        if (window.Babel && window.Babel.transform) {
-          clearInterval(checkBabel);
-          resolve(window.Babel);
-        }
-      }, 50);
-      
-      // Timeout after 5 seconds
-      setTimeout(() => {
-        clearInterval(checkBabel);
-        reject(new Error('Babel initialization timeout'));
-      }, 5000);
-    };
-    script.onerror = () => reject(new Error('Failed to load Babel script'));
-    document.head.appendChild(script);
-  });
-};
 
 // Dynamic component loader using Babel for JSX compilation
 const DynamicComponent = ({ componentCode, onSubmit, submitting, children }) => {
@@ -140,22 +91,12 @@ const DynamicComponent = ({ componentCode, onSubmit, submitting, children }) => 
         
         console.log('Component name:', componentName);
 
-        // Load Babel
-        const Babel = await loadBabel();
-        
-        // Verify Babel is properly loaded
-        if (!Babel || !Babel.transform) {
-          throw new Error('Babel failed to load properly. Please refresh the page.');
-        }
-        
-        console.log('Babel loaded successfully', typeof Babel.transform);
-
         // Basic validation - just check for return statement
         if (!cleanedCode.includes('return')) {
           throw new Error('Component must have a return statement');
         }
 
-        // Compile JSX to JavaScript
+        // Compile JSX to JavaScript using imported Babel
         let compiledCode;
         try {
           compiledCode = Babel.transform(cleanedCode, {
