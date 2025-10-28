@@ -234,9 +234,11 @@ export default function Agent({ user }) {
       // Handle knowledge collections
       if (knowledgeResult.success) {
         const knowledgeData = knowledgeResult.data
-        const configsList = knowledgeData.configurations || []
+        const configsList = knowledgeData.configurations || knowledgeData.collections || []
         // Use knowledge config objects with proper IDs
-        setKnowledgeCollections(configsList.map(c => ({ id: c.id, name: c.collection || c.name })).sort((a, b) => a.name.localeCompare(b.name)))
+        const mappedCollections = configsList.map(c => ({ id: c.id, name: c.collection || c.name })).filter(c => c.id && c.name)
+        console.log('Mapped knowledge collections:', mappedCollections)
+        setKnowledgeCollections(mappedCollections.sort((a, b) => a.name.localeCompare(b.name)))
       } else {
         console.error('Failed to fetch knowledge collections:', knowledgeResult.error)
         showError('Failed to load knowledge collections')
