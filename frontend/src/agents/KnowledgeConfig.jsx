@@ -86,7 +86,8 @@ export default function KnowledgeConfig({ user }) {
 
   // Form validation errors
   const [errors, setErrors] = useState({
-    name: ''
+    name: '',
+    model_id: ''
   })
 
   const loadModels = useCallback(async () => {
@@ -327,7 +328,8 @@ export default function KnowledgeConfig({ user }) {
 
   const validateForm = () => {
     const newErrors = {
-      name: ''
+      name: '',
+      model_id: ''
     }
 
     // Validate name
@@ -335,13 +337,19 @@ export default function KnowledgeConfig({ user }) {
       newErrors.name = 'Collection name is required'
     }
 
+    // Validate model selection
+    if (!form.model_id || form.model_id.trim() === '') {
+      newErrors.model_id = 'Model selection is required'
+    }
+
     setErrors(newErrors)
-    return !newErrors.name
+    return !newErrors.name && !newErrors.model_id
   }
 
   const resetErrors = () => {
     setErrors({
-      name: ''
+      name: '',
+      model_id: ''
     })
   }
 
@@ -886,13 +894,19 @@ export default function KnowledgeConfig({ user }) {
                 Select a model for processing your documents.
               </Typography>
               
-              <FormControl size="small" sx={{ minWidth: 300 }}>
-                <InputLabel id="model-select-label">Model</InputLabel>
+              <FormControl size="small" sx={{ minWidth: 300 }} error={!!errors.model_id}>
+                <InputLabel id="model-select-label">Model *</InputLabel>
                 <Select 
                   labelId="model-select-label" 
-                  label="Model" 
+                  label="Model *" 
                   value={form.model_id || ''}
-                  onChange={(e) => setForm(f => ({ ...f, model_id: e.target.value }))}
+                  onChange={(e) => {
+                    setForm(f => ({ ...f, model_id: e.target.value }))
+                    // Clear error when user selects a model
+                    if (errors.model_id) {
+                      setErrors(prev => ({ ...prev, model_id: '' }))
+                    }
+                  }}
                 >
                   <MenuItem value="">
                     <em>Select a model...</em>
@@ -904,6 +918,11 @@ export default function KnowledgeConfig({ user }) {
                     </MenuItem>
                   ))}
                 </Select>
+                {errors.model_id && (
+                  <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 1.75 }}>
+                    {errors.model_id}
+                  </Typography>
+                )}
               </FormControl>
             </Box>
 
