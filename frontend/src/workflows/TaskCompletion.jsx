@@ -66,9 +66,26 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
   useEffect(() => {
     const handleDynamicFormSubmit = (event) => {
       console.log('📨 Received FormSubmit event from dynamic component:', event.detail);
+      // Retrieve the actual data from the temporary storage
+      const submittedData = window.__workflowFormData;
+      // Clean up
+      delete window.__workflowFormData;
+      
+      console.log('📦 Retrieved form data:', submittedData);
+      console.log('📦 Data type:', submittedData?.constructor?.name);
+      console.log('📦 Is FormData?', submittedData instanceof FormData);
+      
+      // If data is a plain object, check for File objects
+      if (submittedData && typeof submittedData === 'object' && !(submittedData instanceof FormData)) {
+        console.log('📦 Plain object keys:', Object.keys(submittedData));
+        Object.entries(submittedData).forEach(([key, value]) => {
+          console.log(`📦 ${key}:`, value?.constructor?.name, value instanceof File ? `File: ${value.name}` : value);
+        });
+      }
+      
       // Use ref to get latest handleSubmit function
-      if (event.detail && handleSubmitRef.current) {
-        handleSubmitRef.current(event.detail);
+      if (submittedData && handleSubmitRef.current) {
+        handleSubmitRef.current(submittedData);
       }
     };
 
@@ -268,32 +285,53 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
       console.log('🔑 Instance ID:', instanceId);
 
       // Check if dataToSubmit is a FormData object (for file uploads)
-      const isFormDataSubmission = dataToSubmit instanceof FormData;
+      let isFormDataSubmission = dataToSubmit instanceof FormData;
+      
+      // Also check if it's a plain object containing File objects
+      let hasFiles = false;
+      if (!isFormDataSubmission && dataToSubmit && typeof dataToSubmit === 'object') {
+        hasFiles = Object.values(dataToSubmit).some(value => value instanceof File);
+        console.log('🔍 Checking plain object for files, found:', hasFiles);
+      }
+      
       console.log('📎 Is FormData submission:', isFormDataSubmission);
+      console.log('📎 Has File objects:', hasFiles);
 
       let requestOptions;
       
-      if (isFormDataSubmission) {
+      if (isFormDataSubmission || hasFiles) {
         // Handle multipart/form-data submission (with files)
         const formDataToSend = new FormData();
         
         // Add task_id as form field
         formDataToSend.append('task_id', taskData.taskSpec);
         
-        // Extract files and regular data from submitted FormData
+        // Extract files and regular data
         const regularData = {};
         const filesToUpload = [];
         
-        for (const [key, value] of dataToSubmit.entries()) {
-          if (value instanceof File) {
-            // Collect files to upload
-            filesToUpload.push({ key, file: value });
-            console.log(`📎 Found file: ${key} = ${value.name}`);
-          } else {
-            // Regular form data
-            regularData[key] = value;
-            console.log(`📝 Found data: ${key} = ${value}`);
+        if (isFormDataSubmission) {
+          // Extract from FormData
+          for (const [key, value] of dataToSubmit.entries()) {
+            if (value instanceof File) {
+              filesToUpload.push({ key, file: value });
+              console.log(`📎 Found file in FormData: ${key} = ${value.name}`);
+            } else {
+              regularData[key] = value;
+              console.log(`📝 Found data in FormData: ${key} = ${value}`);
+            }
           }
+        } else {
+          // Extract from plain object
+          Object.entries(dataToSubmit).forEach(([key, value]) => {
+            if (value instanceof File) {
+              filesToUpload.push({ key, file: value });
+              console.log(`📎 Found file in object: ${key} = ${value.name}`);
+            } else {
+              regularData[key] = value;
+              console.log(`📝 Found data in object: ${key} = ${value}`);
+            }
+          });
         }
         
         // Add regular data as JSON string

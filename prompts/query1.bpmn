@@ -1,0 +1,521 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+  <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+    xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+    xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+    xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0"
+    xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0"
+    id="Definitions_1"
+    targetNamespace="http://example.com/bpmn"
+    xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL http://www.omg.org/spec/BPMN/2.0/20100501/BPMN20.xsd">
+    <process id="Process_1" isExecutable="true">
+      <startEvent id="StartEvent_74E625" name="Start">
+        <outgoing>SequenceFlow_388E94</outgoing>
+      </startEvent>
+      <endEvent id="EndEvent_F642E8" name="End">
+        <incoming>SequenceFlow_4C89A5</incoming>
+      </endEvent>
+      <serviceTask id="ServiceTask_04E9DB" name="Analyze Intent &amp; Generate Pipeline">
+        <incoming>SequenceFlow_BE7CFB</incoming>
+        <outgoing>SequenceFlow_2A6D95</outgoing>
+        <extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+          <serviceConfiguration xmlns="http://example.org/service">
+            <function>
+              <moduleName>agent_executor</moduleName>
+              <functionName>run_agent</functionName>
+              <parameters>
+                <parameter name="agent_name" value="Research"/>
+                <parameter name="prompt" value="intelligent_query_prompt"/>
+                <parameter name="user" value="user"/>
+                <parameter name="conv_id" value="conv_id"/>
+              </parameters>
+            </function>
+          </serviceConfiguration>
+        </extensionElements>
+      </serviceTask>
+      <userTask id="UserTask_8469EC" name="Input prompt">
+        <incoming>SequenceFlow_388E94</incoming>
+        <outgoing>SequenceFlow_506DA6</outgoing>
+        <extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+          <formData xmlns="http://example.org/form">
+            <scriptData xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+              <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+// JSX code will be generated here
+]]></script>
+            </scriptData>
+            <formField id="prompt" label="prompt" type="string" required="false"/>
+          </formData>
+        </extensionElements>
+      </userTask>
+      <scriptTask id="ScriptTask_836398" name="Fetch Schema Samples">
+        <incoming>SequenceFlow_506DA6</incoming>
+        <outgoing>SequenceFlow_D0D393</outgoing>
+        <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+```python
+import os
+import json
+from datetime import datetime, date
+from pymongo import MongoClient
+from pymongo.errors import PyMongoError
+from bson import ObjectId
+
+def serialize_mongo_doc(doc):
+    """Convert MongoDB document to JSON-serializable format"""
+    if isinstance(doc, dict):
+        return {k: serialize_mongo_doc(v) for k, v in doc.items()}
+    elif isinstance(doc, list):
+        return [serialize_mongo_doc(item) for item in doc]
+    elif isinstance(doc, ObjectId):
+        return str(doc)
+    elif isinstance(doc, (datetime, date)):
+        return doc.isoformat()
+    return doc
+
+def fetch_sample_documents(limit=3):
+    """Fetch sample documents from all three collections"""
+    mongo_url = os.getenv('MONGO_URL')
+    mongo_db_name = os.getenv('MONGO_DB')
+    
+    if not mongo_url or not mongo_db_name:
+        raise ValueError('Missing MONGO_URL or MONGO_DB environment variable.')
+
+    client = MongoClient(mongo_url)
+    db = client[mongo_db_name]
+
+    projects = []
+    project_activities = []
+    activity_notifications = []
+    
+    try:
+        # Fetch samples with tenant isolation if needed
+        projects = [serialize_mongo_doc(doc) for doc in db['projects'].find().limit(limit)]
+        project_activities = [serialize_mongo_doc(doc) for doc in db['projectActivities'].find().limit(limit)]
+        activity_notifications = [serialize_mongo_doc(doc) for doc in db['activityNotifications'].find().limit(limit)]
+    except PyMongoError as err:
+        print(f"MongoDB error: {err}")
+        projects = []
+        project_activities = []
+        activity_notifications = []
+    finally:
+        client.close()
+    
+    return projects, project_activities, activity_notifications
+
+# Execute and store in variables
+projects, project_activities, activity_notifications = fetch_sample_documents(limit=3)
+
+# Convert to compact JSON for next task (these variables flow to next script)
+projects_json = json.dumps(projects[:2], indent=2) if projects else "[]"
+activities_json = json.dumps(project_activities[:2], indent=2) if project_activities else "[]"
+notifications_json = json.dumps(activity_notifications[:2], indent=2) if activity_notifications else "[]"
+
+print(f"[BPMN-Step1] Fetched samples: {len(projects)} projects, {len(project_activities)} activities, {len(activity_notifications)} notifications")
+```
+]]></script>
+      </scriptTask>
+      <scriptTask id="ScriptTask_4A817B" name="Build Intelligent Prompt">
+        <incoming>SequenceFlow_D0D393</incoming>
+        <outgoing>SequenceFlow_BE7CFB</outgoing>
+        <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+```python
+# This script receives: prompt, projects_json, activities_json, notifications_json from previous task
+# Complete inline intelligent query prompt - no external files needed
+
+intelligent_query_prompt = f"""You are an expert MongoDB Query Generator for a project management system.
+
+**YOUR TASK:**
+Analyze the user's natural language question and generate an optimized MongoDB aggregation pipeline.
+
+**DATABASE SCHEMA:**
+
+**Collection: projects**
+- _id: ObjectId
+- name, description: String
+- status: PLANNING | IN_PROGRESS | COMPLETED | ON_HOLD
+- priority: Low | Normal | High | Critical
+- assignee, approver: String (email)
+- due_date, start_date: String (YYYY-MM-DD)
+- progress: Number (0-100)
+- parent_id: String (references projects._id)
+- tenantId, userId: String
+
+**Collection: projectActivities**
+- _id: ObjectId
+- project_id: String (references projects._id as string)
+- subject, description: String
+- type: TASK | MILESTONE | MEETING | REVIEW
+- status: Pending | In Progress | Completed | Cancelled
+- priority: Low | Normal | High | Critical
+- assignee, approver: String (email)
+- due_date, start_date: String (YYYY-MM-DD)
+- progress: Number (0-100)
+- tenantId, userId: String
+
+**Collection: activityNotifications**
+- _id: ObjectId
+- activity_id: String (references projectActivities._id as string)
+- sender_id, sender_email, sender_name: String
+- message: String
+- mentioned_users: Array
+- files: Array [{{filename, path}}]
+- tenantId: String
+
+**RELATIONSHIPS:**
+- projects._id (ObjectId) ← projectActivities.project_id (String)
+- projectActivities._id (ObjectId) ← activityNotifications.activity_id (String)
+
+**SAMPLE DATA:**
+
+Projects:
+{projects_json}
+
+Activities:
+{activities_json}
+
+Notifications:
+{notifications_json}
+
+**USER QUESTION:**
+{prompt}
+
+**GENERATION RULES:**
+
+1. **Intent Detection:**
+   - PROJECT_OVERVIEW: Show project details
+   - PROJECT_WITH_ACTIVITIES: Project + activities join
+   - PROJECT_FULL_DETAILS: All 3 collections joined
+   - ACTIVITY_SEARCH: Find specific activities/tasks
+   - NOTIFICATION_SEARCH: Find notifications
+   - AGGREGATION_QUERY: Count/sum/average queries
+   - STATUS_BASED: Filter by status
+   - USER_BASED: Filter by assignee/approver
+   - TIME_BASED: Filter by dates
+
+2. **CRITICAL $LOOKUP RULE:**
+   Always convert ObjectId to String BEFORE $lookup:
+   ```
+   {{ "$addFields": {{ "_id_str": {{ "$toString": "$_id" }} }} }}
+   ```
+
+3. **Text Search Pattern:**
+   Use CONTAINS (no anchors):
+   ```
+   {{ "$match": {{ "name": {{ "$regex": "search", "$options": "i" }} }} }}
+   ```
+   NEVER use: "^search$"
+
+4. **Pipeline Optimization:**
+   - Place $match first
+   - Limit results with $limit
+   - Project only needed fields
+
+5. **User Context:**
+   Replace "my/me" with actual user email using $regex
+
+**OUTPUT FORMAT (JSON ONLY - NO MARKDOWN):**
+
+{{
+  "intent": "INTENT_TYPE",
+  "description": "What this query does",
+  "collection": "primaryCollection",
+  "pipeline": [
+    {{ "$match": {{ ... }} }},
+    {{ "$addFields": {{ "_id_str": {{ "$toString": "$_id" }} }} }},
+    {{ "$lookup": {{ ... }} }}
+  ]
+}}
+
+**EXAMPLES:**
+
+Question: "Show all completed projects"
+{{
+  "intent": "STATUS_BASED",
+  "description": "Fetch all projects with completed status",
+  "collection": "projects",
+  "pipeline": [
+    {{ "$match": {{ "status": "COMPLETED" }} }},
+    {{ "$limit": 100 }}
+  ]
+}}
+
+Question: "Get Test project with activities"
+{{
+  "intent": "PROJECT_WITH_ACTIVITIES",
+  "description": "Fetch Test project with all related activities",
+  "collection": "projects",
+  "pipeline": [
+    {{ "$match": {{ "name": {{ "$regex": "Test", "$options": "i" }} }} }},
+    {{ "$addFields": {{ "_id_str": {{ "$toString": "$_id" }} }} }},
+    {{
+      "$lookup": {{
+        "from": "projectActivities",
+        "localField": "_id_str",
+        "foreignField": "project_id",
+        "as": "activities"
+      }}
+    }},
+    {{ "$limit": 10 }}
+  ]
+}}
+
+Question: "Count tasks by status"
+{{
+  "intent": "AGGREGATION_QUERY",
+  "description": "Count activities grouped by status",
+  "collection": "projectActivities",
+  "pipeline": [
+    {{ "$match": {{ "type": "TASK" }} }},
+    {{ "$group": {{ "_id": "$status", "count": {{ "$sum": 1 }} }} }},
+    {{ "$sort": {{ "count": -1 }} }}
+  ]
+}}
+
+**NOW GENERATE THE PIPELINE:**
+Return ONLY the JSON object. No explanations, no markdown code blocks, just pure JSON.
+"""
+
+print(f"[BPMN-Step2] Built intelligent prompt for: {prompt[:50]}...")
+# Output: intelligent_query_prompt (flows to ServiceTask as 'prompt' parameter)
+```
+]]></script>
+      </scriptTask>
+      <scriptTask id="ScriptTask_82FA1C" name="Execute Pipeline &amp; Format Results">
+        <incoming>SequenceFlow_2A6D95</incoming>
+        <outgoing>SequenceFlow_4C89A5</outgoing>
+        <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+```python
+# This script receives: response (from agent), user (from context), prompt (original question)
+import os
+import json
+from datetime import datetime, date
+from pymongo import MongoClient
+from pymongo.errors import PyMongoError
+from bson import ObjectId
+
+def serialize_result(doc):
+    """Convert MongoDB results to JSON-serializable format"""
+    if isinstance(doc, dict):
+        return {k: serialize_result(v) for k, v in doc.items()}
+    elif isinstance(doc, list):
+        return [serialize_result(item) for item in doc]
+    elif isinstance(doc, ObjectId):
+        return str(doc)
+    elif isinstance(doc, (datetime, date)):
+        return doc.isoformat()
+    return doc
+
+def parse_agent_response(response_data):
+    """Parse agent response to extract pipeline"""
+    try:
+        # Agent response might be nested in 'response' or 'content'
+        if isinstance(response_data, dict):
+            content = response_data.get('response') or response_data.get('content') or response_data
+        else:
+            content = response_data
+            
+        # Parse JSON if string
+        if isinstance(content, str):
+            # Remove markdown code blocks if present
+            content = content.strip()
+            if content.startswith('```'):
+                lines = content.split('\n')
+                content = '\n'.join([line for line in lines if not line.startswith('```')])
+            
+            data = json.loads(content.strip())
+        else:
+            data = content
+            
+        # Extract required fields
+        collection = data.get('collection')
+        pipeline = data.get('pipeline')
+        intent = data.get('intent', 'UNKNOWN')
+        description = data.get('description', 'Query execution')
+        
+        return collection, pipeline, intent, description
+        
+    except json.JSONDecodeError as e:
+        print(f"[ERROR] JSON parsing error: {e}")
+        print(f"[ERROR] Response content: {response_data}")
+        return None, None, None, None
+    except KeyError as e:
+        print(f"[ERROR] Missing required field in response: {e}")
+        return None, None, None, None
+    except Exception as e:
+        print(f"[ERROR] Unexpected error parsing response: {e}")
+        return None, None, None, None
+
+def execute_mongo_pipeline(collection_name, pipeline, tenant_id=None):
+    """Execute MongoDB aggregation pipeline with tenant isolation"""
+    mongo_url = os.getenv('MONGO_URL', 'mongodb://localhost:8801')
+    mongo_db_name = os.getenv('MONGO_DB', 'giap')
+    
+    client = MongoClient(mongo_url)
+    db = client[mongo_db_name]
+    
+    try:
+        # Add tenant filter if provided
+        if tenant_id and pipeline:
+            # Check if first stage is $match, if so add tenantId to it
+            if pipeline and isinstance(pipeline[0], dict) and '$match' in pipeline[0]:
+                pipeline[0]['$match']['tenantId'] = tenant_id
+            else:
+                # Insert tenant filter at the beginning
+                pipeline.insert(0, {'$match': {'tenantId': tenant_id}})
+        
+        # Execute aggregation
+        print(f"[BPMN-Step4] Executing pipeline on collection: {collection_name}")
+        print(f"[BPMN-Step4] Pipeline: {json.dumps(pipeline, indent=2)}")
+        
+        results = db[collection_name].aggregate(pipeline)
+        documents = [serialize_result(doc) for doc in results]
+        
+        print(f"[BPMN-Step4] Query returned {len(documents)} documents")
+        return documents
+        
+    except PyMongoError as e:
+        print(f"[ERROR] MongoDB error: {e}")
+        return []
+    finally:
+        client.close()
+
+def format_results_summary(documents, intent, description):
+    """Create a human-readable summary of results"""
+    if not documents:
+        return "No matching records found"
+    
+    count = len(documents)
+    
+    # Create summary based on intent
+    if intent == "AGGREGATION_QUERY":
+        if 'total' in documents[0] or 'count' in documents[0]:
+            return f"Query result: {documents[0]}"
+        return f"Aggregation returned {count} result(s)"
+    elif intent in ["PROJECT_OVERVIEW", "ACTIVITY_SEARCH", "NOTIFICATION_SEARCH"]:
+        return f"Found {count} record(s)"
+    elif intent in ["PROJECT_WITH_ACTIVITIES", "PROJECT_FULL_DETAILS"]:
+        return f"Retrieved complete details with {count} main record(s)"
+    else:
+        return f"{description} - {count} record(s) found"
+
+# Parse the agent response (receives 'response' from ServiceTask)
+collection, pipeline, intent, description = parse_agent_response(response)
+
+# Get tenant ID from user context if available (receives 'user' from context)
+tenant_id = user.get('tenantId') if isinstance(user, dict) else None
+
+# Execute query
+if collection and pipeline:
+    project_documents = execute_mongo_pipeline(collection, pipeline, tenant_id)
+    
+    if not project_documents:
+        _output_message = "No matching records found"
+        _output_docs = []
+    else:
+        _output_message = format_results_summary(project_documents, intent, description)
+        _output_docs = project_documents
+        
+    # Include metadata
+    _query_metadata = {
+        "intent": intent,
+        "description": description,
+        "collection": collection,
+        "record_count": len(project_documents),
+        "pipeline": pipeline,
+        "original_question": prompt
+    }
+else:
+    project_documents = []
+    _output_message = "Failed to parse query from agent response"
+    _output_docs = []
+    _query_metadata = {
+        "intent": "ERROR",
+        "description": "Agent response parsing failed",
+        "error": "Could not extract collection or pipeline from agent response",
+        "original_question": prompt
+    }
+
+print(f"[BPMN-Step4] Execution complete: {_output_message}")
+# Output variables: _output_docs, _output_message, _query_metadata
+```
+]]></script>
+      </scriptTask>
+      <sequenceFlow id="SequenceFlow_388E94" sourceRef="StartEvent_74E625" targetRef="UserTask_8469EC" />
+      <sequenceFlow id="SequenceFlow_506DA6" sourceRef="UserTask_8469EC" targetRef="ScriptTask_836398" />
+      <sequenceFlow id="SequenceFlow_D0D393" sourceRef="ScriptTask_836398" targetRef="ScriptTask_4A817B" />
+      <sequenceFlow id="SequenceFlow_BE7CFB" sourceRef="ScriptTask_4A817B" targetRef="ServiceTask_04E9DB" />
+      <sequenceFlow id="SequenceFlow_2A6D95" sourceRef="ServiceTask_04E9DB" targetRef="ScriptTask_82FA1C" />
+      <sequenceFlow id="SequenceFlow_4C89A5" sourceRef="ScriptTask_82FA1C" targetRef="EndEvent_F642E8" />
+    </process>
+    <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+      <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1">
+        <bpmndi:BPMNShape id="StartEvent_74E625_di" bpmnElement="StartEvent_74E625">
+          <dc:Bounds x="250" y="250" width="36" height="36" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="250" y="291" width="36" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="EndEvent_F642E8_di" bpmnElement="EndEvent_F642E8">
+          <dc:Bounds x="706.275" y="287.35" width="100" height="60" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="706.275" y="352.35" width="100" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="ServiceTask_04E9DB_di" bpmnElement="ServiceTask_04E9DB">
+          <dc:Bounds x="640.1" y="109.69999999999999" width="100" height="60" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="620" y="175" width="140" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="UserTask_8469EC_di" bpmnElement="UserTask_8469EC">
+          <dc:Bounds x="299.5" y="137" width="100" height="60" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="299.5" y="202" width="100" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="ScriptTask_836398_di" bpmnElement="ScriptTask_836398">
+          <dc:Bounds x="396" y="208" width="100" height="60" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="380" y="273" width="130" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="ScriptTask_4A817B_di" bpmnElement="ScriptTask_4A817B">
+          <dc:Bounds x="514.75" y="153.5" width="100" height="60" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="500" y="218.5" width="130" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="ScriptTask_82FA1C_di" bpmnElement="ScriptTask_82FA1C">
+          <dc:Bounds x="654.05" y="196.5" width="100" height="60" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="630" y="261.5" width="150" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNEdge id="SequenceFlow_388E94_di" bpmnElement="SequenceFlow_388E94">
+          <di:waypoint x="286" y="268" />
+          <di:waypoint x="300" y="177" />
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_506DA6_di" bpmnElement="SequenceFlow_506DA6">
+          <di:waypoint x="400" y="177" />
+          <di:waypoint x="398" y="248" />
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_D0D393_di" bpmnElement="SequenceFlow_D0D393">
+          <di:waypoint x="496" y="248" />
+          <di:waypoint x="515" y="194" />
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_BE7CFB_di" bpmnElement="SequenceFlow_BE7CFB">
+          <di:waypoint x="615" y="194" />
+          <di:waypoint x="649" y="222" />
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_2A6D95_di" bpmnElement="SequenceFlow_2A6D95">
+          <di:waypoint x="740" y="150" />
+          <di:waypoint x="655" y="237" />
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_4C89A5_di" bpmnElement="SequenceFlow_4C89A5">
+          <di:waypoint x="755" y="237" />
+          <di:waypoint x="706" y="305" />
+        </bpmndi:BPMNEdge>
+      </bpmndi:BPMNPlane>
+    </bpmndi:BPMNDiagram>
+  </definitions>
