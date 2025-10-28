@@ -1160,11 +1160,9 @@ function GanttChart({ user, projectId: propProjectId }) {
       PLANNING: 'secondary',
       COMPLETED: 'success',
       // Activity statuses
-      'NEW': 'info',
-      'IN_PROGRESS': 'primary',
-      'ON_HOLD': 'warning',
-      'COMPLETED': 'success',
-      'CANCELLED': 'error'
+      NEW: 'info',
+      ON_HOLD: 'warning',
+      CANCELLED: 'error'
     }
     const color = colors[status] || 'primary'
     
@@ -1187,11 +1185,9 @@ function GanttChart({ user, projectId: propProjectId }) {
       PLANNING: 'Planning',
       COMPLETED: 'Completed',
       // Activity statuses
-      'NEW': 'New',
-      'IN_PROGRESS': 'In Progress',
-      'ON_HOLD': 'On Hold',
-      'COMPLETED': 'Completed',
-      'CANCELLED': 'Cancelled'
+      NEW: 'New',
+      ON_HOLD: 'On Hold',
+      CANCELLED: 'Cancelled'
     }
     return labels[status] || status
   }

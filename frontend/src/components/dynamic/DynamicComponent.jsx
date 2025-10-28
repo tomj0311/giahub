@@ -41,15 +41,49 @@ class ComponentErrorBoundary extends React.Component {
 // Load Babel standalone for JSX compilation
 const loadBabel = () => {
   return new Promise((resolve, reject) => {
-    if (window.Babel) {
+    // Check if Babel is already loaded and fully initialized
+    if (window.Babel && window.Babel.transform) {
       resolve(window.Babel);
+      return;
+    }
+
+    // Check if script is already being loaded
+    const existingScript = document.querySelector('script[src*="babel"]');
+    if (existingScript) {
+      // Wait for existing script to load
+      const checkBabel = setInterval(() => {
+        if (window.Babel && window.Babel.transform) {
+          clearInterval(checkBabel);
+          resolve(window.Babel);
+        }
+      }, 50);
+      
+      // Timeout after 10 seconds
+      setTimeout(() => {
+        clearInterval(checkBabel);
+        reject(new Error('Babel loading timeout'));
+      }, 10000);
       return;
     }
 
     const script = document.createElement('script');
     script.src = 'https://unpkg.com/@babel/standalone/babel.min.js';
-    script.onload = () => resolve(window.Babel);
-    script.onerror = reject;
+    script.onload = () => {
+      // Wait for Babel to be fully available
+      const checkBabel = setInterval(() => {
+        if (window.Babel && window.Babel.transform) {
+          clearInterval(checkBabel);
+          resolve(window.Babel);
+        }
+      }, 50);
+      
+      // Timeout after 5 seconds
+      setTimeout(() => {
+        clearInterval(checkBabel);
+        reject(new Error('Babel initialization timeout'));
+      }, 5000);
+    };
+    script.onerror = () => reject(new Error('Failed to load Babel script'));
     document.head.appendChild(script);
   });
 };
@@ -108,7 +142,13 @@ const DynamicComponent = ({ componentCode, onSubmit, submitting, children }) => 
 
         // Load Babel
         const Babel = await loadBabel();
-        console.log('Babel loaded successfully');
+        
+        // Verify Babel is properly loaded
+        if (!Babel || !Babel.transform) {
+          throw new Error('Babel failed to load properly. Please refresh the page.');
+        }
+        
+        console.log('Babel loaded successfully', typeof Babel.transform);
 
         // Basic validation - just check for return statement
         if (!cleanedCode.includes('return')) {
