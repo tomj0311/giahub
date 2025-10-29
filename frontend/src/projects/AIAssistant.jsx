@@ -3,32 +3,17 @@ import {
   Box,
   Typography,
   Button,
-  Card,
-  CardContent,
   CircularProgress,
   Alert,
   List,
   ListItemButton,
-  ListItemText,
   Chip,
-  Paper,
   Avatar,
-  Divider,
   alpha,
-  useTheme,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow
+  useTheme
 } from '@mui/material';
 import {
   Bot,
-  Play,
-  CheckCircle,
-  XCircle,
-  Clock,
   RefreshCw
 } from 'lucide-react';
 import sharedApiService from '../utils/apiService';
@@ -580,21 +565,6 @@ const AIAssistant = ({ user }) => {
     });
   };
 
-  const getMessageIcon = (type, status) => {
-    if (type === 'error') return <XCircle size={16} />;
-    if (status === 'processing') return <Clock size={16} />;
-    if (status === 'completed') return <CheckCircle size={16} />;
-    return <Bot size={16} />;
-  };
-
-  const getMessageColor = (type, status) => {
-    if (type === 'error') return theme.palette.error.main;
-    if (status === 'processing') return theme.palette.warning.main;
-    return theme.palette.secondary.main;
-  };
-
-
-
   return (
     <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Header */}
@@ -624,29 +594,18 @@ const AIAssistant = ({ user }) => {
       </Box>
 
       {/* Main Content */}
-      <Box sx={{ display: 'flex', gap: 2, height: 'calc(100vh - 200px)', overflow: 'hidden', width: '100%' }}>
+      <Box sx={{ display: 'flex', gap: 3, height: 'calc(100vh - 200px)', overflow: 'hidden', width: '100%' }}>
         {/* Left Panel - Workflow Selection */}
         <Box sx={{ 
-          width: 320,
-          minWidth: 320,
-          maxWidth: 320,
-          border: '1px solid',
-          borderColor: 'divider',
+          width: 280,
           display: 'flex',
           flexDirection: 'column',
-          bgcolor: 'background.paper',
-          borderRadius: 1,
           height: '100%',
           overflow: 'hidden'
         }}>
-          <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="subtitle1" fontWeight="bold">
-              Available Assistants
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {workflows.length} assistant{workflows.length !== 1 ? 's' : ''} available
-            </Typography>
-          </Box>
+          <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2 }}>
+            Available Assistants ({workflows.length})
+          </Typography>
 
           {/* Workflow List */}
           <Box sx={{ flex: 1, overflow: 'auto' }}>
@@ -655,66 +614,59 @@ const AIAssistant = ({ user }) => {
                 <CircularProgress />
               </Box>
             ) : error && workflows.length === 0 ? (
-              <Alert severity="warning" sx={{ m: 2 }}>
+              <Alert severity="warning" sx={{ m: 0 }}>
                 {error}
               </Alert>
             ) : (
-              <List sx={{ p: 1 }}>
+              <List sx={{ p: 0 }}>
                 {workflows.map((workflow) => (
-                  <Card 
+                  <ListItemButton
                     key={workflow.id || workflow.workflow_id || workflow._id}
+                    selected={selectedWorkflow?.name === workflow.name}
+                    onClick={() => {
+                      if (state === 'idle') {
+                        setSelectedWorkflow(workflow);
+                        startWorkflow(false, workflow);
+                      }
+                    }}
+                    disabled={(state === 'running' || isPolling || loading) && selectedWorkflow?.name === workflow.name}
                     sx={{ 
                       mb: 1,
-                      border: selectedWorkflow?.name === workflow.name ? 
-                        `2px solid ${theme.palette.primary.main}` : 
-                        '1px solid',
-                      borderColor: selectedWorkflow?.name === workflow.name ? 
-                        theme.palette.primary.main : 
-                        'divider',
-                      bgcolor: selectedWorkflow?.name === workflow.name ? 
-                        alpha(theme.palette.primary.main, 0.05) : 
-                        'background.paper'
+                      borderRadius: 1,
+                      border: '1px solid',
+                      borderColor: selectedWorkflow?.name === workflow.name ? 'primary.main' : 'divider',
+                      '&.Mui-selected': {
+                        bgcolor: alpha(theme.palette.primary.main, 0.08),
+                      },
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      py: 1.5
                     }}
                   >
-                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                      <Typography variant="subtitle1" fontWeight={500} sx={{ mb: 0.5 }}>
-                        {workflow.name}
+                    <Typography variant="body1" fontWeight={500}>
+                      {workflow.name}
+                    </Typography>
+                    {workflow.description && (
+                      <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                        {workflow.description}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        {workflow.description || 'No description'}
-                      </Typography>
-                      
-                      {state === 'idle' || selectedWorkflow?.name !== workflow.name ? (
-                        <Button
-                          variant="contained"
-                          size="medium"
-                          fullWidth
-                          startIcon={loading && selectedWorkflow?.name === workflow.name ? 
-                            <CircularProgress size={20} /> : 
-                            <Play size={20} />
-                          }
-                          onClick={() => {
-                            setSelectedWorkflow(workflow);
-                            startWorkflow(false, workflow);
-                          }}
-                          disabled={(state === 'running' || isPolling || loading) && selectedWorkflow?.name === workflow.name}
-                        >
-                          Start Assistant
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outlined"
-                          size="medium"
-                          fullWidth
-                          startIcon={<RefreshCw size={20} />}
-                          onClick={handleReset}
-                          disabled={isPolling}
-                        >
-                          Reset
-                        </Button>
-                      )}
-                    </CardContent>
-                  </Card>
+                    )}
+                    {selectedWorkflow?.name === workflow.name && state !== 'idle' && (
+                      <Button
+                        variant="text"
+                        size="small"
+                        startIcon={<RefreshCw size={16} />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleReset();
+                        }}
+                        disabled={isPolling}
+                        sx={{ mt: 1, alignSelf: 'flex-end' }}
+                      >
+                        Reset
+                      </Button>
+                    )}
+                  </ListItemButton>
                 ))}
               </List>
             )}
@@ -722,7 +674,17 @@ const AIAssistant = ({ user }) => {
         </Box>
 
         {/* Right Panel - Results/Messages */}
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', borderRadius: 1, border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', overflow: 'hidden', minWidth: 0 }}>
+        <Box sx={{ 
+          flex: 1, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          height: '100%', 
+          overflow: 'hidden', 
+          minWidth: 0,
+          bgcolor: alpha(theme.palette.grey[500], 0.03),
+          borderRadius: 1,
+          p: 2
+        }}>
           {state === 'idle' && !selectedWorkflow && (
             <Box sx={{ 
               flex: 1,
@@ -731,13 +693,12 @@ const AIAssistant = ({ user }) => {
               alignItems: 'center', 
               justifyContent: 'center',
               gap: 2,
-              color: 'text.secondary',
-              p: 3
+              color: 'text.secondary'
             }}>
               <Bot size={48} />
-              <Typography variant="h6">Select an AI Assistant to Get Started</Typography>
-              <Typography variant="body2" sx={{ textAlign: 'center', maxWidth: 400 }}>
-                Choose from the available assistants on the left panel
+              <Typography variant="h6">Select an Assistant</Typography>
+              <Typography variant="body2">
+                Choose from the available assistants
               </Typography>
             </Box>
           )}
@@ -749,36 +710,29 @@ const AIAssistant = ({ user }) => {
               flexDirection: 'column', 
               alignItems: 'center', 
               justifyContent: 'center',
-              gap: 2,
-              p: 3
+              gap: 2
             }}>
-              <Avatar sx={{ 
-                bgcolor: theme.palette.primary.main,
-                width: 64,
-                height: 64
-              }}>
-                <Bot size={32} />
-              </Avatar>
+              <Bot size={48} color={theme.palette.primary.main} />
               <Typography variant="h6" fontWeight="bold">
                 {selectedWorkflow.name}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', maxWidth: 500 }}>
-                {selectedWorkflow.description || 'Click "Start Assistant" to begin'}
+                {selectedWorkflow.description || 'Starting assistant...'}
               </Typography>
             </Box>
           )}
 
           {(state === 'running' || state === 'completed' || state === 'failed' || state === 'task_ready') && (
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              {/* Fixed Assistant Avatar */}
+              {/* Assistant Header */}
               <Box sx={{ 
-                p: 2, 
-                borderBottom: '1px solid', 
-                borderColor: 'divider',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 2,
-                bgcolor: 'background.paper'
+                mb: 2,
+                pb: 2,
+                borderBottom: '1px solid',
+                borderColor: 'divider'
               }}>
                 <Avatar sx={{ 
                   bgcolor: theme.palette.secondary.main,
@@ -787,7 +741,7 @@ const AIAssistant = ({ user }) => {
                 }}>
                   <Bot size={24} />
                 </Avatar>
-                <Box>
+                <Box sx={{ flex: 1 }}>
                   <Typography variant="subtitle1" fontWeight="bold">
                     {selectedWorkflow?.name || 'AI Assistant'}
                   </Typography>
@@ -798,161 +752,138 @@ const AIAssistant = ({ user }) => {
               </Box>
               
               {/* Messages Area */}
-              <Box sx={{ flex: 1, overflowY: 'auto', p: state === 'task_ready' ? 0 : 3 }}>
-                <List sx={{ p: 0 }}>
-                  {messages.filter(msg => {
-                    // Filter out messages with no content and no outputData
-                    return msg.content || (msg.outputData && Object.keys(msg.outputData).length > 0);
-                  }).map((msg, index, filteredMessages) => (
-                    <React.Fragment key={msg.id}>
+              <Box sx={{ flex: 1, overflowY: 'auto' }}>
+                {messages.filter(msg => {
+                  // Filter out messages with no content and no outputData
+                  return msg.content || (msg.outputData && Object.keys(msg.outputData).length > 0);
+                }).map((msg, index) => (
+                  <Box 
+                    key={msg.id}
+                    sx={{ 
+                      width: '100%',
+                      display: 'flex', 
+                      gap: 1.5,
+                      mb: 2,
+                      flexDirection: msg.type === 'user' ? 'row-reverse' : 'row',
+                      justifyContent: msg.type === 'user' ? 'flex-start' : 'flex-start'
+                    }}
+                  >
+                    <Avatar sx={{ 
+                      bgcolor: msg.type === 'user' ? theme.palette.primary.main : 
+                                msg.type === 'error' ? theme.palette.error.main :
+                                theme.palette.secondary.main,
+                      width: 32,
+                      height: 32,
+                      flexShrink: 0
+                    }}>
+                      {msg.type === 'user' ? 'U' : <Bot size={18} />}
+                    </Avatar>
+                    
+                    <Box sx={{ 
+                      maxWidth: msg.type === 'user' ? '50%' : '100%',
+                      minWidth: 0
+                    }}>
                       <Box sx={{ 
                         display: 'flex', 
-                        alignItems: 'flex-start',
-                        gap: 2,
-                        mb: 3,
-                        px: 1,
-                        flexDirection: msg.type === 'user' ? 'row-reverse' : 'row'
+                        alignItems: 'center', 
+                        gap: 1.5, 
+                        mb: 1,
+                        flexDirection: msg.type === 'user' ? 'row-reverse' : 'row',
+                        justifyContent: msg.type === 'user' ? 'flex-end' : 'flex-start'
                       }}>
-                        <Avatar sx={{ 
-                          bgcolor: msg.type === 'user' ? theme.palette.primary.main : getMessageColor(msg.type, msg.status),
-                          width: 36,
-                          height: 36,
-                          mt: 1
-                        }}>
-                          {msg.type === 'user' ? 'U' : getMessageIcon(msg.type, msg.status)}
-                        </Avatar>
-                        
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Box sx={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: 1.5, 
-                            mb: 1,
-                            py: 1.5,
-                            flexDirection: msg.type === 'user' ? 'row-reverse' : 'row'
-                          }}>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.95rem' }}>
-                              {msg.type === 'error' ? 'Error' : msg.type === 'user' ? 'You' : 'Assistant'}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                              {formatTimestamp(msg.timestamp)}
-                            </Typography>
-                            {msg.taskName && (
-                              <Chip 
-                                label={msg.taskName} 
-                                size="small" 
-                                variant="outlined"
-                                sx={{ height: 22, fontSize: '0.7rem' }}
-                              />
-                            )}
-                          </Box>
-                          
-                          <Paper sx={{ 
-                            p: 2, 
-                            bgcolor: msg.type === 'user' ? 
-                              alpha(theme.palette.primary.main, 0.1) :
-                              msg.type === 'error' ? 
-                              alpha(theme.palette.error.main, 0.1) : 
-                              alpha(theme.palette.grey[500], 0.1),
-                            border: msg.type === 'error' ? 
-                              `1px solid ${theme.palette.error.main}` : 'none',
-                            ml: msg.type === 'user' ? 'auto' : 0,
-                            mr: msg.type === 'user' ? 0 : 'auto',
-                            maxWidth: msg.type === 'user' ? '60%' : '100%',
-                            textAlign: msg.type === 'user' ? 'right' : 'left'
-                          }}>
-                            {msg.status === 'processing' ? (
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <CircularProgress size={16} />
-                                <Typography variant="body2">{msg.content}</Typography>
-                              </Box>
-                            ) : (
-                              <>
-                                {msg.content && (
-                                  <Typography 
-                                    variant="body2" 
-                                    sx={{ 
-                                      whiteSpace: 'pre-wrap',
-                                      wordBreak: 'break-word'
-                                    }}
-                                  >
-                                    {msg.content}
-                                  </Typography>
-                                )}
-                                
-                                {/* Display output data from workflow - simplified */}
-                                {msg.outputData && (
-                                  <Box sx={{ mt: msg.content ? 2 : 0 }}>
-                                    {Object.entries(msg.outputData).map(([key, value]) => (
-                                      <Box key={key} sx={{ mb: 2 }}>
-                                        <Box sx={{ 
-                                          maxHeight: 600, 
-                                          overflow: 'auto'
-                                        }}>
-                                          <IntelligentJsonRenderer data={value} keyName={null} />
-                                        </Box>
-                                      </Box>
-                                    ))}
-                                  </Box>
-                                )}
-                              </>
-                            )}
-                          </Paper>
-                        </Box>
+                        <Typography variant="caption" fontWeight={600}>
+                          {msg.type === 'error' ? 'Error' : msg.type === 'user' ? 'You' : 'Assistant'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {formatTimestamp(msg.timestamp)}
+                        </Typography>
+                        {msg.taskName && (
+                          <Chip 
+                            label={msg.taskName} 
+                            size="small" 
+                            variant="outlined"
+                            sx={{ height: 20, fontSize: '0.65rem' }}
+                          />
+                        )}
                       </Box>
-                      {index < filteredMessages.length - 1 && <Divider sx={{ my: 2 }} />}
-                    </React.Fragment>
-                  ))}
-                  
-                  {/* Show TaskCompletion if ready */}
-                  {state === 'task_ready' && readyTaskData && workflowId && instanceId && (
-                    <Box sx={{ width: '100%' }}>
-                      <TaskCompletion
-                        key={readyTaskData.taskSpec}
-                        user={user}
-                        workflowId={workflowId}
-                        instanceId={instanceId}
-                        taskId={readyTaskData.taskSpec}
-                        isDialog={true}
-                        onSuccess={handleTaskSuccess}
-                      />
+                      
+                      <Box sx={{ 
+                        p: 1.5,
+                        borderRadius: 1,
+                        bgcolor: msg.type === 'user' ? 
+                          alpha(theme.palette.primary.main, 0.1) :
+                          msg.type === 'error' ? 
+                          alpha(theme.palette.error.main, 0.1) : 
+                          'background.paper',
+                        border: '1px solid',
+                        borderColor: msg.type === 'error' ? 'error.main' : 'divider'
+                      }}>
+                        {msg.status === 'processing' ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <CircularProgress size={14} />
+                            <Typography variant="body2">{msg.content}</Typography>
+                          </Box>
+                        ) : (
+                          <>
+                            {msg.content && (
+                              <Typography 
+                                variant="body2" 
+                                sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                              >
+                                {msg.content}
+                              </Typography>
+                            )}
+                            
+                            {msg.outputData && (
+                              <Box sx={{ mt: msg.content ? 1.5 : 0 }}>
+                                {Object.entries(msg.outputData).map(([key, value]) => (
+                                  <Box key={key} sx={{ maxHeight: 500, overflow: 'auto' }}>
+                                    <IntelligentJsonRenderer data={value} keyName={null} />
+                                  </Box>
+                                ))}
+                              </Box>
+                            )}
+                          </>
+                        )}
+                      </Box>
                     </Box>
-                  )}
-                  
-                  {/* Start Over Button - Shows inline when workflow is completed or failed */}
-                  {(state === 'completed' || state === 'failed') && (
-                    <Box sx={{ 
-                      display: 'flex', 
-                      justifyContent: 'center',
-                      my: 3,
-                      px: 2
-                    }}>
-                      <Button
-                        variant="contained"
-                        size="large"
-                        startIcon={<RefreshCw size={20} />}
-                        onClick={() => {
-                          // Keep existing messages and restart the workflow
-                          setState('running');
-                          setError('');
-                          setReadyTaskData(null);
-                          startWorkflow(true); // Pass true to keep messages
-                        }}
-                        sx={{
-                          minWidth: 200,
-                          bgcolor: theme.palette.primary.main,
-                          '&:hover': {
-                            bgcolor: theme.palette.primary.dark,
-                          }
-                        }}
-                      >
-                        Start Over
-                      </Button>
-                    </Box>
-                  )}
-                  
-                  <div ref={messagesEndRef} />
-                </List>
+                  </Box>
+                ))}
+                
+                {/* Show TaskCompletion if ready */}
+                {state === 'task_ready' && readyTaskData && workflowId && instanceId && (
+                  <Box sx={{ mt: 2 }}>
+                    <TaskCompletion
+                      key={readyTaskData.taskSpec}
+                      user={user}
+                      workflowId={workflowId}
+                      instanceId={instanceId}
+                      taskId={readyTaskData.taskSpec}
+                      isDialog={true}
+                      onSuccess={handleTaskSuccess}
+                    />
+                  </Box>
+                )}
+                
+                {/* Start Over Button */}
+                {(state === 'completed' || state === 'failed') && (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+                    <Button
+                      variant="contained"
+                      startIcon={<RefreshCw size={18} />}
+                      onClick={() => {
+                        setState('running');
+                        setError('');
+                        setReadyTaskData(null);
+                        startWorkflow(true);
+                      }}
+                    >
+                      Start Over
+                    </Button>
+                  </Box>
+                )}
+                
+                <div ref={messagesEndRef} />
               </Box>
             </Box>
           )}
