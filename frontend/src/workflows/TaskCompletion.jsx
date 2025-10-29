@@ -241,7 +241,12 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
         const isRequired = field.required === 'true' || field.required === true;
         if (isRequired) {
           const value = formData[field.id];
-          if (!value || (typeof value === 'string' && value.trim() === '')) {
+          // Handle file type validation
+          if (field.type === 'files') {
+            if (!value || !(value instanceof File)) {
+              errors[field.id] = `${field.label || field.id} is required`;
+            }
+          } else if (!value || (typeof value === 'string' && value.trim() === '')) {
             errors[field.id] = `${field.label || field.id} is required`;
           }
         }
@@ -500,6 +505,53 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
                           error={!!fieldErrors[field.id]}
                           helperText={fieldErrors[field.id]}
                         />
+                      ) : field.type === 'files' ? (
+                        <Box>
+                          <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium' }}>
+                            {field.label || field.id}
+                            {(field.required === 'true' || field.required === true) && (
+                              <span style={{ color: 'red' }}> *</span>
+                            )}
+                          </Typography>
+                          <Button
+                            variant="outlined"
+                            component="label"
+                            fullWidth
+                            sx={{ 
+                              justifyContent: 'flex-start',
+                              textTransform: 'none',
+                              py: 1.5,
+                              borderStyle: fieldErrors[field.id] ? 'solid' : 'dashed',
+                              borderColor: fieldErrors[field.id] ? 'error.main' : 'divider',
+                              '&:hover': {
+                                borderStyle: 'solid'
+                              }
+                            }}
+                          >
+                            {formData[field.id] ? (
+                              <span>
+                                📎 {formData[field.id].name} ({(formData[field.id].size / 1024).toFixed(2)} KB)
+                              </span>
+                            ) : (
+                              <span>Click to upload file</span>
+                            )}
+                            <input
+                              type="file"
+                              hidden
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  handleFormChange(field.id, file);
+                                }
+                              }}
+                            />
+                          </Button>
+                          {fieldErrors[field.id] && (
+                            <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'block' }}>
+                              {fieldErrors[field.id]}
+                            </Typography>
+                          )}
+                        </Box>
                       ) : (
                         <TextField
                           fullWidth
