@@ -580,7 +580,7 @@ function WorkflowExecution({ user }) {
     >
       {/* Header */}
       <Grid container sx={{borderBottom: '2px solid rgba(255, 255, 255, 0.08)' }}>
-        <Grid item xs={12} display="flex" alignItems="center" justifyContent="space-between">
+        <Grid item xs={12} display="flex" alignItems="center" justifyContent="space-between" sx={{ pb: 2 }}>
           <Grid container alignItems="center" spacing={2} sx={{ flex: 1 }}>
             <Grid item>
               <Typography variant="h5" fontWeight="bold">
