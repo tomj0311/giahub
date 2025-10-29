@@ -450,15 +450,6 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
       width: '100%'
     }}>
       <Box sx={{ maxWidth: isDialog ? 600 : '100%', mx: isDialog ? 'auto' : 0, pt: isDialog ? 1 : 0, width: '100%' }}>
-        {/* Header */}
-        {isDialog && (
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', mb: 2 }}>
-            <Button onClick={onClose} color="inherit">
-              ×
-            </Button>
-          </Box>
-        )}
-
         {error && (
           <Alert severity="error" sx={{ mb: 3 }}>
             {error}
