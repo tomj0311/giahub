@@ -566,13 +566,14 @@ const AIAssistant = ({ user }) => {
   };
 
   return (
-    <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Header */}
       <Box sx={{ 
         pb: 2,
         mb: 2,
         borderBottom: '1px solid',
-        borderColor: 'divider'
+        borderColor: 'divider',
+        flexShrink: 0
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
           <Bot size={28} />
@@ -594,21 +595,21 @@ const AIAssistant = ({ user }) => {
       </Box>
 
       {/* Main Content */}
-      <Box sx={{ display: 'flex', gap: 3, height: 'calc(100vh - 200px)', overflow: 'hidden', width: '100%' }}>
+      <Box sx={{ display: 'flex', gap: 3, flex: 1, overflow: 'hidden', width: '100%', minHeight: 0 }}>
         {/* Left Panel - Workflow Selection */}
         <Box sx={{ 
           width: 280,
+          flexShrink: 0,
           display: 'flex',
           flexDirection: 'column',
-          height: '100%',
-          overflow: 'hidden'
+          minHeight: 0
         }}>
-          <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2 }}>
+          <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2, flexShrink: 0 }}>
             Available Assistants ({workflows.length})
           </Typography>
 
           {/* Workflow List */}
-          <Box sx={{ flex: 1, overflow: 'auto' }}>
+          <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
             {workflowsLoading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
                 <CircularProgress />
@@ -678,8 +679,7 @@ const AIAssistant = ({ user }) => {
           flex: 1, 
           display: 'flex', 
           flexDirection: 'column', 
-          height: '100%', 
-          overflow: 'hidden', 
+          minHeight: 0,
           minWidth: 0,
           bgcolor: alpha(theme.palette.grey[500], 0.03),
           borderRadius: 1,
@@ -723,7 +723,7 @@ const AIAssistant = ({ user }) => {
           )}
 
           {(state === 'running' || state === 'completed' || state === 'failed' || state === 'task_ready') && (
-            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
               {/* Assistant Header */}
               <Box sx={{ 
                 display: 'flex',
@@ -732,7 +732,8 @@ const AIAssistant = ({ user }) => {
                 mb: 2,
                 pb: 2,
                 borderBottom: '1px solid',
-                borderColor: 'divider'
+                borderColor: 'divider',
+                flexShrink: 0
               }}>
                 <Avatar sx={{ 
                   bgcolor: theme.palette.secondary.main,
@@ -752,7 +753,7 @@ const AIAssistant = ({ user }) => {
               </Box>
               
               {/* Messages Area */}
-              <Box sx={{ flex: 1, overflowY: 'auto' }}>
+              <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
                 {messages.filter(msg => {
                   // Filter out messages with no content and no outputData
                   return msg.content || (msg.outputData && Object.keys(msg.outputData).length > 0);
