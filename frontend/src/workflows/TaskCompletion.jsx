@@ -506,8 +506,8 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
                           helperText={fieldErrors[field.id]}
                         />
                       ) : field.type === 'files' ? (
-                        <Box>
-                          <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium' }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium', alignSelf: 'flex-start' }}>
                             {field.label || field.id}
                             {(field.required === 'true' || field.required === true) && (
                               <span style={{ color: 'red' }}> *</span>
@@ -518,7 +518,7 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
                             component="label"
                             fullWidth
                             sx={{ 
-                              justifyContent: 'flex-start',
+                              justifyContent: 'center',
                               textTransform: 'none',
                               py: 1.5,
                               borderStyle: fieldErrors[field.id] ? 'solid' : 'dashed',
@@ -547,7 +547,7 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
                             />
                           </Button>
                           {fieldErrors[field.id] && (
-                            <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'block' }}>
+                            <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'block', alignSelf: 'flex-start' }}>
                               {fieldErrors[field.id]}
                             </Typography>
                           )}
