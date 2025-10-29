@@ -1,0 +1,1026 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+  <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+    xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+    xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+    xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0"
+    xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0"
+    id="Definitions_1"
+    targetNamespace="http://example.com/bpmn"
+    xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL http://www.omg.org/spec/BPMN/2.0/20100501/BPMN20.xsd">
+    <process id="Process_2" isExecutable="true">
+      <startEvent id="StartEvent_Report" name="Start Report Generation">
+        <outgoing>SequenceFlow_Start_UserInput</outgoing>
+      </startEvent>
+      <endEvent id="EndEvent_Report" name="Report Complete">
+        <incoming>SequenceFlow_A08DB8</incoming>
+        <incoming>SequenceFlow_975D16</incoming>
+      </endEvent>
+      <serviceTask id="ServiceTask_GeneratePipeline" name="AI Agent: Generate Pipeline">
+        <incoming>SequenceFlow_BuildPrompt_Agent</incoming>
+        <outgoing>SequenceFlow_Agent_Execute</outgoing>
+        <extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+          <serviceConfiguration xmlns="http://example.org/service">
+            <function>
+              <moduleName>agent_executor</moduleName>
+              <functionName>run_agent</functionName>
+              <parameters>
+                <parameter name="agent_name" value="Research"/>
+                <parameter name="prompt" value="intelligent_query_prompt"/>
+                <parameter name="user" value=""/>
+              </parameters>
+            </function>
+          </serviceConfiguration>
+        </extensionElements>
+      </serviceTask>
+      <serviceTask id="ServiceTask_EnhanceReport" name="AI Agent: Enhance Report with Insights">
+        <incoming>SequenceFlow_EnhancePrompt_Service</incoming>
+        <outgoing>SequenceFlow_Enhance_Format</outgoing>
+        <extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+          <serviceConfiguration xmlns="http://example.org/service">
+            <function>
+              <moduleName>agent_executor</moduleName>
+              <functionName>run_agent</functionName>
+              <parameters>
+                <parameter name="agent_name" value="Research"/>
+                <parameter name="prompt" value="enhance_report_prompt"/>
+                <parameter name="user" value=""/>
+              </parameters>
+            </function>
+          </serviceConfiguration>
+        </extensionElements>
+      </serviceTask>
+      <userTask id="UserTask_ReportInput" name="Input Query &amp; Report Config">
+        <incoming>SequenceFlow_Start_UserInput</incoming>
+        <outgoing>SequenceFlow_UserInput_FetchSchema</outgoing>
+        <extensionElements xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+          <formData xmlns="http://example.org/form">
+            <scriptData xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+              <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+// JSX code for report configuration form
+]]></script>
+            </scriptData>
+            <formField id="prompt" label="Query Description" type="string" required="true"/>
+            <formField id="report_title" label="Report Title" type="string" required="false"/>
+            <formField id="include_charts" label="Include Visual Charts" type="boolean" required="false"/>
+          </formData>
+        </extensionElements>
+      </userTask>
+      <scriptTask id="ScriptTask_FetchSchema" name="Fetch Schema &amp; Samples">
+        <incoming>SequenceFlow_UserInput_FetchSchema</incoming>
+        <outgoing>SequenceFlow_FetchSchema_BuildPrompt</outgoing>
+        <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+```python
+import os
+import json
+from datetime import datetime, date
+from pymongo import MongoClient
+from pymongo.errors import PyMongoError
+from bson import ObjectId
+
+def serialize_mongo_doc(doc):
+    """Convert MongoDB document to JSON-serializable format"""
+    if isinstance(doc, dict):
+        return {k: serialize_mongo_doc(v) for k, v in doc.items()}
+    elif isinstance(doc, list):
+        return [serialize_mongo_doc(item) for item in doc]
+    elif isinstance(doc, ObjectId):
+        return str(doc)
+    elif isinstance(doc, (datetime, date)):
+        return doc.isoformat()
+    return doc
+
+def fetch_sample_documents(limit=3):
+    """Fetch sample documents from all three collections"""
+    mongo_url = os.getenv('MONGO_URL', 'mongodb://localhost:8801')
+    mongo_db_name = os.getenv('MONGO_DB', 'giap')
+    
+    if not mongo_url or not mongo_db_name:
+        raise ValueError('Missing MONGO_URL or MONGO_DB environment variable.')
+
+    client = MongoClient(mongo_url)
+    db = client[mongo_db_name]
+
+    projects = []
+    project_activities = []
+    activity_notifications = []
+    
+    try:
+        projects = [serialize_mongo_doc(doc) for doc in db['projects'].find().limit(limit)]
+        project_activities = [serialize_mongo_doc(doc) for doc in db['projectActivities'].find().limit(limit)]
+        activity_notifications = [serialize_mongo_doc(doc) for doc in db['activityNotifications'].find().limit(limit)]
+    except PyMongoError as err:
+        print(f"MongoDB error: {err}")
+        projects = []
+        project_activities = []
+        activity_notifications = []
+    finally:
+        client.close()
+    
+    return projects, project_activities, activity_notifications
+
+# Execute and store in variables
+projects, project_activities, activity_notifications = fetch_sample_documents(limit=3)
+
+# Convert to compact JSON for next task
+projects_json = json.dumps(projects[:2], indent=2) if projects else "[]"
+activities_json = json.dumps(project_activities[:2], indent=2) if project_activities else "[]"
+notifications_json = json.dumps(activity_notifications[:2], indent=2) if activity_notifications else "[]"
+
+print(f"[Report-Step1] Fetched samples: {len(projects)} projects, {len(project_activities)} activities, {len(activity_notifications)} notifications")
+```
+]]></script>
+      </scriptTask>
+      <scriptTask id="ScriptTask_BuildPrompt" name="Build Query Generation Prompt">
+        <incoming>SequenceFlow_FetchSchema_BuildPrompt</incoming>
+        <outgoing>SequenceFlow_BuildPrompt_Agent</outgoing>
+        <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+```python
+# Build intelligent query prompt with schema and samples
+intelligent_query_prompt = f"""You are an expert MongoDB Query Generator for a project management system report.
+
+**YOUR TASK:**
+Analyze the user's natural language question and generate an optimized MongoDB aggregation pipeline for reporting purposes.
+
+**DATABASE SCHEMA:**
+
+**Collection: projects**
+- _id: ObjectId
+- name, description: String
+- status: PLANNING | IN_PROGRESS | COMPLETED | ON_HOLD
+- priority: Low | Normal | High | Critical
+- assignee, approver: String (email)
+- due_date, start_date: String (YYYY-MM-DD)
+- progress: Number (0-100)
+- parent_id: String (references projects._id)
+- tenantId, userId: String
+
+**Collection: projectActivities**
+- _id: ObjectId
+- project_id: String (references projects._id as string)
+- subject, description: String
+- type: TASK | MILESTONE | MEETING | REVIEW
+- status: Pending | In Progress | Completed | Cancelled
+- priority: Low | Normal | High | Critical
+- assignee, approver: String (email)
+- due_date, start_date: String (YYYY-MM-DD)
+- progress: Number (0-100)
+- tenantId, userId: String
+
+**Collection: activityNotifications**
+- _id: ObjectId
+- activity_id: String (references projectActivities._id as string)
+- sender_id, sender_email, sender_name: String
+- message: String
+- mentioned_users: Array
+- files: Array [{{filename, path}}]
+- tenantId: String
+
+**RELATIONSHIPS:**
+- projects._id (ObjectId) ← projectActivities.project_id (String)
+- projectActivities._id (ObjectId) ← activityNotifications.activity_id (String)
+
+**SAMPLE DATA:**
+
+Projects:
+{projects_json}
+
+Activities:
+{activities_json}
+
+Notifications:
+{notifications_json}
+
+**USER QUESTION:**
+{prompt}
+
+**GENERATION RULES:**
+
+1. **Intent Detection:**
+   - PROJECT_OVERVIEW: Show project details
+   - PROJECT_WITH_ACTIVITIES: Project + activities join
+   - PROJECT_FULL_DETAILS: All 3 collections joined
+   - ACTIVITY_SEARCH: Find specific activities/tasks
+   - NOTIFICATION_SEARCH: Find notifications
+   - AGGREGATION_QUERY: Count/sum/average queries
+   - STATUS_BASED: Filter by status
+   - USER_BASED: Filter by assignee/approver
+   - TIME_BASED: Filter by dates
+
+2. **CRITICAL $LOOKUP RULE:**
+   Always convert ObjectId to String BEFORE $lookup:
+   ```
+   {{ "$addFields": {{ "_id_str": {{ "$toString": "$_id" }} }} }}
+   ```
+
+3. **Text Search Pattern:**
+   Use CONTAINS (no anchors):
+   ```
+   {{ "$match": {{ "name": {{ "$regex": "search", "$options": "i" }} }} }}
+   ```
+
+4. **Pipeline Optimization:**
+   - Place $match first
+   - Project useful fields for reporting
+   - Include aggregations when relevant
+
+**OUTPUT FORMAT (JSON ONLY - NO MARKDOWN):**
+
+{{
+  "intent": "INTENT_TYPE",
+  "description": "What this query does",
+  "collection": "primaryCollection",
+  "pipeline": [
+    {{ "$match": {{ ... }} }},
+    {{ "$addFields": {{ "_id_str": {{ "$toString": "$_id" }} }} }},
+    {{ "$lookup": {{ ... }} }}
+  ],
+  "suggested_columns": ["column1", "column2", "column3"]
+}}
+
+Return ONLY the JSON object. No explanations, no markdown code blocks, just pure JSON.
+"""
+
+print(f"[Report-Step2] Built intelligent prompt for: {prompt[:50]}...")
+```
+]]></script>
+      </scriptTask>
+      <scriptTask id="ScriptTask_ExecutePipeline" name="Execute MongoDB Pipeline">
+        <incoming>SequenceFlow_Agent_Execute</incoming>
+        <outgoing>SequenceFlow_Execute_Gateway</outgoing>
+        <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+```python
+import os
+import json
+from datetime import datetime, date
+from pymongo import MongoClient
+from pymongo.errors import PyMongoError
+from bson import ObjectId
+
+def serialize_result(doc):
+    """Convert MongoDB results to JSON-serializable format"""
+    if isinstance(doc, dict):
+        return {k: serialize_result(v) for k, v in doc.items()}
+    elif isinstance(doc, list):
+        return [serialize_result(item) for item in doc]
+    elif isinstance(doc, ObjectId):
+        return str(doc)
+    elif isinstance(doc, (datetime, date)):
+        return doc.isoformat()
+    return doc
+
+def parse_agent_response(response_data):
+    """Parse agent response to extract pipeline"""
+    try:
+        if isinstance(response_data, dict):
+            content = response_data.get('response') or response_data.get('content') or response_data
+        else:
+            content = response_data
+            
+        if isinstance(content, str):
+            content = content.strip()
+            if content.startswith('```'):
+                lines = content.split('\n')
+                content = '\n'.join([line for line in lines if not line.startswith('```')])
+            data = json.loads(content.strip())
+        else:
+            data = content
+            
+        collection = data.get('collection')
+        pipeline = data.get('pipeline')
+        intent = data.get('intent', 'UNKNOWN')
+        description = data.get('description', 'Query execution')
+        suggested_columns = data.get('suggested_columns', [])
+        
+        return collection, pipeline, intent, description, suggested_columns
+        
+    except Exception as e:
+        print(f"[ERROR] Parsing error: {e}")
+        return None, None, None, None, []
+
+def execute_mongo_pipeline(collection_name, pipeline):
+    """Execute MongoDB aggregation pipeline"""
+    mongo_url = os.getenv('MONGO_URL', 'mongodb://localhost:8801')
+    mongo_db_name = os.getenv('MONGO_DB', 'giap')
+    
+    client = MongoClient(mongo_url)
+    db = client[mongo_db_name]
+    
+    try:
+        print(f"[Report-Step4] Executing pipeline on collection: {collection_name}")
+        results = db[collection_name].aggregate(pipeline)
+        documents = [serialize_result(doc) for doc in results]
+        
+        print(f"[Report-Step4] Query returned {len(documents)} documents")
+        return documents
+        
+    except PyMongoError as e:
+        print(f"[ERROR] MongoDB error: {e}")
+        return []
+    finally:
+        client.close()
+
+# Parse response and execute
+collection, pipeline, intent, description, suggested_columns = parse_agent_response(response)
+
+if collection and pipeline:
+    query_results = execute_mongo_pipeline(collection, pipeline)
+    record_count = len(query_results)
+    
+    query_metadata = {
+        "intent": intent,
+        "description": description,
+        "collection": collection,
+        "record_count": record_count,
+        "pipeline": pipeline,
+        "original_question": prompt,
+        "suggested_columns": suggested_columns
+    }
+else:
+    query_results = []
+    record_count = 0
+    query_metadata = {
+        "intent": "ERROR",
+        "description": "Failed to parse pipeline",
+        "error": "Could not extract collection or pipeline"
+    }
+
+print(f"[Report-Step4] Execution complete: {record_count} records retrieved")
+# Outputs: query_results, record_count, query_metadata
+```
+]]></script>
+      </scriptTask>
+      <scriptTask id="ScriptTask_NoRecordsReport" name="Generate Empty Report">
+        <incoming>SequenceFlow_Gateway_NoRecords</incoming>
+        <outgoing>SequenceFlow_A08DB8</outgoing>
+        <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+```python
+from datetime import datetime
+
+# This script receives: query_metadata from previous task
+
+# Generate empty report
+report_title = globals().get('report_title', 'MongoDB Query Report')
+query_desc = query_metadata.get('description', 'No description')
+
+markdown_report = f"""# {report_title}
+
+**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+**Query Description:** {query_desc}
+
+**Original Question:** {query_metadata.get('original_question', 'N/A')}
+
+---
+
+## Results
+
+⚠️ **No records found matching the query criteria.**
+
+### Query Details
+- **Collection:** {query_metadata.get('collection', 'N/A')}
+- **Intent:** {query_metadata.get('intent', 'N/A')}
+- **Record Count:** 0
+
+---
+
+*Report generated by MongoDB Query Report System*
+"""
+
+print(f"[Report-NoRecords] Generated empty report")
+
+# Store in _output variable for UI
+_output = {
+    "type": "markdown_report",
+    "content": markdown_report,
+    "metadata": {
+        "record_count": 0,
+        "status": "no_records"
+    }
+}
+```
+]]></script>
+      </scriptTask>
+      <scriptTask id="ScriptTask_DetailedReport" name="Generate Detailed Report">
+        <incoming>SequenceFlow_Gateway_FewRecords</incoming>
+        <outgoing>SequenceFlow_Detailed_Enhance</outgoing>
+        <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+```python
+from datetime import datetime
+import json
+
+# This script receives: query_results, record_count, query_metadata from previous task
+
+def generate_markdown_table(records, columns=None):
+    """Generate markdown table from records"""
+    if not records:
+        return "_No data available_"
+    
+    # Determine columns
+    if not columns:
+        # Extract all unique keys from all records
+        all_keys = set()
+        for record in records:
+            if isinstance(record, dict):
+                all_keys.update(record.keys())
+        columns = sorted(list(all_keys))
+    
+    # Filter out complex nested objects and very long columns
+    simple_columns = []
+    for col in columns:
+        # Check first record to see if column is simple type
+        sample_val = records[0].get(col) if isinstance(records[0], dict) else None
+        if not isinstance(sample_val, (dict, list)) or col in ['_id', 'name', 'status', 'priority']:
+            simple_columns.append(col)
+    
+    if not simple_columns:
+        simple_columns = ['_id', 'name'] if 'name' in columns else columns[:5]
+    
+    # Build header
+    header = "| " + " | ".join(simple_columns) + " |"
+    separator = "| " + " | ".join(["---"] * len(simple_columns)) + " |"
+    
+    # Build rows
+    rows = []
+    for record in records[:50]:  # Limit to 50 rows
+        row_values = []
+        for col in simple_columns:
+            val = record.get(col, '') if isinstance(record, dict) else ''
+            # Format value
+            if isinstance(val, (dict, list)):
+                val = json.dumps(val)[:50] + "..." if len(json.dumps(val)) > 50 else json.dumps(val)
+            elif val is None:
+                val = ''
+            else:
+                val = str(val)[:100]  # Limit cell content
+            row_values.append(val)
+        rows.append("| " + " | ".join(row_values) + " |")
+    
+    return header + "\n" + separator + "\n" + "\n".join(rows)
+
+# Get variables from context
+report_title = globals().get('report_title', 'MongoDB Query Report')
+query_desc = query_metadata.get('description', 'No description')
+suggested_cols = query_metadata.get('suggested_columns', [])
+
+markdown_report = f"""# {report_title}
+
+**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+**Query Description:** {query_desc}
+
+**Original Question:** {query_metadata.get('original_question', 'N/A')}
+
+---
+
+## Summary
+
+- **Total Records:** {record_count}
+- **Collection:** {query_metadata.get('collection', 'N/A')}
+- **Intent:** {query_metadata.get('intent', 'N/A')}
+
+---
+
+## Detailed Results
+
+{generate_markdown_table(query_results, suggested_cols if suggested_cols else None)}
+
+---
+
+## Query Pipeline
+
+```json
+{json.dumps(query_metadata.get('pipeline', []), indent=2)}
+```
+
+---
+
+*Report generated by MongoDB Query Report System*
+"""
+
+print(f"[Report-Detailed] Generated detailed report with {record_count} records")
+# Output: markdown_report
+```
+]]></script>
+      </scriptTask>
+      <scriptTask id="ScriptTask_SummaryReport" name="Generate Summary Report">
+        <incoming>SequenceFlow_Gateway_ManyRecords</incoming>
+        <outgoing>SequenceFlow_Summary_Aggregate</outgoing>
+        <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+```python
+from datetime import datetime
+import json
+
+# This script receives: query_results, record_count, query_metadata from previous task
+
+def generate_summary_table(records, max_rows=20):
+    """Generate summary table showing first N records"""
+    if not records:
+        return "_No data available_"
+    
+    # Get simple columns
+    all_keys = set()
+    for record in records[:10]:
+        if isinstance(record, dict):
+            all_keys.update(record.keys())
+    
+    columns = sorted(list(all_keys))
+    simple_columns = []
+    for col in columns:
+        sample_val = records[0].get(col) if isinstance(records[0], dict) else None
+        if not isinstance(sample_val, (dict, list)) or col in ['_id', 'name', 'status', 'priority', 'type']:
+            simple_columns.append(col)
+    
+    if not simple_columns:
+        simple_columns = columns[:5]
+    
+    # Limit columns to 6 max for readability
+    simple_columns = simple_columns[:6]
+    
+    header = "| " + " | ".join(simple_columns) + " |"
+    separator = "| " + " | ".join(["---"] * len(simple_columns)) + " |"
+    
+    rows = []
+    for record in records[:max_rows]:
+        row_values = []
+        for col in simple_columns:
+            val = record.get(col, '') if isinstance(record, dict) else ''
+            if isinstance(val, (dict, list)):
+                val = f"[{type(val).__name__}]"
+            elif val is None:
+                val = ''
+            else:
+                val = str(val)[:50]
+            row_values.append(val)
+        rows.append("| " + " | ".join(row_values) + " |")
+    
+    table = header + "\n" + separator + "\n" + "\n".join(rows)
+    
+    if len(records) > max_rows:
+        table += f"\n\n_... and {len(records) - max_rows} more records_"
+    
+    return table
+
+# Generate summary report
+report_title = globals().get('report_title', 'MongoDB Query Report')
+query_desc = query_metadata.get('description', 'No description')
+
+markdown_report = f"""# {report_title}
+
+**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+**Query Description:** {query_desc}
+
+**Original Question:** {query_metadata.get('original_question', 'N/A')}
+
+---
+
+## Summary
+
+- **Total Records:** {record_count}
+- **Collection:** {query_metadata.get('collection', 'N/A')}
+- **Intent:** {query_metadata.get('intent', 'N/A')}
+
+⚠️ **Note:** Showing first 10 records. Full aggregation statistics below.
+
+---
+
+## Sample Data (First 10 Records)
+
+{generate_summary_table(query_results, max_rows=10)}
+
+---
+"""
+
+print(f"[Report-Summary] Generated summary report header for {record_count} records")
+# Output: markdown_report (partial, will be enhanced with aggregations)
+```
+]]></script>
+      </scriptTask>
+      <scriptTask id="ScriptTask_GenerateAggregations" name="Compute Aggregations &amp; Statistics">
+        <incoming>SequenceFlow_Summary_Aggregate</incoming>
+        <outgoing>SequenceFlow_Aggregate_Combine</outgoing>
+        <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+```python
+from collections import Counter
+import json
+
+def compute_aggregations(records):
+    """Compute statistical aggregations from records"""
+    if not records:
+        return {}
+    
+    aggregations = {}
+    
+    # Find fields to aggregate
+    sample = records[0] if isinstance(records[0], dict) else {}
+    
+    # Count by categorical fields
+    categorical_fields = ['status', 'priority', 'type', 'assignee', 'approver']
+    
+    for field in categorical_fields:
+        values = [r.get(field) for r in records if isinstance(r, dict) and r.get(field)]
+        if values:
+            counter = Counter(values)
+            aggregations[field] = dict(counter.most_common(10))
+    
+    # Numeric aggregations
+    numeric_fields = ['progress', 'count', 'total']
+    for field in numeric_fields:
+        values = [r.get(field) for r in records if isinstance(r, dict) and isinstance(r.get(field), (int, float))]
+        if values:
+            aggregations[field] = {
+                'min': min(values),
+                'max': max(values),
+                'avg': sum(values) / len(values),
+                'total': sum(values)
+            }
+    
+    return aggregations
+
+def format_aggregation_tables(aggregations):
+    """Format aggregations as markdown tables"""
+    if not aggregations:
+        return "_No aggregations computed_"
+    
+    sections = []
+    
+    # Categorical aggregations
+    for field, counts in aggregations.items():
+        if isinstance(counts, dict) and all(isinstance(v, int) for v in counts.values()):
+            # This is a count aggregation
+            sections.append(f"### By {field.title()}\n")
+            sections.append("| Value | Count |")
+            sections.append("| --- | --- |")
+            for value, count in sorted(counts.items(), key=lambda x: x[1], reverse=True):
+                sections.append(f"| {value} | {count} |")
+            sections.append("")
+    
+    # Numeric aggregations
+    for field, stats in aggregations.items():
+        if isinstance(stats, dict) and 'avg' in stats:
+            sections.append(f"### {field.title()} Statistics\n")
+            sections.append("| Metric | Value |")
+            sections.append("| --- | --- |")
+            sections.append(f"| Minimum | {stats.get('min', 0):.2f} |")
+            sections.append(f"| Maximum | {stats.get('max', 0):.2f} |")
+            sections.append(f"| Average | {stats.get('avg', 0):.2f} |")
+            if 'total' in stats:
+                sections.append(f"| Total | {stats.get('total', 0):.2f} |")
+            sections.append("")
+    
+    return "\n".join(sections)
+
+# Compute aggregations
+aggregation_results = compute_aggregations(query_results)
+aggregation_markdown = format_aggregation_tables(aggregation_results)
+
+print(f"[Report-Aggregate] Computed {len(aggregation_results)} aggregations")
+# Output: aggregation_results, aggregation_markdown
+```
+]]></script>
+      </scriptTask>
+      <scriptTask id="ScriptTask_CombineSummary" name="Combine Summary &amp; Aggregations">
+        <incoming>SequenceFlow_Aggregate_Combine</incoming>
+        <outgoing>SequenceFlow_Combined_Enhance</outgoing>
+        <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+```python
+import json
+
+# Append aggregations to summary report
+markdown_report += f"""
+## Aggregations & Statistics
+
+{aggregation_markdown}
+
+---
+
+## Query Pipeline
+
+```json
+{json.dumps(query_metadata.get('pipeline', []), indent=2)}
+```
+
+---
+
+*Report generated by MongoDB Query Report System*
+"""
+
+print(f"[Report-Combine] Combined summary and aggregations")
+# Output: markdown_report (now complete)
+```
+]]></script>
+      </scriptTask>
+      <scriptTask id="ScriptTask_BuildEnhancePrompt" name="Build Enhancement Prompt">
+        <incoming>SequenceFlow_Detailed_Enhance</incoming>
+        <incoming>SequenceFlow_Combined_Enhance</incoming>
+        <outgoing>SequenceFlow_EnhancePrompt_Service</outgoing>
+        <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+```python
+# Build prompt for AI to add insights
+enhance_report_prompt = f"""You are a data analyst reviewing a MongoDB query report.
+
+**Report Content:**
+{markdown_report[:2000]}...
+
+**Your Task:**
+Add a brief "Key Insights" section (3-5 bullet points) summarizing the most important findings from this data.
+
+Focus on:
+- Trends or patterns in the data
+- Notable outliers or anomalies
+- Actionable recommendations
+
+Return ONLY the markdown bullet list for the Key Insights section, no other text.
+"""
+
+print(f"[Report-Enhance] Built enhancement prompt")
+# Output: enhance_report_prompt
+```
+]]></script>
+      </scriptTask>
+      <scriptTask id="ScriptTask_FormatFinalReport" name="Format &amp; Finalize Report">
+        <incoming>SequenceFlow_Enhance_Format</incoming>
+        <outgoing>SequenceFlow_Format_Save</outgoing>
+        <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+```python
+# Add AI insights to report
+if response and isinstance(response, (dict, str)):
+    insights_content = response.get('response', response) if isinstance(response, dict) else response
+    
+    # Insert insights after summary section
+    insights_section = f"""
+## 🔍 Key Insights
+
+{insights_content}
+
+---
+"""
+    
+    # Find position to insert (after Summary section)
+    if "---" in markdown_report:
+        parts = markdown_report.split("---", 2)
+        if len(parts) >= 2:
+            markdown_report = parts[0] + "---" + parts[1] + "---" + insights_section + "---".join(parts[2:])
+
+# Final formatting
+final_markdown_report = markdown_report
+
+print(f"[Report-Format] Final report prepared, length: {len(final_markdown_report)} chars")
+# Output: final_markdown_report
+```
+]]></script>
+      </scriptTask>
+      <scriptTask id="ScriptTask_SaveReport" name="Prepare Output Variable">
+        <incoming>SequenceFlow_Format_Save</incoming>
+        <outgoing>SequenceFlow_975D16</outgoing>
+        <script xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><![CDATA[
+```python
+from datetime import datetime
+
+# Prepare output for UI instead of saving to file
+_output = {
+    "type": "markdown_report",
+    "content": final_markdown_report,
+    "metadata": {
+        "record_count": record_count,
+        "collection": query_metadata.get('collection', 'N/A'),
+        "intent": query_metadata.get('intent', 'N/A'),
+        "description": query_metadata.get('description', 'N/A'),
+        "generated_at": datetime.now().isoformat(),
+        "original_question": query_metadata.get('original_question', 'N/A'),
+        "status": "success"
+    }
+}
+
+_output_message = f"Report generated successfully with {record_count} records"
+
+print(f"[Report-Output] Report prepared for UI, length: {len(final_markdown_report)} chars")
+# Output: _output, _output_message
+```
+]]></script>
+      </scriptTask>
+      <exclusiveGateway id="Gateway_CheckRecordCount" name="Check Record Count">
+        <incoming>SequenceFlow_Execute_Gateway</incoming>
+        <outgoing>SequenceFlow_Gateway_NoRecords</outgoing>
+        <outgoing>SequenceFlow_Gateway_FewRecords</outgoing>
+        <outgoing>SequenceFlow_Gateway_ManyRecords</outgoing>
+      </exclusiveGateway>
+      <sequenceFlow id="SequenceFlow_Start_UserInput" sourceRef="StartEvent_Report" targetRef="UserTask_ReportInput" />
+      <sequenceFlow id="SequenceFlow_UserInput_FetchSchema" sourceRef="UserTask_ReportInput" targetRef="ScriptTask_FetchSchema" />
+      <sequenceFlow id="SequenceFlow_FetchSchema_BuildPrompt" sourceRef="ScriptTask_FetchSchema" targetRef="ScriptTask_BuildPrompt" />
+      <sequenceFlow id="SequenceFlow_BuildPrompt_Agent" sourceRef="ScriptTask_BuildPrompt" targetRef="ServiceTask_GeneratePipeline" />
+      <sequenceFlow id="SequenceFlow_Agent_Execute" sourceRef="ServiceTask_GeneratePipeline" targetRef="ScriptTask_ExecutePipeline" />
+      <sequenceFlow id="SequenceFlow_Execute_Gateway" sourceRef="ScriptTask_ExecutePipeline" targetRef="Gateway_CheckRecordCount" />
+      <sequenceFlow id="SequenceFlow_Gateway_NoRecords" name="record_count == 0" sourceRef="Gateway_CheckRecordCount" targetRef="ScriptTask_NoRecordsReport">
+        <conditionExpression xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xsi:type="tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">record_count == 0</conditionExpression>
+      </sequenceFlow>
+      <sequenceFlow id="SequenceFlow_Gateway_FewRecords" name="record_count &lt;= 5" sourceRef="Gateway_CheckRecordCount" targetRef="ScriptTask_DetailedReport">
+        <conditionExpression xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xsi:type="tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">record_count &gt; 0 and record_count &lt;= 5</conditionExpression>
+      </sequenceFlow>
+      <sequenceFlow id="SequenceFlow_Gateway_ManyRecords" name="record_count &gt; 5" sourceRef="Gateway_CheckRecordCount" targetRef="ScriptTask_SummaryReport">
+        <conditionExpression xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xsi:type="tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">record_count &gt; 5</conditionExpression>
+      </sequenceFlow>
+      <sequenceFlow id="SequenceFlow_Detailed_Enhance" sourceRef="ScriptTask_DetailedReport" targetRef="ScriptTask_BuildEnhancePrompt" />
+      <sequenceFlow id="SequenceFlow_Summary_Aggregate" sourceRef="ScriptTask_SummaryReport" targetRef="ScriptTask_GenerateAggregations" />
+      <sequenceFlow id="SequenceFlow_Aggregate_Combine" sourceRef="ScriptTask_GenerateAggregations" targetRef="ScriptTask_CombineSummary" />
+      <sequenceFlow id="SequenceFlow_Combined_Enhance" sourceRef="ScriptTask_CombineSummary" targetRef="ScriptTask_BuildEnhancePrompt" />
+      <sequenceFlow id="SequenceFlow_EnhancePrompt_Service" sourceRef="ScriptTask_BuildEnhancePrompt" targetRef="ServiceTask_EnhanceReport" />
+      <sequenceFlow id="SequenceFlow_Enhance_Format" sourceRef="ServiceTask_EnhanceReport" targetRef="ScriptTask_FormatFinalReport" />
+      <sequenceFlow id="SequenceFlow_Format_Save" sourceRef="ScriptTask_FormatFinalReport" targetRef="ScriptTask_SaveReport" />
+      <sequenceFlow id="SequenceFlow_A08DB8" sourceRef="ScriptTask_NoRecordsReport" targetRef="EndEvent_Report" />
+      <sequenceFlow id="SequenceFlow_975D16" sourceRef="ScriptTask_SaveReport" targetRef="EndEvent_Report" />
+    </process>
+    <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+      <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_2">
+        <bpmndi:BPMNShape id="StartEvent_Report_di" bpmnElement="StartEvent_Report">
+          <dc:Bounds x="180" y="200" width="36" height="36" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="180" y="241" width="36" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="EndEvent_Report_di" bpmnElement="EndEvent_Report">
+          <dc:Bounds x="1363.4861016949149" y="324.87050847457624" width="36" height="36" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="1363.4861016949149" y="365.87050847457624" width="36" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="ServiceTask_GeneratePipeline_di" bpmnElement="ServiceTask_GeneratePipeline">
+          <dc:Bounds x="720" y="188" width="100" height="60" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="720" y="253" width="100" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="ServiceTask_EnhanceReport_di" bpmnElement="ServiceTask_EnhanceReport">
+          <dc:Bounds x="865.6298305084745" y="428.6844745762712" width="100" height="60" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="865.6298305084745" y="493.6844745762712" width="100" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="UserTask_ReportInput_di" bpmnElement="UserTask_ReportInput">
+          <dc:Bounds x="270" y="188" width="100" height="60" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="270" y="253" width="100" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="ScriptTask_FetchSchema_di" bpmnElement="ScriptTask_FetchSchema">
+          <dc:Bounds x="420" y="188" width="100" height="60" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="420" y="253" width="100" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="ScriptTask_BuildPrompt_di" bpmnElement="ScriptTask_BuildPrompt">
+          <dc:Bounds x="570" y="188" width="100" height="60" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="570" y="253" width="100" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="ScriptTask_ExecutePipeline_di" bpmnElement="ScriptTask_ExecutePipeline">
+          <dc:Bounds x="870" y="188" width="100" height="60" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="870" y="253" width="100" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="ScriptTask_NoRecordsReport_di" bpmnElement="ScriptTask_NoRecordsReport">
+          <dc:Bounds x="565.6298305084745" y="320.6844745762712" width="100" height="60" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="565.6298305084745" y="385.6844745762712" width="100" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="ScriptTask_DetailedReport_di" bpmnElement="ScriptTask_DetailedReport">
+          <dc:Bounds x="565.6298305084745" y="428.6844745762712" width="100" height="60" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="565.6298305084745" y="493.6844745762712" width="100" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="ScriptTask_SummaryReport_di" bpmnElement="ScriptTask_SummaryReport">
+          <dc:Bounds x="565.6298305084745" y="540.6844745762712" width="100" height="60" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="565.6298305084745" y="605.6844745762712" width="100" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="ScriptTask_GenerateAggregations_di" bpmnElement="ScriptTask_GenerateAggregations">
+          <dc:Bounds x="715.6298305084745" y="540.6844745762712" width="100" height="60" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="715.6298305084745" y="605.6844745762712" width="100" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="ScriptTask_CombineSummary_di" bpmnElement="ScriptTask_CombineSummary">
+          <dc:Bounds x="865.6298305084745" y="540.6844745762712" width="100" height="60" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="865.6298305084745" y="605.6844745762712" width="100" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="ScriptTask_BuildEnhancePrompt_di" bpmnElement="ScriptTask_BuildEnhancePrompt">
+          <dc:Bounds x="715.6298305084745" y="428.6844745762712" width="100" height="60" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="715.6298305084745" y="493.6844745762712" width="100" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="ScriptTask_FormatFinalReport_di" bpmnElement="ScriptTask_FormatFinalReport">
+          <dc:Bounds x="1060.912542372881" y="428.13559322033893" width="100" height="60" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="1060.912542372881" y="493.13559322033893" width="100" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="ScriptTask_SaveReport_di" bpmnElement="ScriptTask_SaveReport">
+          <dc:Bounds x="1227.3789830508474" y="428.13559322033893" width="100" height="60" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="1700" y="253" width="140" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNShape id="Gateway_CheckRecordCount_di" bpmnElement="Gateway_CheckRecordCount">
+          <dc:Bounds x="338.01491525423717" y="348.60786440677964" width="50" height="50" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="338.01491525423717" y="403.60786440677964" width="50" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNShape>
+        <bpmndi:BPMNEdge id="SequenceFlow_Start_UserInput_di" bpmnElement="SequenceFlow_Start_UserInput">
+          <di:waypoint x="216" y="218" />
+          <di:waypoint x="270" y="218" />
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_UserInput_FetchSchema_di" bpmnElement="SequenceFlow_UserInput_FetchSchema">
+          <di:waypoint x="370" y="218" />
+          <di:waypoint x="420" y="218" />
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_FetchSchema_BuildPrompt_di" bpmnElement="SequenceFlow_FetchSchema_BuildPrompt">
+          <di:waypoint x="520" y="218" />
+          <di:waypoint x="570" y="218" />
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_BuildPrompt_Agent_di" bpmnElement="SequenceFlow_BuildPrompt_Agent">
+          <di:waypoint x="670" y="218" />
+          <di:waypoint x="720" y="218" />
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_Agent_Execute_di" bpmnElement="SequenceFlow_Agent_Execute">
+          <di:waypoint x="820" y="218" />
+          <di:waypoint x="870" y="218" />
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_Execute_Gateway_di" bpmnElement="SequenceFlow_Execute_Gateway">
+          <di:waypoint x="970" y="218" />
+          <di:waypoint x="1020" y="218" />
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_Gateway_NoRecords_di" bpmnElement="SequenceFlow_Gateway_NoRecords">
+          <di:waypoint x="1045" y="193" />
+          <di:waypoint x="1045" y="110" />
+          <di:waypoint x="1120" y="110" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="995" y="100" width="100" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_Gateway_FewRecords_di" bpmnElement="SequenceFlow_Gateway_FewRecords">
+          <di:waypoint x="1070" y="218" />
+          <di:waypoint x="1120" y="218" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="1070" y="208" width="100" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_Gateway_ManyRecords_di" bpmnElement="SequenceFlow_Gateway_ManyRecords">
+          <di:waypoint x="1045" y="243" />
+          <di:waypoint x="1045" y="330" />
+          <di:waypoint x="1120" y="330" />
+          <bpmndi:BPMNLabel>
+            <dc:Bounds x="995" y="320" width="100" height="40" />
+          </bpmndi:BPMNLabel>
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_Detailed_Enhance_di" bpmnElement="SequenceFlow_Detailed_Enhance">
+          <di:waypoint x="1220" y="218" />
+          <di:waypoint x="1270" y="218" />
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_Summary_Aggregate_di" bpmnElement="SequenceFlow_Summary_Aggregate">
+          <di:waypoint x="1220" y="330" />
+          <di:waypoint x="1270" y="330" />
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_Aggregate_Combine_di" bpmnElement="SequenceFlow_Aggregate_Combine">
+          <di:waypoint x="1370" y="330" />
+          <di:waypoint x="1420" y="330" />
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_Combined_Enhance_di" bpmnElement="SequenceFlow_Combined_Enhance">
+          <di:waypoint x="1470" y="300" />
+          <di:waypoint x="1470" y="218" />
+          <di:waypoint x="1370" y="218" />
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_EnhancePrompt_Service_di" bpmnElement="SequenceFlow_EnhancePrompt_Service">
+          <di:waypoint x="1370" y="218" />
+          <di:waypoint x="1420" y="218" />
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_Enhance_Format_di" bpmnElement="SequenceFlow_Enhance_Format">
+          <di:waypoint x="1520" y="218" />
+          <di:waypoint x="1570" y="218" />
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_Format_Save_di" bpmnElement="SequenceFlow_Format_Save">
+          <di:waypoint x="1670" y="218" />
+          <di:waypoint x="1720" y="218" />
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_A08DB8_di" bpmnElement="SequenceFlow_A08DB8">
+          <di:waypoint x="666" y="361" />
+          <di:waypoint x="1363" y="343" />
+        </bpmndi:BPMNEdge>
+        <bpmndi:BPMNEdge id="SequenceFlow_975D16_di" bpmnElement="SequenceFlow_975D16">
+          <di:waypoint x="1327" y="468" />
+          <di:waypoint x="1363" y="343" />
+        </bpmndi:BPMNEdge>
+      </bpmndi:BPMNPlane>
+    </bpmndi:BPMNDiagram>
+  </definitions>

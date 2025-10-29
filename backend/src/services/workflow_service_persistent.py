@@ -374,6 +374,8 @@ class WorkflowServicePersistent:
             logger.error(f"[WORKFLOW] Error handling ServiceTask {task.task_spec.bpmn_id}: {e}")
             bpmn_id = task.task_spec.bpmn_id
             # Update workflow status for exception case
+            task.data['error'] = str(e)
+            task.error()
             await cls._update_workflow_status(workflow, instance_id, tenant_id)
             raise
 
