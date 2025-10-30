@@ -192,7 +192,6 @@ async def run_agent(
 async def debug_conversations(user: dict = Depends(verify_token_middleware)):
     """Debug endpoint to check conversations and user info."""
     tenant_id = user.get("tenantId")
-    user_id = user.get("id") or user.get("userId")
     
     try:
         from ..utils.mongo_storage import MongoStorageService

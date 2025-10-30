@@ -69,7 +69,6 @@ const GanttChart = lazy(() => import('../projects/GanttChart'))
 const AIAssistant = lazy(() => import('../projects/AIAssistant'))
 const WorkflowConfig = lazy(() => import('../workflows/WorkflowConfig'))
 const WorkflowExecution = lazy(() => import('../workflows/WorkflowExecution'))
-const WorkflowUI = lazy(() => import('../workflows/WorkflowUI'))
 const TaskCompletion = lazy(() => import('../workflows/TaskCompletion'))
 const DynamicComponentLoader = lazy(() => import('../workflows/DynamicComponentLoader'))
 const DynamicFunctionTester = lazy(() => import('../workflows/DynamicFunctionTester'))
@@ -247,11 +246,6 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 					label: 'Home',
 					to: '/dashboard/workflows',
 					icon: 'Home'
-				},
-				{
-					label: 'Run Workflow',
-					to: '/dashboard/workflow-ui',
-					icon: 'Play'
 				},
 				{
 					label: 'Scheduler Jobs',
@@ -1104,7 +1098,6 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="agent-playground" element={<AgentPlayground user={user} />} />
 				<Route path="analytics" element={<Analytics />} />
 				<Route path="workflows" element={<WorkflowConfig user={user} />} />
-				<Route path="workflow-ui" element={<WorkflowUI user={user} />} />
 				<Route path="function-tester" element={<DynamicFunctionTester user={user} />} />
 				<Route path="scheduler-jobs" element={<SchedulerJobs user={user} />} />
 				<Route path="dynamic" element={<DynamicComponentLoader user={user} />} />

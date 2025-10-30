@@ -311,11 +311,7 @@ class WorkflowServicePersistent:
                                         logger.info(f"[WORKFLOW] Using config default value for parameter '{param_name}' = {param_value}")
                         
                         logger.info(f"[WORKFLOW] Final function parameters: {function_params}")
-                        
-                        # Add user to parameters if not already present
-                        if 'user' in function_params:
-                            function_params['user'] = user
-                        
+                                               
                         # Import and execute the function
                         try:
                             module_path = f"backend.src.modules.{module_name}"
