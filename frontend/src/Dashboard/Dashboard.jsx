@@ -71,7 +71,6 @@ const WorkflowConfig = lazy(() => import('../workflows/WorkflowConfig'))
 const WorkflowExecution = lazy(() => import('../workflows/WorkflowExecution'))
 const TaskCompletion = lazy(() => import('../workflows/TaskCompletion'))
 const DynamicComponentLoader = lazy(() => import('../workflows/DynamicComponentLoader'))
-const DynamicFunctionTester = lazy(() => import('../workflows/DynamicFunctionTester'))
 const SchedulerJobs = lazy(() => import('../workflows/SchedulerJobs'))
 const Analytics = lazy(() => import('./Analytics'))
 const BPMN = lazy(() => import('../components/bpmn/BPMN'))
@@ -257,11 +256,6 @@ function DashboardLayout({ user, onLogout, themeKey, setThemeKey }) {
 					icon: 'Package',
 					expandable: true,
 					children: [
-						{
-							label: 'Function Tester',
-							to: '/dashboard/function-tester',
-							icon: 'TestTube'
-						},
 						{
 							label: 'Generate UI Components',
 							to: '/dashboard/dynamic',
@@ -1098,7 +1092,6 @@ export default function Dashboard({ user, onLogout, themeKey, setThemeKey }) {
 				<Route path="agent-playground" element={<AgentPlayground user={user} />} />
 				<Route path="analytics" element={<Analytics />} />
 				<Route path="workflows" element={<WorkflowConfig user={user} />} />
-				<Route path="function-tester" element={<DynamicFunctionTester user={user} />} />
 				<Route path="scheduler-jobs" element={<SchedulerJobs user={user} />} />
 				<Route path="dynamic" element={<DynamicComponentLoader user={user} />} />
 				<Route path="bpmn" element={<BPMNEditorWrapper />} />
