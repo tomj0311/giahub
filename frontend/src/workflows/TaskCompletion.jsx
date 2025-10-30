@@ -218,10 +218,16 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
     }
   };
 
-  const handleFormChange = (fieldId, value) => {
+  const handleFormChange = (fieldId, value, fieldType = null) => {
+    // Convert to number if field type is number and value is not empty
+    let processedValue = value;
+    if (fieldType === 'number' && value !== '' && value !== null && value !== undefined) {
+      processedValue = Number(value);
+    }
+    
     setFormData(prev => ({
       ...prev,
-      [fieldId]: value
+      [fieldId]: processedValue
     }));
     
     // Clear error for this field when user starts typing
@@ -246,7 +252,19 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
             if (!value || !(value instanceof File)) {
               errors[field.id] = `${field.label || field.id} is required`;
             }
-          } else if (!value || (typeof value === 'string' && value.trim() === '')) {
+          } 
+          // Handle boolean type - always has a value, no validation needed
+          else if (field.type === 'boolean') {
+            // Skip - checkboxes always have true/false value
+          }
+          // Handle number type - check for null/undefined but allow 0
+          else if (field.type === 'number') {
+            if (value === null || value === undefined || value === '') {
+              errors[field.id] = `${field.label || field.id} is required`;
+            }
+          }
+          // Handle other types (text, email, etc.)
+          else if (!value || (typeof value === 'string' && value.trim() === '')) {
             errors[field.id] = `${field.label || field.id} is required`;
           }
         }
@@ -548,7 +566,7 @@ function TaskCompletion({ user, workflowId: propWorkflowId, instanceId: propInst
                           fullWidth
                           label={field.label || field.id}
                           value={formData[field.id] || ''}
-                          onChange={(e) => handleFormChange(field.id, e.target.value)}
+                          onChange={(e) => handleFormChange(field.id, e.target.value, field.type)}
                           required={field.required === 'true' || field.required === true}
                           type={field.type === 'number' ? 'number' : 'text'}
                           variant="outlined"
